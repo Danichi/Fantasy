@@ -143,6 +143,7 @@ async function boot() {
   };
   realm.onSave = save;
   mapUI.onChange = save;
+  events.on('progressChanged', save);
   window.addEventListener('beforeunload', save);
   setInterval(save, 30000);
   mapUI.onToggle = (open) => {
@@ -167,8 +168,8 @@ async function boot() {
   hud.onSlotDrop = (mode, slot, ref) => {
     const eq = player.equip;
     const uid = typeof ref === 'number' ? ref : 0;
-    const it = eq.get(uid);
-    if (!it) return;
+    const it = typeof ref === 'number' ? eq.get(ref) : undefined;
+    if (typeof ref === 'number' && !it) return;
     // Quick items take consumables; the moveset takes spells and learned martial moves.
     if (mode === 'items' && it.def.kind === 'consumable' && slot < eq.quick.length) {
       eq.quick = eq.quick.map((u) => (u === uid ? null : u));
