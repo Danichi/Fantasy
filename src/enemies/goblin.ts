@@ -82,7 +82,6 @@ export class Goblin implements Target {
   private vel = new THREE.Vector3();
   private yaw = Math.random() * Math.PI * 2;
   private grounded = true;
-  private home: THREE.Vector3;
   private rb: RAPIER.RigidBody;
   private col: RAPIER.Collider;
   private kcc: RAPIER.KinematicCharacterController;
@@ -90,11 +89,9 @@ export class Goblin implements Target {
   private mixer: THREE.AnimationMixer | null = null;
   private actions: Record<string, THREE.AnimationAction> = {};
   private currentAction = '';
-  private flash = 0;
 
   constructor(at: THREE.Vector3, private scene: THREE.Scene, private fx: FX) {
     this.position.copy(at);
-    this.home = at.clone();
     this.group.add(fallbackGoblin());
     scene.add(this.group);
 
@@ -138,7 +135,6 @@ export class Goblin implements Target {
   takeHit(h: HitInfo) {
     if (!this.alive || this.state === 'dying') return;
     this.hp -= h.damage;
-    this.flash = 1;
     if (this.hp <= 0) {
       this.die();
       return;
@@ -191,7 +187,6 @@ export class Goblin implements Target {
   update(dt: number, player: Player) {
     this.st += dt;
     this.cooldown -= dt;
-    this.flash = Math.max(0, this.flash - dt * 5);
     this.mixer?.update(dt);
 
     if (this.state === 'dying') {
