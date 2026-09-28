@@ -53,7 +53,7 @@ const CELL_W = 256, CELL_H = 384;
 
 function leafMaterial(src: THREE.MeshPhongMaterial, uniforms: { uTime: THREE.IUniform }) {
   const m = new THREE.MeshStandardMaterial({
-    map: src.map, color: src.color, side: THREE.DoubleSide, alphaTest: 0.5, roughness: 0.8, envMapIntensity: 0.5,
+    map: src.map, color: src.color, side: THREE.DoubleSide, alphaTest: 0.5, roughness: 0.72, envMapIntensity: 0.8,
   });
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = uniforms.uTime;
