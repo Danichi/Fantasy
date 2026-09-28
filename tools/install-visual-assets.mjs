@@ -51,6 +51,28 @@ for (const [slug, filename] of assets) {
   }
 }
 
+const creatureDir = join(root, 'public', 'assets', 'vendor', 'creatures');
+mkdirSync(creatureDir, { recursive: true });
+
+const creatureAssets = [
+  ['wolf.glb', 'https://raw.githubusercontent.com/Master-Coder-Sudo/Claude-gaming-world/main/public/models/creatures/wolf.glb'],
+  ['stag.glb', 'https://raw.githubusercontent.com/Master-Coder-Sudo/Claude-gaming-world/main/public/models/creatures/stag.glb'],
+  ['goblin.glb', 'https://raw.githubusercontent.com/Master-Coder-Sudo/Claude-gaming-world/main/public/models/creatures/goblin.glb'],
+  ['orc.glb', 'https://raw.githubusercontent.com/Master-Coder-Sudo/Claude-gaming-world/main/public/models/creatures/orc.glb'],
+];
+
+for (const [filename, url] of creatureAssets) {
+  const target = join(creatureDir, filename);
+  if (existsSync(target)) continue;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    writeFileSync(target, Buffer.from(await res.arrayBuffer()));
+  } catch (error) {
+    console.warn('[visual-assets] Could not fetch creature ' + filename + ':', error);
+  }
+}
+
 writeFileSync(
   join(targetDir, 'README.md'),
   [
@@ -63,6 +85,7 @@ writeFileSync(
     '- https://quaternius.com/packs/stylizednaturemegakit.html',
     '- https://quaternius.itch.io/stylized-nature-megakit',
     '- https://market.drawcall.ai/',
+    '- Creature mirror: https://github.com/Master-Coder-Sudo/Claude-gaming-world (Quaternius CC0 assets; see its CREDITS.md)',
     '',
     'Drawcall Market assets are fetched at development/build time so the game keeps its runtime assets local.',
     '',
