@@ -6,7 +6,7 @@ export interface SkillNode {
   desc: string;
   cost: number;
   requires?: string[];
-  actionId: string;
+  actionId?: string;
   move: string;
 }
 
@@ -44,11 +44,11 @@ export const COMBAT_STYLES: Record<CombatStyleId, CombatStyle> = {
     color: '#ffcf72',
     mechanic: 'Hold your Boundary stance while still. Focus determines and pays for its radius. Attacks entering the zone can be intercepted without frame-perfect parries.',
     nodes: [
-      { id: 'boundary-anchor', name: 'Anchor', desc: 'Increase the minimum Boundary radius and Focus efficiency.', cost: 1, actionId: 'boundaryAnchor', move: 'ANCHOR' },
+      { id: 'boundary-anchor', name: 'Anchor', desc: 'Increase the minimum Boundary radius and Focus efficiency.', cost: 1, move: 'PASSIVE' },
       { id: 'boundary-pulse', name: 'Pulse', desc: 'Release a countershock after a successful Boundary interception.', cost: 1, requires: ['boundary-anchor'], actionId: 'boundaryPulse', move: 'BOUNDARY PULSE' },
-      { id: 'boundary-wall', name: 'Inner Wall', desc: 'Increase interception radius and make ranged attacks easier to catch.', cost: 1, requires: ['boundary-anchor'], actionId: 'boundaryWall', move: 'INNER WALL' },
+      { id: 'boundary-wall', name: 'Inner Wall', desc: 'Increase interception radius and make ranged attacks easier to catch.', cost: 1, requires: ['boundary-anchor'], move: 'PASSIVE' },
       { id: 'boundary-counter', name: 'Counter', desc: 'Your next melee strike after an interception deals increased stagger.', cost: 1, requires: ['boundary-pulse'], actionId: 'boundaryCounter', move: 'BOUNDARY COUNTER' },
-      { id: 'boundary-domain', name: 'Domain', desc: 'Sustain a larger Boundary for longer and unlock the strongest counter window.', cost: 2, requires: ['boundary-wall', 'boundary-counter'], actionId: 'boundaryDomain', move: 'DOMAIN' },
+      { id: 'boundary-domain', name: 'Domain', desc: 'Sustain a larger Boundary for longer and unlock the strongest counter window.', cost: 2, requires: ['boundary-wall', 'boundary-counter'], move: 'PASSIVE' },
     ],
   },
   cross: {
