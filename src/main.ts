@@ -171,10 +171,10 @@ async function boot() {
     const it = typeof ref === 'number' ? eq.get(ref) : undefined;
     if (typeof ref === 'number' && !it) return;
     // Quick items take consumables; the moveset takes spells and learned martial moves.
-    if (mode === 'items' && it.def.kind === 'consumable' && slot < eq.quick.length) {
+    if (mode === 'items' && typeof ref === 'number' && it?.def.kind === 'consumable' && slot < eq.quick.length) {
       eq.quick = eq.quick.map((u) => (u === uid ? null : u));
       eq.quick[slot] = uid;
-    } else if (mode === 'moves' && typeof ref === 'number' && it.def.kind === 'spell') {
+    } else if (mode === 'moves' && typeof ref === 'number' && it?.def.kind === 'spell') {
       eq.moves = eq.moves.map((u) => (u === ref ? null : u));
       eq.moves[slot] = ref;
     } else if (mode === 'moves' && typeof ref === 'string' && ref.startsWith('skill:')) {
