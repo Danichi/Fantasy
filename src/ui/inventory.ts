@@ -250,11 +250,15 @@ export class InventoryUI {
       const prereq = node.requires?.every((r) => prog.hasSkill(selected.id, r)) ?? true;
       const canBuy = learned && !owned && prereq && prog.skillPoints >= node.cost;
       const lockedReason = !learned ? `Train with ${selected.trainer}` : !prereq ? 'Prerequisite required' : prog.skillPoints < node.cost ? 'Need more skill points' : 'Unlock';
-      return `<button class="skill-node ${owned ? 'owned' : ''} ${canBuy ? 'available' : ''}" data-skill="${node.id}" title="${node.desc}">
+      const row = node.requires?.length ? Math.min(3, node.requires.length + 1) : 1;
+      const col = (i % 2) + 1;
+      const reqNames = node.requires?.map((req) => selected.nodes.find((n) => n.id === req)?.name ?? req).join(' · ') ?? 'Starting node';
+      return `<button class="skill-node ${owned ? 'owned' : ''} ${canBuy ? 'available' : ''}" data-skill="${node.id}" style="grid-column:${col};grid-row:${row}" title="${node.desc}">
         <span class="node-num">${String(i + 1).padStart(2, '0')}</span>
         <b>${node.name}</b>
         <small>${owned ? 'MASTERED' : lockedReason}</small>
         <p>${node.desc}</p>
+        <span class="requires">${reqNames}</span>
         <em>${node.cost} SP</em>
       </button>`;
     }).join('');
