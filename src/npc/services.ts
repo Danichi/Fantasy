@@ -1,4 +1,4 @@
-import type { DialogueOption, } from '../ui/dialogue';
+import type { DialogueOption } from '../ui/dialogue';
 import type { Player } from '../player/player';
 import type { Realm } from '../dungeon/realm';
 import { COMBAT_STYLES, type CombatStyleId } from '../progression/styles';
@@ -47,6 +47,7 @@ export function shopOptions(player: Player, openShop: (text?: string) => void): 
       player.prog.addGold(-price);
       player.equip.add(id, 1);
       events.emit('equipmentChanged', {});
+      events.emit('progressChanged', {});
       openShop('Done. Anything else?');
     },
   }));
