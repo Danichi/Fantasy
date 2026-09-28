@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { events } from '../core/events';
 import type { Progression } from '../progression/progression';
 import type { DialogueUI } from '../ui/dialogue';
+import { heightAt } from '../world/terrain';
 
 export type GuildRank = 'Novice' | 'Copper' | 'Iron' | 'Bronze' | 'Silver' | 'Gold' | 'Platinum' | 'Mythic';
 
@@ -198,7 +199,7 @@ export class AdventurerGuild {
       const x = center.x + Math.sin(a) * radius;
       const z = center.z + Math.cos(a) * radius * 0.7;
       const g = new THREE.Group();
-      g.position.set(x, 0, z);
+      g.position.set(x, heightAt(x, z), z);
       g.rotation.y = a + Math.PI;
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.72, 5, 8), i % 6 === 0 ? matBody : matCloth[i % matCloth.length]);
       body.position.y = 0.8;
@@ -330,6 +331,8 @@ export class AdventurerGuild {
       });
     }
   }
+
+  setVisible(v: boolean) { this.group.visible = v; if (!v && this.openState) this.close(); }
 
   interactable(): { pos: THREE.Vector3; radius: number; label: () => string; enabled: () => boolean; action: () => void } {
     return {
