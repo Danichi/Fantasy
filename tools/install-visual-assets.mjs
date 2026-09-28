@@ -28,7 +28,7 @@ mkdirSync(targetDir, { recursive: true });
 
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
-function installAsset(slug: string) {
+function installAsset(slug) {
   const result = spawnSync(
     npx,
     ['--yes', '@drawcall/market@0.8.10', 'install', slug],
