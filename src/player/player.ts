@@ -204,6 +204,7 @@ export class Player {
     if (!input.uiMode) this.readInput(input, cam);
     else this.moveIntent.set(0, 0, 0);
     this.combat.discipline = this.prog.combat.primary;
+    if (this.prog.combat.primary !== 'boundary' && this.combat.boundaryActive) this.combat.breakBoundary(false);
     this.combat.tick(dt, this.moveIntent.lengthSq() > 0 || this.sprinting, false);
     if (this.prog.combat.origin === 'dragon' && !this.grounded && input.held('jump')) {
       // Early draconic flight is deliberately weak; it becomes more useful as Heroic Legacy grows.
