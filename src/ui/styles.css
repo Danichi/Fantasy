@@ -706,3 +706,5 @@ html, body {
 @media (max-width: 900px) {
   .quest-tracker { left: 14px; top: 96px; width: 235px; }
 }
+
+.style-resource.cross i { background: linear-gradient(90deg, rgba(203,112,255,.96), rgba(255,208,250,.98)); }
