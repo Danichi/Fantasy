@@ -13,9 +13,9 @@ const MODEL_URL = '/assets/npc/goblin.glb';
 const HEIGHT = 1.65;
 const GRAV = 20;
 
-let modelPromise: Promise<THREE.Group | null> | null = null;
+let modelPromise: Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] } | null> | null = null;
 function loadGoblinModel() {
-  return (modelPromise ??= new GLTFLoader().loadAsync(MODEL_URL).then((g) => g.scene).catch((e) => {
+  return (modelPromise ??= new GLTFLoader().loadAsync(MODEL_URL).then((g) => ({ scene: g.scene, animations: g.animations })).catch((e) => {
     console.warn('Goblin model not found; using fallback:', e);
     return null;
   }));
@@ -112,7 +112,7 @@ export class Goblin implements Target {
 
     void loadGoblinModel().then((source) => {
       if (!source || !this.alive) return;
-      const model = SkeletonUtils.clone(source) as THREE.Group;
+      const model = SkeletonUtils.clone(source.scene) as THREE.Group;
       model.updateMatrixWorld(true);
       const bb = new THREE.Box3().setFromObject(model);
       const h = Math.max(0.01, bb.max.y - bb.min.y);
@@ -130,10 +130,7 @@ export class Goblin implements Target {
       this.group.add(model);
       this.model = model;
       this.mixer = new THREE.AnimationMixer(model);
-      const clips = source.userData.__goblinClips as THREE.AnimationClip[] | undefined;
-      // The source scene does not retain animations, so the loader is queried
-      // again only when needed; the normal GLB path below handles the clips.
-      void clips;
+      for (const clip of source.animations) this.actions[clip.name] = this.mixer.clipAction(clip);
       this.setAnimation('idle');
     });
   }
@@ -284,7 +281,6 @@ export class Goblin implements Target {
     this.group.position.copy(this.position);
     this.group.rotation.y = this.yaw;
     this.center.set(this.position.x, this.position.y + 0.8, this.position.z);
-    this.model?.scale.setScalar(this.model.scale.x);
   }
 
   dispose() {
