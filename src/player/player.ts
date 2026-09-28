@@ -84,6 +84,7 @@ export class Player {
   private staminaDelay = 0;
   private hot = { rate: 0, left: 0 };
   private burn = { dps: 0, left: 0 };
+  private originCooldown = 0;
 
   act: ActiveAction | null = null;
   private buffer: { a: Buffered; t: number } | null = null;
@@ -909,6 +910,7 @@ export class Player {
   }
 
   private updateStats(dt: number) {
+    this.originCooldown = Math.max(0, this.originCooldown - dt);
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
     else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen')) * dt);
     this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen')) * dt);
@@ -946,6 +948,7 @@ export class Player {
   private boundaryActiveSafe() { return !!this.combat.boundaryActive && this.prog.combat.primary === 'boundary'; }
 
   private useOriginAbility() {
+    if (this.originCooldown > 0 || this.dead) return;
     const origin = this.prog.combat.origin;
     if (origin === 'dragon') {
       const f = this.forward;
@@ -960,14 +963,17 @@ export class Player {
         t.takeHit({ damage: dmg, poise: 35, dir: f.clone(), at: t.center.clone(), crit: false, source: 'melee' });
         events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: false, enemyId: t.id });
       }
+      this.originCooldown = 4.5;
       events.emit('originAbility', { origin, ability: 'Dragon Breath' });
     } else if (origin === 'demon') {
       this.hot = { rate: Math.max(10, this.maxHp * 0.08), left: 2.5 };
       this.stamina = Math.min(this.maxStamina, this.stamina + 30);
+      this.originCooldown = 5.5;
       events.emit('originAbility', { origin, ability: 'Blood Awakening' });
     } else {
       this.mana = Math.min(this.maxMana, this.mana + 22);
       this.stamina = Math.min(this.maxStamina, this.stamina + 22);
+      this.originCooldown = 6;
       events.emit('originAbility', { origin, ability: 'Heroic Adaptation' });
     }
   }
