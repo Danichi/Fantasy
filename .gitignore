@@ -6,3 +6,4 @@ screenshots/
 assets-src/
 .tmp/
 *.log
+release/

@@ -308,6 +308,21 @@ export function buildOverlays(onStart: () => void) {
     start.classList.add('hidden');
     onStart();
   });
+  // Desktop build: Quit and fullscreen buttons on the title/pause screen.
+  const desktop = (window as any).desktop as { quit(): void; toggleFullscreen(): void } | undefined;
+  if (desktop) {
+    const row = document.createElement('div');
+    row.className = 'desk-row';
+    row.innerHTML = '<button data-a="fs">Toggle fullscreen (F11)</button><button data-a="quit">Quit game</button>';
+    row.addEventListener('click', (e) => {
+      const a = (e.target as HTMLElement).dataset.a;
+      if (!a) return;
+      e.stopPropagation();
+      if (a === 'quit') desktop.quit();
+      else desktop.toggleFullscreen();
+    });
+    start.querySelector('.title-card')!.appendChild(row);
+  }
   help.addEventListener('click', () => help.classList.add('hidden'));
   return {
     start,

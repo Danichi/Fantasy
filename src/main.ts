@@ -1,3 +1,9 @@
+// Fonts are bundled so the game works offline (desktop build).
+import '@fontsource/cinzel/500.css';
+import '@fontsource/cinzel/700.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
 import * as THREE from 'three';
 import { Renderer } from './render/renderer';
 import { physics, PhysicsDebug } from './physics/physics';
