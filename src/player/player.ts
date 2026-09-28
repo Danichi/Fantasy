@@ -907,12 +907,13 @@ export class Player {
     const toAtt = att.from.clone().sub(this.pos).setY(0).normalize();
     const facing = toAtt.dot(this.forward);
     const a = this.act;
-    if (this.boundaryActive && this.activeCombatStyle === 'boundary' && att.parryable && this.center.distanceTo(att.from) <= this.boundaryRadius) {
+    const attackPoint = att.at ?? att.from;
+    if (this.boundaryActive && this.activeCombatStyle === 'boundary' && att.parryable && this.center.distanceTo(attackPoint) <= this.boundaryRadius) {
       att.onParried?.();
       this.prog.addMastery('boundary', 1);
       this.boundaryCounterReady = this.hasStyleSkill('boundary', 'boundary-counter');
       if (this.hasStyleSkill('boundary', 'boundary-pulse')) this.boundaryPulse();
-      events.emit('parrySuccess', { at: att.from.clone() });
+      events.emit('parrySuccess', { at: attackPoint.clone() });
       return 'parried';
     }
     if (a?.def.parry && a.t >= a.def.parry[0] && a.t <= a.def.parry[1] && att.parryable && facing > 0.1) {
