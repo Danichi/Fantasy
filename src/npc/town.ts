@@ -8,8 +8,7 @@ import type { DialogueUI } from '../ui/dialogue';
 import type { Interactable } from '../dungeon/instance';
 import type { Player } from '../player/player';
 import type { Realm } from '../dungeon/realm';
-import { COMBAT_STYLES, type CombatStyleId } from '../progression/styles';
-import { events } from '../core/events';
+import type { CombatStyleId } from '../progression/styles';
 import { trainingOption, shopOptions } from './services';
 
 // The townsfolk: who they are, where they stand, and what they'll tell you.
