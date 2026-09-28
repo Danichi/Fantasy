@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CRYPT, heightAt } from './terrain';
 import { physics } from '../physics/physics';
@@ -137,6 +138,7 @@ export function buildCrypt(scene: THREE.Scene, m: WorldMats, fx: FX) {
   const brazierMat = m.stone;
   const braziers: THREE.Vector3[] = [];
   const group = new THREE.Group();
+  const houseLoader = new GLTFLoader();
   for (const sx of [-1, 1]) {
     const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.28, 0.5, 12, 1, true), new THREE.MeshStandardMaterial({ color: 0x3a3632, metalness: 0.7, roughness: 0.5, side: THREE.DoubleSide }));
     const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 1.2, 8), brazierMat);
@@ -152,6 +154,32 @@ export function buildCrypt(scene: THREE.Scene, m: WorldMats, fx: FX) {
   group.position.set(CRYPT.x, baseY, gz);
   scene.add(group);
   group.updateMatrixWorld(true);
+
+  // Orc house: this is now the visible entrance landmark for the first dungeon.
+  // The GLB is supplied separately at /assets/npc/orc_house.glb.
+  void houseLoader.loadAsync('/assets/npc/orc_house.glb').then((g) => {
+    if (!group.parent) return;
+    const house = g.scene;
+    house.updateMatrixWorld(true);
+    const hb = new THREE.Box3().setFromObject(house);
+    const h = Math.max(0.01, hb.max.y - hb.min.y);
+    const scale = 8.2 / h;
+    house.scale.setScalar(scale);
+    house.updateMatrixWorld(true);
+    const hb2 = new THREE.Box3().setFromObject(house);
+    const center = hb2.getCenter(new THREE.Vector3());
+    // Face the same direction as the existing crypt approach: the player's
+    // interaction point is placed directly in front of the house.
+    house.position.set(CRYPT.x - center.x, baseY - hb2.min.y, gz + 0.2 - center.z);
+    house.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) {
+        m.castShadow = true;
+        m.receiveShadow = true;
+      }
+    });
+    group.add(house);
+  }).catch((e) => console.warn('orc house failed to load', e));
   const world = braziers.map((b) => b.clone().applyMatrix4(group.matrixWorld));
 
   // Collision: the facade either side of the door, and the (for now) sealed tunnel.
@@ -167,7 +195,7 @@ export function buildCrypt(scene: THREE.Scene, m: WorldMats, fx: FX) {
   let t = 0;
   return {
     /** the doorway (world position) */
-    door: new THREE.Vector3(CRYPT.x, baseY, gz - 0.5),
+    door: new THREE.Vector3(CRYPT.x, baseY, gz + 4.8),
     update(dt: number) {
       t += dt;
       (sigil.material as THREE.MeshBasicMaterial).opacity = 0.7 + Math.sin(t * 1.6) * 0.25;
