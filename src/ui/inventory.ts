@@ -5,6 +5,7 @@ import { events } from '../core/events';
 import { iconFor, wideIconFor } from './icons';
 import type { CharPreview } from './charPreview';
 import { DISCIPLINES, SPECIALIZATIONS, LEARNED_CLASSES } from '../progression/combatProgression';
+import { CLASS_ABILITIES } from '../progression/classData';
 
 // Inventory & equipment screen (I).
 //   left:   armour slots          centre: live 3D character + weapons + summary
@@ -246,7 +247,11 @@ export class InventoryUI {
     }).join('');
     const learned = Object.entries(p.learnedClasses);
     const learnedHtml = learned.length
-      ? learned.map(([id, s]) => `<div class="class-card learned"><h3>${LEARNED_CLASSES[id as keyof typeof LEARNED_CLASSES]?.name ?? id}</h3><span>LV ${s.level} · ${Math.round(s.mastery)}% mastery</span></div>`).join('')
+      ? learned.map(([id, s]) => {
+          const data = CLASS_ABILITIES[id];
+          const abilities = data?.abilities?.slice(0, 4).map((a) => a.name).join(' · ') ?? 'Abilities loading';
+          return `<div class="class-card learned"><h3>${LEARNED_CLASSES[id as keyof typeof LEARNED_CLASSES]?.name ?? data?.name ?? id}</h3><span>LV ${s.level} · ${Math.round(s.mastery)}% mastery</span><small>${abilities}</small></div>`;
+        }).join('')
       : '<div class="class-card empty"><h3>No learned classes yet</h3><span>Class quests and trainers unlock professions.</span></div>';
     const starter = Object.values(LEARNED_CLASSES).filter((x) => x.rarity === 'common').slice(0, 10);
     const starterHtml = starter.map((x) => `<div class="class-card"><h3>${x.name}</h3><span>${x.summary}</span></div>`).join('');
