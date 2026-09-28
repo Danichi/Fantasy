@@ -76,4 +76,24 @@ export class Physics {
   }
 }
 
+/** Wireframe of every collider (?debug=physics). Call update() each frame. */
+export class PhysicsDebug {
+  private lines: THREE.LineSegments;
+  constructor(scene: THREE.Scene) {
+    this.lines = new THREE.LineSegments(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, transparent: true, opacity: 0.8 }),
+    );
+    this.lines.frustumCulled = false;
+    this.lines.renderOrder = 999;
+    scene.add(this.lines);
+  }
+  update() {
+    const { vertices, colors } = physics.world.debugRender();
+    const g = this.lines.geometry;
+    g.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 4));
+  }
+}
+
 export const physics = new Physics();

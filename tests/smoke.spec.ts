@@ -109,20 +109,39 @@ test('fireball spends mana and hits', async ({ page }) => {
   expect(res.hit).toBe(true);
 });
 
-test('hotbar swaps the weapon model in the hand', async ({ page }) => {
+test('equipping swaps the weapon model in the hand, and accessories apply bonuses', async ({ page }) => {
   await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const eq = g.player.equip;
     const before = eq.model('main')?.userData.itemUid;
-    g.useHotbar(1); // arming sword
+    eq.equip(eq.items.find((i: any) => i.def.id === 'armingSword').uid, 'main');
     await new Promise((r) => setTimeout(r, 100));
     const after = eq.model('main')?.userData.itemUid;
     const socket = g.player.rig.hands.Right.socket;
-    return { before, after, inSocket: socket.children.some((c: any) => c.userData.itemUid === after) };
+    const hp0 = g.player.maxHp;
+    eq.equip(eq.items.find((i: any) => i.def.id === 'garnetAmulet').uid);
+    return { before, after, inSocket: socket.children.some((c: any) => c.userData.itemUid === after), dMaxHp: g.player.maxHp - hp0 };
   });
   expect(res.after).not.toBe(res.before);
   expect(res.inSocket).toBe(true);
+  expect(res.dMaxHp).toBe(25);
+});
+
+test('rocks block the player', async ({ page }) => {
+  await boot(page);
+  const z = await page.evaluate(async () => {
+    const g = (window as any).__game;
+    g.player.teleport(new g.THREE.Vector3(-40, g.player.pos.y + 3, -3));
+    await new Promise((r) => setTimeout(r, 600));
+    g.cam.yaw = Math.PI;
+    g.input.press('KeyW');
+    await new Promise((r) => setTimeout(r, 3000));
+    g.input.release('KeyW');
+    return g.player.pos.z;
+  });
+  // The mossy rock cluster sits in the way; without collision we'd reach z < -9.
+  expect(z).toBeGreaterThan(-8);
 });
 
 test('dual wield: off-hand attack and equip armour', async ({ page }) => {

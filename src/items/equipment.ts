@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Character } from '../player/character';
 import { RigLayer } from '../player/rigLayer';
 import { basisQuat } from '../player/ik';
-import { ITEMS, ARMOR_SLOTS, type ItemDef, type Slot } from './itemDefs';
+import { ITEMS, ARMOR_SLOTS, ACCESSORY_SLOTS, type ItemDef, type ItemStats, type Slot } from './itemDefs';
 import { buildArmorParts, type ArmorPart, type LimbFit } from './armorModels';
 import { events } from '../core/events';
 
@@ -12,12 +12,11 @@ export interface ItemInstance {
   qty: number;
 }
 
-export type HotbarEntry = number | null; // item uid
 
 let nextUid = 1;
 
 const CHILD: Record<string, string> = {
-  Head: 'HeadTop_End', Spine2: 'Neck',
+  Head: 'HeadTop_End', Spine2: 'Neck', Hips: 'Spine',
   RightArm: 'RightForeArm', LeftArm: 'LeftForeArm', RightForeArm: 'RightHand', LeftForeArm: 'LeftHand',
   RightHand: 'RightHandMiddle1', LeftHand: 'LeftHandMiddle1',
   RightUpLeg: 'RightLeg', LeftUpLeg: 'LeftLeg', RightLeg: 'RightFoot', LeftLeg: 'LeftFoot',
@@ -27,7 +26,10 @@ const CHILD: Record<string, string> = {
 export class Equipment implements LimbFit {
   items: ItemInstance[] = [];
   equipped: Partial<Record<Slot, number>> = {};
-  hotbar: HotbarEntry[] = new Array(8).fill(null);
+  /** quick items (potions etc.) on keys 1-4 */
+  quick: (number | null)[] = [null, null, null, null];
+  /** moveset bar (Tab): spells now, class skills later; keys 1-6 */
+  moves: (number | null)[] = [null, null, null, null, null, null];
   /** the spell R casts */
   activeSpell: number | null = null;
   showArmor = true;
@@ -106,7 +108,14 @@ export class Equipment implements LimbFit {
     const k = item.def.kind;
     if (slot === 'main') return k === 'sword';
     if (slot === 'off') return k === 'sword' || k === 'shield';
-    return k === 'armor' && item.def.slot === slot;
+    if (slot === 'ring1' || slot === 'ring2') return k === 'accessory' && (item.def.slot === 'ring1' || item.def.slot === 'ring2');
+    return (k === 'armor' || k === 'accessory') && item.def.slot === slot;
+  }
+
+  /** Natural slot for an item; rings take the first free ring slot. */
+  slotFor(item: ItemInstance): Slot | undefined {
+    if (item.def.slot === 'ring1' || item.def.slot === 'ring2') return this.equipped.ring1 == null ? 'ring1' : 'ring2';
+    return item.def.slot;
   }
 
   /** Equip into `slot` (defaults to the item's natural slot). */
@@ -118,7 +127,7 @@ export class Equipment implements LimbFit {
       events.emit('equipmentChanged', {});
       return true;
     }
-    const target = slot ?? item.def.slot;
+    const target = slot ?? this.slotFor(item);
     if (!target || !this.canEquip(item, target)) return false;
     // An item can only be in one slot: moving a sword main<->off swaps.
     const from = this.slotOf(uid);
@@ -195,11 +204,18 @@ export class Equipment implements LimbFit {
   get dualWield() {
     return this.offItem?.def.kind === 'sword' && !!this.mainWeapon;
   }
+  /** Sum of a stat across everything equipped (armour, accessories, weapons). */
+  bonus(stat: keyof ItemStats) {
+    let sum = 0;
+    for (const uid of Object.values(this.equipped)) sum += (this.get(uid)?.def.stats[stat] as number | undefined) ?? 0;
+    return sum;
+  }
+
   get armorValue() {
     return ARMOR_SLOTS.reduce((s, sl) => s + (this.inSlot(sl)?.def.stats.armor ?? 0), 0);
   }
   get poise() {
-    return ARMOR_SLOTS.reduce((s, sl) => s + (this.inSlot(sl)?.def.stats.poise ?? 0), 0) + (this.mainWeapon?.def.stats.poise ?? 0);
+    return [...ARMOR_SLOTS, ...ACCESSORY_SLOTS].reduce((s, sl) => s + (this.inSlot(sl)?.def.stats.poise ?? 0), 0) + (this.mainWeapon?.def.stats.poise ?? 0);
   }
 
   consume(uid: number) {
@@ -208,7 +224,7 @@ export class Equipment implements LimbFit {
     it.qty--;
     if (it.qty <= 0) {
       this.items = this.items.filter((i) => i !== it);
-      this.hotbar = this.hotbar.map((h) => (h === uid ? null : h));
+      this.quick = this.quick.map((h) => (h === uid ? null : h));
     }
   }
 }

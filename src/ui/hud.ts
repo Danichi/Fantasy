@@ -2,10 +2,12 @@ import * as THREE from 'three';
 import type { Player } from '../player/player';
 import { targets } from '../combat/targets';
 import { events } from '../core/events';
-import { iconFor } from './icons';
+import { iconFor, wideIconFor } from './icons';
 
-// Heads-up display: vitals (top right), hotbar (bottom left), lock-on reticle,
-// enemy health bars, floating damage numbers, toasts and the death screen.
+// Heads-up display: vitals (top right); bottom left, the two big hand frames
+// (main / off hand) beside a bar that Tab flips between quick items (keys 1-4)
+// and the moveset (keys 1-6); lock-on reticle, enemy health bars, floating
+// damage numbers, toasts and the death screen.
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', parent?: HTMLElement, html = '') {
   const e = document.createElement(tag);
@@ -29,7 +31,10 @@ export class HUD {
   readonly root: HTMLElement;
   private bars: Record<'hp' | 'st' | 'mp', BarEls>;
   private slots: HTMLDivElement[] = [];
-  private loadout: HTMLDivElement;
+  private hands: Record<'main' | 'off', HTMLDivElement>;
+  private barTitle: HTMLDivElement;
+  /** which set the number keys use */
+  mode: 'items' | 'moves' = 'items';
   private reticle: HTMLDivElement;
   private ehp = new Map<number, { e: HTMLDivElement; i: HTMLElement; b: HTMLElement; shown: number; trail: number }>();
   private toastEl: HTMLDivElement;
@@ -39,7 +44,7 @@ export class HUD {
   private death: HTMLDivElement;
   private tmp = new THREE.Vector3();
   private hotbarDirty = true;
-  onHotbarDrop?: (slot: number, uid: number) => void;
+  onSlotDrop?: (mode: 'items' | 'moves', slot: number, uid: number) => void;
 
   constructor(private player: Player, private camera: THREE.Camera) {
     this.root = document.getElementById('ui')!;
@@ -56,10 +61,18 @@ export class HUD {
     };
     this.bars = { hp: mk('hp', 'HEALTH'), st: mk('st', 'STAMINA'), mp: mk('mp', 'MANA') };
 
-    const wrap = el('div', 'hotbar-wrap', this.root);
-    this.loadout = el('div', 'loadout', wrap);
-    const hb = el('div', 'hotbar', wrap);
-    for (let i = 0; i < 8; i++) {
+    const wrap = el('div', 'loadout-wrap', this.root);
+    const handRow = el('div', 'hands', wrap);
+    const mkHand = (k: 'main' | 'off', label: string, key: string) => {
+      const h = el('div', `hand ${k}`, handRow);
+      h.innerHTML = `<span class="cap">${label}</span><span class="keyhint">${key}</span><div class="art"></div><span class="nm"></span>`;
+      return h;
+    };
+    this.hands = { main: mkHand('main', 'MAIN HAND', 'LMB'), off: mkHand('off', 'OFF HAND', 'RMB') };
+    const side = el('div', 'quickside', wrap);
+    this.barTitle = el('div', 'bar-title', side);
+    const hb = el('div', 'hotbar', side);
+    for (let i = 0; i < 6; i++) {
       const s = el('div', 'slot interactive', hb);
       s.dataset.i = String(i);
       s.addEventListener('dragover', (e) => {
@@ -71,7 +84,7 @@ export class HUD {
         e.preventDefault();
         s.classList.remove('dragover');
         const uid = Number(e.dataTransfer?.getData('text/uid'));
-        if (uid) this.onHotbarDrop?.(i, uid);
+        if (uid) this.onSlotDrop?.(this.mode, i, uid);
       });
       this.slots.push(s);
     }
@@ -140,26 +153,41 @@ export class HUD {
     setTimeout(() => d.remove(), 950);
   }
 
+  setMode(m: 'items' | 'moves') {
+    this.mode = m;
+    this.hotbarDirty = true;
+  }
+
   private renderHotbar() {
     const eq = this.player.equip;
-    const main = eq.equipped.main, off = eq.equipped.off, spell = eq.activeSpell;
-    eq.hotbar.forEach((uid, i) => {
-      const s = this.slots[i];
-      const it = eq.get(uid);
-      s.className = 'slot interactive';
-      s.innerHTML = `<span class="key">${i + 1}</span>`;
+    // Hand frames.
+    for (const k of ['main', 'off'] as const) {
+      const it = eq.inSlot(k);
+      const h = this.hands[k];
+      h.classList.toggle('empty', !it);
+      h.querySelector('.art')!.innerHTML = it ? `<img src="${wideIconFor(it.def.id)}" alt="">` : '';
+      h.querySelector('.nm')!.textContent = it ? it.def.name : k === 'off' ? (eq.mainWeapon ? 'Empty' : '') : 'Unarmed';
+      h.querySelector('.keyhint')!.textContent = k === 'main' ? 'LMB' : it?.def.kind === 'shield' ? 'RMB block · F parry' : it ? 'RMB' : '';
+    }
+    // Quick items or moveset.
+    const moves = this.mode === 'moves';
+    this.barTitle.innerHTML = `<span class="${moves ? '' : 'on'}">ITEMS</span><span class="${moves ? 'on' : ''}">MOVES</span><kbd>Tab</kbd>`;
+    const list = moves ? eq.moves : eq.quick;
+    this.slots.forEach((s, i) => {
+      const uid = list[i];
+      s.className = 'slot interactive' + (moves ? ' move' : '') + (i >= list.length ? ' hidden' : '');
+      s.innerHTML = `<span class="key">${i + 1}</span><i class="cd"></i>`;
       s.title = '';
+      const it = eq.get(uid);
       if (!it) return;
       s.innerHTML += `<img src="${iconFor(it.def.id)}" alt="">`;
       if (it.def.stack) s.innerHTML += `<span class="qty">${it.qty}</span>`;
+      if (it.def.stats.manaCost) s.innerHTML += `<span class="cost">${it.def.stats.manaCost}</span>`;
       s.title = it.def.name;
-      if (uid === main) s.classList.add('main'), (s.innerHTML += '<span class="tag">MAIN</span>');
-      else if (uid === off) s.classList.add('off'), (s.innerHTML += '<span class="tag">OFF</span>');
-      else if (uid === spell) s.classList.add('spell'), (s.innerHTML += '<span class="tag">SPELL</span>');
+      if (moves && uid === eq.activeSpell) s.classList.add('spell');
     });
-    const nm = (u: number | null | undefined) => eq.get(u)?.def.name ?? '—';
-    this.loadout.innerHTML = `<span>Main <b>${nm(main)}</b></span><span>Off <b>${nm(off)}</b></span><span>Spell <b>${nm(spell)}</b></span>`;
   }
+
 
   private updateBar(b: BarEls, v: number, max: number, dt: number, widthPx: number) {
     const f = Math.max(0, v / max);

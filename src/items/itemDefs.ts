@@ -2,9 +2,13 @@ import * as THREE from 'three';
 import { buildSword, buildRoundShield, buildKiteShield } from './weaponModels';
 import { buildArmorPiece, type ArmorPieceId } from './armorModels';
 
-export type Slot = 'main' | 'off' | 'head' | 'shoulders' | 'chest' | 'hands' | 'legs' | 'feet';
-export const ARMOR_SLOTS: Slot[] = ['head', 'shoulders', 'chest', 'hands', 'legs', 'feet'];
-export type ItemKind = 'sword' | 'shield' | 'armor' | 'spell' | 'consumable';
+export type Slot =
+  | 'main' | 'off'
+  | 'head' | 'shoulders' | 'chest' | 'cloak' | 'hands' | 'legs' | 'feet'
+  | 'amulet' | 'ring1' | 'ring2' | 'belt' | 'trinket';
+export const ARMOR_SLOTS: Slot[] = ['head', 'shoulders', 'chest', 'cloak', 'hands', 'legs', 'feet'];
+export const ACCESSORY_SLOTS: Slot[] = ['amulet', 'ring1', 'ring2', 'belt', 'trinket'];
+export type ItemKind = 'sword' | 'shield' | 'armor' | 'accessory' | 'spell' | 'consumable';
 export type Rarity = 'common' | 'fine' | 'rare' | 'epic';
 
 export interface ItemStats {
@@ -17,7 +21,19 @@ export interface ItemStats {
   manaCost?: number;
   heal?: number;
   restoreMana?: number;
+  // bonuses (armour and accessories)
+  maxHp?: number;
+  maxStamina?: number;
+  maxMana?: number;
+  staminaRegen?: number; // fraction, 0.25 = +25%
+  manaRegen?: number;
+  damagePct?: number; // fraction
 }
+
+export const STAT_LABEL: Partial<Record<keyof ItemStats, string>> = {
+  maxHp: 'Max health', maxStamina: 'Max stamina', maxMana: 'Max mana',
+  staminaRegen: 'Stamina regen', manaRegen: 'Mana regen', damagePct: 'Damage',
+};
 
 export interface ItemDef {
   id: string;
@@ -87,6 +103,31 @@ export const ITEMS: Record<string, ItemDef> = {
   sabatons: {
     id: 'sabatons', name: 'Sabatons', kind: 'armor', slot: 'feet', rarity: 'common',
     desc: 'Articulated steel foot plates.', stats: { armor: 2, poise: 3 }, armor: 'sabatons',
+  },
+  wayfarerCloak: {
+    id: 'wayfarerCloak', name: "Wayfarer's Cloak", kind: 'armor', slot: 'cloak', rarity: 'fine',
+    desc: 'A heavy wool cloak, crimson and travel-worn.', stats: { armor: 2, maxStamina: 10 }, armor: 'cloak',
+  },
+  // ---- accessories -------------------------------------------------------------
+  garnetAmulet: {
+    id: 'garnetAmulet', name: 'Garnet Amulet', kind: 'accessory', slot: 'amulet', rarity: 'rare',
+    desc: 'A deep red garnet on a silver chain. Warm to the touch.', stats: { maxHp: 25 }, armor: 'amulet',
+  },
+  ringVigor: {
+    id: 'ringVigor', name: 'Ring of Vigour', kind: 'accessory', slot: 'ring1', rarity: 'fine',
+    desc: 'A plain iron band. Your breath comes easier.', stats: { staminaRegen: 0.25 },
+  },
+  ringSage: {
+    id: 'ringSage', name: "Sage's Ring", kind: 'accessory', slot: 'ring1', rarity: 'rare',
+    desc: 'A silver ring set with a moonstone that hums faintly.', stats: { manaRegen: 0.5, maxMana: 15 },
+  },
+  warriorBelt: {
+    id: 'warriorBelt', name: "Warrior's Belt", kind: 'accessory', slot: 'belt', rarity: 'common',
+    desc: 'Thick leather with a brass buckle and a pouch.', stats: { poise: 8, maxStamina: 10 }, armor: 'belt',
+  },
+  luckyCharm: {
+    id: 'luckyCharm', name: 'Lucky Charm', kind: 'accessory', slot: 'trinket', rarity: 'fine',
+    desc: 'A knotted cord and a boar tusk. Strikes seem to land a little harder.', stats: { damagePct: 0.08 },
   },
   fireball: {
     id: 'fireball', name: 'Fireball', kind: 'spell', rarity: 'rare',

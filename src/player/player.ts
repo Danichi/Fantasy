@@ -62,9 +62,18 @@ export class Player {
   private landT = 1; // seconds since landing (drives the landing half of the jump clip)
   private fallSpeed = 0;
 
-  maxHp = 120; hp = 120;
-  maxStamina = 100; stamina = 100;
-  maxMana = 80; mana = 80;
+  hp = 120;
+  stamina = 100;
+  mana = 80;
+  get maxHp() {
+    return 120 + (this.equip?.bonus('maxHp') ?? 0);
+  }
+  get maxStamina() {
+    return 100 + (this.equip?.bonus('maxStamina') ?? 0);
+  }
+  get maxMana() {
+    return 80 + (this.equip?.bonus('maxMana') ?? 0);
+  }
   private staminaDelay = 0;
   private hot = { rate: 0, left: 0 };
   private burn = { dps: 0, left: 0 };
@@ -731,7 +740,8 @@ export class Player {
           a.hitSet.add(tg.id);
           const crit = tg.stunned;
           const charge = 1 + a.charge * 0.6;
-          const dmg = Math.round(base * h.dmg * charge * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
+          const bonus = 1 + this.equip.bonus('damagePct');
+          const dmg = Math.round(base * h.dmg * charge * bonus * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
           const dir = tg.position.clone().sub(this.pos).setY(0).normalize();
           const at2 = tg.center.clone().addScaledVector(dir, -tg.radius * 0.8);
           tg.takeHit({ damage: dmg, poise: h.poise * charge, dir, at: at2, crit, source: 'melee' });
@@ -823,8 +833,9 @@ export class Player {
 
   private updateStats(dt: number) {
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
-    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * dt);
-    this.mana = Math.min(this.maxMana, this.mana + 2.2 * dt);
+    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen')) * dt);
+    this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen')) * dt);
+    this.hp = Math.min(this.hp, this.maxHp);
     if (this.hot.left > 0 && !this.dead) {
       this.hot.left -= dt;
       this.hp = Math.min(this.maxHp, this.hp + this.hot.rate * dt);
@@ -844,6 +855,14 @@ export class Player {
     if (st.restoreMana) this.mana = Math.min(this.maxMana, this.mana + st.restoreMana);
     this.equip.consume(uid);
     this.onSpell?.(st.heal ? 'potionHeal' : 'potionMana', this.center, this.forward, null);
+  }
+
+  /** Cast a spell from the moveset bar. */
+  castMove(uid: number) {
+    const it = this.equip.get(uid);
+    if (!it || it.def.kind !== 'spell' || this.dead) return;
+    this.equip.activeSpell = uid;
+    this.buffer = { a: 'cast', t: performance.now() / 1000 };
   }
 
   /** Debug: show action `id` frozen at time t. */

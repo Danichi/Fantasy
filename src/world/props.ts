@@ -161,6 +161,31 @@ function coniferGeometry(seed: number) {
   return { foliage, trunk };
 }
 
+/**
+ * Exact static collision for a placed prop: its (already simplified) meshes
+ * baked into one world-space triangle mesh.
+ */
+function addMeshCollider(obj: THREE.Object3D) {
+  obj.updateMatrixWorld(true);
+  const verts: number[] = [];
+  const idx: number[] = [];
+  const v = new THREE.Vector3();
+  obj.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const g = m.geometry;
+    const pos = g.attributes.position as THREE.BufferAttribute;
+    const base = verts.length / 3;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+      verts.push(v.x, v.y, v.z);
+    }
+    if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(base + g.index.getX(i));
+    else for (let i = 0; i < pos.count; i++) idx.push(base + i);
+  });
+  if (idx.length) physics.addTrimesh(new Float32Array(verts), new Uint32Array(idx));
+}
+
 export interface World {
   update(dt: number): void;
 }
@@ -361,7 +386,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     o.scale.setScalar(s);
     if (!shadow) o.traverse((c) => (c.castShadow = false));
     scene.add(o);
-    if (collider) physics.addCylinder(new THREE.Vector3(x, heightAt(x, z) + 0.8, z), 0.8, collider * s);
+    if (collider) addMeshCollider(o);
   };
   const [barrels, crate, barrel, boulder, rocks, shrub, firepit, lantern, stump] = await Promise.all(
     ['wooden_barrels_01', 'wooden_crate_01', 'Barrel_01', 'boulder_01', 'rock_moss_set_01', 'shrub_02', 'stone_fire_pit', 'wooden_lantern_01', 'tree_stump_01'].map(loadModel),
@@ -395,7 +420,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
   for (const [x, z, s] of [[-34, 2, 1.4], [36, 26, 1.8], [-16, 44, 1.2], [42, -8, 1.5], [-44, 22, 1.7], [12, 50, 1.3]] as const) {
     place(boulder, x, z, rr() * 6, s, 1.1);
   }
-  for (const [x, z] of [[-40, -10], [30, 40], [-28, 44], [46, 12]] as const) place(rocks, x, z, rr() * 6, 1.3);
+  for (const [x, z] of [[-40, -10], [30, 40], [-28, 44], [46, 12]] as const) place(rocks, x, z, rr() * 6, 1.3, 1);
   for (let i = 0; i < 16; i++) {
     const a = rr() * Math.PI * 2;
     const r = PALISADE_R - 2.5 - rr() * 3;

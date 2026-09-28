@@ -6,7 +6,7 @@ import { mats } from './materials';
 // of the back of the hand), +X = Y x Z. Radii are in metres and sized for a
 // 1.8 m body; bone lengths come from the loaded rig.
 
-export type ArmorPieceId = 'helm' | 'pauldrons' | 'breastplate' | 'gauntlets' | 'greaves' | 'sabatons';
+export type ArmorPieceId = 'helm' | 'pauldrons' | 'breastplate' | 'gauntlets' | 'greaves' | 'sabatons' | 'cloak' | 'amulet' | 'belt';
 
 export interface LimbFit {
   /** returns a socket in limb space for this bone plus the bone's length */
@@ -215,12 +215,86 @@ function sabaton(len: number) {
   return g;
 }
 
+let clothMat: THREE.MeshStandardMaterial | null = null;
+function wool() {
+  if (clothMat) return clothMat;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#6e1a1a';
+  g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 1800; i++) {
+    const l = Math.random() * 40;
+    g.fillStyle = `rgba(${90 + l},${20 + l * 0.3},${20 + l * 0.3},0.35)`;
+    g.fillRect(Math.random() * 128, Math.random() * 128, 1.5, 1.5);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(3, 3);
+  clothMat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.95, side: THREE.DoubleSide });
+  return clothMat;
+}
+
+/** Cape from the shoulders to the backs of the knees, folded into soft pleats. */
+function cloak(len: number) {
+  const W = 0.44, H = 1.05;
+  const geo = new THREE.PlaneGeometry(W, H, 12, 16);
+  const p = geo.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i);
+    const t = (H / 2 - y) / H; // 0 at the shoulders, 1 at the hem
+    const width = 0.62 + t * 0.55; // flares toward the hem
+    const pleat = Math.sin((x / W) * Math.PI * 7) * 0.012 * (0.3 + t);
+    // Wraps around the back of the shoulders, then hangs away from the legs.
+    const z = -0.14 - Math.cos((x / W) * Math.PI) * 0.06 * (1 - t) - t * t * 0.12 + pleat;
+    p.setXYZ(i, x * width, len * 0.8 - t * H, z);
+  }
+  geo.computeVertexNormals();
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(geo, wool()));
+  const clasp = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 6, 16), mats().brass);
+  clasp.position.set(0, len * 0.85, 0.1);
+  g.add(clasp);
+  return g;
+}
+
+function amulet(len: number) {
+  const g = new THREE.Group();
+  const chain = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.004, 6, 32, Math.PI), mats().brass);
+  chain.rotation.set(Math.PI / 2 + 0.35, 0, Math.PI);
+  chain.position.set(0, len * 0.55, 0.07);
+  const gem = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.022, 0),
+    new THREE.MeshPhysicalMaterial({ color: 0x9b1020, roughness: 0.05, clearcoat: 1, emissive: 0x3a0005 }),
+  );
+  gem.scale.y = 1.4;
+  gem.position.set(0, len * 0.55 - 0.1, 0.16);
+  g.add(chain, gem);
+  return g;
+}
+
+function belt(len: number) {
+  const g = new THREE.Group();
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.022, 6, 32), mats().leather);
+  band.rotation.x = Math.PI / 2;
+  band.scale.set(1, 0.78, 2.2);
+  band.position.y = len * 0.6;
+  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.012), mats().brass);
+  buckle.position.set(0, len * 0.6, 0.13);
+  const pouch = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.05), mats().leather);
+  pouch.position.set(-0.13, len * 0.6 - 0.05, 0.06);
+  pouch.rotation.y = -0.6;
+  g.add(band, buckle, pouch);
+  return g;
+}
+
 // ---- assembly ---------------------------------------------------------------
 
 const DEFAULT_LEN: Record<string, number> = {
   Head: 0.2, Spine2: 0.14, RightArm: 0.28, LeftArm: 0.28, RightForeArm: 0.28, LeftForeArm: 0.28,
   RightHand: 0.09, LeftHand: 0.09, RightUpLeg: 0.45, LeftUpLeg: 0.45, RightLeg: 0.44, LeftLeg: 0.44,
-  RightFoot: 0.14, LeftFoot: 0.14,
+  RightFoot: 0.14, LeftFoot: 0.14, Hips: 0.1,
 };
 
 type PartSpec = { bone: string; make: (len: number) => THREE.Object3D };
@@ -248,6 +322,12 @@ function specs(id: ArmorPieceId): PartSpec[] {
       ];
     case 'sabatons':
       return [{ bone: 'RightFoot', make: sabaton }, { bone: 'LeftFoot', make: sabaton }];
+    case 'cloak':
+      return [{ bone: 'Spine2', make: cloak }];
+    case 'amulet':
+      return [{ bone: 'Spine2', make: amulet }];
+    case 'belt':
+      return [{ bone: 'Hips', make: belt }];
   }
 }
 

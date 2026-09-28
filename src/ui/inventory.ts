@@ -1,42 +1,84 @@
 import type { Player } from '../player/player';
-import type { Slot } from '../items/itemDefs';
+import { ARMOR_SLOTS, ACCESSORY_SLOTS, STAT_LABEL, type ItemKind, type ItemStats, type Slot } from '../items/itemDefs';
 import type { ItemInstance } from '../items/equipment';
 import { events } from '../core/events';
-import { iconFor } from './icons';
+import { iconFor, wideIconFor } from './icons';
+import type { CharPreview } from './charPreview';
 
-// Inventory & equipment screen (I). Click an item to equip it in its natural
-// slot, Shift-click a sword to put it in the off hand, click an equipped slot
-// to take it off, drag any item onto the hotbar to bind it to a number key.
+// Inventory & equipment screen (I).
+//   left:   armour slots          centre: live 3D character + weapons + summary
+//   right:  accessories, quick items
+//   far:    tabs (Items / Skills / Stats) with the item grid and details
+// Click an item to equip it (Shift-click a sword for the off hand), click an
+// equipped slot to take it off, or drag items onto slots and the HUD bar.
 
 const SLOT_LABEL: Record<Slot, string> = {
-  main: 'Main hand', off: 'Off hand', head: 'Head', shoulders: 'Shoulders',
-  chest: 'Chest', hands: 'Hands', legs: 'Legs', feet: 'Feet',
+  main: 'Main hand', off: 'Off hand', head: 'Head', shoulders: 'Shoulders', chest: 'Chest', cloak: 'Cloak',
+  hands: 'Hands', legs: 'Legs', feet: 'Feet', amulet: 'Amulet', ring1: 'Ring', ring2: 'Ring', belt: 'Belt', trinket: 'Trinket',
 };
-const DOLL: Slot[] = ['head', 'shoulders', 'chest', 'hands', 'legs', 'feet', 'main', 'off'];
+
+type Tab = 'items' | 'skills' | 'stats';
+type Filter = 'all' | 'weapons' | 'armour' | 'accessories' | 'magic' | 'consumables';
+const FILTERS: [Filter, string, ItemKind[]][] = [
+  ['all', 'All', []],
+  ['weapons', 'Weapons', ['sword', 'shield']],
+  ['armour', 'Armour', ['armor']],
+  ['accessories', 'Accessories', ['accessory']],
+  ['magic', 'Magic', ['spell']],
+  ['consumables', 'Usables', ['consumable']],
+];
+
+const CLASSES = [
+  { id: 'swordsman', name: 'Swordsman', where: 'the arms master at the barracks', blurb: 'Blade techniques: dashing strikes, whirlwinds and deadly ripostes.' },
+  { id: 'mage', name: 'Mage', where: 'the magus in the tower', blurb: 'Fire, frost and lightning, barriers and blinks.' },
+  { id: 'tank', name: 'Tank', where: 'the knight captain', blurb: 'Shield mastery: bulwark parries, bashes and war cries.' },
+];
+
+function fmtStat(k: keyof ItemStats, v: number) {
+  if (k === 'staminaRegen' || k === 'manaRegen' || k === 'damagePct') return `+${Math.round(v * 100)}%`;
+  if (k === 'speed') return `${Math.round(v * 100)}%`;
+  if (k === 'block') return `${v}%`;
+  if (k === 'stability') return `${Math.round(v * 100)}`;
+  return `${v > 0 && k.startsWith('max') ? '+' : ''}${v}`;
+}
 
 export class InventoryUI {
   readonly el: HTMLDivElement;
-  private doll: HTMLDivElement;
-  private grid: HTMLDivElement;
-  private detail: HTMLDivElement;
-  private stats: HTMLDivElement;
+  private armorCol: HTMLDivElement;
+  private accCol: HTMLDivElement;
+  private weaponRow: HTMLDivElement;
+  private summary: HTMLDivElement;
+  private body: HTMLDivElement;
+  private tabs: HTMLDivElement;
+  private tab: Tab = 'items';
+  private filter: Filter = 'all';
+  private hovered: ItemInstance | undefined;
   open = false;
   onToggle?: (open: boolean) => void;
+  onQuickDrop?: (slot: number, uid: number) => void;
 
-  constructor(private player: Player) {
+  constructor(private player: Player, preview: CharPreview) {
     const root = document.getElementById('ui')!;
     this.el = document.createElement('div');
     this.el.className = 'inventory hidden';
     this.el.innerHTML = `
-      <section><h2>EQUIPMENT</h2><div class="paperdoll"></div><div class="stats"></div></section>
-      <section><h2>INVENTORY</h2><div class="grid"></div></section>
-      <section class="detail"></section>
-      <div class="inv-help">Click to equip · <b>Shift-click</b> a sword to wield it in the off hand · Click an equipped slot to remove it · Drag items onto the hotbar · <b>I</b> or <b>Esc</b> to close</div>`;
+      <section class="inv-col armor"><h2>ARMOUR</h2><div class="slots"></div></section>
+      <section class="inv-center">
+        <div class="preview-frame"><div class="preview"></div><span class="rot-hint">Drag to rotate</span></div>
+        <div class="weapons"></div>
+        <div class="summary"></div>
+      </section>
+      <section class="inv-col acc"><h2>ACCESSORIES</h2><div class="slots"></div></section>
+      <section class="inv-main"><div class="tabs"></div><div class="body"></div></section>
+      <div class="inv-help">Click to equip · <b>Shift-click</b> a sword for the off hand · Click an equipped slot to remove it · Drag items onto slots or the HUD bar · <b>I</b> / <b>Esc</b> to close</div>`;
     root.appendChild(this.el);
-    this.doll = this.el.querySelector('.paperdoll')!;
-    this.grid = this.el.querySelector('.grid')!;
-    this.detail = this.el.querySelector('.detail')!;
-    this.stats = this.el.querySelector('.stats')!;
+    this.armorCol = this.el.querySelector('.armor .slots')!;
+    this.accCol = this.el.querySelector('.acc .slots')!;
+    this.weaponRow = this.el.querySelector('.weapons')!;
+    this.summary = this.el.querySelector('.summary')!;
+    this.body = this.el.querySelector('.inv-main .body')!;
+    this.tabs = this.el.querySelector('.inv-main .tabs')!;
+    preview.bind(this.el.querySelector('.preview')!);
     events.on('equipmentChanged', () => this.open && this.render());
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Escape' && this.open) {
@@ -53,61 +95,109 @@ export class InventoryUI {
     this.onToggle?.(this.open);
   }
 
-  private showDetail(it: ItemInstance | undefined) {
-    if (!it) {
-      this.detail.innerHTML = '<h2>DETAILS</h2><p style="color:var(--ink-dim)">Hover an item to inspect it.</p>';
-      return;
-    }
-    const d = it.def;
-    const st = d.stats;
-    const rows: string[] = [];
-    if (st.damage) rows.push(`<span>Damage</span><b>${st.damage}</b>`);
-    if (st.speed) rows.push(`<span>Speed</span><b>${Math.round(st.speed * 100)}%</b>`);
-    if (st.block) rows.push(`<span>Block</span><b>${st.block}%</b>`);
-    if (st.stability) rows.push(`<span>Stability</span><b>${Math.round(st.stability * 100)}</b>`);
-    if (st.armor) rows.push(`<span>Armour</span><b>${st.armor}</b>`);
-    if (st.poise) rows.push(`<span>Poise</span><b>${st.poise}</b>`);
-    if (st.manaCost) rows.push(`<span>Mana cost</span><b>${st.manaCost}</b>`);
-    if (st.heal) rows.push(`<span>Restores</span><b>${st.heal} HP</b>`);
-    if (st.restoreMana) rows.push(`<span>Restores</span><b>${st.restoreMana} MP</b>`);
-    const how =
-      d.kind === 'sword' ? 'Click: main hand. Shift-click: off hand (dual wield).' :
-      d.kind === 'shield' ? 'Click: off hand. Hold right mouse to block, F to parry.' :
-      d.kind === 'spell' ? 'Click to attune. Press R to cast.' :
-      d.kind === 'consumable' ? 'Bind to the hotbar and press its number to drink.' : 'Click to wear.';
-    this.detail.innerHTML = `
-      <div class="name">${d.name}</div><div class="rar">${d.rarity} ${d.kind}</div>
-      <img class="big" src="${iconFor(d.id)}" alt="">
-      <p>${d.desc}</p>
-      <div class="stats" style="margin:0 0 12px">${rows.join('')}</div>
-      <div class="how">${how}</div>`;
+  /** The transparent window the 3D preview is drawn into (null when closed). */
+  get previewVisible() {
+    return this.open;
+  }
+
+  // ---- slots ----------------------------------------------------------------
+  private slotEl(slot: Slot, wide = false) {
+    const eq = this.player.equip;
+    const it = eq.inSlot(slot);
+    const d = document.createElement('div');
+    d.className = `eqslot${it ? '' : ' empty'}${wide ? ' wide' : ''}`;
+    const img = it ? `<img src="${wide ? wideIconFor(it.def.id) : iconFor(it.def.id)}" alt="">` : '';
+    d.innerHTML = `<div class="ic">${img}</div><div class="tx"><div class="sl">${SLOT_LABEL[slot]}</div><div class="nm">${it?.def.name ?? 'Empty'}</div></div>`;
+    d.addEventListener('click', () => eq.unequip(slot));
+    d.addEventListener('mouseenter', () => this.showDetail(it));
+    d.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      d.classList.add('dragover');
+    });
+    d.addEventListener('dragleave', () => d.classList.remove('dragover'));
+    d.addEventListener('drop', (e) => {
+      e.preventDefault();
+      d.classList.remove('dragover');
+      const uid = Number(e.dataTransfer?.getData('text/uid'));
+      const item = eq.get(uid);
+      if (item && eq.canEquip(item, slot)) eq.equip(uid, slot);
+    });
+    return d;
   }
 
   render() {
     const eq = this.player.equip;
-    this.doll.innerHTML = '';
-    for (const slot of DOLL) {
-      const it = eq.inSlot(slot);
-      const d = document.createElement('div');
-      d.className = 'eqslot' + (it ? '' : ' empty');
-      d.innerHTML = `<div class="ic">${it ? `<img src="${iconFor(it.def.id)}" alt="">` : ''}</div><div><div class="sl">${SLOT_LABEL[slot]}</div><div class="nm">${it?.def.name ?? 'Empty'}</div></div>`;
-      d.addEventListener('click', () => eq.unequip(slot));
-      d.addEventListener('mouseenter', () => this.showDetail(it));
-      this.doll.appendChild(d);
-    }
-    const sp = eq.get(eq.activeSpell);
-    this.stats.innerHTML = `
-      <span>Attack</span><b>${eq.mainWeapon?.def.stats.damage ?? 0}${eq.dualWield ? ' + ' + (eq.offItem?.def.stats.damage ?? 0) : ''}</b>
-      <span>Armour</span><b>${eq.armorValue}</b>
-      <span>Poise</span><b>${eq.poise}</b>
-      <span>Block</span><b>${eq.hasShield ? (eq.offItem!.def.stats.block ?? 0) + '%' : '—'}</b>
-      <span>Attuned spell</span><b>${sp?.def.name ?? '—'}</b>`;
+    const p = this.player;
+    this.armorCol.replaceChildren(...ARMOR_SLOTS.map((s) => this.slotEl(s)));
+    this.accCol.replaceChildren(...ACCESSORY_SLOTS.map((s) => this.slotEl(s)));
+    // Quick items under the accessories.
+    const qh = document.createElement('h2');
+    qh.textContent = 'QUICK ITEMS';
+    const quick = document.createElement('div');
+    quick.className = 'quickrow';
+    eq.quick.forEach((uid, i) => {
+      const it = eq.get(uid);
+      const q = document.createElement('div');
+      q.className = 'qslot';
+      q.innerHTML = `<span class="key">${i + 1}</span>${it ? `<img src="${iconFor(it.def.id)}" alt=""><span class="qty">${it.qty}</span>` : ''}`;
+      q.addEventListener('dragover', (e) => e.preventDefault());
+      q.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const u = Number(e.dataTransfer?.getData('text/uid'));
+        if (u) this.onQuickDrop?.(i, u);
+        this.render();
+      });
+      q.addEventListener('click', () => {
+        eq.quick[i] = null;
+        events.emit('equipmentChanged', {});
+      });
+      quick.appendChild(q);
+    });
+    this.accCol.append(qh, quick);
 
-    this.grid.innerHTML = '';
+    this.weaponRow.replaceChildren(this.slotEl('main', true), this.slotEl('off', true));
+    const block = eq.hasShield ? `${eq.offItem!.def.stats.block ?? 0}%` : '—';
+    this.summary.innerHTML = `
+      <span><b>${eq.mainWeapon?.def.stats.damage ?? 0}${eq.dualWield ? ' + ' + (eq.offItem?.def.stats.damage ?? 0) : ''}</b>Attack</span>
+      <span><b>${eq.armorValue}</b>Armour</span>
+      <span><b>${eq.poise}</b>Poise</span>
+      <span><b>${block}</b>Block</span>
+      <span><b>${Math.ceil(p.hp)}/${p.maxHp}</b>Health</span>`;
+
+    this.tabs.innerHTML = '';
+    for (const [id, label] of [['items', 'ITEMS'], ['skills', 'SKILLS'], ['stats', 'STATS']] as [Tab, string][]) {
+      const b = document.createElement('button');
+      b.className = 'tab' + (this.tab === id ? ' on' : '');
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        this.tab = id;
+        this.render();
+      });
+      this.tabs.appendChild(b);
+    }
+    if (this.tab === 'items') this.renderItems();
+    else if (this.tab === 'skills') this.renderSkills();
+    else this.renderStats();
+  }
+
+  private renderItems() {
+    const eq = this.player.equip;
+    const filters = FILTERS.map(([id, label]) => `<button class="chip${this.filter === id ? ' on' : ''}" data-f="${id}">${label}</button>`).join('');
+    this.body.innerHTML = `<div class="chips">${filters}</div><div class="grid"></div><div class="detail"></div>`;
+    this.body.querySelectorAll<HTMLButtonElement>('.chip').forEach((b) =>
+      b.addEventListener('click', () => {
+        this.filter = b.dataset.f as Filter;
+        this.renderItems();
+      }),
+    );
+    const grid = this.body.querySelector('.grid')!;
+    const kinds = FILTERS.find((f) => f[0] === this.filter)![2];
     for (const it of eq.items) {
+      if (kinds.length && !kinds.includes(it.def.kind)) continue;
       const d = document.createElement('div');
       const slot = eq.slotOf(it.uid);
-      const tag = slot ? (slot === 'main' ? 'MAIN' : slot === 'off' ? 'OFF' : 'WORN') : it.uid === eq.activeSpell ? 'ATTUNED' : '';
+      const onBar = eq.moves.includes(it.uid) || eq.quick.includes(it.uid);
+      const tag = slot ? (slot === 'main' ? 'MAIN' : slot === 'off' ? 'OFF' : 'WORN') : onBar ? 'ON BAR' : '';
       d.className = `item r-${it.def.rarity}`;
       d.draggable = true;
       d.innerHTML = `<img src="${iconFor(it.def.id)}" alt="" draggable="false">${tag ? `<span class="eq">${tag}</span>` : ''}${it.def.stack ? `<span class="qty">${it.qty}</span>` : ''}`;
@@ -118,18 +208,76 @@ export class InventoryUI {
           this.render();
           return;
         }
+        if (it.def.kind === 'spell') {
+          eq.equip(it.uid); // attune
+          this.render();
+          return;
+        }
         if (slot) {
           eq.unequip(slot);
           return;
         }
-        const target: Slot | undefined = it.def.kind === 'sword' && e.shiftKey ? 'off' : undefined;
-        eq.equip(it.uid, target);
+        eq.equip(it.uid, it.def.kind === 'sword' && e.shiftKey ? 'off' : undefined);
       });
       d.addEventListener('mouseenter', () => this.showDetail(it));
       d.addEventListener('dragstart', (e) => e.dataTransfer?.setData('text/uid', String(it.uid)));
-      this.grid.appendChild(d);
+      grid.appendChild(d);
     }
-    this.showDetail(undefined);
+    this.showDetail(this.hovered);
+  }
+
+  private renderSkills() {
+    this.body.innerHTML = `
+      <p class="lead">Each class has its own skill tree. Learn a class from its trainer in town, then spend skill points as you level. Any learned skill can go on your moveset bar (<b>Tab</b>).</p>
+      <div class="classes">${CLASSES.map(
+        (c) => `<div class="class locked"><h3>${c.name}</h3><p>${c.blurb}</p><span class="how">Learn from ${c.where}</span></div>`,
+      ).join('')}</div>`;
+  }
+
+  private renderStats() {
+    const p = this.player, eq = p.equip;
+    const rows: [string, string][] = [
+      ['Level', '1'],
+      ['Health', `${Math.ceil(p.hp)} / ${p.maxHp}`],
+      ['Stamina', `${Math.ceil(p.stamina)} / ${p.maxStamina}`],
+      ['Mana', `${Math.ceil(p.mana)} / ${p.maxMana}`],
+      ['Attack', `${eq.mainWeapon?.def.stats.damage ?? 0}`],
+      ['Armour', `${eq.armorValue}`],
+      ['Poise', `${eq.poise}`],
+      ['Stamina regen', `+${Math.round(eq.bonus('staminaRegen') * 100)}%`],
+      ['Mana regen', `+${Math.round(eq.bonus('manaRegen') * 100)}%`],
+      ['Damage bonus', `+${Math.round(eq.bonus('damagePct') * 100)}%`],
+    ];
+    this.body.innerHTML = `<div class="statgrid">${rows.map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>`;
+  }
+
+  private showDetail(it: ItemInstance | undefined) {
+    this.hovered = it;
+    const box = this.body.querySelector('.detail');
+    if (!box) return;
+    if (!it) {
+      box.innerHTML = '<p class="dim">Hover an item to inspect it.</p>';
+      return;
+    }
+    const d = it.def;
+    const rows: string[] = [];
+    const labels: Partial<Record<keyof ItemStats, string>> = {
+      damage: 'Damage', speed: 'Speed', block: 'Block', stability: 'Stability', armor: 'Armour', poise: 'Poise',
+      manaCost: 'Mana cost', heal: 'Restores HP', restoreMana: 'Restores MP', ...STAT_LABEL,
+    };
+    for (const [k, v] of Object.entries(d.stats) as [keyof ItemStats, number][]) {
+      if (v === undefined || !labels[k]) continue;
+      rows.push(`<span>${labels[k]}</span><b>${fmtStat(k, v)}</b>`);
+    }
+    const how =
+      d.kind === 'sword' ? 'Click: main hand · Shift-click: off hand (dual wield)' :
+      d.kind === 'shield' ? 'Click: off hand · RMB block · F parry' :
+      d.kind === 'spell' ? 'Drag onto the moveset bar (Tab) · offensive spells need a lock-on' :
+      d.kind === 'consumable' ? 'Drag onto a quick slot (keys 1-4)' : 'Click to wear';
+    box.innerHTML = `
+      <img class="big" src="${iconFor(d.id)}" alt="">
+      <div class="dtext"><div class="name">${d.name}</div><div class="rar r-${d.rarity}">${d.rarity} ${d.kind === 'armor' ? 'armour' : d.kind}</div>
+      <p>${d.desc}</p><div class="stats">${rows.join('')}</div><div class="how">${how}</div></div>`;
   }
 }
 
@@ -138,11 +286,11 @@ export function buildOverlays(onStart: () => void) {
   const controls = `
     <div class="controls">
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</span><span><kbd>Mouse</kbd> Look</span>
-      <span><kbd>Shift</kbd> Sprint</span><span><kbd>Space</kbd> Dodge roll</span>
+      <span><kbd>Shift</kbd> Sprint · attack while sprinting to lunge</span><span><kbd>Space</kbd> Dodge roll</span>
       <span><kbd>LMB</kbd> Attack · hold for heavy</span><span><kbd>RMB</kbd> Block / off-hand attack</span>
-      <span><kbd>F</kbd> Parry</span><span><kbd>MMB</kbd> / <kbd>Tab</kbd> Lock on</span>
-      <span><kbd>R</kbd> Cast spell</span><span><kbd>C</kbd> Jump</span>
-      <span><kbd>1</kbd>–<kbd>8</kbd> Hotbar · <kbd>Shift</kbd>+num = off hand</span><span><kbd>I</kbd> Inventory</span>
+      <span><kbd>F</kbd> Parry</span><span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on</span>
+      <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span>
+      <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory</span>
     </div>`;
   const start = document.createElement('div');
   start.className = 'overlay';

@@ -1,10 +1,10 @@
 import { Equipment } from './equipment';
 
-/** Starting inventory, equipment and hotbar for a new character. */
+/** Starting inventory, equipment, quick items and moves for a new character. */
 export function setupLoadout(eq: Equipment) {
   const longsword = eq.add('longsword');
-  const arming1 = eq.add('armingSword');
-  const arming2 = eq.add('armingSword');
+  eq.add('armingSword');
+  eq.add('armingSword');
   eq.add('knightSword');
   const round = eq.add('roundShield');
   eq.add('kiteShield');
@@ -14,6 +14,12 @@ export function setupLoadout(eq: Equipment) {
   eq.add('gauntlets');
   eq.add('greaves');
   eq.add('sabatons');
+  eq.add('wayfarerCloak');
+  eq.add('garnetAmulet');
+  eq.add('ringVigor');
+  eq.add('ringSage');
+  eq.add('warriorBelt');
+  eq.add('luckyCharm');
   const fire = eq.add('fireball');
   const heal = eq.add('healingLight');
   const hp = eq.add('healthPotion', 5);
@@ -23,5 +29,6 @@ export function setupLoadout(eq: Equipment) {
   eq.equip(round.uid, 'off');
   eq.equip(fire.uid);
 
-  eq.hotbar = [longsword.uid, arming1.uid, arming2.uid, round.uid, fire.uid, heal.uid, hp.uid, mp.uid];
+  eq.quick = [hp.uid, mp.uid, null, null];
+  eq.moves = [fire.uid, heal.uid, null, null, null, null];
 }

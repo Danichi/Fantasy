@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Renderer } from './render/renderer';
-import { physics } from './physics/physics';
+import { physics, PhysicsDebug } from './physics/physics';
 import { buildTerrain, heightAt } from './world/terrain';
 import { Input } from './core/input';
 import { Player } from './player/player';
@@ -13,6 +13,7 @@ import { Spells } from './magic/spells';
 import { buildIcons } from './ui/icons';
 import { HUD } from './ui/hud';
 import { InventoryUI, buildOverlays } from './ui/inventory';
+import { CharPreview } from './ui/charPreview';
 import { events } from './core/events';
 import { buildWorld } from './world/props';
 import { Grass } from './world/grass';
@@ -39,6 +40,7 @@ async function boot() {
   const spells = new Spells(r.scene, fx, player);
   const world = await buildWorld(r.scene, r.renderer, fx);
   const grass = new Grass(r.scene);
+  const physDebug = new URLSearchParams(location.search).get('debug') === 'physics' ? new PhysicsDebug(r.scene) : null;
 
   const cam = new ThirdPersonCamera(r.camera, input);
   cam.snapTo(player.pos);
@@ -50,7 +52,9 @@ async function boot() {
 
   // ---- UI ------------------------------------------------------------------
   const hud = new HUD(player, r.camera);
-  const inv = new InventoryUI(player);
+  const preview = new CharPreview(r.renderer, r.scene, player, [r.sun, r.hemi]);
+  const inv = new InventoryUI(player, preview);
+  inv.onQuickDrop = (slot, uid) => hud.onSlotDrop?.('items', slot, uid);
   let started = TEST_MODE;
   // Paused only when the player releases the mouse with Esc; the pause
   // overlay is always visible while paused, so the game never freezes silently.
@@ -64,13 +68,22 @@ async function boot() {
   });
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
-  hud.onHotbarDrop = (slot, uid) => {
+  hud.onSlotDrop = (mode, slot, uid) => {
     const eq = player.equip;
-    eq.hotbar = eq.hotbar.map((u) => (u === uid ? null : u));
-    eq.hotbar[slot] = uid;
+    const it = eq.get(uid);
+    if (!it) return;
+    // Quick items take consumables; the moveset takes spells (and skills later).
+    if (mode === 'items' && it.def.kind === 'consumable' && slot < eq.quick.length) {
+      eq.quick = eq.quick.map((u) => (u === uid ? null : u));
+      eq.quick[slot] = uid;
+    } else if (mode === 'moves' && it.def.kind === 'spell') {
+      eq.moves = eq.moves.map((u) => (u === uid ? null : u));
+      eq.moves[slot] = uid;
+    } else hud.toast(mode === 'items' ? 'Quick slots take potions and other usables' : 'The moveset takes spells and skills');
     hud.markHotbarDirty();
   };
   inv.onToggle = (open) => {
+    document.body.classList.toggle('inv-open', open);
     input.uiMode = open;
     if (open) input.exitLock();
     else input.requestLock();
@@ -94,15 +107,20 @@ async function boot() {
 
   const useHotbar = (i: number) => {
     const eq = player.equip;
-    const it = eq.get(eq.hotbar[i]);
-    if (!it || player.dead) return;
-    hud.pulseSlot(i);
-    const k = it.def.kind;
-    if (k === 'consumable') return player.useConsumable(it.uid);
-    if (k === 'spell') return eq.equip(it.uid);
-    if (player.act) return hud.toast('Finish your action first');
-    if (k === 'sword') eq.equip(it.uid, input.shift ? 'off' : 'main');
-    else eq.equip(it.uid);
+    if (player.dead) return;
+    if (hud.mode === 'items') {
+      const it = eq.get(eq.quick[i]);
+      if (!it) return;
+      hud.pulseSlot(i);
+      if (it.def.kind === 'consumable') player.useConsumable(it.uid);
+      hud.markHotbarDirty();
+    } else {
+      const it = eq.get(eq.moves[i]);
+      if (!it) return;
+      hud.pulseSlot(i);
+      player.castMove(it.uid);
+      hud.markHotbarDirty();
+    }
   };
 
   events.on('playerDied', () => {
@@ -147,6 +165,7 @@ async function boot() {
       simSteps++;
       if (input.wasPressed('inventory')) inv.toggle();
       if (input.wasPressed('help')) overlays.toggleHelp();
+      if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
       slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
       player.update(STEP, input, cam);
       slimes.update(STEP, player);
@@ -167,8 +186,10 @@ async function boot() {
     grass.update(dt, r.camera.position, renderPos);
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
+    physDebug?.update();
     r.followShadow(renderPos);
     r.render();
+    if (inv.open) preview.render();
     const t2 = performance.now();
     perf.sim = perf.sim * 0.9 + (t1 - t0) * 0.1;
     perf.render = perf.render * 0.9 + (t2 - t1) * 0.1;
