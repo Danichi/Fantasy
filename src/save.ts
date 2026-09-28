@@ -76,7 +76,11 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     const k = idx(uid);
     if (k !== null && k >= 0) equipped[slot as Slot] = k;
   }
-  const clean = (list: (number | string | null)[]) => list.map((u) => {
+  const cleanItems = (list: (number | null)[]) => list.map((u) => {
+    const k = idx(u);
+    return k === null || k < 0 ? null : k;
+  });
+  const cleanMoves = (list: (number | string | null)[]) => list.map((u) => {
     if (typeof u === 'string') return u;
     const k = idx(u);
     return k === null || k < 0 ? null : k;
@@ -87,8 +91,8 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     prog: { level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints, primaryStyle: player.prog.primaryStyle, secondaryStyle: player.prog.secondaryStyle, activeStyle: player.prog.activeStyle, styleIntroductions: [...player.prog.styleIntroductions], learnedSkills: structuredClone(player.prog.learnedSkills), styleMastery: structuredClone(player.prog.styleMastery) },
     items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty })),
     equipped,
-    quick: clean(eq.quick),
-    moves: clean(eq.moves),
+    quick: cleanItems(eq.quick),
+    moves: cleanMoves(eq.moves),
     activeSpell: idx(eq.activeSpell),
     maps,
     dungeon,
