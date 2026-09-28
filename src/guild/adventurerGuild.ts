@@ -135,7 +135,7 @@ export class AdventurerGuild {
   private explored = new Set<string>();
   private _rep = 0;
   private _completed = 0;
-  private rank: GuildRank = 'Novice';
+  private rank: GuildRank = 'D';
   onToggle?: (open: boolean) => void;
   onSave?: () => void;
   openState = false;
@@ -203,7 +203,6 @@ export class AdventurerGuild {
     const metal = new THREE.MeshStandardMaterial({ color: 0x98a4ab, metalness: 0.6, roughness: 0.42 });
     const weapon = new THREE.MeshStandardMaterial({ color: 0xb9c5c8, metalness: 0.85, roughness: 0.28 });
     const names = ['Ari', 'Bren', 'Celia', 'Dax', 'Elin', 'Farris', 'Galen', 'Hana', 'Iris', 'Jory', 'Kellan', 'Lysa', 'Mira', 'Nolan', 'Orin', 'Pella', 'Quinn', 'Rhea', 'Soren', 'Talia', 'Ulric', 'Vera', 'Wren', 'Yara', 'Zane', 'Alden', 'Bria', 'Corin', 'Della', 'Eamon', 'Freya', 'Garrick', 'Helia', 'Ivan', 'Jessa', 'Kael', 'Lina', 'Marek', 'Nessa', 'Oren', 'Petra', 'Rowan', 'Syl', 'Theo', 'Uma', 'Viktor', 'Willa', 'Yves'];
-    const surnames = ['Ashvale', 'Brightwood', 'Crowe', 'Dawnrunner', 'Emberhand', 'Fell', 'Greymark', 'Hawk', 'Ironwood', 'Kestrel', 'Lark', 'Morrow'];
     const center = this.guildPos.clone();
     for (let i = 0; i < names.length; i++) {
       const a = (i / names.length) * Math.PI * 2 + 0.18;
