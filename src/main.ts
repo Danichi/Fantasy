@@ -25,6 +25,7 @@ import { DungeonMapUI } from './ui/dungeonMap';
 import { Realm } from './dungeon/realm';
 import { Town } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
+import { loadArmourKit } from './enemies/armourKit';
 import { loadSave, writeSave, applySave, hasSave, clearSave } from './save';
 
 const STEP = 1 / 60;
@@ -335,7 +336,7 @@ async function boot() {
     }
     requestAnimationFrame(frame);
   };
-  await town.ready;
+  await Promise.all([town.ready, loadArmourKit()]);
   mark('npcs');
   // Compile every material's shaders up front, in parallel where the
   // browser supports it, instead of stalling the first frames one by one.

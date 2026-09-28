@@ -134,10 +134,41 @@ export class NPC {
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(rootQ);
     const left = new THREE.Vector3(1, 0, 0).applyQuaternion(rootQ);
     const up = new THREE.Vector3(0, 1, 0);
+    // Lower the arms from the A-pose: turn each upper arm's own direction
+    // (shoulder -> elbow) most of the way toward straight down. Works for any
+    // model orientation.
     const drop = this.spec.armDrop ?? 0.9;
     const sway = Math.sin(this.t * 1.6) * 0.03;
-    if (this.bones.armL) rotateWorld(this.bones.armL, new THREE.Quaternion().setFromAxisAngle(fwd, -drop + sway));
-    if (this.bones.armR) rotateWorld(this.bones.armR, new THREE.Quaternion().setFromAxisAngle(fwd, drop - sway));
+    const down = new THREE.Vector3(0, -1, 0);
+    // The next limb segment: the farthest child bone (rigs also hang twist
+    // and helper bones right at the joint).
+    const next = (bone: THREE.Object3D) => {
+      const o = bone.getWorldPosition(new THREE.Vector3());
+      let best: THREE.Object3D | undefined, bd = -1;
+      for (const c of bone.children) {
+        if (!(c as THREE.Bone).isBone) continue;
+        const d = c.getWorldPosition(new THREE.Vector3()).distanceTo(o);
+        if (d > bd) (bd = d), (best = c);
+      }
+      return best;
+    };
+    const aim = (bone: THREE.Object3D, want: THREE.Vector3) => {
+      const child = next(bone);
+      if (!child) return;
+      const dir = child.getWorldPosition(new THREE.Vector3()).sub(bone.getWorldPosition(new THREE.Vector3())).normalize();
+      rotateWorld(bone, new THREE.Quaternion().setFromUnitVectors(dir, dir.clone().lerp(want, Math.min(1, drop)).normalize()));
+    };
+    for (const key of ['armL', 'armR']) {
+      const arm = this.bones[key];
+      const elbow = arm && next(arm);
+      if (!arm || !elbow) continue;
+      // Outward = the A-pose arm's horizontal direction (away from the body).
+      const a = arm.getWorldPosition(new THREE.Vector3());
+      const out = elbow.getWorldPosition(new THREE.Vector3()).sub(a).setY(0).normalize();
+      aim(arm, down.clone().addScaledVector(out, 0.22 + sway).addScaledVector(fwd, 0.04).normalize());
+      // Forearm hangs with a relaxed bend forward.
+      aim(elbow, down.clone().addScaledVector(fwd, 0.32).addScaledVector(out, 0.08).normalize());
+    }
     for (let i = 0; this.bones['spine' + i]; i++) {
       rotateWorld(this.bones['spine' + i]!, new THREE.Quaternion().setFromAxisAngle(left, Math.sin(this.t * 1.6) * 0.012));
     }

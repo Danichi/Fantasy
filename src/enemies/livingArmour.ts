@@ -6,6 +6,7 @@ import { damp, dampAngle, smoothstep } from '../core/math';
 import { events } from '../core/events';
 import { newTargetId, targets, type HitInfo, type Target } from '../combat/targets';
 import { armorPieces } from '../items/armorModels';
+import { getArmourKit, type PartName } from './armourKit';
 import { buildSword, buildRoundShield } from '../items/weaponModels';
 import type { Player } from '../player/player';
 import type { FX } from '../fx/particles';
@@ -66,6 +67,7 @@ export class LivingArmour implements Target {
   private col: RAPIER.Collider;
   private kcc: RAPIER.KinematicCharacterController;
   private mats: THREE.MeshStandardMaterial[] = [];
+  private eyeY = 1.61;
 
   constructor(at: THREE.Vector3, private scene: THREE.Scene, private fx: FX) {
     this.position.copy(at);
@@ -77,41 +79,61 @@ export class LivingArmour implements Target {
       h.rotation.set(rx, 0, rz);
       return h;
     };
-    const helm = put(armorPieces.helm(0.2), 0, 1.58, 0);
-    const chest = put(armorPieces.breastplate(0.14), 0, 1.22, 0);
-    // Arms/legs: limb frames point down the bone, so flip them upside down.
-    const pl = put(armorPieces.pauldron(0.28, -1), 0.23, 1.44, 0, 0, Math.PI);
-    const pr = put(armorPieces.pauldron(0.28, 1), -0.23, 1.44, 0, 0, Math.PI);
-    const gl = put(armorPieces.greave(0.44), 0.11, 0.52, 0.02, 0, Math.PI);
-    const gr = put(armorPieces.greave(0.44), -0.11, 0.52, 0.02, 0, Math.PI);
-    const cl = put(armorPieces.cuisse(0.42), 0.11, 0.95, 0.02, 0, Math.PI);
-    const cr = put(armorPieces.cuisse(0.42), -0.11, 0.95, 0.02, 0, Math.PI);
-    this.body.add(helm, chest, pl, pr, gl, gr, cl, cr);
-
-    // Sword arm: vambrace hanging from the shoulder, sword in the "hand".
-    this.swordArm.position.set(-0.26, 1.4, 0.02);
-    const vr = put(armorPieces.vambrace(0.28), 0, -0.3, 0.02, 0, Math.PI);
+    const kit = getArmourKit();
+    let plates: THREE.Object3D[];
     const sword = buildSword({ bladeLen: 0.85, bladeWidth: 0.027, thickness: 0.0045, fullerLen: 0.6, gripLen: 0.14, guardSpan: 0.12, guardStyle: 'straight', pommel: 'wheel' });
-    const swordHold = put(sword, 0, -0.56, 0.08, Math.PI / 2 - 0.35, 0);
-    this.swordArm.add(vr, swordHold);
-    this.shieldArm.position.set(0.26, 1.4, 0.02);
-    const vl = put(armorPieces.vambrace(0.28), 0, -0.3, 0.02, 0, Math.PI);
     const shield = buildRoundShield('plain');
     shield.scale.setScalar(0.95);
-    const shieldHold = put(shield, 0.05, -0.5, 0.16, 0, 0);
-    this.shieldArm.add(vl, shieldHold);
+    if (kit) {
+      // The rusty gothic suit, cut into plates that pivot at their joints.
+      const part = (n: PartName) => {
+        const m = new THREE.Mesh(kit.parts[n].geometry, kit.material);
+        const g = new THREE.Group();
+        g.add(m);
+        g.position.copy(kit.parts[n].pivot);
+        return g;
+      };
+      const helm = part('helm'), torso = part('torso'), legL = part('legL'), legR = part('legR');
+      const armR = part('armR'), armL = part('armL');
+      this.body.add(helm, torso, legL, legR);
+      this.swordArm.position.copy(kit.parts.armR.pivot);
+      this.shieldArm.position.copy(kit.parts.armL.pivot);
+      armR.position.set(0, 0, 0);
+      armL.position.set(0, 0, 0);
+      const handY = -(kit.parts.armR.pivot.y - kit.height * 0.46);
+      this.swordArm.add(armR, put(sword, -0.05, handY, 0.08, Math.PI / 2 - 0.35, 0));
+      this.shieldArm.add(armL, put(shield, 0.1, handY + 0.1, 0.18, 0, 0));
+      this.eyeY = kit.height * 0.9;
+      plates = [helm, torso, legL, legR];
+    } else {
+      const helm = put(armorPieces.helm(0.2), 0, 1.58, 0);
+      const chest = put(armorPieces.breastplate(0.14), 0, 1.22, 0);
+      // Arms/legs: limb frames point down the bone, so flip them upside down.
+      const pl = put(armorPieces.pauldron(0.28, -1), 0.23, 1.44, 0, 0, Math.PI);
+      const pr = put(armorPieces.pauldron(0.28, 1), -0.23, 1.44, 0, 0, Math.PI);
+      const gl = put(armorPieces.greave(0.44), 0.11, 0.52, 0.02, 0, Math.PI);
+      const gr = put(armorPieces.greave(0.44), -0.11, 0.52, 0.02, 0, Math.PI);
+      const cl = put(armorPieces.cuisse(0.42), 0.11, 0.95, 0.02, 0, Math.PI);
+      const cr = put(armorPieces.cuisse(0.42), -0.11, 0.95, 0.02, 0, Math.PI);
+      this.body.add(helm, chest, pl, pr, gl, gr, cl, cr);
+      this.swordArm.position.set(-0.26, 1.4, 0.02);
+      this.swordArm.add(put(armorPieces.vambrace(0.28), 0, -0.3, 0.02, 0, Math.PI), put(sword, 0, -0.56, 0.08, Math.PI / 2 - 0.35, 0));
+      this.shieldArm.position.set(0.26, 1.4, 0.02);
+      this.shieldArm.add(put(armorPieces.vambrace(0.28), 0, -0.3, 0.02, 0, Math.PI), put(shield, 0.05, -0.5, 0.16, 0, 0));
+      plates = [helm, chest, pl, pr, gl, gr, cl, cr];
+    }
     this.body.add(this.swordArm, this.shieldArm);
 
     // Cold light in the eye slits and the gaps of the plate.
     const eyeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.2, 2.2, 3.5) });
     for (const sx of [-1, 1]) {
       const e = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), eyeMat);
-      e.position.set(sx * 0.035, 1.61, 0.12);
+      e.position.set(sx * 0.035, this.eyeY, 0.12);
       this.body.add(e);
       this.eyes.push(e);
     }
     const heart = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), eyeMat);
-    heart.position.set(0, 1.25, 0.02);
+    heart.position.set(0, this.eyeY - 0.36, 0.02);
     this.body.add(heart);
 
     this.group.add(this.body);
@@ -129,7 +151,7 @@ export class LivingArmour implements Target {
       }
     });
     // Each directly-held piece can fly apart on death.
-    for (const h of [helm, chest, pl, pr, gl, gr, cl, cr, this.swordArm, this.shieldArm]) {
+    for (const h of [...plates, this.swordArm, this.shieldArm]) {
       this.pieces.push({ obj: h, rest: h.position.clone(), vel: new THREE.Vector3(), spin: new THREE.Vector3() });
     }
     scene.add(this.group);

@@ -7,6 +7,7 @@ import { generateFloor, Grid, type Cell, type FloorLayout } from './generator';
 import { Slime, type SlimeKind } from '../enemies/slime';
 import { LivingArmour } from '../enemies/livingArmour';
 import { OrcWarlord } from '../enemies/orc';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { segmentPointDistance } from '../core/math';
 import type { Player } from '../player/player';
 import type { FX } from '../fx/particles';
@@ -129,6 +130,7 @@ export class DungeonInstance {
     this.buildChests();
     this.buildTraps();
     this.spawnEnemies();
+    if (floor === 2) this.buildStatue();
     // Light pool: a lantern on the player plus the three nearest torches.
     this.lantern = new THREE.PointLight(0xffe6c8, 4.5, 11, 1.6);
     this.group.add(this.lantern);
@@ -500,6 +502,38 @@ export class DungeonInstance {
       this.group.add(slot, p);
       this.darts.push({ plate: d.plate, from: slotPos, to: plate.clone().setY(1.2), t: 9, mesh: null, pos: new THREE.Vector3(), vel: new THREE.Vector3(), hit: false });
     }
+  }
+
+  /** A carved statue of two orcs at blows, in a corner of Grukk's hall. */
+  private buildStatue() {
+    const room = this.layout.rooms[0];
+    if (!room) return;
+    const c = this.cellCenter(room.x, room.y).add(new THREE.Vector3(-0.3, 0, -0.3));
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.6, 2.4), this.m.pillar);
+    plinth.position.copy(c).setY(0.3);
+    plinth.castShadow = plinth.receiveShadow = true;
+    this.group.add(plinth);
+    this.box(plinth.position.clone().setY(1.2), new THREE.Vector3(1.2, 1.2, 1.2));
+    new GLTFLoader().loadAsync('/assets/npc/urukStatue.glb').then((g) => {
+      if (this.disposed) return;
+      const statue = g.scene;
+      statue.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(statue);
+      const k = 2.3 / (box.max.y - box.min.y);
+      statue.scale.setScalar(k);
+      statue.updateMatrixWorld(true);
+      const b2 = new THREE.Box3().setFromObject(statue);
+      const ctr = b2.getCenter(new THREE.Vector3());
+      statue.position.set(c.x - ctr.x, 0.6 - b2.min.y, c.z - ctr.z);
+      // Carved from the same stone as the crypt.
+      statue.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.material = this.m.pillar;
+        m.castShadow = m.receiveShadow = true;
+      });
+      this.group.add(statue);
+    });
   }
 
   // ---- enemies --------------------------------------------------------------------------
