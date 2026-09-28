@@ -33,6 +33,7 @@ export class HUD {
   private bars: Record<'hp' | 'st' | 'mp', BarEls>;
   private momentumEl: HTMLDivElement;
   private focusEl: HTMLDivElement;
+  private crossEl: HTMLDivElement;
   private slots: HTMLDivElement[] = [];
   private hands: Record<'main' | 'off', HTMLDivElement>;
   private barTitle: HTMLDivElement;
@@ -75,6 +76,7 @@ export class HUD {
     this.bars = { hp: mk('hp', 'HEALTH'), st: mk('st', 'STAMINA'), mp: mk('mp', 'MANA') };
     this.momentumEl = el('div', 'style-resource momentum hidden', vit, '<span class="sr-label">MOMENTUM</span><i></i><b></b>');
     this.focusEl = el('div', 'style-resource focus hidden', vit, '<span class="sr-label">FOCUS</span><i></i><b></b>');
+    this.crossEl = el('div', 'style-resource cross hidden', vit, '<span class="sr-label">CROSS OPENING</span><i></i><b></b>');
     const xpRow = el('div', 'xprow', vit);
     xpRow.innerHTML = '<span class="lv">LV 1</span><div class="xpbar"><i></i></div><span class="gold">0</span>';
     this.xpFill = xpRow.querySelector('.xpbar i')!;
@@ -283,12 +285,16 @@ export class HUD {
     const style = p.prog.activeStyle;
     const showMomentum = style === 'gale';
     const showFocus = style === 'boundary';
+    const showCross = style === 'cross' && p.crossOpening > 0;
     this.momentumEl.classList.toggle('hidden', !showMomentum);
     this.focusEl.classList.toggle('hidden', !showFocus);
+    this.crossEl.classList.toggle('hidden', !showCross);
     (this.momentumEl.querySelector('i') as HTMLElement).style.transform = `scaleX(${p.momentum / 100})`;
     (this.focusEl.querySelector('i') as HTMLElement).style.transform = `scaleX(${p.focus / 100})`;
+    (this.crossEl.querySelector('i') as HTMLElement).style.transform = `scaleX(${Math.min(1, p.crossOpening / 2.2)})`;
     (this.momentumEl.querySelector('b') as HTMLElement).textContent = `${Math.round(p.momentum)}`;
     (this.focusEl.querySelector('b') as HTMLElement).textContent = `${Math.round(p.focus)}`;
+    (this.crossEl.querySelector('b') as HTMLElement).textContent = `${p.crossOpening.toFixed(1)}s`;
     if (this.hotbarDirty) {
       this.hotbarDirty = false;
       this.renderHotbar();
