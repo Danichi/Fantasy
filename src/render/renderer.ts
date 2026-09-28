@@ -5,7 +5,7 @@ import { Post } from './post';
 
 // Sun in the south-west: lights the town facades and the player's usual view north.
 export const SUN_DIR = new THREE.Vector3(-0.5, 0.6, 0.55).normalize();
-export const FOG_COLOR = new THREE.Color(0xb9c6cf);
+export const FOG_COLOR = new THREE.Color(0xcfe7ef);
 
 export class Renderer {
   readonly renderer: THREE.WebGLRenderer;
@@ -38,10 +38,10 @@ export class Renderer {
 
     this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1400);
     // The post pass draws atmospheric haze from depth; Low falls back to fog.
-    if (!Q.post) this.scene.fog = new THREE.Fog(FOG_COLOR, 80, 600);
+    if (!Q.post) this.scene.fog = new THREE.Fog(FOG_COLOR, 90, 720);
 
     // Sun: warm key light with a tight shadow box that follows the player.
-    this.sun = new THREE.DirectionalLight(0xffe9cc, 3.3);
+    this.sun = new THREE.DirectionalLight(0xfff1d6, 3.8);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(Q.shadowMapSize, Q.shadowMapSize);
     const s = this.sun.shadow.camera;
@@ -50,7 +50,7 @@ export class Renderer {
     this.sun.shadow.normalBias = 0.035;
     this.scene.add(this.sun, this.sun.target);
 
-    this.hemi = new THREE.HemisphereLight(0xd6e8ff, 0x5f5236, 0.62);
+    this.hemi = new THREE.HemisphereLight(0xdff5ff, 0x769b72, 0.92);
     this.scene.add(this.hemi);
 
     if (Q.post) this.post = new Post(r, Q.msaa ? 4 : 0);
@@ -65,9 +65,9 @@ export class Renderer {
     const env = pmrem.fromEquirectangular(tex).texture;
     pmrem.dispose();
     this.scene.environment = env;
-    this.scene.environmentIntensity = 0.75;
+    this.scene.environmentIntensity = 1.0;
     this.scene.background = tex;
-    this.scene.backgroundIntensity = 0.9;
+    this.scene.backgroundIntensity = 1.05;
     this.scene.backgroundBlurriness = 0.02;
   }
 
