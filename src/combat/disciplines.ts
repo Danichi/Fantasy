@@ -28,8 +28,9 @@ export class CombatDisciplineRuntime {
     if (this.boundaryActive) {
       if (moving || hit) this.breakBoundary(hit);
       else {
-        this.focus = Math.min(100, this.focus + dt * 24);
-        this.boundaryRadius = this.radiusForFocus();
+        this.focus = Math.min(100, this.focus + dt * 24 - Math.max(0, this.boundaryRadius - 3) * dt * 3);
+        if (this.focus <= 0) { this.focus = 0; this.breakBoundary(false); }
+        else this.boundaryRadius = this.radiusForFocus();
       }
     }
   }
@@ -62,9 +63,8 @@ export class CombatDisciplineRuntime {
   }
 
   activateBoundary() {
-    if (this.focus < 10) return false;
     this.boundaryActive = true;
-    this.focus = Math.max(0, this.focus - 6);
+    this.focus = Math.max(0, this.focus - 2);
     this.boundaryRadius = Math.max(3, this.radiusForFocus());
     return true;
   }
