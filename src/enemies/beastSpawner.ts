@@ -12,7 +12,7 @@ interface Spot {
 }
 
 export class BeastSpawner {
-  beasts: Beast[] = [];
+  slimes: Beast[] = [];
   private readonly spots: Spot[];
   enabled = true;
 
@@ -41,7 +41,7 @@ export class BeastSpawner {
 
   spawn(kind: BeastKind, x: number, z: number) {
     const beast = new Beast(kind, new THREE.Vector3(x, heightAt(x, z), z), this.scene, this.fx);
-    this.beasts.push(beast);
+    this.slimes.push(beast);
     return beast;
   }
 
@@ -63,19 +63,19 @@ export class BeastSpawner {
       }
     }
 
-    for (const beast of this.beasts) {
+    for (const beast of this.slimes) {
       if (beast.alive) beast.update(dt, player);
     }
 
-    this.beasts = this.beasts.filter((beast) => !beast.dead);
+    this.slimes = this.slimes.filter((beast) => !beast.dead);
   }
 
   clear() {
-    for (const beast of this.beasts) {
+    for (const beast of this.slimes) {
       beast.alive = false;
       beast.dispose();
     }
-    this.beasts = [];
+    this.slimes = [];
     for (const spot of this.spots) spot.beast = null;
   }
 }
