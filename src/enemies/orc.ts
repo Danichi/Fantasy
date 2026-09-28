@@ -349,6 +349,7 @@ export class OrcWarlord implements Target {
   dispose() {
     targets.delete(this);
     this.scene.remove(this.char.root);
+    if (this.model) this.scene.remove(this.model);
     for (const a of this.arrows) this.scene.remove(a.mesh);
     physics.world.removeCollider(this.col, false);
     physics.world.removeRigidBody(this.rb);
@@ -608,6 +609,11 @@ export class OrcWarlord implements Target {
     const root = this.char.root;
     root.position.lerpVectors(this.prevPos, this.position, alpha);
     root.rotation.y = this.prevYaw + wrapAngle(this.yaw - this.prevYaw) * alpha;
+    if (this.model) {
+      this.model.position.copy(root.position);
+      this.model.rotation.y = root.rotation.y;
+      this.model.scale.setScalar(this.model.scale.x);
+    }
     const s = this.state;
     const anim = this.anim;
     const c = Math.cos(-this.yaw), sn = Math.sin(-this.yaw);
