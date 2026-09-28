@@ -77,11 +77,10 @@ async function boot() {
   mark('grass');
   const river = new River(r.scene);
   mark('river');
-  const foliage = new Foliage(r.scene, r.renderer);
-  mark('foliage');
   const stylizedNature = new StylizedNature(r.scene);
   await stylizedNature.ready;
-  if (stylizedNature.loaded) foliage.setVisible(false);
+  const foliage = stylizedNature.loaded ? null : new Foliage(r.scene, r.renderer);
+  mark('foliage');
   mark('stylizedNature');
   const flowers = new Flowers(r.scene, terrain.splat);
   mark('flowers');
@@ -119,7 +118,7 @@ async function boot() {
       grass.mesh.visible = !h;
       flowers.mesh.visible = !h;
       river.mesh.visible = !h;
-      foliage.setVisible(!h);
+      foliage?.setVisible(!h);
       stylizedNature.setVisible(!h && stylizedNature.loaded);
       town.setVisible(!h);
     },
@@ -323,7 +322,7 @@ async function boot() {
     grass.update(dt, r.camera.position, renderPos);
     flowers.update(dt, r.camera.position);
     terrain.update(r.camera.position, player.pos);
-    foliage.update(dt, r.camera.position);
+    foliage?.update(dt, r.camera.position);
     stylizedNature.update(dt, r.camera.position);
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
