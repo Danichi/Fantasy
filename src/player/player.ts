@@ -233,8 +233,7 @@ export class Player {
     this.stamina = Math.max(0, this.stamina - def.stamina);
     if (def.stamina > 0) this.staminaDelay = 0.65;
     const w = def.hit?.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
-    const styleSpeed = def.id.startsWith('cast') || def.weaponSpeed ? this.prog.styleValue('attackSpeed') : 0;
-    const speed = (def.weaponSpeed ? w?.def.stats.speed ?? 1 : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1) * (1 + styleSpeed);
+    const speed = (def.weaponSpeed ? w?.def.stats.speed ?? 1 : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1);
     this.poseFrom = this.lastPose;
     this.poseFade = 0;
     this.act = { def, t: t0 ?? def.startAt ?? 0, speed, hitSet: new Set(), charge: 0, charging: false, fired: false, usingClip, landed: false };
@@ -297,7 +296,7 @@ export class Player {
       events.emit('needTarget', {});
       return null;
     }
-    const cost = Math.max(0, Math.round((sp.def.stats.manaCost ?? 0) * (1 + this.prog.styleValue('manaCost'))));
+    const cost = Math.max(0, Math.round(sp.def.stats.manaCost ?? 0));
     if (this.mana < cost) {
       events.emit('notEnough', { stat: 'mana' });
       return null;
@@ -782,7 +781,7 @@ export class Player {
       this.stamina -= cost;
       this.staminaDelay = 0.8;
       this.blockHitT = 0;
-      const through = att.damage * (1 - Math.min(96, (st.block ?? 80) + this.prog.styleValue('block')) / 100);
+      const through = att.damage * (1 - Math.min(96, st.block ?? 80) / 100);
       const at = this.center.addScaledVector(toAtt, 0.5);
       if (this.stamina < 0) {
         this.stamina = 0;
@@ -798,10 +797,8 @@ export class Player {
       this.onShake?.(0.12);
       return 'blocked';
     }
-    const armor = this.equip.armorValue + this.prog.styleValue('armor');
-    const lowHealthReduction = this.hp / this.maxHp < 0.4 ? this.prog.styleValue('lowHealthDamage') : 0;
-    let dmg = att.damage * (100 / (100 + armor * 5));
-    if (lowHealthReduction > 0) dmg *= 1 - lowHealthReduction;
+    const armor = this.equip.armorValue;
+    const dmg = att.damage * (100 / (100 + armor * 5));
     this.applyDamage(dmg);
     if (att.burn) this.burn = { dps: att.burn, left: 3 };
     // Hyper-armour through the middle of heavy swings.
@@ -842,7 +839,7 @@ export class Player {
 
   private updateStats(dt: number) {
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
-    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.prog.styleValue('staminaRegen')) * dt);
+    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen')) * dt);
     this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen')) * dt);
     this.hp = Math.min(this.hp, this.maxHp);
     if (this.hot.left > 0 && !this.dead) {
@@ -866,11 +863,21 @@ export class Player {
     this.onSpell?.(st.heal ? 'potionHeal' : 'potionMana', this.center, this.forward, null);
   }
 
-  /** Cast a spell from the moveset bar. */
-  castMove(uid: number) {
-    const it = this.equip.get(uid);
+  /** Use either a spell item uid or a learned combat move reference. */
+  useMove(ref: number | string) {
+    if (typeof ref === 'string') {
+      const [prefix, style, nodeId] = ref.split(':');
+      if (prefix !== 'skill' || !style || !nodeId || this.dead) return;
+      const active = this.prog.activeStyle;
+      if (!active || active !== style) return;
+      const node = this.prog.skillMove(active, nodeId);
+      if (!node) return;
+      this.startAction(node.actionId);
+      return;
+    }
+    const it = this.equip.get(ref);
     if (!it || it.def.kind !== 'spell' || this.dead) return;
-    this.equip.activeSpell = uid;
+    this.equip.activeSpell = ref;
     this.buffer = { a: 'cast', t: performance.now() / 1000 };
   }
 
