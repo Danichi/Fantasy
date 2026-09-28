@@ -9,6 +9,7 @@ import type { DungeonProgress } from './dungeon/instance';
 // progress and every map you've drawn.
 
 const KEY = 'fantasy-rpg-save-v2';
+const OLD_KEY = 'fantasy-rpg-save-v1';
 
 export interface SaveData {
   v: 2;
@@ -34,15 +35,36 @@ export function hasSave() {
 export function clearSave() {
   try {
     localStorage.removeItem(KEY);
+    localStorage.removeItem(OLD_KEY);
   } catch {}
 }
 
 export function loadSave(): SaveData | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEY) ?? localStorage.getItem(OLD_KEY);
     if (!raw) return null;
-    const d = JSON.parse(raw) as SaveData;
-    return (d.v === 2 ? d : null);
+    const d = JSON.parse(raw) as any;
+    if (d.v === 2) return d as SaveData;
+    if (d.v === 1) {
+      return {
+        ...d,
+        v: 2,
+        prog: {
+          ...d.prog,
+          combat: {
+            origin: 'human', heroic: { level: 1, xp: 0, mastery: 0, skillPoints: 0 },
+            primary: 'gale', secondary: null,
+            disciplines: {
+              gale: { level: 1, xp: 0, mastery: 0, skillPoints: 0 },
+              boundary: { level: 0, xp: 0, mastery: 0, skillPoints: 0 },
+              crossblade: { level: 0, xp: 0, mastery: 0, skillPoints: 0 },
+            },
+            specializations: {}, learnedClasses: {}, hybridUnlocks: [], pinnacleUnlocks: [],
+          },
+        },
+      } as SaveData;
+    }
+    return null;
   } catch {
     return null;
   }
