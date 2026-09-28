@@ -1,33 +1,43 @@
 import type { DialogueOption } from '../ui/dialogue';
 import type { Player } from '../player/player';
-import type { Realm } from '../dungeon/realm';
 import { COMBAT_STYLES, type CombatStyleId } from '../progression/styles';
 import { events } from '../core/events';
 
-export function trainingOption(player: Player, realm: Realm, id: CombatStyleId, talk: (text: string) => void): DialogueOption {
+export function trainingOption(player: Player, id: CombatStyleId, talk: (text: string) => void): DialogueOption {
   const style = COMBAT_STYLES[id];
   return {
-    label: player.prog.knowsStyle(id) ? `Ask about ${style.name}` : `Train in ${style.name}`,
+    label: player.prog.knowsStyle(id) ? `Ask about ${style.name}` : `Learn ${style.name}`,
     run: () => {
-      const eligible = id === 'swordsman' ? player.prog.level >= 2 : id === 'mage' ? realm.progress.bossDead : realm.progress.bossDead && player.prog.level >= 6;
       if (!player.prog.knowsStyle(id)) {
-        if (!eligible) {
-          const req = id === 'swordsman' ? 'Reach level 2 first.' : id === 'mage' ? 'Defeat the Warlord in the lower crypt first.' : 'Defeat the Warlord and reach level 6 first.';
-          talk(`${style.name} training is not available yet. ${req}`);
-          return;
-        }
         player.prog.learnStyle(id);
-        talk(`You are now trained in ${style.name}. Spend your skill points in Inventory → Combat Styles. ${player.prog.styleSwapUnlocked ? 'You may change styles there now.' : 'Free style switching is not available until level 12.'}`);
+        talk(`You learned ${style.name}. Open Inventory → Skills to spend skill points on its moves. Only one martial style can be active at a time.`);
         return;
       }
-      if (player.prog.styleSwapUnlocked && player.prog.activeStyle !== id) {
-        player.prog.setActiveStyle(id);
-        talk(`Your active combat style is now ${style.name}.`);
-        return;
-      }
-      talk(player.prog.activeStyle === id ? `You are already fighting as a ${style.name}.` : `You know ${style.name}, but free switching is unlocked at level 12.`);
+      talk(player.prog.activeStyle === id
+        ? `You are currently fighting as a ${style.name}. Train its moves with skill points in Inventory → Skills.`
+        : `You already know ${style.name}. Choose it in Inventory → Skills when you want to fight with its moves.`);
     },
   };
+}
+
+export function magicOptions(player: Player, talk: (text: string) => void): DialogueOption[] {
+  const spells: [string, string][] = [
+    ['fireball', 'Learn Fireball'],
+    ['healingLight', 'Learn Healing Light'],
+  ];
+  return spells.map(([id, label]) => ({
+    label: player.equip.items.some((i) => i.def.id === id) ? `${label.replace('Learn ', '')} — learned` : label,
+    run: () => {
+      if (player.equip.items.some((i) => i.def.id === id)) {
+        talk('You already know that spell.');
+        return;
+      }
+      player.equip.add(id, 1);
+      events.emit('equipmentChanged', {});
+      events.emit('progressChanged', {});
+      talk(`The spell is yours. Equip it from Inventory and place it on the MOVES bar; magic does not use martial style skill points.`);
+    },
+  }));
 }
 
 export function shopOptions(player: Player, openShop: (text?: string) => void): DialogueOption[] {
