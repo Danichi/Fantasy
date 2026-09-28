@@ -6,13 +6,12 @@ import { FLOWER_GLSL } from './flowerNoise';
 
 // ---------------------------------------------------------------------------
 // The overworld: about 1 km square, +z = south.
-//   town      walled by a palisade (TOWN_R) with gates south, north and east;
-//             the training plaza sits in the middle
-//   roads     south to the meadows, north to the crypt in the hills, east over
-//             the river bridge
+//   town      ElderGlen, a fortified farming village that feeds Cresha
+//   roads     south into the crop belt, north to the crypt, east over the river
+//             and onward along the King's Road to Tremison
 //   river     winds north-south east of town
-//   forest    covers the west; meadows lie south and east
-//   hills     rise to the north; mountains close the world in on every side
+//   forest    covers the west; broad farm country fills the south
+//   coast     Tremison sits on a low eastern coast with a deep-water harbor
 // Heights are generated once into a 1 m grid; heightAt() samples it.
 // ---------------------------------------------------------------------------
 export const WORLD_SIZE = 1024;
@@ -43,7 +42,7 @@ const ROADS: P[][] = [
   // north gate up the valley to the crypt
   [[0, -TOWN_R + 6], [6, -150], [-8, -225], [0, -300]],
   // east gate over the bridge
-  [[TOWN_R - 6, 0], [120, 4], [BRIDGE.x, BRIDGE.y], [230, 22], [330, 60], [500, 70]],
+  [[TOWN_R - 6, 0], [120, 4], [BRIDGE.x, BRIDGE.y], [230, 22], [300, 56], [360, 70], [414, 74]],
   // west gate into the forest logging road
   [[-TOWN_R + 6, 0], [-145, 8], [-230, 80], [-320, 118]],
 ];
@@ -129,10 +128,15 @@ function heightFn(x: number, z: number) {
   const channel = smoothstep(13, 5, dr) * riverFade;
   // About a metre deep: wadeable, slowly.
   h = h * (1 - channel) + (RIVER_LEVEL - 1.1 + (dr / 5) * 0.45) * channel;
-  // Mountains close the world in.
+  // Mountains close the world in, except where the eastern King's Road opens
+  // onto Tremison's coastal plain. The harbor reaches the sea near the world edge.
   const edge = Math.max(Math.abs(x), Math.abs(z));
   const m = smoothstep(330, 512, edge + (fbm(x / 90, z / 90, 3) - 0.5) * 60);
   h += Math.pow(m, 1.6) * 95 * (0.6 + 0.8 * fbm(x / 70, z / 70, 4));
+  const coastBand = smoothstep(300, 345, x) * smoothstep(255, 205, Math.abs(z - 76));
+  h = h * (1 - coastBand) + (0.8 + (fbm(x / 42, z / 42, 2) - 0.5) * 1.8) * coastBand;
+  const sea = smoothstep(420, 448, x) * smoothstep(245, 205, Math.abs(z - 76));
+  h = h * (1 - sea) + (-1.25 + (fbm(x / 28, z / 28, 2) - 0.5) * 0.18) * sea;
   return h;
 }
 
