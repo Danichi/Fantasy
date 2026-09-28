@@ -116,7 +116,6 @@ export class Progression {
   addMastery(style: CombatStyleId, amount = 1) {
     if (!this.knowsStyle(style)) return;
     this.styleMastery[style] = Math.max(0, this.styleMastery[style] + amount);
-    events.emit('progressChanged', {});
   }
 
   addGold(n: number) {
