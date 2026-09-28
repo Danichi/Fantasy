@@ -5,7 +5,7 @@ import { pbr } from '../world/props';
 import { mats, paintedWood } from '../items/materials';
 import { generateFloor, Grid, type Cell, type FloorLayout } from './generator';
 import { OrcWarlord } from '../enemies/orc';
-import { Goblin } from '../enemies/goblin';
+import { OrcMob } from '../enemies/orcMob';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { segmentPointDistance } from '../core/math';
 import type { Player } from '../player/player';
@@ -104,7 +104,7 @@ export class DungeonInstance {
   private darts: Dart[] = [];
   private gate: { bars: THREE.Group; collider: RAPIER.Collider | null; t: number; opening: boolean } | null = null;
   private portal: THREE.Group | null = null;
-  goblins: Goblin[] = [];
+  orcs: OrcMob[] = [];
   private boss: OrcWarlord | null = null;
   /** resolves when async content (the boss model) has loaded */
   ready: Promise<void> = Promise.resolve();
@@ -541,7 +541,7 @@ export class DungeonInstance {
       c.x += (Math.random() - 0.5) * 1.2;
       c.z += (Math.random() - 0.5) * 1.2;
 
-      // The crypt's regular enemies are now goblins on both floors. The
+      // The crypt's regular enemies are now orcs on both floors. The
       // existing orc remains the end-of-dungeon boss.
       if (s.kind === 'orc') {
         if (this.progress.bossDead) {
@@ -565,7 +565,7 @@ export class DungeonInstance {
           this.boss = o;
         });
       } else {
-        this.goblins.push(new Goblin(c.setY(0), this.scene, this.fx));
+        this.orcs.push(new OrcMob(c.setY(0), this.scene, this.fx));
       }
     }
   }
@@ -575,9 +575,9 @@ export class DungeonInstance {
     this.time += dt;
     const pp = player.pos;
     // Enemies.
-    for (const g of this.goblins) g.update(dt, player);
-    for (const g of this.goblins.filter((g) => g.dead)) g.dispose();
-    this.goblins = this.goblins.filter((g) => !g.dead);
+    for (const g of this.orcs) g.update(dt, player);
+    for (const g of this.orcs.filter((g) => g.dead)) g.dispose();
+    this.orcs = this.orcs.filter((g) => !g.dead);
     // Boss: fights once woken; the bar shows while he's awake.
     if (this.boss) {
       this.boss.update(dt, player);
@@ -704,8 +704,8 @@ export class DungeonInstance {
     this.boss = null;
     for (const c of this.colliders) physics.world.removeCollider(c, false);
     this.colliders = [];
-    for (const g of this.goblins) g.dispose();
-    this.goblins = [];
+    for (const g of this.orcs) g.dispose();
+    this.orcs = [];
     this.scene.remove(this.group);
     this.group.traverse((o) => {
       const m = o as THREE.Mesh;
