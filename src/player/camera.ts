@@ -11,6 +11,7 @@ export class ThirdPersonCamera {
   pitch = 0.22;
   distance = 3.9;
   private armLen = 3.9;
+  private shoulder = 0.48;
   private pivot = new THREE.Vector3();
   private trauma = 0;
   private time = 0;
@@ -68,16 +69,27 @@ export class ThirdPersonCamera {
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     const fwd = new THREE.Vector3(Math.sin(this.yaw) * cp, -sp, Math.cos(this.yaw) * cp);
     const right = this.right();
-    const shoulder = 0.48;
+    // Shoulder offset shrinks when a wall is close on the right.
+    const side = physics.castRay(this.pivot, right, 0.9);
+    const wantShoulder = side !== null ? Math.max(0, side - 0.4) : 0.48;
+    this.shoulder = wantShoulder < this.shoulder ? wantShoulder : damp(this.shoulder, wantShoulder, 3, dt);
+    const shoulder = this.shoulder;
     const origin = this.pivot.clone().addScaledVector(right, shoulder * 0.5);
     const back = fwd.clone().negate();
     const want = origin.clone().addScaledVector(right, shoulder * 0.5).addScaledVector(back, this.distance);
 
-    // Spring arm: ray from pivot to the desired spot; pull in on hits, ease out.
+    // Spring arm: a bundle of rays (centre plus a 0.25 m ring) approximates a
+    // sphere sweep, so the camera never ends up hugging a wall face.
     const dir = want.clone().sub(this.pivot);
     const full = dir.length();
     dir.normalize();
-    const hit = physics.castRay(this.pivot, dir, full + 0.3);
+    const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+    let hit: number | null = physics.castRay(this.pivot, dir, full + 0.3);
+    for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const o = this.pivot.clone().addScaledVector(right, a * 0.25).addScaledVector(up, b * 0.25);
+      const h = physics.castRay(o, dir, full + 0.3);
+      if (h !== null && (hit === null || h < hit)) hit = h;
+    }
     const allowed = hit !== null ? Math.max(0.6, hit - 0.3) : full;
     this.armLen = allowed < this.armLen ? allowed : damp(this.armLen, allowed, 4, dt);
     const pos = this.pivot.clone().addScaledVector(dir, Math.min(this.armLen, full));

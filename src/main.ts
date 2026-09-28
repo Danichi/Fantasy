@@ -20,8 +20,21 @@ import { Grass } from './world/grass';
 import { River } from './world/water';
 import { Foliage } from './world/foliage';
 import { Flowers } from './world/flowers';
+import { Rewards, XP_FOR_KIND } from './progression/progression';
+import { DungeonMapUI } from './ui/dungeonMap';
+import { Realm } from './dungeon/realm';
+import { loadSave, writeSave, applySave, hasSave, clearSave } from './save';
 
 const STEP = 1 / 60;
+
+const bootTimes: Record<string, number> = {};
+let bootLast = performance.now();
+const mark = (k: string) => {
+  const n = performance.now();
+  bootTimes[k] = Math.round(n - bootLast);
+  bootLast = n;
+};
+(window as any).__boot = bootTimes;
 
 async function boot() {
   const container = document.getElementById('game')!;
@@ -29,25 +42,48 @@ async function boot() {
   const input = new Input(r.renderer.domElement);
   await physics.init();
   await r.loadSky('/assets/hdri/sky_1k.hdr');
+  mark('sky');
   initTerrainData();
+  mark('heights');
   const terrain = new Terrain(r.scene, r.renderer);
+  mark('terrain');
 
   const player = new Player();
   const spawn = new THREE.Vector3(0, heightAt(0, 10), 10);
   terrain.warm(spawn);
   await player.init(r.scene, spawn);
-  setupLoadout(player.equip);
-  buildIcons(r.renderer, r.scene.environment);
+  mark('player');
+  const saveData = TEST_MODE && !location.search.includes('save') ? null : loadSave();
+  if (saveData) applySave(player, saveData);
+  else setupLoadout(player.equip);
 
   const fx = new FX(r.scene, heightAt);
   const slimes = new SlimeSpawner(r.scene, fx);
   if (TEST_MODE) slimes.enabled = false;
   const spells = new Spells(r.scene, fx, player);
   const world = await buildWorld(r.scene, r.renderer, fx);
+  mark('world');
   const grass = new Grass(r.scene, terrain.splat);
+  mark('grass');
   const river = new River(r.scene);
+  mark('river');
   const foliage = new Foliage(r.scene, r.renderer);
+  mark('foliage');
   const flowers = new Flowers(r.scene, terrain.splat);
+  mark('flowers');
+  const rewards = new Rewards(r.scene, player.prog);
+  events.on('enemyDied', ({ at, kind }) => {
+    const [xp, gold] = XP_FOR_KIND[kind] ?? [10, 2];
+    rewards.spawn(at, xp, gold);
+  });
+  events.on('bossSlam', ({ at }) => cam.shake(Math.max(0.15, 0.6 - at.distanceTo(player.pos) * 0.04)));
+  events.on('levelUp', () => {
+    player.hp = player.maxHp;
+    player.mana = player.maxMana;
+    player.stamina = player.maxStamina;
+    fx.add.spawn({ pos: player.center, spread: 3, count: 60, life: [0.6, 1.3], size: [0.1, 0.01], color: 0xcfe8ff, color2: 0x5a9cff, upBias: 1.5, drag: 1.5, jitter: 0.6 });
+    save();
+  });
   const physDebug = new URLSearchParams(location.search).get('debug') === 'physics' ? new PhysicsDebug(r.scene) : null;
 
   const cam = new ThirdPersonCamera(r.camera, input);
@@ -62,6 +98,35 @@ async function boot() {
   const hud = new HUD(player, r.camera);
   const preview = new CharPreview(r.renderer, r.scene, player, [r.sun, r.hemi]);
   const inv = new InventoryUI(player, preview);
+  const mapUI = new DungeonMapUI();
+  const realm = new Realm(r, player, cam, fx, hud, mapUI, {
+    hide: (h) => {
+      terrain.group.visible = !h;
+      grass.mesh.visible = !h;
+      flowers.mesh.visible = !h;
+      river.mesh.visible = !h;
+      foliage.setVisible(!h);
+    },
+    clearEnemies: () => slimes.clear(),
+    enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
+  }, rewards, world.crypt.door);
+  if (saveData) {
+    realm.progress = saveData.dungeon;
+    realm.maps = saveData.maps;
+  }
+  const save = () => {
+    if (TEST_MODE && !location.search.includes('save')) return;
+    writeSave(player, realm.seed, realm.maps, realm.progress);
+  };
+  realm.onSave = save;
+  mapUI.onChange = save;
+  window.addEventListener('beforeunload', save);
+  setInterval(save, 30000);
+  mapUI.onToggle = (open) => {
+    input.uiMode = open || inv.open;
+    if (open) input.exitLock();
+    else input.requestLock();
+  };
   inv.onQuickDrop = (slot, uid) => hud.onSlotDrop?.('items', slot, uid);
   let started = TEST_MODE;
   // Paused only when the player releases the mouse with Esc; the pause
@@ -101,6 +166,21 @@ async function boot() {
     pausedByUser = true;
     overlays.showPaused(true);
   };
+  if (!TEST_MODE && hasSave()) {
+    const cta = overlays.start.querySelector('.cta')!;
+    cta.textContent = 'CLICK TO CONTINUE';
+    const nw = document.createElement('button');
+    nw.className = 'newgame';
+    nw.textContent = 'Start a new game';
+    nw.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!confirm('Start over? Your progress and drawn maps will be erased.')) return;
+      window.removeEventListener('beforeunload', save);
+      clearSave();
+      location.reload();
+    });
+    cta.after(nw);
+  }
   document.addEventListener('pointerlockchange', () => {
     if (input.locked) hadLock = true;
     // Losing a lock we had (Esc, alt-tab) pauses; a lock that never took doesn't.
@@ -133,8 +213,9 @@ async function boot() {
 
   events.on('playerDied', () => {
     setTimeout(() => {
-      player.respawn(spawn);
-      cam.snapTo(spawn);
+      const at = realm.respawnPoint;
+      player.respawn(at);
+      cam.snapTo(at);
     }, 4200);
   });
 
@@ -166,7 +247,7 @@ async function boot() {
     const simDt = dt * timeScale;
     acc += simDt;
     let steps = 0;
-    if (paused || overlayUp) acc = 0;
+    if (paused || overlayUp || mapUI.open) acc = 0;
     while (acc >= STEP && steps < 5) {
       acc -= STEP;
       steps++;
@@ -174,9 +255,30 @@ async function boot() {
       if (input.wasPressed('inventory')) inv.toggle();
       if (input.wasPressed('help')) overlays.toggleHelp();
       if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
+      if (input.wasPressed('map')) {
+        if (realm.mode === 'dungeon') mapUI.toggle();
+        else hud.toast('You have no map of the surface yet');
+      }
       slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
       player.update(STEP, input, cam);
-      slimes.update(STEP, player);
+      if (realm.mode === 'overworld') slimes.update(STEP, player);
+      realm.update(STEP);
+      rewards.update(STEP, player.center);
+      // Interaction: nearest enabled thing in reach.
+      let best: (typeof realm.interactables)[number] | null = null;
+      let bestD = Infinity;
+      if (!player.dead && !player.act) {
+        for (const it of realm.interactables) {
+          if (!it.enabled()) continue;
+          const d = it.pos.distanceTo(player.pos.clone().setY(it.pos.y));
+          if (d < it.radius && d < bestD) {
+            bestD = d;
+            best = it;
+          }
+        }
+      }
+      hud.prompt(best ? best.label() : null);
+      if (best && input.wasPressed('interact')) best.action();
       spells.update(STEP);
       world.update(STEP);
       river.update(STEP);
@@ -190,6 +292,7 @@ async function boot() {
     const alpha = acc / STEP;
     if (!paused) player.present(alpha, overlayUp ? 0 : simDt);
     renderPos.copy(player.char.root.position);
+    if (!paused) realm.present(alpha, overlayUp || mapUI.open ? 0 : simDt);
     cam.update(dt, renderPos, player.sprinting);
     r.camera.getWorldDirection(player.aimDir);
     grass.update(dt, r.camera.position, renderPos);
@@ -198,6 +301,7 @@ async function boot() {
     foliage.update(dt, r.camera.position);
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
+    mapUI.update();
     physDebug?.update();
     r.followShadow(renderPos);
     r.render(dt);
@@ -217,11 +321,26 @@ async function boot() {
     }
     requestAnimationFrame(frame);
   };
+  // Compile every material's shaders up front, in parallel where the
+  // browser supports it, instead of stalling the first frames one by one.
+  r.followShadow(player.pos);
+  cam.update(0, player.pos, false);
+  await r.renderer.compileAsync(r.scene, r.camera);
+  mark('shaders');
+  last = performance.now();
   requestAnimationFrame(frame);
+  // Item icons render off-screen; do it once the world is up (it's behind
+  // the title screen in normal play) so boot isn't held up by it.
+  setTimeout(() => {
+    buildIcons(r.renderer, r.scene.environment);
+    mark('icons');
+    hud.markHotbarDirty();
+    if (inv.open) inv.render();
+  }, 50);
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

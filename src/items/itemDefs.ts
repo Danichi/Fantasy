@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildSword, buildRoundShield, buildKiteShield } from './weaponModels';
+import { buildSword, buildRoundShield, buildKiteShield, buildOdachi } from './weaponModels';
 import { buildArmorPiece, type ArmorPieceId } from './armorModels';
 
 export type Slot =
@@ -8,7 +8,7 @@ export type Slot =
   | 'amulet' | 'ring1' | 'ring2' | 'belt' | 'trinket';
 export const ARMOR_SLOTS: Slot[] = ['head', 'shoulders', 'chest', 'cloak', 'hands', 'legs', 'feet'];
 export const ACCESSORY_SLOTS: Slot[] = ['amulet', 'ring1', 'ring2', 'belt', 'trinket'];
-export type ItemKind = 'sword' | 'shield' | 'armor' | 'accessory' | 'spell' | 'consumable';
+export type ItemKind = 'sword' | 'shield' | 'armor' | 'accessory' | 'spell' | 'consumable' | 'key';
 export type Rarity = 'common' | 'fine' | 'rare' | 'epic';
 
 export interface ItemStats {
@@ -125,7 +125,20 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'warriorBelt', name: "Warrior's Belt", kind: 'accessory', slot: 'belt', rarity: 'common',
     desc: 'Thick leather with a brass buckle and a pouch.', stats: { poise: 8, maxStamina: 10 }, armor: 'belt',
   },
-  luckyCharm: {
+  warlordTusk: {
+    id: 'warlordTusk', name: "Warlord's Tusk", kind: 'accessory', slot: 'trinket', rarity: 'epic',
+    desc: "Grukk's broken tusk on a cord of braided sinew. Wearing it makes your blows land heavier.", stats: { damagePct: 0.12, maxHp: 20 },
+  },
+  orcOdachi: {
+    id: 'orcOdachi', name: "Grukk's Odachi", kind: 'sword', slot: 'main', rarity: 'epic',
+    desc: 'The Warlord\'s great curved blade, cut down to a length a human can swing. Slow, long and brutal.',
+    stats: { damage: 38, speed: 0.8, poise: 8 }, build: () => buildOdachi(0.72),
+  },
+  cryptKey: {
+    id: 'cryptKey', name: 'Crypt Key', kind: 'key', rarity: 'rare',
+    desc: 'A heavy iron key, green with age. It fits the portcullis in the upper crypt.', stats: {},
+  },
+    luckyCharm: {
     id: 'luckyCharm', name: 'Lucky Charm', kind: 'accessory', slot: 'trinket', rarity: 'fine',
     desc: 'A knotted cord and a boar tusk. Strikes seem to land a little harder.', stats: { damagePct: 0.08 },
   },

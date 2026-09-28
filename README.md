@@ -36,6 +36,10 @@ URL options:
 | C | Jump |
 | 1–8 | Hotbar: equip a weapon, attune a spell, drink a potion. Shift+number puts a sword in the off hand. |
 | I | Inventory and equipment. Click to equip, shift-click for off hand, drag items onto the hotbar. |
+| Tab | Switch the bar between quick items (1–4) and moves (1–6) |
+| Q / middle mouse | Lock on |
+| E | Interact: enter the crypt, open chests, unlock gates, take stairs |
+| M | In the dungeon: open the map to draw walls, floor, icons and notes |
 | H | Controls |
 
 ## The stand-in character and Mixamo
@@ -50,6 +54,14 @@ To switch to a realistic character with motion capture, follow
 provide replaces its procedural version automatically, and any clip you skip
 keeps the procedural one. Weapons and armour attach through hand and limb
 frames measured from the skeleton, so they fit any Mixamo character.
+
+## The crypt (first dungeon)
+
+The crypt entrance is at the end of the north road, in the hills. Inside:
+- **Upper Crypt:** a labyrinth with a locked portcullis. The key is in a chest somewhere on your side of the gate. Beyond the gate are the stairs down.
+- **Lower Crypt:** Grukk, the Orc Warlord, waits in his hall. He wields a giant odachi (cleave, spinning sweep, three-hit combo, leaping slam, kick) and a war bow, and he's faster below half health.
+
+You map the dungeon yourself: the minimap only shows where you are and which way you face. Press **M** to draw. Enemies drop XP and gold; levelling raises health, stamina and mana. Progress, gear and your maps save to the browser automatically.
 
 ## Layout
 

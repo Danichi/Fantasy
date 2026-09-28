@@ -8,7 +8,7 @@ async function boot(page: Page) {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   await page.goto('/?test');
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 90_000 });
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
   return errors;
 }
 

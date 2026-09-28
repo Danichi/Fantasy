@@ -237,7 +237,10 @@ export class InventoryUI {
   private renderStats() {
     const p = this.player, eq = p.equip;
     const rows: [string, string][] = [
-      ['Level', '1'],
+      ['Level', `${p.prog.level}`],
+      ['Experience', `${p.prog.xp} / ${p.prog.next}`],
+      ['Gold', `${p.prog.gold}`],
+      ['Skill points', `${p.prog.skillPoints}`],
       ['Health', `${Math.ceil(p.hp)} / ${p.maxHp}`],
       ['Stamina', `${Math.ceil(p.stamina)} / ${p.maxStamina}`],
       ['Mana', `${Math.ceil(p.mana)} / ${p.maxMana}`],
@@ -291,6 +294,7 @@ export function buildOverlays(onStart: () => void) {
       <span><kbd>F</kbd> Parry</span><span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on</span>
       <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span>
       <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory</span>
+      <span><kbd>E</kbd> Interact (doors, chests, gates)</span><span><kbd>M</kbd> Draw the dungeon map</span>
     </div>`;
   const start = document.createElement('div');
   start.className = 'overlay';

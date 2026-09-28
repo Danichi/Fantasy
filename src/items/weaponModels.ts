@@ -270,3 +270,114 @@ export function buildKiteShield() {
   holder.userData.radius = 0.42;
   return holder;
 }
+
+/**
+ * Odachi: a very long, gently curved single-edged blade with a long wrapped
+ * grip and a round tsuba. `scale` 1 = a 2.3 m warlord's blade.
+ */
+export function buildOdachi(scale = 1) {
+  const m = mats();
+  const g = new THREE.Group();
+  const bladeLen = 1.62 * scale, gripLen = 0.52 * scale, width = 0.034 * scale, thick = 0.007 * scale, sori = 0.09 * scale;
+  // Blade: loft a single-edged section (spine at -X, edge at +X) along a curve.
+  const SEG = 36;
+  const pos: number[] = [];
+  const rings: THREE.Vector3[][] = [];
+  for (let i = 0; i <= SEG; i++) {
+    const t = i / SEG;
+    const y = t * bladeLen;
+    const bend = sori * Math.sin(t * Math.PI * 0.9); // curve toward the spine
+    let w = width * (1 - 0.25 * t);
+    if (t > 0.9) w *= Math.max(0.05, 1 - (t - 0.9) / 0.1);
+    const th = thick * (1 - 0.4 * t);
+    const edgeLift = t > 0.9 ? (t - 0.9) / 0.1 * width * 0.6 : 0; // kissaki sweeps up to the spine
+    rings.push([
+      new THREE.Vector3(-w - bend, y, 0), // spine
+      new THREE.Vector3(-w * 0.6 - bend, y, th),
+      new THREE.Vector3(w * 0.4 - bend - edgeLift, y, th * 0.45),
+      new THREE.Vector3(w - bend - edgeLift, y, 0), // edge
+      new THREE.Vector3(w * 0.4 - bend - edgeLift, y, -th * 0.45),
+      new THREE.Vector3(-w * 0.6 - bend, y, -th),
+    ]);
+  }
+  for (let i = 0; i < SEG; i++) {
+    for (let k = 0; k < 6; k++) {
+      const a = rings[i][k], b = rings[i][(k + 1) % 6], c = rings[i + 1][k], d = rings[i + 1][(k + 1) % 6];
+      pos.push(a.x, a.y, a.z, c.x, c.y, c.z, b.x, b.y, b.z, b.x, b.y, b.z, c.x, c.y, c.z, d.x, d.y, d.z);
+    }
+  }
+  const tip = rings[SEG][0].clone().setY(bladeLen + 0.02 * scale);
+  for (let k = 0; k < 6; k++) {
+    const a = rings[SEG][k], b = rings[SEG][(k + 1) % 6];
+    pos.push(a.x, a.y, a.z, tip.x, tip.y, tip.z, b.x, b.y, b.z);
+  }
+  const bg = new THREE.BufferGeometry();
+  bg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  bg.computeVertexNormals();
+  const bladeMat = m.blade.clone();
+  bladeMat.color.set(0xd8dade);
+  const blade = new THREE.Mesh(bg, bladeMat);
+  const guardY = gripLen / 2 + 0.02 * scale;
+  blade.position.y = guardY + 0.02 * scale;
+  // Habaki (brass collar) and round tsuba.
+  const habaki = new THREE.Mesh(new THREE.BoxGeometry(width * 2.3, 0.05 * scale, thick * 3.5), m.brass);
+  habaki.position.y = guardY + 0.04 * scale;
+  const tsuba = new THREE.Mesh(new THREE.CylinderGeometry(0.075 * scale, 0.075 * scale, 0.012 * scale, 24), m.darkSteel);
+  tsuba.position.y = guardY;
+  // Long grip: dark wrap over pale ray-skin.
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.018 * scale, 0.02 * scale, gripLen, 12), m.gripLeather);
+  const kashira = new THREE.Mesh(new THREE.CylinderGeometry(0.021 * scale, 0.019 * scale, 0.03 * scale, 12), m.darkSteel);
+  kashira.position.y = -gripLen / 2 - 0.015 * scale;
+  g.add(blade, habaki, tsuba, grip, kashira);
+  g.traverse((o) => ((o as THREE.Mesh).isMesh && (o.castShadow = true)));
+  g.userData.bladeBase = guardY + 0.05 * scale;
+  g.userData.bladeTip = guardY + 0.02 * scale + bladeLen;
+  return g;
+}
+
+/** Recurve war bow, held at the grip (+Y = upper limb, string toward -Z). */
+export function buildBow(scale = 1) {
+  const m = mats();
+  const g = new THREE.Group();
+  const H = 0.78 * scale;
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20 * 2 - 1; // -1..1
+    const y = t * H;
+    // Limbs bow forward (+Z) then recurve back at the tips.
+    const z = (1 - t * t) * 0.16 * scale - Math.pow(Math.abs(t), 6) * 0.1 * scale;
+    pts.push(new THREE.Vector3(0, y, z));
+  }
+  const limb = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.018 * scale, 6), new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 0.6 }));
+  const wrap = new THREE.Mesh(new THREE.CylinderGeometry(0.026 * scale, 0.026 * scale, 0.14 * scale, 8), m.leather);
+  wrap.position.z = 0.16 * scale;
+  const top = pts[0], bot = pts[pts.length - 1];
+  const stringGeo = new THREE.BufferGeometry().setFromPoints([top, new THREE.Vector3(0, 0, top.z), bot]);
+  const string = new THREE.Line(stringGeo, new THREE.LineBasicMaterial({ color: 0xd8d0b8 }));
+  g.add(limb, wrap, string);
+  g.traverse((o) => ((o as THREE.Mesh).isMesh && (o.castShadow = true)));
+  // Grip at the origin.
+  g.children.forEach((c) => (c.position.z -= 0.16 * scale));
+  g.userData.string = string;
+  g.userData.nock = new THREE.Vector3(0, 0, top.z - 0.16 * scale);
+  return g;
+}
+
+export function buildArrow(scale = 1) {
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.008 * scale, 0.008 * scale, 0.9 * scale, 5), new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.8 }));
+  shaft.rotation.x = Math.PI / 2;
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.022 * scale, 0.09 * scale, 4), mats().darkSteel);
+  head.rotation.x = Math.PI / 2;
+  head.position.z = 0.49 * scale;
+  const fl = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, side: THREE.DoubleSide });
+  for (let k = 0; k < 3; k++) {
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(0.03 * scale, 0.12 * scale), fl);
+    f.position.z = -0.4 * scale;
+    f.rotation.set(Math.PI / 2, 0, (k / 3) * Math.PI * 2);
+    f.translateX(0.015 * scale);
+    g.add(f);
+  }
+  g.add(shaft, head);
+  return g;
+}

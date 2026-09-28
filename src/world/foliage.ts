@@ -259,6 +259,11 @@ export class Foliage {
     }
   }
 
+  setVisible(v: boolean) {
+    for (const vv of this.variants) vv.branches.visible = vv.leaves.visible = v;
+    this.billboards.visible = v;
+  }
+
   get count() {
     return this.instances.length;
   }

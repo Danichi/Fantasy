@@ -57,9 +57,23 @@ function segDist(px: number, pz: number, a: P, b: P) {
   const t = clamp(((px - a[0]) * vx + (pz - a[1]) * vz) / (vx * vx + vz * vz), 0, 1);
   return Math.hypot(px - a[0] - vx * t, pz - a[1] - vz * t);
 }
+// Segment bounding boxes (padded 40 m) so far-away segments are skipped cheaply.
+const bboxCache = new Map<P[][], [number, number, number, number, P, P][]>();
 function polyDist(px: number, pz: number, lines: P[][]) {
+  let segs = bboxCache.get(lines);
+  if (!segs) {
+    segs = [];
+    for (const l of lines) for (let i = 0; i < l.length - 1; i++) {
+      const a = l[i], b = l[i + 1];
+      segs.push([Math.min(a[0], b[0]) - 40, Math.max(a[0], b[0]) + 40, Math.min(a[1], b[1]) - 40, Math.max(a[1], b[1]) + 40, a, b]);
+    }
+    bboxCache.set(lines, segs);
+  }
   let d = 1e9;
-  for (const l of lines) for (let i = 0; i < l.length - 1; i++) d = Math.min(d, segDist(px, pz, l[i], l[i + 1]));
+  for (const [x0, x1, z0, z1, a, b] of segs) {
+    if (px < x0 || px > x1 || pz < z0 || pz > z1) continue;
+    d = Math.min(d, segDist(px, pz, a, b));
+  }
   return d;
 }
 export function roadDist(x: number, z: number) {
@@ -115,7 +129,8 @@ function heightFn(x: number, z: number) {
 }
 
 // ---- height grid ------------------------------------------------------------
-const GRID = WORLD_SIZE + 1; // 1 m spacing
+const HSTEP = 2; // metres between height samples (bilinear in between)
+const GRID = WORLD_SIZE / HSTEP + 1;
 let heights: Float32Array | null = null;
 
 /** Build the 1 m height grid (about half a second). Call once at startup. */
@@ -123,14 +138,27 @@ export function initTerrainData() {
   heights = new Float32Array(GRID * GRID);
   const H = WORLD_SIZE / 2;
   for (let j = 0; j < GRID; j++) {
-    for (let i = 0; i < GRID; i++) heights[j * GRID + i] = heightFn(i - H, j - H);
+    for (let i = 0; i < GRID; i++) heights[j * GRID + i] = heightFn(i * HSTEP - H, j * HSTEP - H);
   }
 }
 
+/**
+ * Somewhere other than the overworld (a dungeon instance) can claim ground
+ * height for its own region; it returns null outside that region.
+ */
+let groundOverride: ((x: number, z: number) => number | null) | null = null;
+export function setGroundOverride(fn: typeof groundOverride) {
+  groundOverride = fn;
+}
+
 export function heightAt(x: number, z: number) {
+  if (groundOverride) {
+    const g = groundOverride(x, z);
+    if (g !== null) return g;
+  }
   if (!heights) return heightFn(x, z);
   const H = WORLD_SIZE / 2;
-  const fx = clamp(x + H, 0, WORLD_SIZE - 1e-3), fz = clamp(z + H, 0, WORLD_SIZE - 1e-3);
+  const fx = clamp(x + H, 0, WORLD_SIZE - 1e-3) / HSTEP, fz = clamp(z + H, 0, WORLD_SIZE - 1e-3) / HSTEP;
   const i = Math.floor(fx), j = Math.floor(fz);
   const u = fx - i, v = fz - j;
   const a = heights[j * GRID + i], b = heights[j * GRID + i + 1];
@@ -144,7 +172,7 @@ export function heightTexture() {
   if (heightTex) return heightTex; // shared by grass, flowers and water
   const N = WORLD_SIZE;
   const data = new Uint16Array(N * N);
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) data[j * N + i] = THREE.DataUtils.toHalfFloat(heights ? heights[j * GRID + i] : 0);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) data[j * N + i] = THREE.DataUtils.toHalfFloat(heightAt(i - N / 2, j - N / 2));
   const t = new THREE.DataTexture(data, N, N, THREE.RedFormat, THREE.HalfFloatType);
   t.magFilter = t.minFilter = THREE.LinearFilter;
   t.needsUpdate = true;

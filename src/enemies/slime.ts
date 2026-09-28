@@ -15,7 +15,7 @@ import type { FX } from '../fx/particles';
 // so every hop, hit and landing jiggles.
 // ---------------------------------------------------------------------------
 
-export type SlimeKind = 'green' | 'blue' | 'magma';
+export type SlimeKind = 'green' | 'blue' | 'magma' | 'cave';
 
 interface Variant {
   radius: number;
@@ -34,9 +34,11 @@ interface Variant {
   attackRange: number;
   burn?: number;
   emissiveCracks?: boolean;
+  aggro?: number; // notice range (m)
 }
 
 export const VARIANTS: Record<SlimeKind, Variant> = {
+  cave: { radius: 0.5, hp: 85, damage: 16, poise: 30, color: 0x9a6cff, deep: 0x2a0f6e, core: 0x3b1f8a, coreEmissive: 0x6a3cff, hopDist: 1.8, hopTime: 0.45, leapDist: 4.4, leapTime: 0.52, windup: 0.42, attackRange: 3.6, aggro: 13 },
   green: { radius: 0.42, hp: 60, damage: 14, poise: 22, color: 0x7ae65e, deep: 0x1f7a2a, core: 0x2d5e1e, coreEmissive: 0x0a1f05, hopDist: 1.7, hopTime: 0.42, leapDist: 4.2, leapTime: 0.5, windup: 0.45, attackRange: 3.4 },
   blue: { radius: 0.68, hp: 140, damage: 24, poise: 55, color: 0x5cb8ff, deep: 0x123f9a, core: 0x1a2f6e, coreEmissive: 0x050a26, hopDist: 2.2, hopTime: 0.62, leapDist: 5.2, leapTime: 0.72, windup: 0.62, attackRange: 4.4 },
   magma: { radius: 0.55, hp: 110, damage: 18, poise: 40, color: 0xff6a2a, deep: 0x7a1000, core: 0x2a0500, coreEmissive: 0xff3300, hopDist: 1.9, hopTime: 0.5, leapDist: 4.6, leapTime: 0.56, windup: 0.5, attackRange: 3.8, burn: 6, emissiveCracks: true },
@@ -298,6 +300,9 @@ export class Slime implements Target {
     }
   }
 
+  /** called once when the slime dies (the King splits into slimelings) */
+  onDeath?: (s: Slime) => void;
+
   private die() {
     this.alive = false;
     this.stunned = false;
@@ -309,6 +314,7 @@ export class Slime implements Target {
       this.fx.add.spawn({ pos: this.center, spread: 5, count: 40, life: [0.4, 1], size: [0.12, 0.02], color: 0xffc070, color2: 0xff3000, gravity: 3, upBias: 0.5 });
     }
     events.emit('enemyDied', { at: this.center.clone(), enemyId: this.id, kind: this.kind });
+    this.onDeath?.(this);
   }
 
   private setState(s: State) {
@@ -321,6 +327,7 @@ export class Slime implements Target {
   }
 
   dispose() {
+    targets.delete(this);
     this.scene.remove(this.group, this.shadow);
     physics.world.removeCollider(this.col, false);
     physics.world.removeRigidBody(this.rb);
@@ -350,7 +357,7 @@ export class Slime implements Target {
 
     const toP = player.pos.clone().sub(this.position);
     const dist = Math.hypot(toP.x, toP.z);
-    const aware = !player.dead && dist < 16;
+    const aware = !player.dead && dist < (v.aggro ?? 16);
     const wantYaw = Math.atan2(toP.x, toP.z);
 
     switch (this.state) {

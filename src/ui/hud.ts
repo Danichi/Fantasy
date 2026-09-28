@@ -44,6 +44,15 @@ export class HUD {
   private death: HTMLDivElement;
   private tmp = new THREE.Vector3();
   private hotbarDirty = true;
+  private xpFill!: HTMLElement;
+  private lvEl!: HTMLElement;
+  private goldEl!: HTMLElement;
+  private promptEl: HTMLDivElement;
+  private bossEl: HTMLDivElement;
+  private fadeEl: HTMLDivElement;
+  private levelEl: HTMLDivElement;
+  private boss: { hp: number; maxHp: number; alive: boolean } | null = null;
+  private bossTrail = 1;
   onSlotDrop?: (mode: 'items' | 'moves', slot: number, uid: number) => void;
 
   constructor(private player: Player, private camera: THREE.Camera) {
@@ -60,6 +69,11 @@ export class HUD {
       return { root, fill, trail, num, trailV: 1, trailHold: 0, last: 1 };
     };
     this.bars = { hp: mk('hp', 'HEALTH'), st: mk('st', 'STAMINA'), mp: mk('mp', 'MANA') };
+    const xpRow = el('div', 'xprow', vit);
+    xpRow.innerHTML = '<span class="lv">LV 1</span><div class="xpbar"><i></i></div><span class="gold">0</span>';
+    this.xpFill = xpRow.querySelector('.xpbar i')!;
+    this.lvEl = xpRow.querySelector('.lv')!;
+    this.goldEl = xpRow.querySelector('.gold')!;
 
     const wrap = el('div', 'loadout-wrap', this.root);
     const handRow = el('div', 'hands', wrap);
@@ -93,6 +107,16 @@ export class HUD {
     this.toastEl = el('div', 'toast', this.root);
     this.banner = el('div', 'banner', this.root);
     this.death = el('div', 'death', this.root, '<h1>YOU DIED</h1>');
+    this.promptEl = el('div', 'prompt', this.root);
+    this.bossEl = el('div', 'bossbar', this.root, '<span class="nm"></span><div class="bb"><b></b><i></i></div>');
+    this.fadeEl = el('div', 'fade', this.root);
+    this.levelEl = el('div', 'levelup', this.root);
+    events.on('levelUp', ({ level }) => {
+      this.levelEl.innerHTML = `LEVEL UP<small>You are now level ${level}. Health, stamina and mana increased.</small>`;
+      this.levelEl.classList.remove('show');
+      void this.levelEl.offsetWidth;
+      this.levelEl.classList.add('show');
+    });
     el('div', 'hint', this.root, '<b>I</b> inventory &nbsp;·&nbsp; <b>H</b> controls');
 
     events.on('equipmentChanged', () => (this.hotbarDirty = true));
@@ -112,6 +136,31 @@ export class HUD {
     });
     events.on('playerDied', () => this.death.classList.add('show'));
     events.on('playerRespawned', () => this.death.classList.remove('show'));
+  }
+
+  /** Interaction prompt ("E  Open chest"); null hides it. */
+  prompt(label: string | null) {
+    if (!label) {
+      this.promptEl.classList.remove('show');
+      return;
+    }
+    const html = `<kbd>E</kbd>${label}`;
+    if (this.promptEl.innerHTML !== html) this.promptEl.innerHTML = html;
+    this.promptEl.classList.add('show');
+  }
+
+  bossBar(t: { hp: number; maxHp: number; alive: boolean } | null, name = 'Grukk, the Orc Warlord') {
+    if (t && !this.boss) this.bossTrail = t.hp / t.maxHp;
+    this.boss = t;
+    this.bossEl.classList.toggle('show', !!t);
+    if (t) this.bossEl.querySelector('.nm')!.textContent = name;
+  }
+
+  /** Fade to black (true) or back (false); resolves when done. */
+  fade(on: boolean, ms = 450) {
+    this.fadeEl.style.transitionDuration = `${ms}ms`;
+    this.fadeEl.classList.toggle('on', on);
+    return new Promise<void>((r) => setTimeout(r, ms));
   }
 
   markHotbarDirty() {
@@ -212,6 +261,17 @@ export class HUD {
     if (this.hotbarDirty) {
       this.hotbarDirty = false;
       this.renderHotbar();
+    }
+    const pr = p.prog;
+    this.xpFill.style.transform = `scaleX(${Math.min(1, pr.xp / pr.next)})`;
+    this.lvEl.textContent = `LV ${pr.level}`;
+    this.goldEl.textContent = `${pr.gold}`;
+    if (this.boss) {
+      const f = Math.max(0, this.boss.hp / this.boss.maxHp);
+      this.bossTrail = Math.max(f, this.bossTrail - dt * 0.35);
+      (this.bossEl.querySelector('.bb i') as HTMLElement).style.transform = `scaleX(${f})`;
+      (this.bossEl.querySelector('.bb b') as HTMLElement).style.transform = `scaleX(${this.bossTrail})`;
+      if (!this.boss.alive) this.bossBar(null);
     }
 
     // Lock-on reticle.

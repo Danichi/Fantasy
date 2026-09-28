@@ -362,3 +362,6 @@ export function buildArmorPiece(id: ArmorPieceId, _fit: null): THREE.Object3D {
   });
   return shadow(g);
 }
+
+/** Individual limb-frame builders, for things that wear armour without a body (Living Armour). */
+export const armorPieces = { helm, pauldron, breastplate, vambrace, greave, cuisse };

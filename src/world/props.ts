@@ -14,7 +14,7 @@ import type { FX } from '../fx/particles';
 
 const TEX = '/assets/textures/';
 
-function pbr(loader: THREE.TextureLoader, id: string, opts: THREE.MeshStandardMaterialParameters = {}, aniso = 4, desaturate = 0) {
+export function pbr(loader: THREE.TextureLoader, id: string, opts: THREE.MeshStandardMaterialParameters = {}, aniso = 4, desaturate = 0) {
   const load = (m: string, srgb: boolean) => {
     const t = loader.load(`${TEX}${id}_${m}_1k.jpg`);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;

@@ -119,6 +119,36 @@ function paintAccessory(def: ItemDef) {
       g.arc(m, 34, 15, 0, Math.PI * 2);
       g.fill();
     }
+  } else if (def.id === 'warlordTusk') {
+    // A curved tusk on a cord, set in gold.
+    g.fillStyle = '#c9a24a';
+    g.beginPath();
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2, r = i % 2 ? 36 : 46;
+      g.lineTo(m + Math.cos(a) * r, m + Math.sin(a) * r);
+    }
+    g.fill();
+    const gr = g.createRadialGradient(m - 8, m - 8, 2, m, m, 30);
+    gr.addColorStop(0, '#e8ffd0');
+    gr.addColorStop(0.4, '#6fe070');
+    gr.addColorStop(1, '#0f5a24');
+    g.fillStyle = gr;
+    g.beginPath();
+    g.arc(m, m, 28, 0, Math.PI * 2);
+    g.fill();
+  } else if (def.kind === 'key') {
+    g.strokeStyle = '#8a8a7a';
+    g.fillStyle = '#8a8a7a';
+    g.lineWidth = 9;
+    g.beginPath();
+    g.arc(40, 40, 18, 0, Math.PI * 2);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(53, 53);
+    g.lineTo(104, 104);
+    g.stroke();
+    g.fillRect(82, 86, 10, 22);
+    g.fillRect(94, 74, 10, 16);
   } else {
     // Charm: a knotted cord and a curved tusk.
     g.strokeStyle = '#8a5a34';
@@ -152,9 +182,11 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
   renderer.toneMapping = THREE.NoToneMapping;
 
   /** Render `holder` into a w x h image, framed to fit, and return a data URL. */
+  const targets = new Map<string, THREE.WebGLRenderTarget>();
   const snap = (holder: THREE.Object3D, w: number, h: number, fill = 1.75) => {
     // Render targets receive linear colour; convert to sRGB when copying out.
-    const rt = new THREE.WebGLRenderTarget(w, h, { samples: 4, type: THREE.FloatType });
+    let rt = targets.get(`${w}x${h}`);
+    if (!rt) targets.set(`${w}x${h}`, (rt = new THREE.WebGLRenderTarget(w, h, { samples: 4, type: THREE.FloatType })));
     const pixels = new Float32Array(w * h * 4);
     scene.add(holder);
     holder.updateMatrixWorld(true);
@@ -174,7 +206,6 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
     renderer.render(scene, cam);
     renderer.readRenderTargetPixels(rt, 0, 0, w, h, pixels);
     scene.remove(holder);
-    rt.dispose();
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
@@ -204,7 +235,7 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
     }
     const model = buildItemModel(def);
     if (!model) {
-      if (def.kind === 'accessory') cache.set(def.id, paintAccessory(def));
+      if (def.kind === 'accessory' || def.kind === 'key') cache.set(def.id, paintAccessory(def));
       continue;
     }
     const holder = new THREE.Group();
@@ -217,14 +248,14 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
     // Wide versions for the hand frames: blades horizontal, shields upright.
     if (def.kind === 'sword' || def.kind === 'shield') {
       const wide = new THREE.Group();
-      const m2 = buildItemModel(def)!;
-      wide.add(m2);
+      wide.add(model); // reuse the same model (building shields paints textures)
       if (def.kind === 'sword') wide.rotation.set(0.25, 0, -Math.PI / 2 + 0.12);
       else wide.rotation.set(0.1, -0.3, 0);
       wideCache.set(def.id, snap(wide, 256, 112, 1.08));
     }
   }
   renderer.setRenderTarget(null);
+  for (const t of targets.values()) t.dispose();
   renderer.toneMapping = prevTone;
   renderer.setClearColor(0x000000, prevClear);
 }

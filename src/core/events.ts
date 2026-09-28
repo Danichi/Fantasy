@@ -15,6 +15,10 @@ export interface GameEvents {
   footstep: { at: Vector3; surface: string };
   notEnough: { stat: 'stamina' | 'mana' };
   needTarget: {};
+  levelUp: { level: number };
+  progressChanged: {};
+  pickup: { kind: 'xp' | 'gold' };
+  bossSlam: { at: Vector3 };
   equipmentChanged: {};
   slimeLand: { at: Vector3; size: number };
 }

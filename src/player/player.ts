@@ -13,6 +13,7 @@ import { ACTIONS, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, reso
 import { targets, hurtSegment, type Target, type IncomingAttack, type DefenceResult } from '../combat/targets';
 import { surfaceAt } from '../world/terrain';
 import { waterDepthAt } from '../world/water';
+import { Progression } from '../progression/progression';
 
 const CAPSULE_HALF = 0.55;
 const CAPSULE_R = 0.32;
@@ -66,14 +67,15 @@ export class Player {
   hp = 120;
   stamina = 100;
   mana = 80;
+  readonly prog = new Progression();
   get maxHp() {
-    return 120 + (this.equip?.bonus('maxHp') ?? 0);
+    return 120 + this.prog.bonusHp + (this.equip?.bonus('maxHp') ?? 0);
   }
   get maxStamina() {
-    return 100 + (this.equip?.bonus('maxStamina') ?? 0);
+    return 100 + this.prog.bonusStamina + (this.equip?.bonus('maxStamina') ?? 0);
   }
   get maxMana() {
-    return 80 + (this.equip?.bonus('maxMana') ?? 0);
+    return 80 + this.prog.bonusMana + (this.equip?.bonus('maxMana') ?? 0);
   }
   private staminaDelay = 0;
   private hot = { rate: 0, left: 0 };
