@@ -4,9 +4,8 @@ import { physics } from '../physics/physics';
 import { pbr } from '../world/props';
 import { mats, paintedWood } from '../items/materials';
 import { generateFloor, Grid, type Cell, type FloorLayout } from './generator';
-import { Slime, type SlimeKind } from '../enemies/slime';
-import { LivingArmour } from '../enemies/livingArmour';
 import { OrcWarlord } from '../enemies/orc';
+import { OrcMob } from '../enemies/orcMob';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { segmentPointDistance } from '../core/math';
 import type { Player } from '../player/player';
@@ -105,8 +104,7 @@ export class DungeonInstance {
   private darts: Dart[] = [];
   private gate: { bars: THREE.Group; collider: RAPIER.Collider | null; t: number; opening: boolean } | null = null;
   private portal: THREE.Group | null = null;
-  slimes: Slime[] = [];
-  armours: LivingArmour[] = [];
+  orcs: OrcMob[] = [];
   private boss: OrcWarlord | null = null;
   /** resolves when async content (the boss model) has loaded */
   ready: Promise<void> = Promise.resolve();
@@ -542,13 +540,14 @@ export class DungeonInstance {
       const c = this.cellCenter(s.cell[0], s.cell[1], 0.3);
       c.x += (Math.random() - 0.5) * 1.2;
       c.z += (Math.random() - 0.5) * 1.2;
-      if (s.kind === 'armour') this.armours.push(new LivingArmour(c.setY(0), this.scene, this.fx));
-      else if (s.kind === 'orc') {
+
+      // The crypt's regular enemies are now orcs on both floors. The
+      // existing orc remains the end-of-dungeon boss.
+      if (s.kind === 'orc') {
         if (this.progress.bossDead) {
           this.buildPortal();
           continue;
         }
-        // Stands at the far end of his hall, facing the way you'll come in.
         const at = this.cellCenter(s.cell[0], s.cell[1]);
         const toEntrance = this.spawnPoint.sub(at);
         this.ready = OrcWarlord.create(at, Math.atan2(toEntrance.x, toEntrance.z), this.scene, this.fx).then((o) => {
@@ -565,7 +564,9 @@ export class DungeonInstance {
           };
           this.boss = o;
         });
-      } else this.slimes.push(new Slime(s.kind as SlimeKind, c, this.scene, this.fx));
+      } else {
+        this.orcs.push(new OrcMob(c.setY(0), this.scene, this.fx));
+      }
     }
   }
 
@@ -574,12 +575,9 @@ export class DungeonInstance {
     this.time += dt;
     const pp = player.pos;
     // Enemies.
-    for (const s of this.slimes) s.update(dt, player, this.slimes);
-    for (const a of this.armours) a.update(dt, player);
-    for (const s of this.slimes.filter((s) => s.dead)) s.dispose();
-    this.slimes = this.slimes.filter((s) => !s.dead);
-    for (const a of this.armours.filter((a) => a.dead)) a.dispose();
-    this.armours = this.armours.filter((a) => !a.dead);
+    for (const g of this.orcs) g.update(dt, player);
+    for (const g of this.orcs.filter((g) => g.dead)) g.dispose();
+    this.orcs = this.orcs.filter((g) => !g.dead);
     // Boss: fights once woken; the bar shows while he's awake.
     if (this.boss) {
       this.boss.update(dt, player);
@@ -710,10 +708,8 @@ export class DungeonInstance {
     this.boss = null;
     for (const c of this.colliders) physics.world.removeCollider(c, false);
     this.colliders = [];
-    for (const s of this.slimes) s.dispose();
-    for (const a of this.armours) a.dispose();
-    this.slimes = [];
-    this.armours = [];
+    for (const g of this.orcs) g.dispose();
+    this.orcs = [];
     this.scene.remove(this.group);
     this.group.traverse((o) => {
       const m = o as THREE.Mesh;
