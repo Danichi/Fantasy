@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { events } from '../core/events';
 import { heightAt } from '../world/terrain';
+import { CombatProgression, type DisciplineId } from './combatProgression';
 
 // Levels, XP, gold and skill points, plus the glowing orbs and coins that
 // burst out of defeated enemies and fly to the player.
@@ -15,10 +16,12 @@ export function xpToNext(level: number) {
 }
 
 export class Progression {
+  /** Legacy account-level progression remains for base stats/rewards. */
   level = 1;
   xp = 0;
   gold = 0;
   skillPoints = 0;
+  readonly combat = new CombatProgression();
 
   get next() {
     return xpToNext(this.level);
@@ -33,6 +36,11 @@ export class Progression {
       events.emit('levelUp', { level: this.level });
     }
     events.emit('progressChanged', {});
+  }
+
+  addCombatXp(id: DisciplineId, amount: number, event: Parameters<CombatProgression['addCombatEvent']>[0] = 'attackHit') {
+    this.combat.addDisciplineXp(id, amount, event ? undefined : 0);
+    events.emit('masteryChanged', { discipline: id, mastery: this.combat.disciplines[id].mastery, level: this.combat.disciplines[id].level });
   }
 
   addGold(n: number) {
