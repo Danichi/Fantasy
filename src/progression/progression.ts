@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { events } from '../core/events';
 import { heightAt } from '../world/terrain';
-import { COMBAT_STYLES, type CombatStyleId } from './styles';
+import { COMBAT_STYLES, styleIds, type CombatStyleId } from './styles';
 
 // Levels, XP, gold and skill points, plus the glowing orbs and coins that
 // burst out of defeated enemies and fly to the player.
@@ -20,9 +20,31 @@ export class Progression {
   xp = 0;
   gold = 0;
   skillPoints = 0;
-  learnedStyles: CombatStyleId[] = [];
-  activeStyle: CombatStyleId | null = null;
-  learnedSkills: Record<CombatStyleId, string[]> = { swordsman: [], bulwark: [] };
+
+  /** The first school chosen after the three starter introductions. */
+  primaryStyle: CombatStyleId | null = null;
+  /** A later secondary school slot; progression systems can unlock this without changing the primary. */
+  secondaryStyle: CombatStyleId | null = null;
+  /** Which schools the player has heard about from their village mentors. */
+  styleIntroductions: CombatStyleId[] = [];
+  learnedSkills: Record<CombatStyleId, string[]> = { gale: [], boundary: [], cross: [] };
+  styleMastery: Record<CombatStyleId, number> = { gale: 0, boundary: 0, cross: 0 };
+
+  get learnedStyles(): CombatStyleId[] {
+    return [this.primaryStyle, this.secondaryStyle].filter((id): id is CombatStyleId => id !== null);
+  }
+
+  get activeStyle() {
+    return this.primaryStyle;
+  }
+
+  get starterStyleQuestComplete() {
+    return this.styleIntroductions.length === styleIds.length;
+  }
+
+  get starterStyleChosen() {
+    return this.primaryStyle !== null;
+  }
 
   get next() {
     return xpToNext(this.level);
@@ -39,22 +61,37 @@ export class Progression {
     events.emit('progressChanged', {});
   }
 
+  markStyleIntroduction(id: CombatStyleId) {
+    if (!COMBAT_STYLES[id] || this.styleIntroductions.includes(id)) return false;
+    this.styleIntroductions.push(id);
+    events.emit('progressChanged', {});
+    return true;
+  }
+
   knowsStyle(id: CombatStyleId) {
     return this.learnedStyles.includes(id);
   }
 
-  learnStyle(id: CombatStyleId) {
-    if (!COMBAT_STYLES[id] || this.knowsStyle(id)) return false;
-    this.learnedStyles.push(id);
-    if (!this.activeStyle) this.activeStyle = id;
+  choosePrimaryStyle(id: CombatStyleId) {
+    if (!COMBAT_STYLES[id] || this.primaryStyle || !this.starterStyleQuestComplete) return false;
+    this.primaryStyle = id;
+    events.emit('progressChanged', {});
+    return true;
+  }
+
+  unlockSecondaryStyle(id: CombatStyleId) {
+    if (!COMBAT_STYLES[id] || !this.primaryStyle || this.secondaryStyle || id === this.primaryStyle) return false;
+    this.secondaryStyle = id;
     events.emit('progressChanged', {});
     return true;
   }
 
   setActiveStyle(id: CombatStyleId) {
-    if (!this.knowsStyle(id)) return false;
-    this.activeStyle = id;
-    events.emit('progressChanged', {});
+    if (id !== this.primaryStyle && id !== this.secondaryStyle) return false;
+    // The primary remains the default active style; secondary switching is allowed
+    // only once a future mastery gate explicitly unlocks the secondary slot.
+    if (id === this.secondaryStyle && !this.secondaryStyle) return false;
+    if (id !== this.primaryStyle) return false;
     return true;
   }
 
@@ -80,12 +117,17 @@ export class Progression {
     return COMBAT_STYLES[style].nodes.find((n) => n.id === nodeId) ?? null;
   }
 
+  addMastery(style: CombatStyleId, amount = 1) {
+    if (!this.knowsStyle(style)) return;
+    this.styleMastery[style] = Math.max(0, this.styleMastery[style] + amount);
+    events.emit('progressChanged', {});
+  }
+
   addGold(n: number) {
     this.gold += n;
     events.emit('progressChanged', {});
   }
 
-  /** Stat growth per level. */
   get bonusHp() {
     return (this.level - 1) * 10;
   }
@@ -95,7 +137,12 @@ export class Progression {
   get bonusMana() {
     return (this.level - 1) * 5;
   }
+
+  get starterQuestCount() {
+    return this.styleIntroductions.length;
+  }
 }
+
 interface Pickup {
   kind: 'xp' | 'gold';
   pos: THREE.Vector3;
