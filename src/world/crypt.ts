@@ -179,6 +179,13 @@ export function buildCrypt(scene: THREE.Scene, m: WorldMats, fx: FX) {
       }
     });
     group.add(house);
+    // The old stone facade remains only as the collision/tunnel foundation;
+    // the supplied Orc House is the visible landmark and doorway.
+    mesh.visible = false;
+    tunnel.visible = false;
+    back.visible = false;
+    gloom.visible = false;
+    sigil.visible = false;
   }).catch((e) => console.warn('orc house failed to load', e));
   const world = braziers.map((b) => b.clone().applyMatrix4(group.matrixWorld));
 
