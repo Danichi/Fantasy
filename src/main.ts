@@ -25,6 +25,7 @@ import { buildWorld } from './world/props';
 import { Grass } from './world/grass';
 import { River } from './world/water';
 import { Foliage } from './world/foliage';
+import { StylizedNature } from './world/stylizedNature';
 import { Flowers } from './world/flowers';
 import { Rewards, XP_FOR_KIND } from './progression/progression';
 import { DungeonMapUI } from './ui/dungeonMap';
@@ -78,6 +79,10 @@ async function boot() {
   mark('river');
   const foliage = new Foliage(r.scene, r.renderer);
   mark('foliage');
+  const stylizedNature = new StylizedNature(r.scene);
+  await stylizedNature.ready;
+  if (stylizedNature.loaded) foliage.setVisible(false);
+  mark('stylizedNature');
   const flowers = new Flowers(r.scene, terrain.splat);
   mark('flowers');
   const rewards = new Rewards(r.scene, player.prog);
@@ -115,6 +120,7 @@ async function boot() {
       flowers.mesh.visible = !h;
       river.mesh.visible = !h;
       foliage.setVisible(!h);
+      stylizedNature.setVisible(!h && stylizedNature.loaded);
       town.setVisible(!h);
     },
     clearEnemies: () => slimes.clear(),
@@ -318,6 +324,7 @@ async function boot() {
     flowers.update(dt, r.camera.position);
     terrain.update(r.camera.position, player.pos);
     foliage.update(dt, r.camera.position);
+    stylizedNature.update(dt, r.camera.position);
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
     mapUI.update();
@@ -363,7 +370,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {
