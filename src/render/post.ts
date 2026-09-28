@@ -66,7 +66,7 @@ const FINAL_FRAG = /* glsl */ `
       vec2 cp = wp.xz * 0.0045 + vec2(uTime * 0.006, uTime * 0.0025);
       float c = noise2(cp) * 0.65 + noise2(cp * 2.3 + 0.37) * 0.35;
       float shade = smoothstep(0.48, 0.72, c);
-      col *= mix(1.0, 0.68, shade * uClouds);
+      col *= mix(1.0, 0.78, shade * uClouds);
     }
 
     // Aerial perspective: exponential haze thinning with altitude, warmer
@@ -97,12 +97,12 @@ const FINAL_FRAG = /* glsl */ `
     // extra saturation in the mids (greens and sky stay vivid).
     float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
     col = mix(vec3(luma), col, 1.16);
-    col = mix(col, col * vec3(1.05, 1.0, 0.92), smoothstep(0.35, 1.0, luma));
-    col = mix(col, col * vec3(0.94, 0.98, 1.06), 1.0 - smoothstep(0.0, 0.35, luma));
+    col = mix(col, col * vec3(1.025, 1.01, 0.97), smoothstep(0.35, 1.0, luma));
+    col = mix(col, col * vec3(0.95, 0.995, 1.045), 1.0 - smoothstep(0.0, 0.35, luma));
     col = col * col * (3.0 - 2.0 * col) * 0.35 + col * 0.65;
     // Vignette.
     vec2 q = vUv - 0.5;
-    col *= 1.0 - dot(q, q) * 0.55;
+    col *= 1.0 - dot(q, q) * 0.28;
     gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
   }`;
 
@@ -168,7 +168,7 @@ export class Post {
         uCamPos: { value: new THREE.Vector3() }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
         uSunColor: { value: new THREE.Color(1.0, 0.86, 0.62) }, uHazeColor: { value: new THREE.Color(0.66, 0.77, 0.9) },
         uNear: { value: 0.1 }, uFar: { value: 900 }, uTime: { value: 0 },
-        uExposure: { value: 1.0 }, uBloom: { value: 0.5 }, uHaze: { value: 0.0012 }, uClouds: { value: 1.0 },
+        uExposure: { value: 1.0 }, uBloom: { value: 0.28 }, uHaze: { value: 0.00072 }, uClouds: { value: 0.85 },
       },
       depthTest: false,
       depthWrite: false,
