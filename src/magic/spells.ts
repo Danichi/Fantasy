@@ -137,7 +137,8 @@ export class Spells {
       light.intensity = 18;
       light.distance = 9;
     }
-    this.balls.push({ phase: Math.random() * 6, group, vel: dir.clone().normalize().multiplyScalar(17), life: 3, target, light, damage: ITEMS.fireball.stats.damage ?? 40 });
+    const spellMult = 1 + this.player.prog.styleValue('spellDamage');
+    this.balls.push({ phase: Math.random() * 6, group, vel: dir.clone().normalize().multiplyScalar(17), life: 3, target, light, damage: (ITEMS.fireball.stats.damage ?? 40) * spellMult });
     this.fx.add.spawn({ pos: from, spread: 3, count: 18, life: [0.15, 0.35], size: [0.15, 0.02], color: 0xffe0a0, color2: 0xff4000 });
   }
 
