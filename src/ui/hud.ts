@@ -140,6 +140,7 @@ export class HUD {
       requestAnimationFrame(() => requestAnimationFrame(() => this.vignette.classList.remove('hurt')));
     });
     events.on('playerDied', () => this.death.classList.add('show'));
+    events.on('originAbility', ({ ability }) => this.showBanner(ability.toUpperCase()));
     events.on('playerRespawned', () => this.death.classList.remove('show'));
   }
 
