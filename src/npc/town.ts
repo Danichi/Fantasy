@@ -8,7 +8,7 @@ import type { DialogueUI } from '../ui/dialogue';
 import type { Interactable } from '../dungeon/instance';
 import type { Player } from '../player/player';
 import type { CombatStyleId } from '../progression/styles';
-import { trainingOption, magicOptions, shopOptions } from './services';
+import { trainingOption, starterChoiceOptions, magicOptions, shopOptions } from './services';
 
 // The townsfolk: who they are, where they stand, and what they teach or sell.
 
@@ -16,16 +16,16 @@ const face = (x: number, z: number, tx = 0, tz = -4) => Math.atan2(tx - x, tz - 
 
 export const NPCS: NpcSpec[] = [
   {
-    id: 'kaela', name: 'Kaela Voss', title: 'Sword Master', file: 'kaela.glb', height: 1.72, pos: [-13.5, 0.5], yaw: face(-13.5, 0.5),
+    id: 'kaela', name: 'Kaela Voss', title: 'Gale Mentor', file: 'kaela.glb', height: 1.72, pos: [-13.5, 0.5], yaw: face(-13.5, 0.5),
     kind: 'rigged', armDrop: 0.95,
     bones: { upperArmL: 'b_MF_UpperArm_L_023', upperArmR: 'b_MF_UpperArm_R_045', spine: ['b_MF_Spine_01_011', 'B_MF_Spine_02_012', 'b_MF_Spine_03_013'], head: 'b_MF_Head_015' },
     greeting: 'Feet apart. Shoulders loose. You hold that blade like it owes you money.',
     lines: [
-      { q: 'Who are you?', a: "Kaela Voss. I trained the town watch, back when the watch still came home. The crypt up north swallows good steel." },
-      { q: 'Teach me the sword.', a: 'I can. Choose Learn Swordsman in this conversation to begin training, then spend your skill points on her moves.' },
+      { q: 'Who are you?', a: 'Kaela Voss. I teach Gale: speed, chaining and the discipline of keeping momentum alive instead of trading blows.' },
+      { q: 'Teach me about Gale.', a: 'Gale rewards precise aggressive play. Every clean chain feeds Momentum, and Momentum makes your attacks faster and harder. Miss, hesitate, or get hit and the wind dies.' },
       { q: 'Any advice?', a: "Slimes crouch before they leap. Parry the leap, and they're yours for the taking. Big ones take longer to wind up. Be patient." },
     ],
-    trainerStyle: 'swordsman',
+    trainerStyle: 'gale',
   },
   {
     id: 'froest', name: 'Master Fröst', title: 'Smith & Merchant', file: 'froest.glb', height: 1.78, pos: [-25, 15], yaw: face(-25, 15),
@@ -48,15 +48,26 @@ export const NPCS: NpcSpec[] = [
     magicTrainer: true,
   },
   {
-    id: 'corvin', name: 'Ser Corvin', title: 'The Black Knight', file: 'corvin.glb', height: 1.98, pos: [5.5, -69], yaw: face(5.5, -69, 5.5, 0),
+    id: 'veyr', name: 'Master Veyr', title: 'Cross Mentor', file: 'urukStatue.glb', height: 1.82, pos: [17, 13], yaw: face(17, 13),
+    kind: 'statue',
+    greeting: 'A fighter who only knows how to attack is predictable. Cross is the art of creating the opening and being ready before it appears.',
+    lines: [
+      { q: 'Who are you?', a: 'Master Veyr. I teach Cross: deflect with one line, punish along another, and turn a successful parry into a real advantage.' },
+      { q: 'Teach me about Cross.', a: 'A successful parry creates a Cross Opening. Your next damaging strike exploits that opening for extra damage and stagger. Different weapons express the principle differently, but the timing is universal.' },
+      { q: 'Can I dual wield?', a: 'Cross works naturally with two weapons, but the school is a combat philosophy rather than a requirement. Spears, greatweapons, daggers and shields can all express the same counter principle.' },
+    ],
+    trainerStyle: 'cross',
+  },
+  {
+    id: 'corvin', name: 'Ser Corvin', title: 'Boundary Mentor', file: 'corvin.glb', height: 1.98, pos: [5.5, -69], yaw: face(5.5, -69, 5.5, 0),
     kind: 'statue',
     greeting: 'You have the look of someone headed north. Most who take that road do not walk it twice.',
     lines: [
       { q: 'Why the black armour?', a: 'I swore an oath to guard this road, and failed it once. The armour remembers, even when the town forgets.' },
-      { q: 'Teach me the shield.', a: 'A shield is a promise that you will still be standing. Choose Learn Bulwark in this conversation when you are ready to train its moves.' },
+      { q: 'Teach me about Boundary.', a: 'Boundary is commitment. Plant your feet, manage Focus, and turn the space around you into a defensive zone where incoming attacks can be intercepted without frame-perfect timing.' },
       { q: 'About the Warlord...', a: 'Grukk swings a blade taller than you and reaches for a bow when you back away. Watch the steel redden before his heavy cut. That is your moment to parry.' },
     ],
-    trainerStyle: 'bulwark',
+    trainerStyle: 'boundary',
   },
 ];
 
@@ -158,7 +169,7 @@ export class Town {
     const opts = s.lines.map((l) => ({ label: l.q, run: () => this.talk(s, l.a) }));
     if (s.trainerStyle) {
       const train = trainingOption(this.player, s.trainerStyle, (next) => this.talk(s, next));
-      opts.unshift(train);
+      opts.unshift(...starterChoiceOptions(this.player, (next) => this.talk(s, next)), train);
     }
     if (s.magicTrainer) {
       opts.unshift(...magicOptions(this.player, (next) => this.talk(s, next)));
