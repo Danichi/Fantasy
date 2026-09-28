@@ -340,7 +340,8 @@ export class Player {
     this.stamina = Math.max(0, this.stamina - def.stamina);
     if (def.stamina > 0) this.staminaDelay = 0.65;
     const w = def.hit?.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
-    const speed = (def.weaponSpeed ? w?.def.stats.speed ?? 1 : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1) * (id.startsWith('gale') || this.activeCombatStyle === 'gale' ? this.galeSpeedMultiplier : 1);
+    const styleSpeed = this.activeCombatStyle === 'gale' && !!def.hit ? this.galeSpeedMultiplier : 1;
+    const speed = (def.weaponSpeed ? w?.def.stats.speed ?? 1 : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1) * styleSpeed;
     this.poseFrom = this.lastPose;
     this.poseFade = 0;
     this.act = { def, t: t0 ?? def.startAt ?? 0, speed, hitSet: new Set(), charge: 0, charging: false, fired: false, usingClip, landed: false };
