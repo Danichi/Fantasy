@@ -3,6 +3,7 @@ import type { Player } from '../player/player';
 import { targets } from '../combat/targets';
 import { events } from '../core/events';
 import { iconFor, wideIconFor } from './icons';
+import { COMBAT_STYLES } from '../progression/styles';
 
 // Heads-up display: vitals (top right); bottom left, the two big hand frames
 // (main / off hand) beside a bar that Tab flips between quick items (keys 1-4)
@@ -30,6 +31,9 @@ interface BarEls {
 export class HUD {
   readonly root: HTMLElement;
   private bars: Record<'hp' | 'st' | 'mp', BarEls>;
+  private momentumEl: HTMLDivElement;
+  private focusEl: HTMLDivElement;
+  private crossEl: HTMLDivElement;
   private slots: HTMLDivElement[] = [];
   private hands: Record<'main' | 'off', HTMLDivElement>;
   private barTitle: HTMLDivElement;
@@ -52,10 +56,10 @@ export class HUD {
   private fadeEl: HTMLDivElement;
   private levelEl: HTMLDivElement;
   private disciplineEl!: HTMLDivElement;
-  private combatBar!: HTMLDivElement;
   private boss: { hp: number; maxHp: number; alive: boolean } | null = null;
   private bossTrail = 1;
-  onSlotDrop?: (mode: 'items' | 'moves', slot: number, uid: number) => void;
+  private questEl: HTMLDivElement;
+  onSlotDrop?: (mode: 'items' | 'moves', slot: number, ref: number | string) => void;
 
   constructor(private player: Player, private camera: THREE.Camera) {
     this.root = document.getElementById('ui')!;
@@ -73,7 +77,9 @@ export class HUD {
     this.bars = { hp: mk('hp', 'HEALTH'), st: mk('st', 'STAMINA'), mp: mk('mp', 'MANA') };
     const discipline = el('div', 'discipline-hud', this.root);
     this.disciplineEl = el('div', 'discipline-name', discipline);
-    this.combatBar = el('div', 'discipline-resource', discipline);
+    this.momentumEl = el('div', 'style-resource momentum hidden', vit, '<span class="sr-label">MOMENTUM</span><i></i><b></b>');
+    this.focusEl = el('div', 'style-resource focus hidden', vit, '<span class="sr-label">FOCUS</span><i></i><b></b>');
+    this.crossEl = el('div', 'style-resource cross hidden', vit, '<span class="sr-label">CROSS OPENING</span><i></i><b></b>');
     const xpRow = el('div', 'xprow', vit);
     xpRow.innerHTML = '<span class="lv">LV 1</span><div class="xpbar"><i></i></div><span class="gold">0</span>';
     this.xpFill = xpRow.querySelector('.xpbar i')!;
@@ -102,8 +108,12 @@ export class HUD {
       s.addEventListener('drop', (e) => {
         e.preventDefault();
         s.classList.remove('dragover');
-        const uid = Number(e.dataTransfer?.getData('text/uid'));
-        if (uid) this.onSlotDrop?.(this.mode, i, uid);
+        const move = e.dataTransfer?.getData('text/move');
+        if (move) this.onSlotDrop?.(this.mode, i, move);
+        else {
+          const uid = Number(e.dataTransfer?.getData('text/uid'));
+          if (uid) this.onSlotDrop?.(this.mode, i, uid);
+        }
       });
       this.slots.push(s);
     }
@@ -123,6 +133,7 @@ export class HUD {
       this.levelEl.classList.add('show');
     });
     el('div', 'hint', this.root, '<b>I</b> inventory &nbsp;·&nbsp; <b>H</b> controls');
+    this.questEl = el('div', 'quest-tracker', this.root);
 
     events.on('equipmentChanged', () => (this.hotbarDirty = true));
     events.on('notEnough', ({ stat }) => {
@@ -229,17 +240,29 @@ export class HUD {
     this.barTitle.innerHTML = `<span class="${moves ? '' : 'on'}">ITEMS</span><span class="${moves ? 'on' : ''}">MOVES</span><kbd>Tab</kbd>`;
     const list = moves ? eq.moves : eq.quick;
     this.slots.forEach((s, i) => {
-      const uid = list[i];
+      const ref = list[i];
       s.className = 'slot interactive' + (moves ? ' move' : '') + (i >= list.length ? ' hidden' : '');
       s.innerHTML = `<span class="key">${i + 1}</span><i class="cd"></i>`;
       s.title = '';
-      const it = eq.get(uid);
+      if (ref == null) return;
+      if (typeof ref === 'string' && ref.startsWith('skill:')) {
+        const [, styleId, nodeId] = ref.split(':');
+        const style = COMBAT_STYLES[styleId as keyof typeof COMBAT_STYLES];
+        const node = style?.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        s.classList.add('skill');
+        s.innerHTML += `<span class="skill-glyph">⚔</span><span class="skill-name">${node.name}</span>`;
+        s.title = `${style.name}: ${node.name}`;
+        return;
+      }
+      if (typeof ref !== 'number') return;
+      const it = eq.get(ref);
       if (!it) return;
       s.innerHTML += `<img src="${iconFor(it.def.id)}" alt="">`;
       if (it.def.stack) s.innerHTML += `<span class="qty">${it.qty}</span>`;
       if (it.def.stats.manaCost) s.innerHTML += `<span class="cost">${it.def.stats.manaCost}</span>`;
       s.title = it.def.name;
-      if (moves && uid === eq.activeSpell) s.classList.add('spell');
+      if (moves && ref === eq.activeSpell) s.classList.add('spell');
     });
   }
 
@@ -260,22 +283,39 @@ export class HUD {
 
   update(dt: number, lockTargetId: number | null) {
     const p = this.player;
+    // Long-term discipline track for the trained school (hidden until one is chosen).
     const cp = p.prog.combat;
-    const rt = p.combat;
-    const name = cp.primary === 'gale' ? 'GALE' : cp.primary === 'boundary' ? 'BOUNDARY' : 'CROSSBLADE';
-    const value = cp.primary === 'gale' ? rt.momentum / 6 : cp.primary === 'boundary' ? rt.focus / 100 : rt.openings / 3;
-    const resource = cp.primary === 'gale' ? `${rt.momentum}/6 MOMENTUM` : cp.primary === 'boundary' ? `${Math.round(rt.focus)} FOCUS` : `${rt.openings}/3 OPENINGS`;
-    this.disciplineEl.textContent = `${name} · LV ${cp.disciplines[cp.primary].level} · ${Math.round(cp.disciplines[cp.primary].mastery)}% MASTERY`;
-    this.combatBar.innerHTML = `<b style="transform:scaleX(${Math.max(0, Math.min(1, value))})"></b><span>${resource}</span>`;
+    const trained = p.prog.primaryStyle !== null;
+    this.disciplineEl.parentElement!.style.display = trained ? '' : 'none';
+    if (trained) {
+      const name = cp.primary === 'gale' ? 'GALE' : cp.primary === 'boundary' ? 'BOUNDARY' : 'CROSSBLADE';
+      this.disciplineEl.textContent = `${name} · LV ${cp.disciplines[cp.primary].level} · ${Math.round(cp.disciplines[cp.primary].mastery)}% MASTERY`;
+    }
     // Bar length grows with the stat's maximum, Souls-style.
     this.updateBar(this.bars.hp, p.hp, p.maxHp, dt, 120 + p.maxHp * 1.6);
     this.updateBar(this.bars.st, p.stamina, p.maxStamina, dt, 110 + p.maxStamina * 1.5);
     this.updateBar(this.bars.mp, p.mana, p.maxMana, dt, 100 + p.maxMana * 1.5);
+    const style = p.prog.activeStyle;
+    const showMomentum = style === 'gale';
+    const showFocus = style === 'boundary';
+    const showCross = style === 'cross' && p.crossOpening > 0;
+    this.momentumEl.classList.toggle('hidden', !showMomentum);
+    this.focusEl.classList.toggle('hidden', !showFocus);
+    this.crossEl.classList.toggle('hidden', !showCross);
+    (this.momentumEl.querySelector('i') as HTMLElement).style.transform = `scaleX(${p.momentum / 100})`;
+    (this.focusEl.querySelector('i') as HTMLElement).style.transform = `scaleX(${p.focus / 100})`;
+    (this.crossEl.querySelector('i') as HTMLElement).style.transform = `scaleX(${Math.min(1, p.crossOpening / 2.2)})`;
+    (this.momentumEl.querySelector('b') as HTMLElement).textContent = `${Math.round(p.momentum)}`;
+    (this.focusEl.querySelector('b') as HTMLElement).textContent = `${Math.round(p.focus)}`;
+    (this.crossEl.querySelector('b') as HTMLElement).textContent = `${p.crossOpening.toFixed(1)}s`;
     if (this.hotbarDirty) {
       this.hotbarDirty = false;
       this.renderHotbar();
     }
     const pr = p.prog;
+    this.questEl.innerHTML = pr.starterStyleChosen
+      ? `<span class="q-kicker">MAIN QUEST</span><b>STARTER SCHOOL CHOSEN</b><small>Primary: ${pr.activeStyle ? pr.activeStyle.toUpperCase() : '—'} · Build your mastery.</small>`
+      : `<span class="q-kicker">MAIN QUEST</span><b>STUDY THE THREE SCHOOLS</b><small>${pr.starterQuestCount}/3 mentors met · Learn Gale, Boundary and Cross, then choose your starter.</small>`;
     this.xpFill.style.transform = `scaleX(${Math.min(1, pr.xp / pr.next)})`;
     this.lvEl.textContent = `LV ${pr.level}`;
     this.goldEl.textContent = `${pr.gold}`;

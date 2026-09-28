@@ -4,6 +4,7 @@ import { physics } from '../physics/physics';
 import { heightAt } from '../world/terrain';
 import { rotateWorld } from '../player/ik';
 import { damp } from '../core/math';
+import type { CombatStyleId } from '../progression/styles';
 
 // ---------------------------------------------------------------------------
 // Town NPCs. Three kinds of body:
@@ -31,6 +32,8 @@ export interface NpcSpec {
   armDrop?: number;
   greeting: string;
   lines: { q: string; a: string }[];
+  trainerStyle?: CombatStyleId;
+  magicTrainer?: boolean;
 }
 
 const loader = new GLTFLoader();

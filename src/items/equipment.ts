@@ -29,7 +29,7 @@ export class Equipment implements LimbFit {
   /** quick items (potions etc.) on keys 1-4 */
   quick: (number | null)[] = [null, null, null, null];
   /** moveset bar (Tab): spells now, class skills later; keys 1-6 */
-  moves: (number | null)[] = [null, null, null, null, null, null];
+  moves: (number | string | null)[] = [null, null, null, null, null, null];
   /** the spell R casts */
   activeSpell: number | null = null;
   showArmor = true;

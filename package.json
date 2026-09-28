@@ -3,10 +3,11 @@
   "version": "0.3.0",
   "description": "Third-person Souls-like fantasy action RPG (three.js + Rapier)",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "npm run assets:visual && vite",
+    "build": "npm run assets:visual && tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "assets:visual": "node tools/install-visual-assets.mjs",
     "import:mixamo": "node tools/import-mixamo.mjs",
     "test": "playwright test",
     "desktop": "vite build && node electron/run.cjs",

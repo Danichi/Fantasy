@@ -9,17 +9,24 @@ import type { GuildSaveData } from './guild/adventurerGuild';
 // the whole game state lives here: progression, inventory, loadout, dungeon
 // progress and every map you've drawn.
 
-const KEY = 'fantasy-rpg-save-v3';
-const OLD_KEYS = ['fantasy-rpg-save-v2', 'fantasy-rpg-save-v1'];
+const KEY = 'fantasy-rpg-save-v5';
+const LEGACY_KEYS = ['fantasy-rpg-save-v4', 'fantasy-rpg-save-v3', 'fantasy-rpg-save-v2', 'fantasy-rpg-save-v1'];
 
 export interface SaveData {
-  v: 3;
+  v: 5;
   seed: number;
-  prog: { level: number; xp: number; gold: number; sp: number; combat: ReturnType<Player['prog']['combat']['toJSON']> };
+  prog: {
+    level: number; xp: number; gold: number; sp: number;
+    /** long-term discipline tracks (levels, mastery, specializations, origin) */
+    combat: ReturnType<Player['prog']['combat']['toJSON']> | null;
+    /** trained combat schools and their skill trees */
+    primaryStyle: string | null; secondaryStyle: string | null; activeStyle: string | null;
+    styleIntroductions: string[]; learnedSkills: Record<string, string[]>; styleMastery: Record<string, number>;
+  };
   items: { id: string; qty: number }[];
   equipped: Partial<Record<Slot, number>>; // slot -> index into items
   quick: (number | null)[];
-  moves: (number | null)[];
+  moves: (number | string | null)[];
   activeSpell: number | null;
   maps: Record<string, MapData>;
   dungeon: DungeonProgress;
@@ -28,7 +35,7 @@ export interface SaveData {
 
 export function hasSave() {
   try {
-    return !!(localStorage.getItem(KEY) ?? OLD_KEYS.map((k) => localStorage.getItem(k)).find(Boolean));
+    return !!(localStorage.getItem(KEY) || LEGACY_KEYS.some((k) => localStorage.getItem(k)));
   } catch {
     return false;
   }
@@ -37,39 +44,38 @@ export function hasSave() {
 export function clearSave() {
   try {
     localStorage.removeItem(KEY);
-    for (const k of OLD_KEYS) localStorage.removeItem(k);
+    for (const k of LEGACY_KEYS) localStorage.removeItem(k);
   } catch {}
 }
 
 export function loadSave(): SaveData | null {
   try {
-    const raw = localStorage.getItem(KEY) ?? OLD_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
+    const raw = localStorage.getItem(KEY) ?? LEGACY_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
     if (!raw) return null;
     const d = JSON.parse(raw) as any;
+    if (d.v === 5) return d as SaveData;
+    // Older saves from either line of development: keep what exists, default the rest.
     const defaultGuild: GuildSaveData = { rank: 'D', rep: 0, completed: 0, nextQuestId: 1, active: [], available: [], explored: [] };
-    if (d.v === 3) return d as SaveData;
-    if (d.v === 2) return { ...d, v: 3, guild: defaultGuild } as SaveData;
-    if (d.v === 1) {
-      return {
-        ...d,
-        v: 3,
-        prog: {
-          ...d.prog,
-          combat: {
-            origin: 'human', heroic: { level: 1, xp: 0, mastery: 0, skillPoints: 0 },
-            primary: 'gale', secondary: null,
-            disciplines: {
-              gale: { level: 1, xp: 0, mastery: 0, skillPoints: 0 },
-              boundary: { level: 0, xp: 0, mastery: 0, skillPoints: 0 },
-              crossblade: { level: 0, xp: 0, mastery: 0, skillPoints: 0 },
-            },
-            specializations: {}, learnedClasses: {}, hybridUnlocks: [], pinnacleUnlocks: [],
-          },
-        },
-        guild: defaultGuild,
-      } as SaveData;
-    }
-    return null;
+    const old = d.prog ?? {};
+    return {
+      ...d,
+      v: 5,
+      prog: {
+        level: old.level ?? 1,
+        xp: old.xp ?? 0,
+        gold: old.gold ?? 0,
+        sp: old.sp ?? 0,
+        combat: old.combat ?? null,
+        primaryStyle: old.primaryStyle ?? null,
+        secondaryStyle: old.secondaryStyle ?? null,
+        activeStyle: old.activeStyle ?? null,
+        styleIntroductions: old.styleIntroductions ?? [],
+        learnedSkills: old.learnedSkills ?? { gale: [], boundary: [], cross: [] },
+        styleMastery: old.styleMastery ?? { gale: 0, boundary: 0, cross: 0 },
+      },
+      moves: (d.moves ?? []).map((m: unknown) => (typeof m === 'number' ? m : null)),
+      guild: d.guild ?? defaultGuild,
+    } as SaveData;
   } catch {
     return null;
   }
@@ -83,18 +89,28 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     const k = idx(uid);
     if (k !== null && k >= 0) equipped[slot as Slot] = k;
   }
-  const clean = (list: (number | null)[]) => list.map((u) => {
+  const cleanItems = (list: (number | null)[]) => list.map((u) => {
+    const k = idx(u);
+    return k === null || k < 0 ? null : k;
+  });
+  const cleanMoves = (list: (number | string | null)[]) => list.map((u) => {
+    if (typeof u === 'string') return u;
     const k = idx(u);
     return k === null || k < 0 ? null : k;
   });
   const data: SaveData = {
-    v: 3,
+    v: 5,
     seed,
-    prog: { level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints, combat: player.prog.combat.toJSON() },
+    prog: {
+      level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints,
+      combat: player.prog.combat.toJSON(),
+      primaryStyle: player.prog.primaryStyle, secondaryStyle: player.prog.secondaryStyle, activeStyle: player.prog.activeStyle,
+      styleIntroductions: [...player.prog.styleIntroductions], learnedSkills: structuredClone(player.prog.learnedSkills), styleMastery: structuredClone(player.prog.styleMastery),
+    },
     items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty })),
     equipped,
-    quick: clean(eq.quick),
-    moves: clean(eq.moves),
+    quick: cleanItems(eq.quick),
+    moves: cleanMoves(eq.moves),
     activeSpell: idx(eq.activeSpell),
     maps,
     dungeon,
@@ -113,7 +129,13 @@ export function applySave(player: Player, d: SaveData) {
   p.xp = d.prog.xp;
   p.gold = d.prog.gold;
   p.skillPoints = d.prog.sp;
-  p.combat.fromJSON(d.prog.combat);
+  if (d.prog.combat) p.combat.fromJSON(d.prog.combat);
+  p.primaryStyle = (d.prog.primaryStyle === 'gale' || d.prog.primaryStyle === 'boundary' || d.prog.primaryStyle === 'cross') ? d.prog.primaryStyle : null;
+  p.secondaryStyle = (d.prog.secondaryStyle === 'gale' || d.prog.secondaryStyle === 'boundary' || d.prog.secondaryStyle === 'cross') ? d.prog.secondaryStyle : null;
+  p.activeStyle = (d.prog.activeStyle === 'gale' || d.prog.activeStyle === 'boundary' || d.prog.activeStyle === 'cross') ? d.prog.activeStyle : p.primaryStyle;
+  p.styleIntroductions = (d.prog.styleIntroductions ?? []).filter((id): id is 'gale' | 'boundary' | 'cross' => id === 'gale' || id === 'boundary' || id === 'cross');
+  p.learnedSkills = { gale: [], boundary: [], cross: [], ...(d.prog.learnedSkills ?? {}) };
+  p.styleMastery = { gale: 0, boundary: 0, cross: 0, ...(d.prog.styleMastery ?? {}) };
   eq.items = [];
   const uids: number[] = [];
   for (const it of d.items) {
@@ -131,7 +153,8 @@ export function applySave(player: Player, d: SaveData) {
     if (u != null) eq.equip(u, slot as Slot);
   }
   eq.quick = d.quick.map(uid);
-  eq.moves = d.moves.map(uid);
+  const moveRef = (k: number | string | null) => typeof k === 'string' ? k : uid(k);
+  eq.moves = d.moves.map(moveRef);
   const sp = uid(d.activeSpell);
   if (sp != null) eq.equip(sp);
   player.hp = player.maxHp;

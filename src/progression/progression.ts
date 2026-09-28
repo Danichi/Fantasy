@@ -2,6 +2,11 @@ import * as THREE from 'three';
 import { events } from '../core/events';
 import { heightAt } from '../world/terrain';
 import { CombatProgression, type DisciplineId } from './combatProgression';
+import { COMBAT_STYLES, styleIds, type CombatStyleId } from './styles';
+
+/** The playable combat schools and the long-term discipline tracks share ids, except Cross. */
+export const styleToDiscipline = (id: CombatStyleId): DisciplineId => (id === 'cross' ? 'crossblade' : id);
+export const disciplineToStyle = (id: DisciplineId): CombatStyleId => (id === 'crossblade' ? 'cross' : id);
 
 // Levels, XP, gold and skill points, plus the glowing orbs and coins that
 // burst out of defeated enemies and fly to the player.
@@ -23,6 +28,28 @@ export class Progression {
   skillPoints = 0;
   readonly combat = new CombatProgression();
 
+  /** The first school chosen after the three starter introductions. */
+  primaryStyle: CombatStyleId | null = null;
+  activeStyle: CombatStyleId | null = null;
+  /** A later secondary school slot; progression systems can unlock this without changing the primary. */
+  secondaryStyle: CombatStyleId | null = null;
+  /** Which schools the player has heard about from their village mentors. */
+  styleIntroductions: CombatStyleId[] = [];
+  learnedSkills: Record<CombatStyleId, string[]> = { gale: [], boundary: [], cross: [] };
+  styleMastery: Record<CombatStyleId, number> = { gale: 0, boundary: 0, cross: 0 };
+
+  get learnedStyles(): CombatStyleId[] {
+    return [this.primaryStyle, this.secondaryStyle].filter((id): id is CombatStyleId => id !== null);
+  }
+
+  get starterStyleQuestComplete() {
+    return this.styleIntroductions.length === styleIds.length;
+  }
+
+  get starterStyleChosen() {
+    return this.primaryStyle !== null;
+  }
+
   get next() {
     return xpToNext(this.level);
   }
@@ -41,6 +68,69 @@ export class Progression {
   addCombatXp(id: DisciplineId, amount: number, event: Parameters<CombatProgression['addCombatEvent']>[0] = 'attackHit') {
     this.combat.addDisciplineXp(id, amount, 0);
     events.emit('masteryChanged', { discipline: id, mastery: this.combat.disciplines[id].mastery, level: this.combat.disciplines[id].level });
+    void event;
+  }
+
+  markStyleIntroduction(id: CombatStyleId) {
+    if (!COMBAT_STYLES[id] || this.styleIntroductions.includes(id)) return false;
+    this.styleIntroductions.push(id);
+    events.emit('progressChanged', {});
+    return true;
+  }
+
+  knowsStyle(id: CombatStyleId) {
+    return this.learnedStyles.includes(id);
+  }
+
+  choosePrimaryStyle(id: CombatStyleId) {
+    if (!COMBAT_STYLES[id] || this.primaryStyle || !this.starterStyleQuestComplete) return false;
+    this.primaryStyle = id;
+    this.activeStyle = id;
+    // Keep the long-term discipline track in step with the chosen school.
+    this.combat.setPrimary(styleToDiscipline(id));
+    events.emit('progressChanged', {});
+    return true;
+  }
+
+  unlockSecondaryStyle(id: CombatStyleId) {
+    if (!COMBAT_STYLES[id] || !this.primaryStyle || this.secondaryStyle || id === this.primaryStyle) return false;
+    this.secondaryStyle = id;
+    events.emit('progressChanged', {});
+    return true;
+  }
+
+  setActiveStyle(id: CombatStyleId) {
+    if (id !== this.primaryStyle && id !== this.secondaryStyle) return false;
+    this.activeStyle = id;
+    events.emit('progressChanged', {});
+    return true;
+  }
+
+  unlockSkill(style: CombatStyleId, nodeId: string) {
+    const tree = COMBAT_STYLES[style];
+    if (!tree || !this.knowsStyle(style)) return false;
+    const node = tree.nodes.find((n) => n.id === nodeId);
+    if (!node || this.learnedSkills[style].includes(nodeId)) return false;
+    if (node.requires?.some((req) => !this.learnedSkills[style].includes(req))) return false;
+    if (this.skillPoints < node.cost) return false;
+    this.skillPoints -= node.cost;
+    this.learnedSkills[style].push(nodeId);
+    events.emit('progressChanged', {});
+    return true;
+  }
+
+  hasSkill(style: CombatStyleId, nodeId: string) {
+    return this.learnedSkills[style]?.includes(nodeId) ?? false;
+  }
+
+  skillMove(style: CombatStyleId, nodeId: string) {
+    if (!this.hasSkill(style, nodeId)) return null;
+    return COMBAT_STYLES[style].nodes.find((n) => n.id === nodeId) ?? null;
+  }
+
+  addMastery(style: CombatStyleId, amount = 1) {
+    if (!this.knowsStyle(style)) return;
+    this.styleMastery[style] = Math.max(0, this.styleMastery[style] + amount);
   }
 
   addGold(n: number) {
@@ -48,7 +138,6 @@ export class Progression {
     events.emit('progressChanged', {});
   }
 
-  /** Stat growth per level. */
   get bonusHp() {
     return (this.level - 1) * 10;
   }
@@ -57,6 +146,10 @@ export class Progression {
   }
   get bonusMana() {
     return (this.level - 1) * 5;
+  }
+
+  get starterQuestCount() {
+    return this.styleIntroductions.length;
   }
 }
 

@@ -14,7 +14,7 @@ import { ThirdPersonCamera } from './player/camera';
 import { DEBUG, TEST_MODE } from './core/settings';
 import { setupLoadout } from './items/loadout';
 import { FX } from './fx/particles';
-import { SlimeSpawner } from './enemies/spawner';
+import { BeastSpawner } from './enemies/beastSpawner';
 import { Spells } from './magic/spells';
 import { buildIcons } from './ui/icons';
 import { HUD } from './ui/hud';
@@ -26,6 +26,7 @@ import { FrontierRegion } from './world/frontier';
 import { Grass } from './world/grass';
 import { River } from './world/water';
 import { Foliage } from './world/foliage';
+import { StylizedNature } from './world/stylizedNature';
 import { Flowers } from './world/flowers';
 import { Rewards, XP_FOR_KIND } from './progression/progression';
 import { DungeonMapUI } from './ui/dungeonMap';
@@ -68,7 +69,7 @@ async function boot() {
   else setupLoadout(player.equip);
 
   const fx = new FX(r.scene, heightAt);
-  const slimes = new SlimeSpawner(r.scene, fx);
+  const slimes = new BeastSpawner(r.scene, fx);
   if (TEST_MODE) slimes.enabled = false;
   const spells = new Spells(r.scene, fx, player);
   const world = await buildWorld(r.scene, r.renderer, fx);
@@ -77,8 +78,11 @@ async function boot() {
   mark('grass');
   const river = new River(r.scene);
   mark('river');
-  const foliage = new Foliage(r.scene, r.renderer);
+  const stylizedNature = new StylizedNature(r.scene);
+  await stylizedNature.ready;
+  const foliage = stylizedNature.loaded ? null : new Foliage(r.scene, r.renderer);
   mark('foliage');
+  mark('stylizedNature');
   const flowers = new Flowers(r.scene, terrain.splat);
   mark('flowers');
   const rewards = new Rewards(r.scene, player.prog);
@@ -118,7 +122,8 @@ async function boot() {
       grass.mesh.visible = !h;
       flowers.mesh.visible = !h;
       river.mesh.visible = !h;
-      foliage.setVisible(!h);
+      foliage?.setVisible(!h);
+      stylizedNature.setVisible(!h && stylizedNature.loaded);
       town.setVisible(!h);
     },
     clearEnemies: () => { slimes.clear(); frontier?.dispose(); },
@@ -154,6 +159,7 @@ async function boot() {
     else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
   };
   mapUI.onChange = save;
+  events.on('progressChanged', save);
   window.addEventListener('beforeunload', save);
   setInterval(save, 30000);
   mapUI.onToggle = (open) => {
@@ -176,18 +182,22 @@ async function boot() {
   }, player.prog.combat.origin);
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
-  hud.onSlotDrop = (mode, slot, uid) => {
+  hud.onSlotDrop = (mode, slot, ref) => {
     const eq = player.equip;
-    const it = eq.get(uid);
-    if (!it) return;
-    // Quick items take consumables; the moveset takes spells (and skills later).
-    if (mode === 'items' && it.def.kind === 'consumable' && slot < eq.quick.length) {
+    const uid = typeof ref === 'number' ? ref : 0;
+    const it = typeof ref === 'number' ? eq.get(ref) : undefined;
+    if (typeof ref === 'number' && !it) return;
+    // Quick items take consumables; the moveset takes spells and learned martial moves.
+    if (mode === 'items' && typeof ref === 'number' && it?.def.kind === 'consumable' && slot < eq.quick.length) {
       eq.quick = eq.quick.map((u) => (u === uid ? null : u));
       eq.quick[slot] = uid;
-    } else if (mode === 'moves' && it.def.kind === 'spell') {
-      eq.moves = eq.moves.map((u) => (u === uid ? null : u));
-      eq.moves[slot] = uid;
-    } else hud.toast(mode === 'items' ? 'Quick slots take potions and other usables' : 'The moveset takes spells and skills');
+    } else if (mode === 'moves' && typeof ref === 'number' && it?.def.kind === 'spell') {
+      eq.moves = eq.moves.map((u) => (u === ref ? null : u));
+      eq.moves[slot] = ref;
+    } else if (mode === 'moves' && typeof ref === 'string' && ref.startsWith('skill:')) {
+      eq.moves = eq.moves.map((u) => (u === ref ? null : u));
+      eq.moves[slot] = ref;
+    } else hud.toast(mode === 'items' ? 'Quick slots take potions and other usables' : 'The moveset takes spells and learned martial moves');
     hud.markHotbarDirty();
   };
   inv.onToggle = (open) => {
@@ -219,13 +229,14 @@ async function boot() {
   document.addEventListener('pointerlockchange', () => {
     if (input.locked) hadLock = true;
     // Losing a lock we had (Esc, alt-tab) pauses; a lock that never took doesn't.
-    else if (hadLock) {
+    else if (hadLock && !input.uiMode && !inv.open && !mapUI.open && !dialogue.open) {
       hadLock = false;
       pause();
     }
   });
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Escape' && !input.locked && !inv.open && !pausedByUser) pause();
+    if (e.code === 'Escape' && (dialogue.open || mapUI.open || inv.open)) return;
+    if (e.code === 'Escape' && !input.locked && !inv.open && !mapUI.open && !dialogue.open && !pausedByUser) pause();
   });
 
   const useHotbar = (i: number) => {
@@ -238,10 +249,10 @@ async function boot() {
       if (it.def.kind === 'consumable') player.useConsumable(it.uid);
       hud.markHotbarDirty();
     } else {
-      const it = eq.get(eq.moves[i]);
-      if (!it) return;
+      const ref = eq.moves[i];
+      if (ref == null) return;
       hud.pulseSlot(i);
-      player.castMove(it.uid);
+      player.useMove(ref);
       hud.markHotbarDirty();
     }
   };
@@ -334,7 +345,8 @@ async function boot() {
     grass.update(dt, r.camera.position, renderPos);
     flowers.update(dt, r.camera.position);
     terrain.update(r.camera.position, player.pos);
-    foliage.update(dt, r.camera.position);
+    foliage?.update(dt, r.camera.position);
+    stylizedNature.update(dt, r.camera.position);
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
     mapUI.update();
@@ -380,7 +392,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

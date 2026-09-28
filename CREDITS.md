@@ -20,3 +20,13 @@ Models were simplified and their textures resized for real-time use.
 
 ## Textures, sky and props
 - Poly Haven (CC0) — textures, HDRI sky, rocks, barrels, crates, lanterns, stumps.
+
+
+## Visual overhaul assets
+
+The visual overhaul uses CC0 assets from Quaternius, installed locally by `tools/install-visual-assets.mjs`.
+
+- Stylized Nature MegaKit: https://quaternius.com/packs/stylizednaturemegakit.html
+- Universal Base Characters: https://quaternius.com/packs/universalbasecharacters.html
+- Animated creatures (wolf, stag, goblin, orc): Quaternius CC0 assets mirrored in the public `Claude-gaming-world` asset repository; see its CREDITS.md for attribution: https://github.com/Master-Coder-Sudo/Claude-gaming-world/blob/main/CREDITS.md
+- Individual nature models are fetched through Drawcall Market: https://market.drawcall.ai/
