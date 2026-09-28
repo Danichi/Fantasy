@@ -187,7 +187,6 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     { x: 19, z: -39, rot: 0.05, spec: { w: 7, d: 6.5, floors: 1, roof: 'slate', seed: 5 } },
     { x: 30, z: -35, rot: -0.35, spec: { w: 7.5, d: 6, floors: 2, roof: 'slate', seed: 6 } },
     { x: -35, z: -30, rot: 0.5, spec: { w: 6, d: 5.5, floors: 1, roof: 'thatch', seed: 7 } },
-  ];
     { x: -72, z: -72, rot: 0.25, spec: { w: 8, d: 7, floors: 2, roof: 'slate', seed: 21 } },
     { x: -54, z: -74, rot: -0.1, spec: { w: 7, d: 6, floors: 1, roof: 'thatch', seed: 22 } },
     { x: -30, z: -72, rot: 0.05, spec: { w: 9, d: 7, floors: 2, roof: 'slate', seed: 23 } },
@@ -203,7 +202,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     { x: -5, z: 62, rot: 0.08, spec: { w: 9, d: 7, floors: 2, roof: 'slate', seed: 33 } },
     { x: 35, z: 62, rot: -0.12, spec: { w: 8, d: 6.5, floors: 1, roof: 'thatch', seed: 34 } },
     { x: 67, z: 52, rot: 0.22, spec: { w: 7, d: 6, floors: 2, roof: 'slate', seed: 35 } },
-    // Commerce district / guild hall.
+    // Commerce district / civic buildings.
     { x: 22, z: -12, rot: 0, spec: { w: 16, d: 12, floors: 2, roof: 'slate', seed: 90 } },
     { x: -24, z: 14, rot: 0.06, spec: { w: 12, d: 9, floors: 2, roof: 'slate', seed: 91 } },
     { x: -5, z: 29, rot: -0.04, spec: { w: 11, d: 8, floors: 1, roof: 'thatch', seed: 92 } },
@@ -213,6 +212,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     { x: -44, z: 25, rot: -0.04, spec: { w: 10, d: 8, floors: 2, roof: 'slate', seed: 96 } },
     { x: 48, z: 30, rot: 0.07, spec: { w: 10, d: 8, floors: 1, roof: 'thatch', seed: 97 } },
     { x: 48, z: -35, rot: -0.1, spec: { w: 9, d: 7, floors: 1, roof: 'slate', seed: 98 } },
+  ];
   for (const h of houses) {
     const { group, half } = buildHouse(h.spec, m);
     // Sit on the lowest corner so the plinth never floats.
