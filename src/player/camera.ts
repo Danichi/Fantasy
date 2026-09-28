@@ -9,15 +9,15 @@ import { clamp, damp, dampAngle, wrapAngle, valueNoise } from '../core/math';
 export class ThirdPersonCamera {
   yaw = Math.PI; // start looking north (-Z)
   pitch = 0.22;
-  distance = 3.9;
-  private armLen = 3.9;
+  distance = 4.8;
+  private armLen = 4.8;
   private shoulder = 0.48;
   private pivot = new THREE.Vector3();
   private trauma = 0;
   private time = 0;
   sensitivity = 0.0022;
-  fovBase = 58;
-  private fov = 58;
+  fovBase = 62;
+  private fov = 62;
   lockTarget: THREE.Vector3 | null = null;
   /** debug: leave the camera wherever it was put */
   frozen = false;
@@ -46,7 +46,7 @@ export class ThirdPersonCamera {
     if (!inp.uiMode) {
       this.yaw -= inp.mouseDX * this.sensitivity;
       this.pitch = clamp(this.pitch + inp.mouseDY * this.sensitivity, -0.6, 1.2);
-      this.distance = clamp(this.distance + inp.wheel * 0.35, 2.2, 6.5);
+      this.distance = clamp(this.distance + inp.wheel * 0.35, 2.6, 7.2);
     }
 
     // Pivot trails the player slightly for weight, but never far.
