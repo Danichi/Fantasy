@@ -102,7 +102,7 @@ const FINAL_FRAG = /* glsl */ `
     col = col * col * (3.0 - 2.0 * col) * 0.35 + col * 0.65;
     // Vignette.
     vec2 q = vUv - 0.5;
-    col *= 1.0 - dot(q, q) * 0.55;
+    col *= 1.0 - dot(q, q) * 0.22;
     gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
   }`;
 
@@ -166,9 +166,9 @@ export class Post {
         tColor: { value: null }, tDepth: { value: null }, tBloom: { value: null }, tNoise: { value: noiseTexture() },
         uProjInv: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() },
         uCamPos: { value: new THREE.Vector3() }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
-        uSunColor: { value: new THREE.Color(1.0, 0.86, 0.62) }, uHazeColor: { value: new THREE.Color(0.66, 0.77, 0.9) },
+        uSunColor: { value: new THREE.Color(1.0, 0.93, 0.78) }, uHazeColor: { value: new THREE.Color(0.72, 0.86, 0.96) },
         uNear: { value: 0.1 }, uFar: { value: 900 }, uTime: { value: 0 },
-        uExposure: { value: 1.0 }, uBloom: { value: 0.5 }, uHaze: { value: 0.0012 }, uClouds: { value: 1.0 },
+        uExposure: { value: 1.08 }, uBloom: { value: 0.42 }, uHaze: { value: 0.0009 }, uClouds: { value: 1.0 },
       },
       depthTest: false,
       depthWrite: false,
