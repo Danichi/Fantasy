@@ -9,10 +9,9 @@ import type { Interactable } from '../dungeon/instance';
 import type { Player } from '../player/player';
 import type { Realm } from '../dungeon/realm';
 import type { CombatStyleId } from '../progression/styles';
-import { trainingOption, shopOptions } from './services';
+import { trainingOption, magicOptions, shopOptions } from './services';
 
-// The townsfolk: who they are, where they stand, and what they'll tell you.
-// (Class training and the shop hook into these same conversations next.)
+// The townsfolk: who they are, where they stand, and what they teach or sell.
 
 const face = (x: number, z: number, tx = 0, tz = -4) => Math.atan2(tx - x, tz - z);
 
@@ -47,7 +46,7 @@ export const NPCS: NpcSpec[] = [
       { q: 'The glowing sigil on the crypt?', a: 'A warding seal. It kept the dead in for three hundred years. Someone broke it, and from the inside.' },
       { q: 'Any advice?', a: 'Fire does not care about armour. Lock your eyes on your foe before you cast, or the flame goes wherever it pleases.' },
     ],
-    trainerStyle: 'mage',
+    magicTrainer: true,
   },
   {
     id: 'corvin', name: 'Ser Corvin', title: 'The Black Knight', file: 'corvin.glb', height: 1.98, pos: [5.5, -69], yaw: face(5.5, -69, 5.5, 0),
@@ -159,8 +158,11 @@ export class Town {
   talk(s: NpcSpec, text = s.greeting) {
     const opts = s.lines.map((l) => ({ label: l.q, run: () => this.talk(s, l.a) }));
     if (s.trainerStyle) {
-      const train = trainingOption(this.player, this.realm, s.trainerStyle, (next) => this.talk(s, next));
+      const train = trainingOption(this.player, s.trainerStyle, (next) => this.talk(s, next));
       opts.unshift(train);
+    }
+    if (s.magicTrainer) {
+      opts.unshift(...magicOptions(this.player, (next) => this.talk(s, next)));
     }
     if (s.id === 'froest') {
       opts.unshift({ label: "Browse Fröst's wares", run: () => this.shop() });
