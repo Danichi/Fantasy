@@ -429,7 +429,7 @@ export class Player {
   private travelAt(a: ActiveAction, t: number): number {
     const def = a.def;
     const info = a.usingClip ? this.char.clipInfo.get(def.clip!) : undefined;
-    if (info?.rootCurve && info.rootCurve.length > 1 && !def.roll) {
+    if (info?.rootCurve && info.rootCurve.length > 1) {
       const f = clamp(t, 0, (info.rootCurve.length - 1) / 30) * 30;
       const i = Math.floor(f), u = f - i;
       const c = info.rootCurve;
