@@ -228,10 +228,11 @@ export class DungeonMapUI {
     });
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Escape' && this.open) {
+        e.preventDefault();
         e.stopImmediatePropagation();
         this.toggle(false);
       }
-    });
+    }, true);
   }
 
   private syncTools() {
@@ -255,6 +256,7 @@ export class DungeonMapUI {
     if (!this.data) return;
     this.open = force ?? !this.open;
     this.editor.classList.toggle('hidden', !this.open);
+    this.mini.classList.toggle('map-open', this.open);
     if (this.open) this.drawEditor();
     else this.onChange?.();
     this.onToggle?.(this.open);
