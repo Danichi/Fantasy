@@ -30,11 +30,7 @@ const FILTERS: [Filter, string, ItemKind[]][] = [
   ['consumables', 'Usables', ['consumable']],
 ];
 
-const CLASSES = [
-  { id: 'swordsman', name: 'Swordsman', where: 'the arms master at the barracks', blurb: 'Blade techniques: dashing strikes, whirlwinds and deadly ripostes.' },
-  { id: 'mage', name: 'Mage', where: 'the magus in the tower', blurb: 'Fire, frost and lightning, barriers and blinks.' },
-  { id: 'tank', name: 'Tank', where: 'the knight captain', blurb: 'Shield mastery: bulwark parries, bashes and war cries.' },
-];
+
 
 function fmtStat(k: keyof ItemStats, v: number) {
   if (k === 'staminaRegen' || k === 'manaRegen' || k === 'damagePct') return `+${Math.round(v * 100)}%`;
@@ -238,11 +234,18 @@ export class InventoryUI {
       const isSecondary = secondary === d.id;
       const button = isPrimary ? 'PRIMARY' : isSecondary ? 'SECONDARY' : 'CHOOSE PRIMARY';
       const disabled = !isPrimary && !isSecondary && p.heroic.level < 1 ? 'disabled' : '';
+      const chosenSpec = p.specializations[d.id];
+      const specButtons = d.specializations.map((sid) => {
+        const spec = SPECIALIZATIONS[sid];
+        const ok = s.level >= 10 && s.mastery >= 50;
+        return `<button class="spec-pick ${chosenSpec === sid ? 'selected' : ''}" data-spec="${sid}" data-spec-discipline="${d.id}" ${ok ? '' : 'disabled'}>${spec.name}</button>`;
+      }).join('');
       return `<div class="discipline-card ${isPrimary ? 'primary' : isSecondary ? 'secondary' : ''}">
         <div class="dc-head"><h3>${d.name}</h3><span>LV ${s.level}</span></div>
         <p>${d.summary}</p>
         <div class="dc-meta">${Math.round(s.mastery)}% mastery · ${Math.round(s.xp)} XP</div>
         <button class="discipline-pick" data-discipline="${d.id}" ${disabled}>${button}</button>
+        <div class="spec-label">Specialization</div><div class="spec-grid">${specButtons}</div>
       </div>`;
     }).join('');
     const learned = Object.entries(p.learnedClasses);
@@ -265,6 +268,13 @@ export class InventoryUI {
       <p class="lead">Combat disciplines define how you fight. Learned classes define what you can do outside that core. Mastery is earned from actual use rather than a second level bar.</p>
       <h2 class="skills-title">LEARNED CLASSES</h2>
       <div class="classes">${learnedHtml}${starterHtml}</div>`;
+    this.body.querySelectorAll<HTMLButtonElement>('.spec-pick').forEach((b) => {
+      b.addEventListener('click', () => {
+        const did = b.dataset.specDiscipline as keyof typeof DISCIPLINES;
+        const sid = b.dataset.spec as keyof typeof SPECIALIZATIONS;
+        if (did && sid && p.chooseSpecialization(did, sid)) this.render();
+      });
+    });
     this.body.querySelectorAll<HTMLButtonElement>('.discipline-pick').forEach((b) => {
       b.addEventListener('click', () => {
         const id = b.dataset.discipline as keyof typeof DISCIPLINES;
