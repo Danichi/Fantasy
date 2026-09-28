@@ -22,8 +22,7 @@ export class Progression {
   skillPoints = 0;
   learnedStyles: CombatStyleId[] = [];
   activeStyle: CombatStyleId | null = null;
-  learnedSkills: Record<CombatStyleId, string[]> = { swordsman: [], mage: [], bulwark: [] };
-  styleSwapUnlocked = false;
+  learnedSkills: Record<CombatStyleId, string[]> = { swordsman: [], bulwark: [] };
 
   get next() {
     return xpToNext(this.level);
@@ -35,7 +34,6 @@ export class Progression {
       this.xp -= this.next;
       this.level++;
       this.skillPoints++;
-      this.updateStyleSwapUnlock();
       events.emit('levelUp', { level: this.level });
     }
     events.emit('progressChanged', {});
@@ -49,19 +47,12 @@ export class Progression {
     if (!COMBAT_STYLES[id] || this.knowsStyle(id)) return false;
     this.learnedStyles.push(id);
     if (!this.activeStyle) this.activeStyle = id;
-    this.updateStyleSwapUnlock();
     events.emit('progressChanged', {});
     return true;
   }
 
-  canSwapStyles() {
-    return this.styleSwapUnlocked;
-  }
-
   setActiveStyle(id: CombatStyleId) {
     if (!this.knowsStyle(id)) return false;
-    if (this.activeStyle === id) return true;
-    if (!this.styleSwapUnlocked) return false;
     this.activeStyle = id;
     events.emit('progressChanged', {});
     return true;
@@ -84,27 +75,9 @@ export class Progression {
     return this.learnedSkills[style]?.includes(nodeId) ?? false;
   }
 
-  updateStyleSwapUnlock() {
-    this.styleSwapUnlocked = this.level >= STYLE_SWAP_LEVEL;
-    return this.styleSwapUnlocked;
-  }
-
-  styleValue(effect: 'meleeDamage' | 'spellDamage' | 'attackSpeed' | 'maxHp' | 'maxMana' | 'maxStamina' | 'manaCost' | 'armor' | 'block' | 'staminaRegen' | 'lowHealthDamage') {
-    const style = this.activeStyle;
-    if (!style) return 0;
-    const on = (id: string) => this.hasSkill(style, id);
-    if (effect === 'meleeDamage') return (on('keen-edge') ? 0.06 : 0) + (on('blade-master') ? 0.10 : 0);
-    if (effect === 'spellDamage') return (on('arcane-focus') ? 0.15 : 0) + (on('archmage') ? 0.15 : 0);
-    if (effect === 'attackSpeed') return (on('flowing-steel') ? 0.08 : 0) + (on('blade-master') ? 0.05 : 0) + (on('quick-cast') ? 0.10 : 0);
-    if (effect === 'maxHp') return on('fortified') ? 20 : 0;
-    if (effect === 'maxMana') return (on('arcane-well') ? 20 : 0) + (on('archmage') ? 10 : 0);
-    if (effect === 'maxStamina') return on('iron-will') ? 12 : 0;
-    if (effect === 'manaCost') return on('efficient-casting') ? -0.10 : 0;
-    if (effect === 'armor') return on('iron-guard') ? 5 : 0;
-    if (effect === 'block') return on('aegis') ? 8 : 0;
-    if (effect === 'staminaRegen') return on('steadfast') ? 0.20 : 0;
-    if (effect === 'lowHealthDamage') return on('last-stand') ? 0.12 : 0;
-    return 0;
+  skillMove(style: CombatStyleId, nodeId: string) {
+    if (!this.hasSkill(style, nodeId)) return null;
+    return COMBAT_STYLES[style].nodes.find((n) => n.id === nodeId) ?? null;
   }
 
   addGold(n: number) {
@@ -114,16 +87,15 @@ export class Progression {
 
   /** Stat growth per level. */
   get bonusHp() {
-    return (this.level - 1) * 10 + this.styleValue('maxHp');
+    return (this.level - 1) * 10;
   }
   get bonusStamina() {
-    return (this.level - 1) * 4 + this.styleValue('maxStamina');
+    return (this.level - 1) * 4;
   }
   get bonusMana() {
-    return (this.level - 1) * 5 + this.styleValue('maxMana');
+    return (this.level - 1) * 5;
   }
 }
-
 interface Pickup {
   kind: 'xp' | 'gold';
   pos: THREE.Vector3;
