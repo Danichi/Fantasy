@@ -26,7 +26,7 @@ export interface SaveData {
 
 export function hasSave() {
   try {
-    return !!localStorage.getItem(KEY);
+    return !!(localStorage.getItem(KEY) ?? localStorage.getItem(OLD_KEY));
   } catch {
     return false;
   }
@@ -83,7 +83,7 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     return k === null || k < 0 ? null : k;
   });
   const data: SaveData = {
-    v: 1,
+    v: 2,
     seed,
     prog: { level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints, combat: player.prog.combat.toJSON() },
     items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty })),
