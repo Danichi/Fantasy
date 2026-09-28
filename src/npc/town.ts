@@ -10,6 +10,7 @@ import type { Player } from '../player/player';
 import type { Realm } from '../dungeon/realm';
 import { COMBAT_STYLES, type CombatStyleId } from '../progression/styles';
 import { events } from '../core/events';
+import { trainingOption, shopOptions } from './services';
 
 // The townsfolk: who they are, where they stand, and what they'll tell you.
 // (Class training and the shop hook into these same conversations next.)
@@ -158,8 +159,21 @@ export class Town {
 
   talk(s: NpcSpec, text = s.greeting) {
     const opts = s.lines.map((l) => ({ label: l.q, run: () => this.talk(s, l.a) }));
+    if (s.trainerStyle) {
+      const train = trainingOption(this.player, this.realm, s.trainerStyle, (next) => this.talk(s, next));
+      opts.unshift(train);
+    }
+    if (s.id === 'froest') {
+      opts.unshift({ label: "Browse Fröst's wares", run: () => this.shop() });
+    }
     opts.push({ label: 'Farewell.', run: () => this.dialogue.close() });
     this.dialogue.show(s.name, s.title, text, opts);
+  }
+
+  private shop(text = "Pick something useful. I can sell you the steel; what you do with it is your business.") {
+    const opts = shopOptions(this.player, (next) => this.shop(next));
+    opts.push({ label: 'Leave the stall.', run: () => this.dialogue.close() });
+    this.dialogue.show('Master Fröst', 'Smith & Merchant', text, opts);
   }
 
   setVisible(v: boolean) {
