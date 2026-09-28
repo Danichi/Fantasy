@@ -26,7 +26,7 @@ export interface SaveData {
 
 export function hasSave() {
   try {
-    return !!localStorage.getItem(KEY);
+    return !!(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY));
   } catch {
     return false;
   }
@@ -35,6 +35,7 @@ export function hasSave() {
 export function clearSave() {
   try {
     localStorage.removeItem(KEY);
+    localStorage.removeItem(LEGACY_KEY);
   } catch {}
 }
 
@@ -76,7 +77,7 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     return k === null || k < 0 ? null : k;
   });
   const data: SaveData = {
-    v: 1,
+    v: 2,
     seed,
     prog: { level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints, learnedStyles: [...player.prog.learnedStyles], activeStyle: player.prog.activeStyle, learnedSkills: structuredClone(player.prog.learnedSkills), styleSwapUnlocked: player.prog.styleSwapUnlocked },
     items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty })),
