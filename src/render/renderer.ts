@@ -27,30 +27,31 @@ export class Renderer {
     r.setPixelRatio(this.basePixelRatio);
     r.setSize(window.innerWidth, window.innerHeight);
     r.shadowMap.enabled = true;
-    r.shadowMap.type = THREE.PCFShadowMap;
+    r.shadowMap.type = THREE.PCFSoftShadowMap;
     // Shadows refresh every other frame (see render()); at 60fps that's invisible.
     r.shadowMap.autoUpdate = false;
     r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.toneMappingExposure = 0.95;
+    r.toneMappingExposure = 1.06;
     r.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(r.domElement);
     this.renderer = r;
 
-    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1400);
+    this.camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.08, 1700);
     // The post pass draws atmospheric haze from depth; Low falls back to fog.
     if (!Q.post) this.scene.fog = new THREE.Fog(FOG_COLOR, 80, 600);
 
     // Sun: warm key light with a tight shadow box that follows the player.
-    this.sun = new THREE.DirectionalLight(0xffe9cc, 3.3);
+    this.sun = new THREE.DirectionalLight(0xfff0d2, 3.0);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(Q.shadowMapSize, Q.shadowMapSize);
     const s = this.sun.shadow.camera;
-    s.left = -30; s.right = 30; s.top = 30; s.bottom = -30; s.near = 1; s.far = 160;
+    s.left = -42; s.right = 42; s.top = 42; s.bottom = -42; s.near = 1; s.far = 220;
+    this.sun.shadow.radius = 3.2;
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.035;
     this.scene.add(this.sun, this.sun.target);
 
-    this.hemi = new THREE.HemisphereLight(0xd6e8ff, 0x5f5236, 0.62);
+    this.hemi = new THREE.HemisphereLight(0xbfe3ff, 0x48683d, 0.78);
     this.scene.add(this.hemi);
 
     if (Q.post) this.post = new Post(r, Q.msaa ? 4 : 0);
@@ -65,10 +66,10 @@ export class Renderer {
     const env = pmrem.fromEquirectangular(tex).texture;
     pmrem.dispose();
     this.scene.environment = env;
-    this.scene.environmentIntensity = 0.75;
+    this.scene.environmentIntensity = 0.9;
     this.scene.background = tex;
-    this.scene.backgroundIntensity = 0.9;
-    this.scene.backgroundBlurriness = 0.02;
+    this.scene.backgroundIntensity = 1.03;
+    this.scene.backgroundBlurriness = 0.012;
   }
 
   resize() {
@@ -83,12 +84,12 @@ export class Renderer {
 
   /** Keep the shadow frustum centred on the player so it stays sharp. */
   followShadow(focus: THREE.Vector3) {
-    const texel = (30 * 2) / Q.shadowMapSize;
+    const texel = (42 * 2) / Q.shadowMapSize;
     // Snap to shadow texels to stop shimmering as the player moves.
     const fx = Math.round(focus.x / texel) * texel;
     const fz = Math.round(focus.z / texel) * texel;
     this.sun.target.position.set(fx, focus.y, fz);
-    this.sun.position.set(fx, focus.y, fz).addScaledVector(SUN_DIR, 80);
+    this.sun.position.set(fx, focus.y, fz).addScaledVector(SUN_DIR, 110);
   }
 
   /** Nudge render resolution to hold ~60fps. */
