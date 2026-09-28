@@ -170,12 +170,12 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     stone: pbr(L, 'castle_brick_07', { color: 0xb0aaa0 }, aniso),
     bridgeStone: pbr(L, 'rock_face_03', { color: 0xb4b2ac }, aniso, 0.85),
     plaster: pbr(L, 'white_plaster_rough_01', { color: 0xe8dcc4 }, aniso),
-    timber: pbr(L, 'weathered_peeling_timber', { color: 0x5a4636 }, aniso),
+    timber: pbr(L, 'weathered_peeling_timber', { color: 0x8b6546 }, aniso),
     slate: pbr(L, 'roof_slates_02', { color: 0x8a8a92 }, aniso),
     thatch: pbr(L, 'thatch_roof_angled', { color: 0xc9b58a }, aniso),
-    planks: pbr(L, 'wood_planks_grey', { color: 0x8a6a4a }, aniso),
+    planks: pbr(L, 'wood_planks_grey', { color: 0xa07b55 }, aniso),
     glass: new THREE.MeshStandardMaterial({ color: 0x3a2a10, emissive: 0xffa040, emissiveIntensity: 1.6, roughness: 0.3 }),
-    bark: pbr(L, 'bark_brown_02', { color: 0x9a8a78 }, aniso),
+    bark: pbr(L, 'bark_brown_02', { color: 0xa88668 }, aniso),
   };
 
   // ---- houses along the northern street -----------------------------------
