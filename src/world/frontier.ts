@@ -166,7 +166,6 @@ function buildFarmingVillage(scene: THREE.Scene) {
 function buildTremison(scene: THREE.Scene) {
   const cx = TREMISON.x, cz = TREMISON.y;
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x8e9796, roughness: 0.9 });
-  const roofMat = new THREE.MeshStandardMaterial({ color: 0x4b5660, roughness: 0.95 });
   const wall = (x: number, z: number, w: number, d: number, h: number) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
     const y = heightAt(x, z);
@@ -322,7 +321,7 @@ class RoadBeast implements Target {
       this.hp = 0;
       this.alive = false;
       this.deathT = 0.65;
-      events.emit('enemyDied', { at: this.center.clone(), kind: this.kind });
+      events.emit('enemyDied', { at: this.center.clone(), enemyId: this.id, kind: this.kind });
     }
   }
 
@@ -350,7 +349,6 @@ class RoadBeast implements Target {
       this.root.position.copy(this.position);
     } else if (d <= 2.4 && this.cooldown <= 0) {
       this.cooldown = this.kind === 'boar' ? 1.6 : 1.15;
-      const dir = this.player.pos.clone().sub(this.position).setY(0).normalize();
       this.player.receiveAttack({
         damage: this.kind === 'boar' ? 14 : 10,
         from: this.position.clone(),
