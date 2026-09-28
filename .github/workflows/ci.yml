@@ -15,8 +15,14 @@ concurrency:
 
 jobs:
   build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        workers: [2, 8]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      PLAYWRIGHT_WORKERS: ${{ matrix.workers }}
 
     steps:
       - name: Checkout
