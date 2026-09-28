@@ -3,6 +3,7 @@ import type { Player } from '../player/player';
 import { targets } from '../combat/targets';
 import { events } from '../core/events';
 import { iconFor, wideIconFor } from './icons';
+import { COMBAT_STYLES } from '../progression/styles';
 
 // Heads-up display: vitals (top right); bottom left, the two big hand frames
 // (main / off hand) beside a bar that Tab flips between quick items (keys 1-4)
@@ -53,7 +54,7 @@ export class HUD {
   private levelEl: HTMLDivElement;
   private boss: { hp: number; maxHp: number; alive: boolean } | null = null;
   private bossTrail = 1;
-  onSlotDrop?: (mode: 'items' | 'moves', slot: number, uid: number) => void;
+  onSlotDrop?: (mode: 'items' | 'moves', slot: number, ref: number | string) => void;
 
   constructor(private player: Player, private camera: THREE.Camera) {
     this.root = document.getElementById('ui')!;
@@ -97,8 +98,12 @@ export class HUD {
       s.addEventListener('drop', (e) => {
         e.preventDefault();
         s.classList.remove('dragover');
-        const uid = Number(e.dataTransfer?.getData('text/uid'));
-        if (uid) this.onSlotDrop?.(this.mode, i, uid);
+        const move = e.dataTransfer?.getData('text/move');
+        if (move) this.onSlotDrop?.(this.mode, i, move);
+        else {
+          const uid = Number(e.dataTransfer?.getData('text/uid'));
+          if (uid) this.onSlotDrop?.(this.mode, i, uid);
+        }
       });
       this.slots.push(s);
     }
@@ -223,17 +228,28 @@ export class HUD {
     this.barTitle.innerHTML = `<span class="${moves ? '' : 'on'}">ITEMS</span><span class="${moves ? 'on' : ''}">MOVES</span><kbd>Tab</kbd>`;
     const list = moves ? eq.moves : eq.quick;
     this.slots.forEach((s, i) => {
-      const uid = list[i];
+      const ref = list[i];
       s.className = 'slot interactive' + (moves ? ' move' : '') + (i >= list.length ? ' hidden' : '');
       s.innerHTML = `<span class="key">${i + 1}</span><i class="cd"></i>`;
       s.title = '';
-      const it = eq.get(uid);
+      if (ref == null) return;
+      if (typeof ref === 'string' && ref.startsWith('skill:')) {
+        const [, styleId, nodeId] = ref.split(':');
+        const style = COMBAT_STYLES[styleId as keyof typeof COMBAT_STYLES];
+        const node = style?.nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        s.classList.add('skill');
+        s.innerHTML += `<span class="skill-glyph">⚔</span><span class="skill-name">${node.name}</span>`;
+        s.title = `${style.name}: ${node.name}`;
+        return;
+      }
+      const it = eq.get(ref);
       if (!it) return;
       s.innerHTML += `<img src="${iconFor(it.def.id)}" alt="">`;
       if (it.def.stack) s.innerHTML += `<span class="qty">${it.qty}</span>`;
       if (it.def.stats.manaCost) s.innerHTML += `<span class="cost">${it.def.stats.manaCost}</span>`;
       s.title = it.def.name;
-      if (moves && uid === eq.activeSpell) s.classList.add('spell');
+      if (moves && ref === eq.activeSpell) s.classList.add('spell');
     });
   }
 
