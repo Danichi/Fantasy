@@ -7,7 +7,7 @@ import { buildSword } from '../items/weaponModels';
 import type { DialogueUI } from '../ui/dialogue';
 import type { Interactable } from '../dungeon/instance';
 import type { Player } from '../player/player';
-import { COMBAT_STYLES, type CombatStyleId } from '../progression/styles';
+import { COMBAT_STYLES } from '../progression/styles';
 import { trainingOption, starterChoiceOptions, magicOptions, shopOptions } from './services';
 
 // The townsfolk: who they are, where they stand, and what they teach or sell.
