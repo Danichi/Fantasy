@@ -1030,7 +1030,7 @@ export class Player {
       const active = this.prog.activeStyle;
       if (!active || active !== style) return;
       const node = this.prog.skillMove(active, nodeId);
-      if (!node) return;
+      if (!node || !node.actionId) return;
       this.startAction(node.actionId);
       return;
     }
