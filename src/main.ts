@@ -22,6 +22,7 @@ import { InventoryUI, buildOverlays } from './ui/inventory';
 import { CharPreview } from './ui/charPreview';
 import { events } from './core/events';
 import { buildWorld } from './world/props';
+import { FrontierRegion } from './world/frontier';
 import { Grass } from './world/grass';
 import { River } from './world/water';
 import { Foliage } from './world/foliage';
@@ -110,6 +111,7 @@ async function boot() {
   const preview = new CharPreview(r.renderer, r.scene, player, [r.sun, r.hemi]);
   const inv = new InventoryUI(player, preview);
   const mapUI = new DungeonMapUI();
+  let frontier!: FrontierRegion;
   const realm = new Realm(r, player, cam, fx, hud, mapUI, {
     hide: (h) => {
       terrain.group.visible = !h;
@@ -119,12 +121,17 @@ async function boot() {
       foliage.setVisible(!h);
       town.setVisible(!h);
     },
-    clearEnemies: () => slimes.clear(),
+    clearEnemies: () => { slimes.clear(); frontier?.dispose(); },
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
   }, rewards, world.crypt.door);
   const dialogue = new DialogueUI();
   const town = new Town(r.scene, r.camera, dialogue, player);
-  realm.overworldInteractables.push(...town.interactables());
+  frontier = new FrontierRegion(
+    r.scene, player, fx, dialogue,
+    (msg) => hud.toast(msg),
+    () => town.guild.open('board'),
+  );
+  realm.overworldInteractables.push(...town.interactables(), ...frontier.interactables);
   dialogue.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open;
     if (open) input.exitLock();
@@ -289,7 +296,7 @@ async function boot() {
       }
       slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
       player.update(STEP, input, cam);
-      if (realm.mode === 'overworld') slimes.update(STEP, player);
+      if (realm.mode === 'overworld') { slimes.update(STEP, player); frontier.update(STEP); }
       realm.update(STEP);
       rewards.update(STEP, player.center);
       // Interaction: nearest enabled thing in reach.
