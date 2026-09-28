@@ -6,6 +6,10 @@ import { mats, paintedWood } from '../items/materials';
 import { buildSword } from '../items/weaponModels';
 import type { DialogueUI } from '../ui/dialogue';
 import type { Interactable } from '../dungeon/instance';
+import type { Player } from '../player/player';
+import type { Realm } from '../dungeon/realm';
+import { COMBAT_STYLES, type CombatStyleId } from '../progression/styles';
+import { events } from '../core/events';
 
 // The townsfolk: who they are, where they stand, and what they'll tell you.
 // (Class training and the shop hook into these same conversations next.)
@@ -23,6 +27,7 @@ export const NPCS: NpcSpec[] = [
       { q: 'Teach me the sword.', a: "Not yet. The drill yard's still being cleared. Come back soon and I'll show you techniques worth the bruises." },
       { q: 'Any advice?', a: "Slimes crouch before they leap. Parry the leap, and they're yours for the taking. Big ones take longer to wind up. Be patient." },
     ],
+    trainerStyle: 'swordsman',
   },
   {
     id: 'froest', name: 'Master Fröst', title: 'Smith & Merchant', file: 'froest.glb', height: 1.78, pos: [-25, 15], yaw: face(-25, 15),
@@ -42,6 +47,7 @@ export const NPCS: NpcSpec[] = [
       { q: 'The glowing sigil on the crypt?', a: 'A warding seal. It kept the dead in for three hundred years. Someone broke it, and from the inside.' },
       { q: 'Any advice?', a: 'Fire does not care about armour. Lock your eyes on your foe before you cast, or the flame goes wherever it pleases.' },
     ],
+    trainerStyle: 'mage',
   },
   {
     id: 'corvin', name: 'Ser Corvin', title: 'The Black Knight', file: 'corvin.glb', height: 1.98, pos: [5.5, -69], yaw: face(5.5, -69, 5.5, 0),
@@ -52,6 +58,7 @@ export const NPCS: NpcSpec[] = [
       { q: 'Teach me the shield.', a: "A shield is a promise that you'll still be standing. When you have earned it, I will teach you the Bulwark." },
       { q: 'About the Warlord...', a: 'Grukk swings a blade taller than you and reaches for a bow when you back away. Watch the steel redden before his heavy cut. That is your moment to parry.' },
     ],
+    trainerStyle: 'bulwark',
   },
 ];
 
@@ -119,7 +126,7 @@ export class Town {
   private tags = new Map<string, HTMLDivElement>();
   private tmp = new THREE.Vector3();
 
-  constructor(private scene: THREE.Scene, private camera: THREE.Camera, private dialogue: DialogueUI) {
+  constructor(private scene: THREE.Scene, private camera: THREE.Camera, private dialogue: DialogueUI, private player: Player, private realm: Realm) {
     this.npcs = NPCS.map((s) => new NPC(s, scene));
     // Fröst's stall stands between him and the square.
     const f = NPCS.find((n) => n.id === 'froest')!;
