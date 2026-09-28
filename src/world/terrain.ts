@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { fbm, smoothstep, clamp } from '../core/math';
 import { physics } from '../physics/physics';
+import { FLOWER_GLSL } from './flowerNoise';
 
 // ---------------------------------------------------------------------------
 // The overworld: about 1 km square, +z = south.
@@ -69,30 +70,41 @@ export function streetDist(x: number, z: number) {
 }
 
 /** The procedural height function (slow). Use heightAt() at runtime. */
-function heightFn(x: number, z: number) {
+/** Rolling countryside plus the town rise, with roads smoothed into it. */
+function lowlandAt(x: number, z: number) {
   const r = Math.hypot(x, z);
-  // Rolling countryside.
   let h = (fbm(x / 110 + 3.1, z / 110 - 7.7, 4) - 0.5) * 12 + (fbm(x / 32, z / 32, 3) - 0.5) * 2.2;
-  // Town sits on a gentle, nearly level rise.
   const town = smoothstep(TOWN_R + 35, TOWN_R - 5, r);
   h = h * (1 - town * 0.88) + town * 0.4;
-  // Northern hills with the crypt entrance cut into their foot.
+  // Roads flatten the small bumps (before the hills, so roads climb them).
+  const road = smoothstep(9, 2.5, roadDist(x, z));
+  return h * (1 - road * 0.55);
+}
+function hillsAt(x: number, z: number) {
   const north = smoothstep(-170, -330, z);
-  h += north * (18 + 22 * fbm(x / 70, z / 70, 3));
+  return north * (18 + 22 * fbm(x / 70, z / 70, 3));
+}
+// The crypt sits on a shelf at the natural hillside height.
+let terraceH: number | null = null;
+
+/** The procedural height function (slow). Use heightAt() at runtime. */
+function heightFn(x: number, z: number) {
+  let h = lowlandAt(x, z) + hillsAt(x, z);
+  // Shelf in front of the crypt entrance, and a steep face behind it.
+  const tx = CRYPT.x, tz = CRYPT.y + 20;
+  terraceH ??= lowlandAt(tx, tz) + hillsAt(tx, tz);
+  const shelf = smoothstep(28, 13, Math.hypot(x - tx, z - tz));
+  h = h * (1 - shelf) + (terraceH + (fbm(x / 20, z / 20, 2) - 0.5) * 0.8) * shelf;
   const cd = Math.hypot(x - CRYPT.x, (z - CRYPT.y) * 0.8);
-  const terrace = smoothstep(26, 12, Math.hypot(x - CRYPT.x, z - (CRYPT.y + 22)));
-  h = h * (1 - terrace) + (8 + 3 * fbm(x / 20, z / 20, 2)) * terrace;
-  // The hill face behind the entrance stays steep.
-  if (z < CRYPT.y + 4) h += smoothstep(24, 6, cd) * 6;
-  // Roads are smoothed and slightly raised.
-  const rd = roadDist(x, z);
-  const road = smoothstep(9, 2.5, rd);
-  h = h * (1 - road * 0.55);
+  // Rises behind the facade (which sits at CRYPT.y + 3), level in front of it.
+  h += smoothstep(CRYPT.y + 0.5, CRYPT.y - 5, z) * smoothstep(26, 7, cd) * 9;
   // River: banks above the water, channel carved below it.
   const dr = Math.abs(x - riverX(z));
-  const nearRiver = smoothstep(40, 14, dr);
+  // The river rises from springs in the northern and southern foothills.
+  const riverFade = 1 - smoothstep(360, 420, Math.abs(z));
+  const nearRiver = smoothstep(40, 14, dr) * riverFade;
   h = Math.max(h, RIVER_LEVEL + 1.2) * nearRiver + h * (1 - nearRiver);
-  const channel = smoothstep(13, 5, dr);
+  const channel = smoothstep(13, 5, dr) * riverFade;
   // About a metre deep: wadeable, slowly.
   h = h * (1 - channel) + (RIVER_LEVEL - 1.1 + (dr / 5) * 0.45) * channel;
   // Mountains close the world in.
@@ -127,13 +139,16 @@ export function heightAt(x: number, z: number) {
 }
 
 /** Heights as a half-float texture (1 m texels) for GPU-placed foliage. */
+let heightTex: THREE.DataTexture | null = null;
 export function heightTexture() {
+  if (heightTex) return heightTex; // shared by grass, flowers and water
   const N = WORLD_SIZE;
   const data = new Uint16Array(N * N);
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) data[j * N + i] = THREE.DataUtils.toHalfFloat(heights ? heights[j * GRID + i] : 0);
   const t = new THREE.DataTexture(data, N, N, THREE.RedFormat, THREE.HalfFloatType);
   t.magFilter = t.minFilter = THREE.LinearFilter;
   t.needsUpdate = true;
+  heightTex = t;
   return t;
 }
 
@@ -159,7 +174,7 @@ export function splatAt(x: number, z: number): [number, number, number] {
   );
   // River banks: mud and gravel.
   const dr = Math.abs(x - riverX(z));
-  dirt = Math.max(dirt, smoothstep(17, 11, dr + (n - 0.5) * 4));
+  dirt = Math.max(dirt, smoothstep(17, 11, dr + (n - 0.5) * 4) * (1 - smoothstep(360, 420, Math.abs(z))));
   // Worn patches scattered in the grass.
   dirt = Math.max(dirt, smoothstep(0.68, 0.76, fbm(x * 0.045 - 3, z * 0.045 + 5, 3)) * 0.8);
   dirt = clamp(dirt * (1 - stone), 0, 1);
@@ -244,6 +259,7 @@ function terrainMaterial(renderer: THREE.WebGLRenderer) {
         vec3 tW;
         float tFar, tRock;
         vec2 uvS, uvD, uvG, uvR;
+        ${FLOWER_GLSL}
         vec3 heightBlend(vec3 w, vec3 h) {
           vec3 x = w + h * 0.55;
           float m = max(max(x.r, x.g), x.b) - 0.28;
@@ -263,11 +279,26 @@ function terrainMaterial(renderer: THREE.WebGLRenderer) {
         float mv = smoothstep(0.3, 0.7, sp.a);
         if (sp.r > 0.004) cS = texture2D(dS, uvS).rgb * 0.62;
         if (sp.g > 0.004) cD = texture2D(dD, far > 0.5 ? uv2 / 3.4 * 0.1 : uvD).rgb * vec3(0.95, 0.9, 0.85);
-        if (sp.b > 0.004) cG = texture2D(dG, far > 0.5 ? uv2 / 4.2 * 0.09 : uvG).rgb * vec3(0.72, 0.95, 0.55);
+        if (sp.b > 0.004) cG = texture2D(dG, far > 0.5 ? uv2 / 4.2 * 0.09 : uvG).rgb * vec3(0.6, 0.92, 0.46);
         vec3 hts = vec3(dot(cS, vec3(0.5)), dot(cD, vec3(0.4)), dot(cG, vec3(0.5)));
         tW = heightBlend(sp.rgb, hts);
         vec3 col = cS * tW.r + cD * tW.g + cG * tW.b;
         col *= mix(vec3(0.9, 0.93, 0.86), vec3(1.07, 1.03, 0.98), mix(sp.a, mv, 0.5));
+        // Wildflowers beyond the 3D sprigs: dots in the middle distance,
+        // a soft colour wash far away.
+        float fDens = flowerDensity(vWPos.xz) * tW.b;
+        if (fDens > 0.02) {
+          float dist = length(vWPos - cameraPosition);
+          float k = flowerKind(vWPos.xz);
+          vec3 fc = k < 0.5 ? vec3(0.95, 0.93, 0.86) : k < 1.5 ? vec3(0.95, 0.76, 0.14) : k < 2.5 ? vec3(0.32, 0.46, 0.92) : vec3(0.86, 0.13, 0.08);
+          vec2 cellP = vWPos.xz * 3.0;
+          float pick = fh(floor(cellP));
+          float dotShape = smoothstep(0.24, 0.1, length(fract(cellP) - 0.5));
+          float mid = smoothstep(12.0, 18.0, dist) * (1.0 - smoothstep(45.0, 70.0, dist));
+          float flatGround = smoothstep(0.9, 0.97, normalize(vWN).y);
+          col = mix(col, fc, step(pick, fDens * 0.22) * dotShape * 0.8 * mid * flatGround);
+          col = mix(col, mix(col, fc, 0.5), fDens * 0.12 * smoothstep(45.0, 70.0, dist));
+        }
         // Steep ground turns to rock (triplanar-lite: project on the dominant side).
         vec3 wn = normalize(vWN);
         tRock = smoothstep(0.28, 0.45, 1.0 - wn.y);

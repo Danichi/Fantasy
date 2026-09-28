@@ -132,16 +132,18 @@ test('rocks block the player', async ({ page }) => {
   await boot(page);
   const z = await page.evaluate(async () => {
     const g = (window as any).__game;
-    g.player.teleport(new g.THREE.Vector3(-40, g.player.pos.y + 3, -3));
-    await new Promise((r) => setTimeout(r, 600));
+    // Stand south of the boulder at (-40, 112) and run north into it.
+    const h = g.player.pos.y;
+    g.player.teleport(new g.THREE.Vector3(-40, h + 3, 122));
+    await new Promise((r) => setTimeout(r, 800));
     g.cam.yaw = Math.PI;
     g.input.press('KeyW');
     await new Promise((r) => setTimeout(r, 3000));
     g.input.release('KeyW');
     return g.player.pos.z;
   });
-  // The mossy rock cluster sits in the way; without collision we'd reach z < -9.
-  expect(z).toBeGreaterThan(-8);
+  // Without collision we'd run straight through to z < 108.
+  expect(z).toBeGreaterThan(112);
 });
 
 test('dual wield: off-hand attack and equip armour', async ({ page }) => {

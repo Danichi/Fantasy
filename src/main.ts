@@ -19,6 +19,7 @@ import { buildWorld } from './world/props';
 import { Grass } from './world/grass';
 import { River } from './world/water';
 import { Foliage } from './world/foliage';
+import { Flowers } from './world/flowers';
 
 const STEP = 1 / 60;
 
@@ -46,6 +47,7 @@ async function boot() {
   const grass = new Grass(r.scene, terrain.splat);
   const river = new River(r.scene);
   const foliage = new Foliage(r.scene, r.renderer);
+  const flowers = new Flowers(r.scene, terrain.splat);
   const physDebug = new URLSearchParams(location.search).get('debug') === 'physics' ? new PhysicsDebug(r.scene) : null;
 
   const cam = new ThirdPersonCamera(r.camera, input);
@@ -191,6 +193,7 @@ async function boot() {
     cam.update(dt, renderPos, player.sprinting);
     r.camera.getWorldDirection(player.aimDir);
     grass.update(dt, r.camera.position, renderPos);
+    flowers.update(dt, r.camera.position);
     terrain.update(r.camera.position, player.pos);
     foliage.update(dt, r.camera.position);
     input.endFrame();

@@ -5,6 +5,7 @@ import { heightAt, PALISADE_R, PLAZA_CENTER, PLAZA_R, GATES } from './terrain';
 import { physics } from '../physics/physics';
 import { buildHouse, worldUV, type WorldMats } from './buildings';
 import { buildBridge } from './water';
+import { buildCrypt } from './crypt';
 import { mulberry32, wrapAngle as wrap } from '../core/math';
 import { newTargetId, targets, type HitInfo, type Target } from '../combat/targets';
 import type { FX } from '../fx/particles';
@@ -13,7 +14,7 @@ import type { FX } from '../fx/particles';
 
 const TEX = '/assets/textures/';
 
-function pbr(loader: THREE.TextureLoader, id: string, opts: THREE.MeshStandardMaterialParameters = {}, aniso = 4) {
+function pbr(loader: THREE.TextureLoader, id: string, opts: THREE.MeshStandardMaterialParameters = {}, aniso = 4, desaturate = 0) {
   const load = (m: string, srgb: boolean) => {
     const t = loader.load(`${TEX}${id}_${m}_1k.jpg`);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -22,7 +23,18 @@ function pbr(loader: THREE.TextureLoader, id: string, opts: THREE.MeshStandardMa
     return t;
   };
   const arm = load('arm', false);
-  return new THREE.MeshStandardMaterial({ map: load('diff', true), normalMap: load('nor_gl', false), roughnessMap: arm, aoMap: arm, aoMapIntensity: 0.6, ...opts });
+  const mat = new THREE.MeshStandardMaterial({ map: load('diff', true), normalMap: load('nor_gl', false), roughnessMap: arm, aoMap: arm, aoMapIntensity: 0.6, ...opts });
+  if (desaturate > 0) {
+    // Pull the texture's own colour toward grey (e.g. reddish photo rock -> granite).
+    mat.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15))), ${desaturate.toFixed(2)});`,
+      );
+    };
+  }
+  return mat;
 }
 
 function strawTexture() {
@@ -147,6 +159,7 @@ function addMeshCollider(obj: THREE.Object3D) {
 }
 
 export interface World {
+  crypt: ReturnType<typeof buildCrypt>;
   update(dt: number): void;
 }
 
@@ -155,7 +168,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const m: WorldMats = {
     stone: pbr(L, 'castle_brick_07', { color: 0xb0aaa0 }, aniso),
-    bridgeStone: pbr(L, 'rock_face_03', { color: 0x9c9a94 }, aniso),
+    bridgeStone: pbr(L, 'rock_face_03', { color: 0xb4b2ac }, aniso, 0.85),
     plaster: pbr(L, 'white_plaster_rough_01', { color: 0xe8dcc4 }, aniso),
     timber: pbr(L, 'weathered_peeling_timber', { color: 0x5a4636 }, aniso),
     slate: pbr(L, 'roof_slates_02', { color: 0x8a8a92 }, aniso),
@@ -188,6 +201,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
   }
 
   buildBridge(scene, m);
+  const crypt = buildCrypt(scene, m, fx);
 
   // ---- palisade with three open gates -------------------------------------------
   const logGeo = (() => {
@@ -349,28 +363,32 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
       scene.add(l);
     }
   }
-  // Boulders and rocks out in the fields, as cover.
+  // Boulders and rock clusters out in the meadows, as cover while fighting.
   const rr = mulberry32(21);
-  for (const [x, z, s] of [[-34, 2, 1.4], [36, 26, 1.8], [-16, 44, 1.2], [42, -8, 1.5], [-44, 22, 1.7], [12, 50, 1.3]] as const) {
-    place(boulder, x, z, rr() * 6, s, 1.1);
+  for (const [x, z, sc] of [[-40, 112, 1.5], [44, 138, 1.8], [-62, 168, 1.4], [70, 96, 1.6], [26, 248, 1.5], [-34, 262, 1.7], [112, -58, 1.5], [96, 150, 1.4]] as const) {
+    place(boulder, x, z, rr() * 6, sc, 1.1);
   }
-  for (const [x, z] of [[-40, -10], [30, 40], [-28, 44], [46, 12]] as const) place(rocks, x, z, rr() * 6, 1.3, 1);
-  for (let i = 0; i < 16; i++) {
+  for (const [x, z] of [[-24, 128], [58, 176], [110, 60], [-70, 214]] as const) place(rocks, x, z, rr() * 6, 1.3, 1);
+  // Bushes along the inside of the wall (clear of the gates and the house row).
+  for (let i = 0; i < 26; i++) {
     const a = rr() * Math.PI * 2;
     const r = PALISADE_R - 2.5 - rr() * 3;
     const x = Math.sin(a) * r, z = Math.cos(a) * r;
-    if (z > 0 && Math.abs(x) < 8) continue;
-    if (z < -25) continue;
+    if (Object.values(GATES).some((g) => Math.hypot(g.x - x, g.y - z) < 10)) continue;
+    if (z < -25 && Math.abs(x) < 45) continue;
     place(shrub, x, z, rr() * 6, 0.8 + rr() * 0.6, undefined, false);
   }
-  for (const [x, z] of [[-24, 30], [33, -12], [8, 28]] as const) place(stump, x, z, rr() * 6, 1, 0.5);
+  // Stumps where the western forest has been cut back.
+  for (const [x, z] of [[-118, 34], [-126, -42], [-112, 84], [-135, 10]] as const) place(stump, x, z, rr() * 6, 1, 0.5);
 
   // Fire in the pit.
   const pit = new THREE.Vector3(PLAZA_CENTER.x + 9.5, heightAt(PLAZA_CENTER.x + 9.5, PLAZA_CENTER.y - 9.5) + 0.35, PLAZA_CENTER.y - 9.5);
   let fireT = 0;
 
   return {
+    crypt,
     update(dt: number) {
+      crypt.update(dt);
       for (const d of dummies) d.update(dt);
       fireT += dt;
       if (fireT > 0.03) {

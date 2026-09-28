@@ -77,7 +77,7 @@ export class River {
       uSize: { value: WORLD_SIZE },
       uLevel: { value: RIVER_LEVEL },
     };
-    const mat = new THREE.MeshStandardMaterial({ color: 0x2a5560, roughness: 0.22, metalness: 0.0, transparent: true, envMapIntensity: 0.32 });
+    const mat = new THREE.MeshStandardMaterial({ color: 0x2a5560, roughness: 0.12, metalness: 0.0, transparent: true, envMapIntensity: 0.0 });
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.uniforms);
       sh.vertexShader = sh.vertexShader
@@ -103,6 +103,16 @@ export class River {
           float foam = smoothstep(0.12, 0.01, wDepth) * (0.5 + 0.5 * sin(vWPos.z * 0.9 + uTime * 1.6));
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.84, 0.82), foam * 0.6);
           diffuseColor.a = smoothstep(0.0, 0.08, wDepth) * mix(0.8, 0.97, smoothstep(0.0, 1.0, wDepth));`,
+        )
+        .replace(
+          '#include <opaque_fragment>',
+          `// Fresnel: the sky shows at grazing angles, the depths when looking down.
+          float cosV = clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0);
+          float fres = 0.03 + 0.97 * pow(1.0 - cosV, 5.0);
+          vec3 skyCol = vec3(0.55, 0.68, 0.82);
+          outgoingLight = mix(outgoingLight, skyCol, fres * 0.8);
+          diffuseColor.a = mix(diffuseColor.a, 1.0, fres * 0.6);
+          #include <opaque_fragment>`,
         )
         .replace(
           '#include <normal_fragment_maps>',
