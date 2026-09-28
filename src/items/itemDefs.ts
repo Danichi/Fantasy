@@ -1,0 +1,115 @@
+import * as THREE from 'three';
+import { buildSword, buildRoundShield, buildKiteShield } from './weaponModels';
+import { buildArmorPiece, type ArmorPieceId } from './armorModels';
+
+export type Slot = 'main' | 'off' | 'head' | 'shoulders' | 'chest' | 'hands' | 'legs' | 'feet';
+export const ARMOR_SLOTS: Slot[] = ['head', 'shoulders', 'chest', 'hands', 'legs', 'feet'];
+export type ItemKind = 'sword' | 'shield' | 'armor' | 'spell' | 'consumable';
+export type Rarity = 'common' | 'fine' | 'rare' | 'epic';
+
+export interface ItemStats {
+  damage?: number;
+  speed?: number; // attack speed multiplier
+  block?: number; // % physical damage absorbed while blocking
+  stability?: number; // lower stamina cost when blocking (0..1)
+  armor?: number; // flat damage reduction before %
+  poise?: number;
+  manaCost?: number;
+  heal?: number;
+  restoreMana?: number;
+}
+
+export interface ItemDef {
+  id: string;
+  name: string;
+  kind: ItemKind;
+  slot?: Slot; // natural slot; swords may also go to 'off'
+  rarity: Rarity;
+  desc: string;
+  stats: ItemStats;
+  /** builds the 3D model (weapons/shields: grip space; armour: limb space) */
+  build?: () => THREE.Object3D;
+  /** armour pieces: which bones get which parts */
+  armor?: ArmorPieceId;
+  stack?: boolean;
+}
+
+const longsword = { bladeLen: 0.86, bladeWidth: 0.025, thickness: 0.0042, fullerLen: 0.66, gripLen: 0.15, guardSpan: 0.115, guardStyle: 'curved' as const, pommel: 'pear' as const };
+const arming = { bladeLen: 0.72, bladeWidth: 0.024, thickness: 0.004, fullerLen: 0.72, gripLen: 0.1, guardSpan: 0.095, guardStyle: 'straight' as const, pommel: 'wheel' as const };
+const knight = { bladeLen: 0.8, bladeWidth: 0.028, thickness: 0.0045, fullerLen: 0.55, gripLen: 0.12, guardSpan: 0.12, guardStyle: 'curved' as const, pommel: 'wheel' as const, guardMat: 'brass' as const };
+
+export const ITEMS: Record<string, ItemDef> = {
+  longsword: {
+    id: 'longsword', name: 'Longsword', kind: 'sword', slot: 'main', rarity: 'common',
+    desc: 'A hand-and-a-half blade with a long reach. Balanced and dependable.',
+    stats: { damage: 24, speed: 1 }, build: () => buildSword(longsword),
+  },
+  armingSword: {
+    id: 'armingSword', name: 'Arming Sword', kind: 'sword', slot: 'main', rarity: 'common',
+    desc: 'A light one-handed sword. Quick in either hand, ideal for dual wielding.',
+    stats: { damage: 18, speed: 1.2 }, build: () => buildSword(arming),
+  },
+  knightSword: {
+    id: 'knightSword', name: "Knight's Broadsword", kind: 'sword', slot: 'main', rarity: 'fine',
+    desc: 'A broad blade with a brass-fitted hilt. Heavier strikes, slower recovery.',
+    stats: { damage: 30, speed: 0.88, poise: 5 }, build: () => buildSword(knight),
+  },
+  roundShield: {
+    id: 'roundShield', name: 'Round Shield', kind: 'shield', slot: 'off', rarity: 'common',
+    desc: 'Linden planks with an iron rim and boss. Light, and quick to parry with.',
+    stats: { block: 80, stability: 0.45 }, build: () => buildRoundShield('quartered'),
+  },
+  kiteShield: {
+    id: 'kiteShield', name: 'Heater Shield', kind: 'shield', slot: 'off', rarity: 'fine',
+    desc: 'A curved heater shield bearing a gold chevron. Absorbs every blow.',
+    stats: { block: 100, stability: 0.62 }, build: () => buildKiteShield(),
+  },
+  ironHelm: {
+    id: 'ironHelm', name: 'Nasal Helm', kind: 'armor', slot: 'head', rarity: 'common',
+    desc: 'A riveted conical helm with a nasal guard.', stats: { armor: 3, poise: 4 }, armor: 'helm',
+  },
+  pauldrons: {
+    id: 'pauldrons', name: 'Steel Pauldrons', kind: 'armor', slot: 'shoulders', rarity: 'common',
+    desc: 'Layered shoulder lames on leather.', stats: { armor: 3, poise: 5 }, armor: 'pauldrons',
+  },
+  breastplate: {
+    id: 'breastplate', name: 'Breastplate', kind: 'armor', slot: 'chest', rarity: 'fine',
+    desc: 'A ridged steel breastplate and backplate.', stats: { armor: 7, poise: 12 }, armor: 'breastplate',
+  },
+  gauntlets: {
+    id: 'gauntlets', name: 'Gauntlets', kind: 'armor', slot: 'hands', rarity: 'common',
+    desc: 'Steel vambraces and hand plates.', stats: { armor: 2, poise: 2 }, armor: 'gauntlets',
+  },
+  greaves: {
+    id: 'greaves', name: 'Greaves', kind: 'armor', slot: 'legs', rarity: 'common',
+    desc: 'Shin plates, knee cops and cuisses.', stats: { armor: 4, poise: 6 }, armor: 'greaves',
+  },
+  sabatons: {
+    id: 'sabatons', name: 'Sabatons', kind: 'armor', slot: 'feet', rarity: 'common',
+    desc: 'Articulated steel foot plates.', stats: { armor: 2, poise: 3 }, armor: 'sabatons',
+  },
+  fireball: {
+    id: 'fireball', name: 'Fireball', kind: 'spell', rarity: 'rare',
+    desc: 'Hurl a sphere of flame that bursts on impact. Homes gently toward a locked target.',
+    stats: { damage: 42, manaCost: 18 },
+  },
+  healingLight: {
+    id: 'healingLight', name: 'Healing Light', kind: 'spell', rarity: 'rare',
+    desc: 'A prayer of warm light that restores health over a few seconds.',
+    stats: { heal: 55, manaCost: 28 },
+  },
+  healthPotion: {
+    id: 'healthPotion', name: 'Health Draught', kind: 'consumable', rarity: 'common', stack: true,
+    desc: 'Restores 60 health.', stats: { heal: 60 },
+  },
+  manaPotion: {
+    id: 'manaPotion', name: 'Mana Draught', kind: 'consumable', rarity: 'common', stack: true,
+    desc: 'Restores 50 mana.', stats: { restoreMana: 50 },
+  },
+};
+
+export function buildItemModel(def: ItemDef): THREE.Object3D | null {
+  if (def.build) return def.build();
+  if (def.armor) return buildArmorPiece(def.armor, null);
+  return null;
+}
