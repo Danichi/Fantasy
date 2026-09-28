@@ -354,7 +354,7 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon') =>
     </div>`;
   const start = document.createElement('div');
   start.className = 'overlay';
-  start.innerHTML = `<div class="title-card"><h1>THE TRAINING GROUNDS</h1><p class="sub">A bright fantasy training world. Choose your origin, then shape your Heroic Legacy.</p>
+  start.innerHTML = `<div class="title-card"><h1>ELDERGLEN TOWN</h1><p class="sub">A thriving frontier town. Choose your origin, shape your Heroic Legacy, take Guild contracts, and explore beyond the walls.</p>
   <div class="origin-picker">
     <button class="origin-choice" data-origin="human"><b>HUMAN</b><span>Adaptable learning</span></button>
     <button class="origin-choice" data-origin="dragon"><b>DRAGON</b><span>Fire resistance · flight · breath</span></button>
