@@ -126,7 +126,7 @@ async function boot() {
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
   }, rewards, world.crypt.door);
   const dialogue = new DialogueUI();
-  const town = new Town(r.scene, r.camera, dialogue);
+  const town = new Town(r.scene, r.camera, dialogue, player, realm);
   realm.overworldInteractables.push(...town.interactables());
   dialogue.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open;
@@ -207,13 +207,14 @@ async function boot() {
   document.addEventListener('pointerlockchange', () => {
     if (input.locked) hadLock = true;
     // Losing a lock we had (Esc, alt-tab) pauses; a lock that never took doesn't.
-    else if (hadLock) {
+    else if (hadLock && !input.uiMode && !inv.open && !mapUI.open && !dialogue.open) {
       hadLock = false;
       pause();
     }
   });
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Escape' && !input.locked && !inv.open && !pausedByUser) pause();
+    if (e.code === 'Escape' && (dialogue.open || mapUI.open || inv.open)) return;
+    if (e.code === 'Escape' && !input.locked && !inv.open && !mapUI.open && !dialogue.open && !pausedByUser) pause();
   });
 
   const useHotbar = (i: number) => {
