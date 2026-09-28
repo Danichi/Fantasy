@@ -276,6 +276,19 @@ export const ACTIONS: Record<string, ActionDef> = {
   },
 };
 
+Object.assign(ACTIONS, {
+  swordsmanLunge: { ...ACTIONS.slash3, id: 'swordsmanLunge', stamina: 18, hit: { from: 0.42, to: 0.62, dmg: 1.65, poise: 42, hand: 'main' }, move: { dist: 1.75, from: 0.2, to: 0.62 }, track: 0.55 },
+  swordsmanRising: { ...ACTIONS.slash2, id: 'swordsmanRising', stamina: 16, hit: { from: 0.34, to: 0.52, dmg: 1.85, poise: 52, hand: 'main' }, move: { dist: 0.9, from: 0.22, to: 0.54 }, track: 0.48 },
+  swordsmanCrosscut: { ...ACTIONS.slash1, id: 'swordsmanCrosscut', stamina: 17, hit: { from: 0.32, to: 0.5, dmg: 1.55, poise: 30, hand: 'main' }, move: { dist: 0.65, from: 0.22, to: 0.5 }, track: 0.4 },
+  swordsmanExecutioner: { ...ACTIONS.heavy, id: 'swordsmanExecutioner', dur: 1.65, stamina: 30, hit: { from: 0.88, to: 1.16, dmg: 3.15, poise: 92, hand: 'main' }, move: { dist: 1.2, from: 0.72, to: 1.14 }, track: 0.95 },
+  swordsmanTempest: { ...ACTIONS.sprintAttack, id: 'swordsmanTempest', dur: 1.25, stamina: 24, hit: { from: 0.44, to: 0.72, dmg: 2.15, poise: 58, hand: 'main' }, move: { dist: 2.8, from: 0.04, to: 0.72 }, track: 0.32 },
+  bulwarkBreaker: { ...ACTIONS.heavy, id: 'bulwarkBreaker', dur: 1.72, stamina: 30, hit: { from: 0.92, to: 1.2, dmg: 2.65, poise: 110, hand: 'main' }, move: { dist: 0.9, from: 0.78, to: 1.2 }, track: 1.0 },
+  bulwarkCharge: { ...ACTIONS.sprintAttack, id: 'bulwarkCharge', dur: 1.35, stamina: 24, hit: { from: 0.46, to: 0.75, dmg: 2.25, poise: 82, hand: 'main' }, move: { dist: 3, from: 0.04, to: 0.74 }, track: 0.34 },
+  bulwarkCounter: { ...ACTIONS.slash3, id: 'bulwarkCounter', stamina: 20, hit: { from: 0.5, to: 0.72, dmg: 2.05, poise: 118, hand: 'main' }, move: { dist: 0.55, from: 0.38, to: 0.72 }, track: 0.6 },
+  bulwarkCrush: { ...ACTIONS.heavy, id: 'bulwarkCrush', dur: 1.82, stamina: 34, hit: { from: 0.98, to: 1.28, dmg: 3.35, poise: 128, hand: 'main' }, move: { dist: 0.75, from: 0.82, to: 1.28 }, track: 1.05 },
+  bulwarkAdvance: { ...ACTIONS.sprintAttack, id: 'bulwarkAdvance', dur: 1.4, stamina: 28, hit: { from: 0.5, to: 0.82, dmg: 2.85, poise: 140, hand: 'main' }, move: { dist: 2.5, from: 0.05, to: 0.8 }, track: 0.38 },
+});
+
 export const LIGHT_COMBO_START = 'slash1';
 export const OFF_COMBO_START = 'offslash1';
 
