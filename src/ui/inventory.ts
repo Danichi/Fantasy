@@ -234,14 +234,14 @@ export class InventoryUI {
   private renderSkills() {
     const prog = this.player.prog;
     const selected = COMBAT_STYLES[this.skillStyle];
-    const learned = prog.learnedStyles.includes(this.skillStyle);
+    const learned = prog.knowsStyle(this.skillStyle);
     const styleCards = styleIds.map((id) => {
       const s = COMBAT_STYLES[id];
       const on = prog.activeStyle === id;
       const known = prog.knowsStyle(id);
       return `<button class="style-card ${known ? 'known' : 'locked'} ${on ? 'active' : ''}" data-style="${id}">
         <span class="style-orb" style="--style:${s.color}"></span>
-        <b>${s.name}</b><small>${known ? (on ? 'ACTIVE STYLE' : 'LEARNED') : `TRAIN WITH ${s.trainer.toUpperCase()}`}</small>
+        <b>${s.name}</b><small>${known ? (on ? 'ACTIVE' : 'LEARNED') : `TRAIN WITH ${s.trainer.toUpperCase()}`}</small>
       </button>`;
     }).join('');
 
@@ -249,14 +249,15 @@ export class InventoryUI {
       const owned = prog.hasSkill(selected.id, node.id);
       const prereq = node.requires?.every((r) => prog.hasSkill(selected.id, r)) ?? true;
       const canBuy = learned && !owned && prereq && prog.skillPoints >= node.cost;
-      const lockedReason = !learned ? `Train with ${selected.trainer}` : !prereq ? 'Prerequisite required' : prog.skillPoints < node.cost ? 'Need more skill points' : 'Unlock';
+      const lockedReason = !learned ? `Train with ${selected.trainer}` : !prereq ? 'Prerequisite required' : prog.skillPoints < node.cost ? 'Need more skill points' : 'Unlock move';
       const row = node.requires?.length ? Math.min(3, node.requires.length + 1) : 1;
       const col = (i % 2) + 1;
-      const reqNames = node.requires?.map((req) => selected.nodes.find((n) => n.id === req)?.name ?? req).join(' · ') ?? 'Starting node';
-      return `<button class="skill-node ${owned ? 'owned' : ''} ${canBuy ? 'available' : ''}" data-skill="${node.id}" style="grid-column:${col};grid-row:${row}" title="${node.desc}">
+      const reqNames = node.requires?.map((req) => selected.nodes.find((n) => n.id === req)?.name ?? req).join(' · ') ?? 'Starting move';
+      const ref = `skill:${selected.id}:${node.id}`;
+      return `<button class="skill-node ${owned ? 'owned' : ''} ${canBuy ? 'available' : ''}" data-skill="${node.id}" data-move="${ref}" ${owned ? 'draggable="true"' : ''} style="grid-column:${col};grid-row:${row}" title="${node.desc}">
         <span class="node-num">${String(i + 1).padStart(2, '0')}</span>
         <b>${node.name}</b>
-        <small>${owned ? 'MASTERED' : lockedReason}</small>
+        <small>${owned ? 'MASTERED · DRAG TO MOVES' : lockedReason}</small>
         <p>${node.desc}</p>
         <span class="requires">${reqNames}</span>
         <em>${node.cost} SP</em>
@@ -264,14 +265,14 @@ export class InventoryUI {
     }).join('');
 
     const switcher = prog.knowsStyle(selected.id)
-      ? `<button class="style-switch ${prog.activeStyle === selected.id ? 'active' : ''}" data-switch="${selected.id}" ${!prog.canSwapStyles() || prog.activeStyle === selected.id ? 'disabled' : ''}>
-          ${prog.activeStyle === selected.id ? 'ACTIVE' : prog.canSwapStyles() ? 'SET ACTIVE' : `SWITCH UNLOCKS AT LEVEL ${12}`}
+      ? `<button class="style-switch ${prog.activeStyle === selected.id ? 'active' : ''}" data-switch="${selected.id}" ${prog.activeStyle === selected.id ? 'disabled' : ''}>
+          ${prog.activeStyle === selected.id ? 'ACTIVE STYLE' : 'USE THIS STYLE'}
         </button>`
       : `<div class="style-lock">Train with ${selected.trainer} to learn this combat style.</div>`;
 
     this.body.innerHTML = `
       <div class="style-head">
-        <div><span class="eyebrow">COMBAT STYLES</span><h3>${selected.name}</h3><p>${selected.short}</p></div>
+        <div><span class="eyebrow">MARTIAL STYLES</span><h3>${selected.name}</h3><p>${selected.short}</p><small class="magic-note">Magic is separate. Learn spells from Magus Orren and equip them on the MOVES bar.</small></div>
         <div class="sp-badge"><small>SKILL POINTS</small><b>${prog.skillPoints}</b></div>
       </div>
       <div class="style-cards">${styleCards}</div>
@@ -279,7 +280,7 @@ export class InventoryUI {
         <div class="tree-line"></div>
         <div class="skill-tree">${nodes}</div>
       </div>
-      <div class="style-footer">${switcher}<span>${prog.styleSwapUnlocked ? 'Style switching is unlocked.' : 'Combat style swapping is restricted until level 12.'}</span></div>`;
+      <div class="style-footer">${switcher}<span>Only one martial style can be active at a time. Learn both, then choose which one you fight with.</span></div>`;
 
     this.body.querySelectorAll<HTMLButtonElement>('.style-card').forEach((b) => {
       b.addEventListener('click', () => {
@@ -295,7 +296,7 @@ export class InventoryUI {
           this.renderSkills();
         } else {
           const node = selected.nodes.find((n) => n.id === id)!;
-          const reason = !learned ? `Train with ${selected.trainer} first.` : !(node.requires?.every((r) => prog.hasSkill(selected.id, r)) ?? true) ? 'Unlock the prerequisite nodes first.' : 'You need more skill points.';
+          const reason = !learned ? `Train with ${selected.trainer} first.` : !(node.requires?.every((r) => prog.hasSkill(selected.id, r)) ?? true) ? 'Unlock the prerequisite moves first.' : 'You need more skill points.';
           const toast = document.querySelector('.toast') as HTMLElement | null;
           if (toast) {
             toast.textContent = reason;
@@ -303,6 +304,10 @@ export class InventoryUI {
             setTimeout(() => toast.classList.remove('show'), 1800);
           }
         }
+      });
+      b.addEventListener('dragstart', (e) => {
+        const ref = b.dataset.move;
+        if (ref && prog.hasSkill(selected.id, b.dataset.skill!)) e.dataTransfer?.setData('text/move', ref);
       });
     });
 
