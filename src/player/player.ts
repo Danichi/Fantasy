@@ -921,7 +921,7 @@ export class Player {
     if (a?.def.parry && a.t >= a.def.parry[0] && a.t <= a.def.parry[1] && att.parryable && facing > 0.1) {
       att.onParried?.();
       if (this.activeCombatStyle === 'cross') {
-        const duration = this.hasStyleSkill('cross-master') ? 2.2 : this.hasStyleSkill('cross-parry') ? 1.65 : 1.05;
+        const duration = this.hasStyleSkill('cross', 'cross-master') ? 2.2 : this.hasStyleSkill('cross', 'cross-parry') ? 1.65 : 1.05;
         this.crossOpening = duration;
         this.prog.addMastery('cross', 1);
       }
