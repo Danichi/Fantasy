@@ -14,7 +14,7 @@ import { ThirdPersonCamera } from './player/camera';
 import { DEBUG, TEST_MODE } from './core/settings';
 import { setupLoadout } from './items/loadout';
 import { FX } from './fx/particles';
-import { SlimeSpawner } from './enemies/spawner';
+import { BeastSpawner } from './enemies/beastSpawner';
 import { Spells } from './magic/spells';
 import { buildIcons } from './ui/icons';
 import { HUD } from './ui/hud';
@@ -68,7 +68,7 @@ async function boot() {
   else setupLoadout(player.equip);
 
   const fx = new FX(r.scene, heightAt);
-  const slimes = new SlimeSpawner(r.scene, fx);
+  const slimes = new BeastSpawner(r.scene, fx);
   if (TEST_MODE) slimes.enabled = false;
   const spells = new Spells(r.scene, fx, player);
   const world = await buildWorld(r.scene, r.renderer, fx);
