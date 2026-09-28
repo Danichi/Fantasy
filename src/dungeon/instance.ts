@@ -575,14 +575,9 @@ export class DungeonInstance {
     this.time += dt;
     const pp = player.pos;
     // Enemies.
-    for (const s of this.slimes) s.update(dt, player, this.slimes);
-    for (const a of this.armours) a.update(dt, player);
+    for (const g of this.goblins) g.update(dt, player);
     for (const g of this.goblins.filter((g) => g.dead)) g.dispose();
     this.goblins = this.goblins.filter((g) => !g.dead);
-    for (const s of this.slimes.filter((s) => s.dead)) s.dispose();
-    this.slimes = this.slimes.filter((s) => !s.dead);
-    for (const a of this.armours.filter((a) => a.dead)) a.dispose();
-    this.armours = this.armours.filter((a) => !a.dead);
     // Boss: fights once woken; the bar shows while he's awake.
     if (this.boss) {
       this.boss.update(dt, player);
@@ -710,10 +705,7 @@ export class DungeonInstance {
     for (const c of this.colliders) physics.world.removeCollider(c, false);
     this.colliders = [];
     for (const g of this.goblins) g.dispose();
-    for (const s of this.slimes) s.dispose();
-    for (const a of this.armours) a.dispose();
-    this.slimes = [];
-    this.armours = [];
+    this.goblins = [];
     this.scene.remove(this.group);
     this.group.traverse((o) => {
       const m = o as THREE.Mesh;
