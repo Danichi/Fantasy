@@ -119,8 +119,8 @@ function breastplate(len: number) {
     const a = Math.atan2(x, z);
     const front = Math.cos(a) > 0;
     // Width tapers at the waist, chest swells forward, flat-ish back.
-    const rx = 0.158 + 0.012 * Math.sin(t * Math.PI) - (t < 0.25 ? (0.25 - t) * 0.08 : 0);
-    let rz = front ? 0.118 + 0.028 * Math.sin(Math.min(1, t * 1.25) * Math.PI * 0.85) : 0.1;
+    const rx = 0.176 + 0.012 * Math.sin(t * Math.PI) - (t < 0.25 ? (0.25 - t) * 0.08 : 0);
+    let rz = front ? 0.132 + 0.03 * Math.sin(Math.min(1, t * 1.25) * Math.PI * 0.85) : 0.118;
     // Medial ridge down the front.
     if (front) rz += 0.012 * Math.max(0, 1 - Math.abs(Math.sin(a)) * 5);
     // Scoop the neck and armholes at the top.
@@ -137,7 +137,7 @@ function breastplate(len: number) {
   g.add(plate);
   // Faulds: two flaring lames at the waist.
   for (let i = 0; i < 2; i++) {
-    const f = new THREE.Mesh(new THREE.CylinderGeometry(0.16 + i * 0.012, 0.172 + i * 0.012, 0.05, 36, 1, true), mat);
+    const f = new THREE.Mesh(new THREE.CylinderGeometry(0.175 + i * 0.012, 0.188 + i * 0.012, 0.05, 36, 1, true), mat);
     f.scale.z = 0.78;
     f.position.y = plate.position.y - H / 2 - 0.02 - i * 0.042;
     g.add(f);

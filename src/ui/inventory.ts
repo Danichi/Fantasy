@@ -143,7 +143,7 @@ export function buildOverlays(onStart: () => void) {
     </div>`;
   const start = document.createElement('div');
   start.className = 'overlay';
-  start.innerHTML = `<div class="title-card"><h1>THE TRAINING GROUNDS</h1><p class="sub">Slimes have overrun the field outside town. Take up your sword.</p><span class="cta">CLICK TO BEGIN</span>${controls}</div>`;
+  start.innerHTML = `<div class="title-card"><h1>THE TRAINING GROUNDS</h1><p class="sub">Slimes have overrun the field outside town. Take up your sword.</p><span class="cta">CLICK TO BEGIN</span><p class="mobile-note">Best played with a keyboard and mouse on a larger screen.</p>${controls}</div>`;
   root.appendChild(start);
   const help = document.createElement('div');
   help.className = 'overlay hidden';

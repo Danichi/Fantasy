@@ -13,8 +13,19 @@ const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _axis = new THREE.Vector3();
 
+const _dp = new THREE.Vector3();
+const _ds = new THREE.Vector3();
+/**
+ * World rotation read straight from matrixWorld. Callers keep world matrices
+ * current (every edit below refreshes the bone's subtree), which avoids
+ * getWorldQuaternion's walk up the whole ancestor chain on every call.
+ */
 export function worldQuat(o: THREE.Object3D, out = new THREE.Quaternion()) {
-  return o.getWorldQuaternion(out);
+  o.matrixWorld.decompose(_dp, out, _ds);
+  return out;
+}
+export function worldPos(o: THREE.Object3D, out = new THREE.Vector3()) {
+  return out.setFromMatrixPosition(o.matrixWorld);
 }
 
 /** Pre-multiply a bone's world rotation by `q` (a world-space delta). */
@@ -54,9 +65,9 @@ export function twoBoneIK(
   const upperStart = upper.quaternion.clone();
   const lowerStart = lower.quaternion.clone();
 
-  upper.getWorldPosition(_a);
-  lower.getWorldPosition(_b);
-  end.getWorldPosition(_c);
+  worldPos(upper, _a);
+  worldPos(lower, _b);
+  worldPos(end, _c);
   const lab = _a.distanceTo(_b);
   const lcb = _b.distanceTo(_c);
   const lat = THREE.MathUtils.clamp(_a.distanceTo(target), 0.01, (lab + lcb) * 0.999);
@@ -71,14 +82,14 @@ export function twoBoneIK(
   rotateWorld(lower, _q);
 
   // 2. Swing the whole chain so the hand points at the target.
-  end.getWorldPosition(_c);
+  worldPos(end, _c);
   _v1.subVectors(_c, _a).normalize();
   _v2.subVectors(target, _a).normalize();
   _q.setFromUnitVectors(_v1, _v2);
   rotateWorld(upper, _q);
 
   // 3. Twist around the shoulder->target axis so the elbow faces the pole.
-  lower.getWorldPosition(_b);
+  worldPos(lower, _b);
   const n = _v2; // already normalised shoulder->target
   const e = _v1.subVectors(_b, _a);
   e.addScaledVector(n, -e.dot(n));

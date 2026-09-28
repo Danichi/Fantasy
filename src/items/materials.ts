@@ -176,11 +176,11 @@ function build() {
   const steelRough = brushedRoughness(7, 'v');
   const armorRough = brushedRoughness(19, 'u');
   return {
-    blade: new THREE.MeshStandardMaterial({ color: 0xdfe4ea, metalness: 1, roughness: 0.55, roughnessMap: steelRough, envMapIntensity: 1.4 }),
+    blade: new THREE.MeshStandardMaterial({ color: 0xe2e0dc, metalness: 1, roughness: 0.5, roughnessMap: steelRough, envMapIntensity: 1.0 }),
     darkSteel: new THREE.MeshStandardMaterial({ color: 0x6d6a66, metalness: 1, roughness: 0.6, roughnessMap: steelRough, envMapIntensity: 1.1, side: THREE.DoubleSide }),
     brass: new THREE.MeshStandardMaterial({ color: 0xc9a25a, metalness: 1, roughness: 0.45, roughnessMap: steelRough, envMapIntensity: 1.2 }),
     iron: new THREE.MeshStandardMaterial({ color: 0x55524e, metalness: 0.9, roughness: 0.7, roughnessMap: armorRough, envMapIntensity: 1 }),
-    armor: new THREE.MeshStandardMaterial({ color: 0xaeb4ba, metalness: 1, roughness: 0.62, roughnessMap: armorRough, envMapIntensity: 1.25, side: THREE.DoubleSide }),
+    armor: new THREE.MeshStandardMaterial({ color: 0xc2bdb4, metalness: 1, roughness: 0.58, roughnessMap: armorRough, envMapIntensity: 0.75, side: THREE.DoubleSide }),
     gripLeather: new THREE.MeshStandardMaterial({ map: leather(3, true), roughness: 0.8, metalness: 0 }),
     leather: new THREE.MeshStandardMaterial({ map: leather(11, false), roughness: 0.75, metalness: 0, color: 0xcfb9a6 }),
   };

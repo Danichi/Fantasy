@@ -45,14 +45,14 @@ function bladeGeometry() {
   for (const [ox, oz, rot, hs] of blades) {
     const base = pos.length / 3;
     const c = Math.cos(rot), s = Math.sin(rot);
+    // Two segments + tip (3 triangles) keeps the curve at a third of the cost.
     const pts = [
       [-W, 0, 0], [W, 0, 0],
-      [-W * 0.8, H * 0.35 * hs, 0.02], [W * 0.8, H * 0.35 * hs, 0.02],
-      [-W * 0.5, H * 0.7 * hs, 0.06], [W * 0.5, H * 0.7 * hs, 0.06],
+      [-W * 0.6, H * 0.55 * hs, 0.04], [W * 0.6, H * 0.55 * hs, 0.04],
       [0, H * hs, 0.13],
     ];
     for (const [x, y, z] of pts) pos.push(ox + x * c + z * s, y, oz - x * s + z * c);
-    idx.push(...[0, 1, 2, 1, 3, 2, 2, 3, 4, 3, 5, 4, 4, 5, 6].map((i) => base + i));
+    idx.push(...[0, 1, 2, 1, 3, 2, 2, 3, 4].map((i) => base + i));
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -112,7 +112,7 @@ export class Grass {
           float scale = (0.2 + aOff.w * 0.3) * keep * (0.55 + dens * 0.5);
           vec3 p = position;
           p.y *= scale;
-          p.xz *= mix(0.8, 1.2, fract(aOff.w * 7.3));
+          p.xz *= mix(0.8, 1.2, fract(aOff.w * 7.3)) * keep; // culled tufts collapse to a point
           float c = cos(aOff.z), s = sin(aOff.z);
           p.xz = mat2(c, -s, s, c) * p.xz;
           float tip = clamp(position.y, 0.0, 1.0);

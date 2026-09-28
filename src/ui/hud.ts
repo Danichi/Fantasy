@@ -162,7 +162,7 @@ export class HUD {
 
   private updateBar(b: BarEls, v: number, max: number, dt: number, widthPx: number) {
     const f = Math.max(0, v / max);
-    b.root.style.width = `${widthPx}px`;
+    b.root.style.width = `${Math.min(widthPx, window.innerWidth - 110)}px`;
     b.fill.style.transform = `scaleX(${f})`;
     // The pale trail lingers, then drains to show how much was just lost.
     if (f < b.last - 0.002) b.trailHold = 0.5;

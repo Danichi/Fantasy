@@ -27,7 +27,6 @@ export interface ActionDef {
   weaponSpeed?: boolean;
   /** charge: hold the pose at this normalised time while the button is held */
   chargeAt?: number;
-  lowerBody?: boolean; // clip affects legs (otherwise locomotion continues underneath)
 }
 
 // ---- pose building blocks (character space: +Z forward, +X left) ----------
@@ -177,7 +176,7 @@ export const ACTIONS: Record<string, ActionDef> = {
     id: 'heavy', dur: 1.55, stamina: 28, clip: 'attack_heavy', proc: heavy,
     hit: { from: 0.94, to: 1.1, dmg: 2.3, poise: 70, hand: 'main' },
     cancel: 1.2, chargeAt: 0.5,
-    move: { dist: 1.1, from: 0.82, to: 1.05 }, track: 0.9, weaponSpeed: true, lowerBody: true,
+    move: { dist: 1.1, from: 0.82, to: 1.05 }, track: 0.9, weaponSpeed: true,
   },
   // ---- off-hand (dual wield) -------------------------------------------------
   offslash1: {
@@ -212,11 +211,11 @@ export const ACTIONS: Record<string, ActionDef> = {
   },
   // ---- movement ---------------------------------------------------------------
   roll: {
-    id: 'roll', dur: 0.78, stamina: 18, clip: 'roll', lowerBody: true,
+    id: 'roll', dur: 0.78, stamina: 18, clip: 'roll',
     iframes: [0.06, 0.46], roll: { dist: 4.6 }, cancel: 0.62, track: 0.02,
   },
   backstep: {
-    id: 'backstep', dur: 0.5, stamina: 12, clip: 'backstep', lowerBody: true,
+    id: 'backstep', dur: 0.5, stamina: 12, clip: 'backstep',
     iframes: [0.04, 0.24], roll: { dist: 1.9, back: true }, cancel: 0.36, track: 0,
     proc: (t) => ({ spinePitch: sampleF([[0, 0], [0.3, -0.2], [1, 0]], t), hipsDrop: sampleF([[0, 0], [0.3, 0.08], [1, 0]], t) }),
   },

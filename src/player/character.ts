@@ -16,7 +16,9 @@ export interface ClipEntry {
   loop?: boolean;
   /** strip horizontal hips motion at load (locomotion downloaded without "In Place") */
   inPlace?: boolean;
-  /** extracted forward root motion in metres, written by the importer */
+  /** forward root motion as a fraction of hips height (written by the importer) */
+  rootMotionRatio?: number;
+  /** the same in metres for the loaded character (computed at load) */
   rootMotion?: number;
 }
 
@@ -104,6 +106,7 @@ export class Character {
 
     // Load every clip, remapping bone prefixes to match this model.
     const modelPrefix = this.detectPrefix(this.model);
+    const hipsY = this.bones.get('Hips')?.getWorldPosition(new THREE.Vector3()).y ?? 1;
     for (const [key, entry] of Object.entries(manifest.clips)) {
       try {
         const g = await get(entry.file);
@@ -114,7 +117,7 @@ export class Character {
         const clip = this.retarget(src.clone(), modelPrefix, !!entry.inPlace);
         clip.name = key;
         this.clips.set(key, clip);
-        this.clipInfo.set(key, entry);
+        this.clipInfo.set(key, { ...entry, rootMotion: entry.rootMotionRatio !== undefined ? entry.rootMotionRatio * hipsY : undefined });
       } catch (e) {
         console.warn('clip failed', key, e);
       }

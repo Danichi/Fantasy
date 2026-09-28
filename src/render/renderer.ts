@@ -31,6 +31,8 @@ export class Renderer {
     r.setSize(window.innerWidth, window.innerHeight);
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFShadowMap;
+    // Shadows refresh every other frame (see render()); at 60fps that's invisible.
+    r.shadowMap.autoUpdate = false;
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 0.95;
     r.outputColorSpace = THREE.SRGBColorSpace;
@@ -128,7 +130,10 @@ export class Renderer {
     return this.dynScale;
   }
 
+  private frameNo = 0;
+
   render() {
+    this.renderer.shadowMap.needsUpdate = this.frameNo++ % 2 === 0;
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
   }

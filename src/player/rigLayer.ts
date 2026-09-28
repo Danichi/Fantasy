@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Character } from './character';
-import { twoBoneIK, setWorldQuat, rotateWorld, basisQuat } from './ik';
+import { twoBoneIK, setWorldQuat, rotateWorld, basisQuat, worldQuat, worldPos } from './ik';
 
 // ---------------------------------------------------------------------------
 // Everything that sits on top of the animation mixer each frame:
@@ -119,7 +119,7 @@ export class RigLayer {
   /** Current grip frame in world space. */
   gripWorldQuat(side: Side, out = new THREE.Quaternion()) {
     const h = this.hands[side];
-    return h.hand.getWorldQuaternion(out).multiply(h.frameLocal);
+    return worldQuat(h.hand, out).multiply(h.frameLocal);
   }
 
   private curlFingers(h: HandRig) {
@@ -149,7 +149,9 @@ export class RigLayer {
   /** Apply a procedural pose (weights inside) plus finger curl. Call after mixer.update. */
   apply(pose: ProcPose | null) {
     const root = this.char.visual;
-    root.updateMatrixWorld(true);
+    // Refresh from the top: the character root may have just moved, and the
+    // helpers below read world matrices directly.
+    this.char.root.updateMatrixWorld(true);
     const rootQ = root.getWorldQuaternion(new THREE.Quaternion());
 
     if (pose) {
@@ -158,10 +160,13 @@ export class RigLayer {
       const up = new THREE.Vector3(0, 1, 0).applyQuaternion(rootQ);
       const left = new THREE.Vector3(1, 0, 0).applyQuaternion(rootQ);
       const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(rootQ);
-      for (const b of this.spine) {
-        if (pose.spineYaw) rotateWorld(b, _q.setFromAxisAngle(up, pose.spineYaw / n));
-        if (pose.spinePitch) rotateWorld(b, _q.setFromAxisAngle(left, pose.spinePitch / n));
-        if (pose.spineRoll) rotateWorld(b, _q.setFromAxisAngle(fwd, pose.spineRoll / n));
+      if (pose.spineYaw || pose.spinePitch || pose.spineRoll) {
+        // One combined rotation per spine bone (each edit refreshes the subtree).
+        const q = new THREE.Quaternion()
+          .setFromAxisAngle(up, (pose.spineYaw ?? 0) / n)
+          .multiply(_q.setFromAxisAngle(left, (pose.spinePitch ?? 0) / n))
+          .multiply(_q2.setFromAxisAngle(fwd, (pose.spineRoll ?? 0) / n));
+        for (const b of this.spine) rotateWorld(b, q);
       }
       if (pose.headPitch && this.head) rotateWorld(this.head, _q.setFromAxisAngle(left, pose.headPitch));
       if (pose.legTuck) this.tuckLegs(pose.legTuck, left);
@@ -181,17 +186,14 @@ export class RigLayer {
     const legs = (['Right', 'Left'] as const).map((s) => ({
       up: c.bone(s + 'UpLeg')!, leg: c.bone(s + 'Leg')!, foot: c.bone(s + 'Foot')!,
     }));
-    const feet = legs.map((l) => ({
-      p: l.foot.getWorldPosition(new THREE.Vector3()),
-      q: l.foot.getWorldQuaternion(new THREE.Quaternion()),
-    }));
+    const feet = legs.map((l) => ({ p: worldPos(l.foot), q: worldQuat(l.foot) }));
     const scale = c.root.getWorldScale(_v).y;
-    const wp = hips.getWorldPosition(new THREE.Vector3());
+    const wp = worldPos(hips);
     wp.y -= drop * scale;
     hips.position.copy(hips.parent!.worldToLocal(wp));
     hips.updateMatrixWorld(true);
     legs.forEach((l, i) => {
-      const knee = l.leg.getWorldPosition(new THREE.Vector3()).addScaledVector(fwd, 0.6 * scale);
+      const knee = worldPos(l.leg).addScaledVector(fwd, 0.6 * scale);
       twoBoneIK(l.up, l.leg, l.foot, feet[i].p, knee, 1);
       setWorldQuat(l.foot, feet[i].q);
     });

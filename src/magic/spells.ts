@@ -154,9 +154,11 @@ export class Spells {
       events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: false, enemyId: t.id });
     }
     const fx = this.fx;
-    fx.add.spawn({ pos: at, spread: 7, count: 70, life: [0.25, 0.7], size: [0.5, 0.05], color: 0xfff0c0, color2: 0xff3000, drag: 3, jitter: 0.3 });
+    // Hot core flash, then a wide fire burst.
+    fx.add.spawn({ pos: at, spread: 1.5, count: 14, life: [0.12, 0.22], size: [1.6, 0.6], color: 0xfff6d8, color2: 0xffa040, jitter: 0.2 });
+    fx.add.spawn({ pos: at, spread: 7, count: 90, life: [0.25, 0.7], size: [0.7, 0.08], color: 0xffe0a0, color2: 0xff3000, drag: 3, jitter: 0.4 });
     fx.add.spawn({ pos: at, spread: 9, count: 40, life: [0.4, 1.1], size: [0.06, 0.01], color: 0xffd080, color2: 0xff2000, gravity: 9, drag: 1, upBias: 0.4 });
-    fx.alpha.spawn({ pos: at, spread: 1.6, count: 16, life: [0.9, 1.8], size: [0.6, 1.6], color: 0x3a302a, alpha: 0.5, drag: 2, upBias: 1.2, jitter: 0.6 });
+    fx.alpha.spawn({ pos: at.clone().setY(at.y + 0.4), spread: 1.4, count: 10, life: [1.0, 2.0], size: [0.5, 1.8], color: 0x6b625a, alpha: 0.28, drag: 2, upBias: 1.4, jitter: 0.8 });
     const light = this.lights.acquire({});
     if (light) {
       light.position.copy(at);

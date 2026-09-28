@@ -84,8 +84,7 @@ export class Player {
   async init(scene: THREE.Scene, spawn: THREE.Vector3) {
     await this.char.load();
     scene.add(this.char.root);
-    const idle = this.char.clips.get('idle')!;
-    for (const k of ['idle', 'walk', 'run', 'sprint']) {
+    for (const k of ['idle', 'walk', 'run', 'sprint', 'strafe_l', 'strafe_r', 'walk_back']) {
       const clip = this.char.clips.get(k);
       if (!clip) continue;
       const a = this.char.mixer.clipAction(clip);
@@ -96,7 +95,6 @@ export class Player {
     // Pose the rig in idle before measuring hand frames and limb sockets.
     this.char.animate(0.3);
     this.char.root.updateMatrixWorld(true);
-    void idle;
     this.rig = new RigLayer(this.char);
     this.rig.setup();
     this.equip = new Equipment(this.char, this.rig);
@@ -158,7 +156,6 @@ export class Player {
 
     if (this.dead) {
       this.deadT += dt;
-      this.updateDeath(dt);
       this.animate(dt, 0);
       return;
     }
@@ -166,7 +163,7 @@ export class Player {
     if (!input.uiMode) this.readInput(input, cam);
     this.updateAction(dt, input);
     this.updateLock(cam);
-    const speed = this.move(dt, input, cam);
+    const speed = this.move(dt);
     this.animate(dt, speed);
     this.detectHits();
   }
@@ -272,7 +269,6 @@ export class Player {
       else return; // keep buffering
     }
     this.buffer = null;
-    if (next === 'cast-none') return;
     if (next) this.startAction(next);
   }
 
@@ -294,7 +290,6 @@ export class Player {
     const a = this.act;
     if (!a) return;
     const d = a.def;
-    const prevT = a.t;
 
     // Light attack held long enough turns into a charged heavy.
     if (d.id === 'slash1' && d.hit && a.t < d.hit.from && input.held('attack') && input.heldFor('attack') > 0.28) {
@@ -318,7 +313,6 @@ export class Player {
       this.endAction();
       this.consumeBuffer();
     }
-    void prevT;
   }
 
   private fireEvent(name: 'fireball' | 'heal') {
@@ -396,7 +390,7 @@ export class Player {
   }
 
   // ---- movement ---------------------------------------------------------------
-  private move(dt: number, input: Input, cam: ThirdPersonCamera) {
+  private move(dt: number) {
     const a = this.act;
     const intent = this.moveIntent;
     let targetSpeed = 0;
@@ -428,6 +422,9 @@ export class Player {
         // Don't lunge into an enemy we're already touching.
         if (this.lock && this.lock.center.distanceTo(this.center) < 1.4) dist *= 0.2;
       }
+      // Real clips carry their own travel distance (extracted by the importer).
+      const clipDist = a.usingClip ? this.char.clipInfo.get(def.clip!)?.rootMotion : undefined;
+      if (clipDist !== undefined && Math.abs(clipDist) > 0.05) dist = Math.abs(clipDist);
       const ease = (t: number) => smoothstep(t0, t1, t);
       const v = ((ease(a.t + dt * a.speed) - ease(a.t)) * dist) / dt;
       hv.copy(dir).multiplyScalar(v);
@@ -493,10 +490,7 @@ export class Player {
     // Fell out of the world: put us back.
     if (this.pos.y < -30) this.teleport(new THREE.Vector3(0, 2, 10));
 
-    const actual = Math.hypot(m.x, m.z) / dt;
-    void input;
-    void cam;
-    return actual;
+    return Math.hypot(m.x, m.z) / dt;
   }
 
   teleport(p: THREE.Vector3) {
@@ -512,18 +506,37 @@ export class Player {
   private animate(dt: number, speed: number) {
     const a = this.act;
     const clipDriven = !!(a && a.usingClip);
-    // Locomotion blend by speed. When a full-body clip plays, fade locomotion out.
-    const locoW = clipDriven && a!.def.lowerBody ? 0 : 1;
+    // Locomotion blend by speed. Real action clips are full-body, so locomotion
+    // steps aside entirely while one plays (the mixer would otherwise average them).
+    const locoW = clipDriven ? 0 : 1;
     const s = a ? 0 : speed;
     const wIdle = 1 - smoothstep(0.1, 1.8, s);
     const wRun = smoothstep(2.4, 4.2, s);
     const wWalk = Math.max(0, 1 - wIdle - wRun);
     const setW = (k: string, w: number) => this.loco[k]?.setEffectiveWeight(w * locoW);
     const sprintBlend = this.loco.sprint ? smoothstep(4.6, 6.2, s) : 0;
+    // Locked on with strafe clips: blend forward / back / left / right by the
+    // direction of travel relative to facing.
+    let fw = 1, bk = 0, lf = 0, rt = 0;
+    if (this.lock && this.loco.strafe_l && this.loco.strafe_r && s > 0.2) {
+      const c = Math.cos(-this.yaw), sn = Math.sin(-this.yaw);
+      const lx = this.vel.x * c + this.vel.z * sn, lz = -this.vel.x * sn + this.vel.z * c;
+      const len = Math.hypot(lx, lz) || 1;
+      fw = Math.max(0, lz) / len;
+      bk = this.loco.walk_back ? Math.max(0, -lz) / len : 0;
+      lf = Math.max(0, lx) / len;
+      rt = Math.max(0, -lx) / len;
+      const sum = fw + bk + lf + rt || 1;
+      fw /= sum; bk /= sum; lf /= sum; rt /= sum;
+    }
+    const moving = 1 - wIdle;
     setW('idle', wIdle);
-    setW('walk', wWalk);
-    setW('run', wRun * (1 - sprintBlend));
-    setW('sprint', wRun * sprintBlend);
+    setW('walk', wWalk * fw);
+    setW('run', wRun * (1 - sprintBlend) * fw);
+    setW('sprint', wRun * sprintBlend * fw);
+    setW('strafe_l', moving * lf);
+    setW('strafe_r', moving * rt);
+    setW('walk_back', moving * bk);
     if (this.loco.walk) this.loco.walk.timeScale = clamp(s / 1.6, 0.6, 1.6);
     if (this.loco.run) this.loco.run.timeScale = clamp(s / 4.3, 0.8, this.loco.sprint ? 1.2 : 1.5);
     this.char.animate(dt);
@@ -587,7 +600,7 @@ export class Player {
       vis.position.set(0, pivot - Math.cos(ang) * pivot, -Math.sin(ang) * pivot);
       vis.position.y -= Math.sin(k * Math.PI) * 0.35;
     }
-    if (this.dead) {
+    if (this.dead && !this.char.has('death')) {
       const k = smoothstep(0, 0.9, this.deadT);
       vis.rotation.x = -k * Math.PI * 0.48;
       vis.position.y = -k * 0.05;
@@ -724,16 +737,22 @@ export class Player {
       this.deadT = 0;
       this.act = null;
       this.lock = null;
+      if (this.char.has('death')) {
+        const d = this.char.mixer.clipAction(this.char.clips.get('death')!);
+        d.reset().setLoop(THREE.LoopOnce, 1);
+        d.clampWhenFinished = true;
+        d.fadeIn(0.15).play();
+        this.clipAction = d;
+        for (const l of Object.values(this.loco)) l.setEffectiveWeight(0);
+      }
       events.emit('playerDied', {});
     }
   }
 
-  private updateDeath(dt: number) {
-    void dt;
-  }
-
   respawn(at: THREE.Vector3) {
     this.dead = false;
+    this.clipAction?.stop();
+    this.clipAction = null;
     this.hp = this.maxHp;
     this.stamina = this.maxStamina;
     this.mana = this.maxMana;

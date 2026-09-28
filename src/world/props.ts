@@ -131,7 +131,7 @@ function coniferGeometry(seed: number) {
     const t = i / (layers - 1);
     const rad = 2.3 * (1 - t * 0.82);
     const h = 2.6 * (1 - t * 0.3);
-    const g = new THREE.ConeGeometry(rad, h, 13, 3, true);
+    const g = new THREE.ConeGeometry(rad, h, 10, 2, true);
     const p = g.attributes.position as THREE.BufferAttribute;
     for (let k = 0; k < p.count; k++) {
       const y = p.getY(k);
@@ -353,12 +353,13 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
       return null;
     }
   };
-  const place = (src: THREE.Object3D | null, x: number, z: number, rotY = 0, s = 1, collider?: number) => {
+  const place = (src: THREE.Object3D | null, x: number, z: number, rotY = 0, s = 1, collider?: number, shadow = true) => {
     if (!src) return;
     const o = src.clone();
     o.position.set(x, heightAt(x, z), z);
     o.rotation.y = rotY;
     o.scale.setScalar(s);
+    if (!shadow) o.traverse((c) => (c.castShadow = false));
     scene.add(o);
     if (collider) physics.addCylinder(new THREE.Vector3(x, heightAt(x, z) + 0.8, z), 0.8, collider * s);
   };
@@ -401,7 +402,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     const x = Math.sin(a) * r, z = Math.cos(a) * r;
     if (z > 0 && Math.abs(x) < 8) continue;
     if (z < -25) continue;
-    place(shrub, x, z, rr() * 6, 0.8 + rr() * 0.6);
+    place(shrub, x, z, rr() * 6, 0.8 + rr() * 0.6, undefined, false);
   }
   for (const [x, z] of [[-24, 30], [33, -12], [8, 28]] as const) place(stump, x, z, rr() * 6, 1, 0.5);
 

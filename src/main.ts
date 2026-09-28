@@ -103,7 +103,9 @@ async function boot() {
   const perf = { sim: 0, render: 0, frame: 0 };
   const frame = (now: number) => {
     const t0 = performance.now();
-    const dtMs = Math.min(100, now - last);
+    // rAF timestamps can precede `last` after a long stall (shader compiles), so
+    // clamp at 0 as well as capping big gaps.
+    const dtMs = Math.max(0, Math.min(100, now - last));
     last = now;
     const dt = dtMs / 1000;
     // Pause the world while the title/pause overlay is up (never in tests).

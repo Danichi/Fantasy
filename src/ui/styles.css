@@ -156,8 +156,9 @@ html, body {
   pointer-events: auto; cursor: pointer;
 }
 .overlay.hidden { display: none; }
-.title-card { text-align: center; max-width: 720px; padding: 0 16px; }
-.title-card h1 { font: 700 46px/1.1 var(--serif); letter-spacing: 0.12em; color: var(--gold-bright); margin: 0 0 6px; text-shadow: 0 0 24px rgba(240, 190, 90, 0.35); }
+.title-card { text-align: center; max-width: 720px; width: 100%; padding: 0 16px; }
+.title-card .mobile-note { display: none; font: 500 12px/1.4 var(--sans); color: var(--gold); margin-top: 18px; }
+.title-card h1 { font: 700 clamp(28px, 7vw, 46px)/1.1 var(--serif); letter-spacing: 0.12em; color: var(--gold-bright); margin: 0 0 6px; text-shadow: 0 0 24px rgba(240, 190, 90, 0.35); }
 .title-card .sub { font: 500 14px/1.5 var(--sans); color: var(--ink-dim); margin: 0 0 26px; letter-spacing: 0.06em; }
 .title-card .cta { display: inline-block; font: 600 14px/1 var(--serif); letter-spacing: 0.3em; padding: 14px 26px; border: 1px solid var(--gold); color: var(--gold-bright); }
 .controls {
@@ -175,7 +176,7 @@ html, body {
 .inventory {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   width: min(1040px, calc(100vw - 32px)); max-height: calc(100vh - 150px);
-  display: grid; grid-template-columns: 250px 1fr 270px; gap: 0;
+  display: grid; grid-template-columns: 310px 1fr 270px; gap: 0;
   background: var(--panel); border: 1px solid var(--panel-edge);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7); pointer-events: auto;
 }
@@ -189,10 +190,11 @@ html, body {
   background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(201, 165, 90, 0.2); cursor: pointer;
 }
 .eqslot:hover { border-color: var(--gold); }
-.eqslot .ic { width: 44px; height: 44px; flex: none; background: rgba(0, 0, 0, 0.4); display: grid; place-items: center; }
+.eqslot .ic { width: 40px; height: 40px; flex: none; background: rgba(0, 0, 0, 0.4); display: grid; place-items: center; }
 .eqslot .ic img { width: 100%; height: 100%; object-fit: contain; }
-.eqslot .nm { font: 500 11px/1.25 var(--sans); color: var(--ink); }
-.eqslot .sl { font: 600 9px/1 var(--sans); letter-spacing: 0.14em; color: var(--ink-dim); text-transform: uppercase; margin-bottom: 3px; }
+.eqslot > div:last-child { min-width: 0; }
+.eqslot .nm { font: 500 11px/1.25 var(--sans); color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+.eqslot .sl { font: 600 9px/1 var(--sans); letter-spacing: 0.1em; white-space: nowrap; color: var(--ink-dim); text-transform: uppercase; margin-bottom: 3px; }
 .eqslot.empty .nm { color: rgba(233, 225, 207, 0.35); }
 .stats { margin-top: 18px; display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; font: 500 12px/1 var(--sans); color: var(--ink-dim); }
 .stats b { color: var(--ink); text-align: right; }
@@ -215,6 +217,15 @@ html, body {
 .detail .how { font: 400 11px/1.5 var(--sans); color: var(--ink-dim); border-top: 1px solid rgba(201, 165, 90, 0.15); padding-top: 10px; }
 .inv-help { grid-column: 1 / -1; padding: 10px 20px; border-top: 1px solid rgba(201, 165, 90, 0.15); font: 400 11px/1.4 var(--sans); color: var(--ink-dim); }
 
+@media (max-width: 600px) {
+  .controls { grid-template-columns: 1fr; }
+  .title-card .mobile-note { display: block; }
+  .bar { max-width: calc(100vw - 110px); }
+  .loadout { display: none; }
+  .hint { display: none; }
+  .hotbar { gap: 3px; }
+  .slot { width: 40px !important; height: 40px !important; }
+}
 @media (max-width: 900px) {
   .inventory { grid-template-columns: 1fr; overflow: auto; }
   .inventory section + section { border-left: 0; border-top: 1px solid rgba(201, 165, 90, 0.15); }

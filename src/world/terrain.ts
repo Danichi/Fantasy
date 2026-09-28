@@ -96,7 +96,7 @@ function buildSplatTexture() {
 }
 
 export function buildTerrain(scene: THREE.Scene, renderer: THREE.WebGLRenderer) {
-  const SEG = 220;
+  const SEG = 170;
   const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, SEG, SEG);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position as THREE.BufferAttribute;
