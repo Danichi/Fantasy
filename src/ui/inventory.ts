@@ -50,7 +50,7 @@ export class InventoryUI {
   private tab: Tab = 'items';
   private filter: Filter = 'all';
   private hovered: ItemInstance | undefined;
-  private skillStyle: CombatStyleId = 'swordsman';
+  private skillStyle: CombatStyleId = 'gale';
   open = false;
   onToggle?: (open: boolean) => void;
   onQuickDrop?: (slot: number, uid: number) => void;
@@ -272,7 +272,7 @@ export class InventoryUI {
 
     this.body.innerHTML = `
       <div class="style-head">
-        <div><span class="eyebrow">MARTIAL STYLES</span><h3>${selected.name}</h3><p>${selected.short}</p><small class="magic-note">Magic is separate. Learn spells from Magus Orren and equip them on the MOVES bar.</small></div>
+        <div><span class="eyebrow">PRIMARY COMBAT SCHOOL</span><h3>${selected.name}</h3><p>${selected.short}</p><small class="magic-note">${selected.mechanic} Magic is a separate system and does not change your combat school.</small></div>
         <div class="sp-badge"><small>SKILL POINTS</small><b>${prog.skillPoints}</b></div>
       </div>
       <div class="style-cards">${styleCards}</div>
@@ -280,7 +280,7 @@ export class InventoryUI {
         <div class="tree-line"></div>
         <div class="skill-tree">${nodes}</div>
       </div>
-      <div class="style-footer">${switcher}<span>Only one martial style can be active at a time. Learn both, then choose which one you fight with.</span></div>`;
+      <div class="style-footer">${switcher}<span>${prog.starterStyleChosen ? 'Primary school chosen. A secondary school slot can be unlocked later through mastery.' : `Starter quest: study all three mentors, then choose your school.`}</span></div>`;
 
     this.body.querySelectorAll<HTMLButtonElement>('.style-card').forEach((b) => {
       b.addEventListener('click', () => {
