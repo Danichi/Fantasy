@@ -160,7 +160,8 @@ export class InventoryUI {
       <span><b>${eq.armorValue}</b>Armour</span>
       <span><b>${eq.poise}</b>Poise</span>
       <span><b>${block}</b>Block</span>
-      <span><b>${Math.ceil(p.hp)}/${p.maxHp}</b>Health</span>`;
+      <span><b>${Math.ceil(p.hp)}/${p.maxHp}</b>Health</span>
+      <span><b>${p.prog.activeStyle ? COMBAT_STYLES[p.prog.activeStyle].name : 'Untrained'}</b>Style</span>`;
 
     this.tabs.innerHTML = '';
     for (const [id, label] of [['items', 'ITEMS'], ['skills', 'SKILLS'], ['stats', 'STATS']] as [Tab, string][]) {
@@ -290,8 +291,6 @@ export class InventoryUI {
           this.renderSkills();
         } else {
           const node = selected.nodes.find((n) => n.id === id)!;
-          this.player.prog.learnStyle;
-          this.player.prog.skillPoints;
           const reason = !learned ? `Train with ${selected.trainer} first.` : !(node.requires?.every((r) => prog.hasSkill(selected.id, r)) ?? true) ? 'Unlock the prerequisite nodes first.' : 'You need more skill points.';
           const toast = document.querySelector('.toast') as HTMLElement | null;
           if (toast) {
