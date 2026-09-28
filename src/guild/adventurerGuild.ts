@@ -4,7 +4,7 @@ import type { Progression } from '../progression/progression';
 import type { DialogueUI } from '../ui/dialogue';
 import { heightAt } from '../world/terrain';
 
-export type GuildRank = 'Novice' | 'Copper' | 'Iron' | 'Bronze' | 'Silver' | 'Gold' | 'Platinum' | 'Mythic';
+export type GuildRank = 'D' | 'C' | 'B' | 'A' | 'S' | 'SS' | 'SSS';
 
 export interface GuildQuest {
   id: string;
@@ -35,25 +35,23 @@ export interface GuildSaveData {
 }
 
 const RANKS: { name: GuildRank; rep: number }[] = [
-  { name: 'Novice', rep: 0 },
-  { name: 'Copper', rep: 150 },
-  { name: 'Iron', rep: 400 },
-  { name: 'Bronze', rep: 800 },
-  { name: 'Silver', rep: 1500 },
-  { name: 'Gold', rep: 3000 },
-  { name: 'Platinum', rep: 6000 },
-  { name: 'Mythic', rep: 12000 },
+  { name: 'D', rep: 0 },
+  { name: 'C', rep: 150 },
+  { name: 'B', rep: 400 },
+  { name: 'A', rep: 900 },
+  { name: 'S', rep: 1800 },
+  { name: 'SS', rep: 3600 },
+  { name: 'SSS', rep: 7500 },
 ];
 
 const RANK_COLORS: Record<GuildRank, string> = {
-  Novice: '#6f7e87',
-  Copper: '#9b6a4c',
-  Iron: '#6c7880',
-  Bronze: '#a97842',
-  Silver: '#6a8ca2',
-  Gold: '#b78722',
-  Platinum: '#557db0',
-  Mythic: '#8749bb',
+  D: '#6f7e87',
+  C: '#6a7f8c',
+  B: '#5b6f7b',
+  A: '#a57b34',
+  S: '#b78722',
+  SS: '#557db0',
+  SSS: '#8749bb',
 };
 
 interface QuestTemplate {
@@ -95,7 +93,7 @@ const TEMPLATES: QuestTemplate[] = [
 ];
 
 function rankForRep(rep: number): GuildRank {
-  let out: GuildRank = 'Novice';
+  let out: GuildRank = 'D';
   for (const r of RANKS) if (rep >= r.rep) out = r.name;
   return out;
 }
@@ -450,7 +448,7 @@ export class AdventurerGuild {
 
   fromJSON(data: GuildSaveData | undefined) {
     if (!data) return;
-    this.rank = data.rank ?? rankForRep(data.rep ?? 0);
+    this.rank = data.rank && RANKS.some((r) => r.name === data.rank) ? data.rank : rankForRep(data.rep ?? 0);
     this._rep = data.rep ?? 0;
     this._completed = data.completed ?? 0;
     this.nextId = data.nextQuestId ?? 1;
