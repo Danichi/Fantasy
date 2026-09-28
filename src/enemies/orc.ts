@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Character } from '../player/character';
 import { Animator } from '../player/animator';
@@ -95,6 +96,7 @@ export class OrcWarlord implements Target {
   onDeath?: (o: OrcWarlord) => void;
 
   private char = new Character();
+  private model: THREE.Group | null = null;
   private anim!: Animator;
   private rig!: RigLayer;
   private odachiHand!: THREE.Object3D;
@@ -143,6 +145,36 @@ export class OrcWarlord implements Target {
     const c = this.char;
     await c.load();
     c.root.scale.setScalar(ORC_SCALE);
+
+    // Use the supplied Orc Warrior model as the visible body. The model is
+    // static (no embedded animation clips), so the existing combat rig remains
+    // active underneath it for hit timing, movement, and boss behavior.
+    try {
+      const gltf = await new GLTFLoader().loadAsync('/assets/npc/orc_warrior.glb');
+      const model = gltf.scene;
+      model.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(model);
+      const h = Math.max(0.01, bb.max.y - bb.min.y);
+      const scale = 2.8 / h;
+      model.scale.setScalar(scale);
+      model.updateMatrixWorld(true);
+      const bb2 = new THREE.Box3().setFromObject(model);
+      const center = bb2.getCenter(new THREE.Vector3());
+      model.position.set(-center.x, -bb2.min.y, -center.z);
+      model.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) {
+          m.castShadow = true;
+          m.receiveShadow = true;
+        }
+      });
+      c.root.add(model);
+      this.model = model;
+      c.root.visible = false;
+      this.scene.add(model);
+    } catch (e) {
+      console.warn('orc warrior model failed to load; using the rigged fallback', e);
+    }
     for (const [b, k] of Object.entries(BULK)) c.bone(b)?.scale.setScalar(k);
     c.root.updateMatrixWorld(true);
     this.scene.add(c.root);
