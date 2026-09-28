@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
-import { heightAt } from '../world/terrain';
 import { damp, dampAngle, clamp } from '../core/math';
 import { events } from '../core/events';
 import { newTargetId, targets, type HitInfo, type Target } from '../combat/targets';
@@ -31,7 +30,7 @@ export const BEAST_VARIANTS: Record<BeastKind, BeastVariant> = {
 };
 
 const LOADER = new GLTFLoader();
-const CACHE = new Map<string, Promise<THREE.GLTF>>();
+const CACHE = new Map<string, Promise<GLTF>>();
 
 type State = 'idle' | 'chase' | 'attack' | 'hurt' | 'dying';
 
@@ -65,7 +64,6 @@ export class Beast implements Target {
   private cooldown = 0;
   private attackDone = false;
   private deadT = 0;
-  private loaded = false;
   private mixer: THREE.AnimationMixer | null = null;
   private actions = new Map<string, THREE.AnimationAction>();
   private activeAction: THREE.AnimationAction | null = null;
@@ -115,23 +113,24 @@ export class Beast implements Target {
       const gltf = await loadFile(BEAST_VARIANTS[this.variantKind].file);
       if (!this.alive) return;
 
-      this.model = gltf.scene;
-      this.model.updateMatrixWorld(true);
+      const model = gltf.scene;
+      this.model = model;
+      model.updateMatrixWorld(true);
 
-      const before = new THREE.Box3().setFromObject(this.model);
+      const before = new THREE.Box3().setFromObject(model);
       const currentH = Math.max(0.01, before.max.y - before.min.y);
       const targetH = BEAST_VARIANTS[this.variantKind].height;
-      this.model.scale.multiplyScalar(targetH / currentH);
-      this.model.updateMatrixWorld(true);
+      model.scale.multiplyScalar(targetH / currentH);
+      model.updateMatrixWorld(true);
 
-      const after = new THREE.Box3().setFromObject(this.model);
+      const after = new THREE.Box3().setFromObject(model);
       const centre = after.getCenter(new THREE.Vector3());
-      this.model.position.x -= centre.x;
-      this.model.position.z -= centre.z;
-      this.model.position.y -= after.min.y;
+      model.position.x -= centre.x;
+      model.position.z -= centre.z;
+      model.position.y -= after.min.y;
       this.modelHeight = targetH;
 
-      this.model.traverse((obj) => {
+      model.traverse((obj) => {
         const mesh = obj as THREE.Mesh;
         if (!mesh.isMesh) return;
         mesh.castShadow = true;
@@ -145,9 +144,9 @@ export class Beast implements Target {
         }
       });
 
-      this.group.add(this.model);
+      this.group.add(model);
       if (gltf.animations.length) {
-        this.mixer = new THREE.AnimationMixer(this.model);
+        this.mixer = new THREE.AnimationMixer(model);
         const idle = findClip(gltf.animations, [/idle/i, /stand/i, /breath/i]) ?? gltf.animations[0];
         const move = findClip(gltf.animations, [/run/i, /walk/i, /move/i, /locomotion/i]) ?? idle;
         const attack = findClip(gltf.animations, [/attack/i, /bite/i, /slash/i, /hit/i]) ?? move;
@@ -158,7 +157,6 @@ export class Beast implements Target {
         if (death) this.actions.set('death', this.makeAction(death, false));
         this.playAction('idle', 0);
       }
-      this.loaded = true;
     } catch (error) {
       console.warn('[creature] failed to load', BEAST_VARIANTS[this.variantKind].file, error);
     }
