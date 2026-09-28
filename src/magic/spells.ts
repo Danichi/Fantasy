@@ -8,6 +8,7 @@ import { events } from '../core/events';
 import { Q } from '../core/settings';
 import type { Player } from '../player/player';
 import { ITEMS } from '../items/itemDefs';
+import { MagicCircles } from './circles';
 
 // Spell effects: Fireball projectiles, Healing Light aura, potion sparkles.
 // Dynamic lights come from a fixed pool created up front so adding a light
@@ -80,6 +81,7 @@ function glowTexture() {
 
 interface Fireball {
   group: THREE.Group;
+  phase: number;
   vel: THREE.Vector3;
   life: number;
   target: Target | null;
@@ -103,8 +105,11 @@ export class Spells {
   private heal: { t: number; ring: THREE.Mesh } | null = null;
   private ringMat: THREE.MeshBasicMaterial;
   private time = 0;
+  private circles: MagicCircles;
+  private castSeen: object | null = null;
 
   constructor(private scene: THREE.Scene, private fx: FX, private player: Player) {
+    this.circles = new MagicCircles(scene);
     this.lights = new LightPool(scene, Math.max(1, Q.maxDynamicLights));
     this.fireMat = new THREE.ShaderMaterial({ vertexShader: FIRE_VERT, fragmentShader: FIRE_FRAG, uniforms: { uTime: { value: 0 } } });
     this.glowMat = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffa050, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
@@ -132,7 +137,7 @@ export class Spells {
       light.intensity = 18;
       light.distance = 9;
     }
-    this.balls.push({ group, vel: dir.clone().normalize().multiplyScalar(17), life: 3, target, light, damage: ITEMS.fireball.stats.damage ?? 40 });
+    this.balls.push({ phase: Math.random() * 6, group, vel: dir.clone().normalize().multiplyScalar(17), life: 3, target, light, damage: ITEMS.fireball.stats.damage ?? 40 });
     this.fx.add.spawn({ pos: from, spread: 3, count: 18, life: [0.15, 0.35], size: [0.15, 0.02], color: 0xffe0a0, color2: 0xff4000 });
   }
 
@@ -165,12 +170,14 @@ export class Spells {
       light.color.set(0xff9a4a);
     }
     this.flashes.push({ light, t: 0, dur: 0.45, peak: 60 });
+    this.circles.shockwave(at.clone().setY(Math.max(at.y - 0.3, heightAt(at.x, at.z) + 0.08)), 'fire', 6.5);
     events.emit('spellImpact', { at: at.clone(), spell: 'fireball' });
     const d = at.distanceTo(this.player.center);
     if (d < 12) this.player.onShake?.(0.35 * (1 - d / 12));
   }
 
   private startHeal() {
+    this.circles.ground(this.player.pos, 'light', 3.2, 3.0);
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 48).rotateX(-Math.PI / 2), this.ringMat.clone());
     this.scene.add(ring);
     if (this.heal) this.scene.remove(this.heal.ring);
@@ -192,8 +199,27 @@ export class Spells {
     this.fireMat.uniforms.uTime.value = this.time;
     const p = this.player;
 
+    this.circles.update(dt);
     // Charging sparks gather at the blade tip while casting.
     const a = p.act;
+    if (a && a !== this.castSeen && (a.def.id === 'castFireball' || a.def.id === 'castHeal')) {
+      this.castSeen = a;
+      const fire = a.def.id === 'castFireball';
+      this.circles.ground(p.pos, fire ? 'fire' : 'light', fire ? 2.4 : 3.2, fire ? 1.1 : 1.6);
+      if (fire) {
+        // Upright circle in front of the caster's weapon hand, facing the target.
+        const hand = p.char.bone('RightHand');
+        this.circles.facing(() => {
+          const pos = new THREE.Vector3();
+          hand?.getWorldPosition(pos);
+          const f = p.forward;
+          pos.addScaledVector(f, 0.55).setY(pos.y + 0.1);
+          const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), f);
+          return { pos, quat };
+        }, 'fire', 1.1, 0.9);
+      }
+    }
+    if (!a) this.castSeen = null;
     if (a && a.def.id === 'castFireball' && !a.fired) {
       const main = p.equip.model('main');
       if (main) {
@@ -242,6 +268,16 @@ export class Spells {
       if (fb.light) fb.light.position.copy(to);
       // Trail: flame puffs and embers.
       this.fx.add.spawn({ pos: to, vel: fb.vel.clone().multiplyScalar(-0.08), spread: 0.8, count: 4, life: [0.18, 0.4], size: [0.32, 0.04], color: 0xffc070, color2: 0xff2a00, jitter: 0.12 });
+      // Two ember streams spiralling around the flight path.
+      fb.phase += dt * 22;
+      const fwd = fb.vel.clone().normalize();
+      const side = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
+      const up = new THREE.Vector3().crossVectors(side, fwd);
+      for (const off of [0, Math.PI]) {
+        const a = fb.phase + off;
+        const p2 = to.clone().addScaledVector(side, Math.cos(a) * 0.28).addScaledVector(up, Math.sin(a) * 0.28);
+        this.fx.add.spawn({ pos: p2, spread: 0.1, count: 1, life: [0.25, 0.45], size: [0.09, 0.01], color: 0xfff0b0, color2: 0xff6010 });
+      }
       if (Math.random() < 0.5) this.fx.alpha.spawn({ pos: to, spread: 0.3, count: 1, life: [0.5, 0.9], size: [0.2, 0.5], color: 0x2d2622, alpha: 0.35, upBias: 1 });
     }
     this.balls = this.balls.filter((b) => b.life > -99);
