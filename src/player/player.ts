@@ -14,6 +14,7 @@ import { targets, hurtSegment, type Target, type IncomingAttack, type DefenceRes
 import { surfaceAt } from '../world/terrain';
 import { waterDepthAt } from '../world/water';
 import { Progression } from '../progression/progression';
+import { CombatDisciplineRuntime } from '../combat/disciplines';
 
 const CAPSULE_HALF = 0.55;
 const CAPSULE_R = 0.32;
@@ -23,7 +24,7 @@ const JUMP_V = 5.8;
 const BUFFER_TIME = 0.35;
 export const SIM_STEP = 1 / 60;
 
-type Buffered = 'attack' | 'offhand' | 'dodge' | 'parry' | 'cast';
+type Buffered = 'attack' | 'offhand' | 'dodge' | 'parry' | 'cast' | 'boundary' | 'originAbility';
 
 interface ActiveAction {
   def: ActionDef; // resolved (clip timing applied when the clip is loaded)
@@ -68,6 +69,9 @@ export class Player {
   stamina = 100;
   mana = 80;
   readonly prog = new Progression();
+  readonly combat = new CombatDisciplineRuntime();
+  private boundaryField = new THREE.Group();
+  private boundaryRing!: THREE.Mesh;
   get maxHp() {
     return 120 + this.prog.bonusHp + (this.equip?.bonus('maxHp') ?? 0);
   }
@@ -126,6 +130,15 @@ export class Player {
     this.rig = new RigLayer(this.char);
     this.rig.setup();
     this.equip = new Equipment(this.char, this.rig);
+    // Gameplay-owned boundary visual: a clean, luminous field independent of any model rig.
+    this.boundaryRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.93, 1.0, 64),
+      new THREE.MeshBasicMaterial({ color: 0x78d7ff, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
+    );
+    this.boundaryRing.rotation.x = -Math.PI / 2;
+    this.boundaryField.add(this.boundaryRing);
+    this.boundaryField.visible = false;
+    this.char.root.add(this.boundaryField);
     for (const b of ['Head', 'Spine2', 'RightArm', 'LeftArm', 'RightForeArm', 'LeftForeArm', 'RightHand', 'LeftHand', 'RightUpLeg', 'LeftUpLeg', 'RightLeg', 'LeftLeg', 'RightFoot', 'LeftFoot']) {
       this.equip.limb(b);
     }
@@ -189,6 +202,12 @@ export class Player {
     }
     if (!input.uiMode) this.readInput(input, cam);
     else this.moveIntent.set(0, 0, 0);
+    this.combat.discipline = this.prog.combat.primary;
+    this.combat.tick(dt, this.moveIntent.lengthSq() > 0 || this.sprinting, false);
+    if (this.prog.combat.origin === 'dragon' && !this.grounded && input.held('jump')) {
+      // Early draconic flight is deliberately weak; it becomes more useful as Heroic Legacy grows.
+      this.vel.y = Math.max(this.vel.y, -1.25 - this.prog.combat.heroic.level * 0.06);
+    }
     this.updateAction(dt, input);
     this.updateLock(cam);
     this.move(dt);
@@ -210,6 +229,8 @@ export class Player {
     if (input.wasPressed('parry')) buf('parry');
     if (input.wasPressed('dodge')) buf('dodge');
     if (input.wasPressed('cast')) buf('cast');
+    if (input.wasPressed('boundary')) buf('boundary');
+    if (input.wasPressed('originAbility')) buf('originAbility');
     this.blocking = input.held('offhand') && this.equip.hasShield && (!this.act || this.act.def.id === 'parryShield');
     if (input.wasPressed('jump') && this.grounded && !this.act) {
       this.vel.y = JUMP_V;
@@ -233,7 +254,8 @@ export class Player {
     this.stamina = Math.max(0, this.stamina - def.stamina);
     if (def.stamina > 0) this.staminaDelay = 0.65;
     const w = def.hit?.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
-    const speed = (def.weaponSpeed ? w?.def.stats.speed ?? 1 : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1);
+    const doctrineSpeed = def.hit && this.prog.combat.primary === 'gale' ? this.combat.speedMultiplier : 1;
+    const speed = (def.weaponSpeed ? w?.def.stats.speed ?? 1 : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1) * doctrineSpeed;
     this.poseFrom = this.lastPose;
     this.poseFade = 0;
     this.act = { def, t: t0 ?? def.startAt ?? 0, speed, hitSet: new Set(), charge: 0, charging: false, fired: false, usingClip, landed: false };
@@ -244,6 +266,8 @@ export class Player {
       const dir = def.roll.back ? this.forward.negate() : this.moveIntent.lengthSq() > 0 ? this.moveIntent.clone() : this.forward;
       this.act.rollDir = dir;
     }
+    this.combat.startAttack(performance.now() / 1000);
+    if (def.roll) this.prog.combat.addCombatEvent('dodge', 1);
     if (def.hit) events.emit('swing', { heavy: id === 'heavy' });
     return true;
   }
@@ -268,6 +292,21 @@ export class Player {
     const offCombo = (d: ActionDef) => d.id.startsWith('offslash');
     let next: string | null = null;
     if (!a) {
+      if (b.a === 'boundary') {
+        this.buffer = null;
+        if (this.prog.combat.primary !== 'boundary') {
+          events.emit('notEnough', { stat: 'stamina' });
+          return;
+        }
+        if (this.combat.boundaryActive) this.combat.breakBoundary(false);
+        else this.combat.activateBoundary();
+        return;
+      }
+      if (b.a === 'originAbility') {
+        this.buffer = null;
+        this.useOriginAbility();
+        return;
+      }
       if (b.a === 'attack' && eq.mainWeapon) next = !this.grounded ? 'airAttack' : this.sprinting ? 'sprintAttack' : 'slash1';
       else if (b.a === 'offhand' && eq.dualWield) next = 'offslash1';
       else if (b.a === 'dodge') next = this.grounded ? (this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep') : null;
@@ -685,6 +724,13 @@ export class Player {
       vis.position.z = -k * 0.2;
     }
     this.rig.apply(pose);
+    this.boundaryField.visible = this.combat.boundaryActive;
+    if (this.boundaryActiveSafe()) {
+      const r = this.combat.boundaryRadius;
+      this.boundaryRing.scale.set(r, r, r);
+      const mat = this.boundaryRing.material as THREE.MeshBasicMaterial;
+      mat.opacity = 0.14 + Math.min(0.18, this.combat.focus / 500);
+    }
 
     // Blade hit detection against the pose we just drew.
     if (a && at !== this.lastPresentT) this.detectHits(a, at);
@@ -746,12 +792,18 @@ export class Player {
           a.hitSet.add(tg.id);
           const crit = tg.stunned;
           const charge = 1 + a.charge * 0.6;
+          const doctrine = this.prog.combat.primary === 'gale' ? this.combat.damageMultiplier : this.prog.combat.primary === 'crossblade' ? this.combat.openingDamageMultiplier : 1;
+          const openingCost = this.prog.combat.primary === 'crossblade' && h.hand === 'main' && this.combat.openings > 0 ? 1 : 0;
+          if (openingCost) this.combat.spendOpening(openingCost);
           const bonus = 1 + this.equip.bonus('damagePct');
-          const dmg = Math.round(base * h.dmg * charge * bonus * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
+          const dmg = Math.round(base * h.dmg * charge * bonus * doctrine * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
           const dir = tg.position.clone().sub(this.pos).setY(0).normalize();
           const at2 = tg.center.clone().addScaledVector(dir, -tg.radius * 0.8);
           tg.takeHit({ damage: dmg, poise: h.poise * charge, dir, at: at2, crit, source: 'melee' });
           events.emit('enemyHit', { at: at2, amount: dmg, crit, enemyId: tg.id });
+          const timing = this.combat.onAttackHit(performance.now() / 1000);
+          this.prog.combat.addCombatEvent(timing.perfect ? 'perfectChain' : 'attackHit', 2);
+          events.emit('disciplineChanged', { discipline: this.prog.combat.primary, momentum: this.combat.momentum, focus: this.combat.focus, openings: this.combat.openings });
           const heavy = a.def.id === 'heavy' || a.def.id === 'airAttack';
           this.onHitStop?.(crit ? 0.16 : heavy ? 0.12 : 0.07);
           this.onShake?.(crit ? 0.4 : heavy ? 0.3 : 0.16);
@@ -768,9 +820,24 @@ export class Player {
     const toAtt = att.from.clone().sub(this.pos).setY(0).normalize();
     const facing = toAtt.dot(this.forward);
     const a = this.act;
+    if (this.combat.canIntercept(att.from.x, att.from.z, this.pos.x, this.pos.z, att.parryable) && facing > -0.4) {
+      const d = this.combat.focus;
+      const perfect = Math.hypot(att.from.x - this.pos.x, att.from.z - this.pos.z) < 1.0;
+      this.combat.focus = Math.max(0, d - (perfect ? 8 : 12));
+      att.onParried?.();
+      events.emit('boundaryIntercept', { at: this.center.clone(), perfect });
+      this.prog.combat.addCombatEvent('boundaryIntercept', 2);
+      events.emit('disciplineChanged', { discipline: this.prog.combat.primary, momentum: this.combat.momentum, focus: this.combat.focus, openings: this.combat.openings });
+      this.onHitStop?.(perfect ? 0.18 : 0.1);
+      return 'parried';
+    }
     if (a?.def.parry && a.t >= a.def.parry[0] && a.t <= a.def.parry[1] && att.parryable && facing > 0.1) {
       att.onParried?.();
+      const perfect = a.t <= a.def.parry[0] + 0.08;
+      this.combat.onParry(perfect);
+      this.prog.combat.addCombatEvent(perfect ? 'perfectParry' : 'parry', 2);
       events.emit('parrySuccess', { at: this.center.addScaledVector(toAtt, 0.6) });
+      events.emit('disciplineChanged', { discipline: this.prog.combat.primary, momentum: this.combat.momentum, focus: this.combat.focus, openings: this.combat.openings });
       this.onHitStop?.(0.18);
       this.onShake?.(0.25);
       return 'parried';
@@ -797,10 +864,14 @@ export class Player {
       this.onShake?.(0.12);
       return 'blocked';
     }
+    if (this.combat.boundaryActive) this.combat.breakBoundary(true);
     const armor = this.equip.armorValue;
     const dmg = att.damage * (100 / (100 + armor * 5));
     this.applyDamage(dmg);
-    if (att.burn) this.burn = { dps: att.burn, left: 3 };
+    if (att.burn) {
+      const burnScale = this.prog.combat.origin === 'dragon' ? 0.35 : 1;
+      this.burn = { dps: att.burn * burnScale, left: 3 };
+    }
     // Hyper-armour through the middle of heavy swings.
     const heavyArmor = (a?.def.id === 'heavy' || a?.def.id === 'airAttack') && a.def.hit && a.t > a.def.hit.from - 0.2 && a.t < a.def.hit.to;
     if (!this.dead && !heavyArmor && att.poise > this.equip.poise * 0.8) {
@@ -841,6 +912,7 @@ export class Player {
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
     else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen')) * dt);
     this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen')) * dt);
+    if (this.prog.combat.origin === 'demon' && !this.dead) this.hp = Math.min(this.maxHp, this.hp + 0.8 * dt);
     this.hp = Math.min(this.hp, this.maxHp);
     if (this.hot.left > 0 && !this.dead) {
       this.hot.left -= dt;
@@ -869,6 +941,35 @@ export class Player {
     if (!it || it.def.kind !== 'spell' || this.dead) return;
     this.equip.activeSpell = uid;
     this.buffer = { a: 'cast', t: performance.now() / 1000 };
+  }
+
+  private boundaryActiveSafe() { return !!this.combat.boundaryActive && this.prog.combat.primary === 'boundary'; }
+
+  private useOriginAbility() {
+    const origin = this.prog.combat.origin;
+    if (origin === 'dragon') {
+      const f = this.forward;
+      const center = this.center;
+      for (const t of targets) {
+        if (!t.alive) continue;
+        const to = t.center.clone().sub(center).setY(0);
+        const d = to.length();
+        if (d > 6.5 || d < 0.01) continue;
+        if (to.normalize().dot(f) < 0.62) continue;
+        const dmg = Math.round(26 + this.prog.combat.heroic.level * 2.5);
+        t.takeHit({ damage: dmg, poise: 35, dir: f.clone(), at: t.center.clone(), crit: false, source: 'melee' });
+        events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: false, enemyId: t.id });
+      }
+      events.emit('originAbility', { origin, ability: 'Dragon Breath' });
+    } else if (origin === 'demon') {
+      this.hot = { rate: Math.max(10, this.maxHp * 0.08), left: 2.5 };
+      this.stamina = Math.min(this.maxStamina, this.stamina + 30);
+      events.emit('originAbility', { origin, ability: 'Blood Awakening' });
+    } else {
+      this.mana = Math.min(this.maxMana, this.mana + 22);
+      this.stamina = Math.min(this.maxStamina, this.stamina + 22);
+      events.emit('originAbility', { origin, ability: 'Heroic Adaptation' });
+    }
   }
 
   /** Debug: show action `id` frozen at time t. */
