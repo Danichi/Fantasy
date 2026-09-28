@@ -1,4 +1,4 @@
-export type CombatStyleId = 'swordsman' | 'mage' | 'bulwark';
+export type CombatStyleId = 'swordsman' | 'bulwark';
 
 export interface SkillNode {
   id: string;
@@ -6,7 +6,8 @@ export interface SkillNode {
   desc: string;
   cost: number;
   requires?: string[];
-  effect: string;
+  actionId: string;
+  move: string;
 }
 
 export interface CombatStyle {
@@ -18,49 +19,33 @@ export interface CombatStyle {
   nodes: SkillNode[];
 }
 
-export const STYLE_SWAP_LEVEL = 12;
-
 export const COMBAT_STYLES: Record<CombatStyleId, CombatStyle> = {
   swordsman: {
     id: 'swordsman',
     name: 'Swordsman',
-    short: 'Fast melee pressure, long combos, brutal finishers.',
+    short: 'Fast melee pressure, flowing chains and aggressive finishers.',
     trainer: 'Kaela Voss',
     color: '#d6a85d',
     nodes: [
-      { id: 'keen-edge', name: 'Keen Edge', desc: '+6% melee damage.', cost: 1, effect: '+6% melee damage' },
-      { id: 'flowing-steel', name: 'Flowing Steel', desc: '+8% attack speed on weapon actions.', cost: 1, requires: ['keen-edge'], effect: '+8% attack speed' },
-      { id: 'iron-will', name: 'Iron Will', desc: '+12 maximum stamina.', cost: 1, requires: ['keen-edge'], effect: '+12 max stamina' },
-      { id: 'executioner', name: 'Executioner', desc: '+18% heavy-attack damage.', cost: 1, requires: ['flowing-steel'], effect: '+18% heavy damage' },
-      { id: 'blade-master', name: 'Blade Master', desc: '+10% melee damage and +5% attack speed.', cost: 2, requires: ['iron-will', 'executioner'], effect: '+10% melee, +5% speed' },
-    ],
-  },
-  mage: {
-    id: 'mage',
-    name: 'Mage',
-    short: 'High mana, efficient casting, powerful elemental damage.',
-    trainer: 'Magus Orren',
-    color: '#78aef0',
-    nodes: [
-      { id: 'arcane-well', name: 'Arcane Well', desc: '+20 maximum mana.', cost: 1, effect: '+20 max mana' },
-      { id: 'efficient-casting', name: 'Efficient Casting', desc: 'Spells cost 10% less mana.', cost: 1, requires: ['arcane-well'], effect: '-10% mana cost' },
-      { id: 'arcane-focus', name: 'Arcane Focus', desc: '+15% spell damage.', cost: 1, requires: ['arcane-well'], effect: '+15% spell damage' },
-      { id: 'quick-cast', name: 'Quick Cast', desc: '+10% action speed while casting.', cost: 1, requires: ['efficient-casting'], effect: '+10% cast speed' },
-      { id: 'archmage', name: 'Archmage', desc: '+15% spell damage and +10 maximum mana.', cost: 2, requires: ['arcane-focus', 'quick-cast'], effect: '+15% spell damage, +10 max mana' },
+      { id: 'lunging-cut', name: 'Lunging Cut', desc: 'A fast advancing slash that closes distance.', cost: 1, actionId: 'swordsmanLunge', move: 'LUNGE' },
+      { id: 'rising-fang', name: 'Rising Fang', desc: 'A rising cut with heavy poise damage.', cost: 1, requires: ['lunging-cut'], actionId: 'swordsmanRising', move: 'RISING FANG' },
+      { id: 'crosscut', name: 'Crosscut', desc: 'A wide cross-body strike with strong reach.', cost: 1, requires: ['lunging-cut'], actionId: 'swordsmanCrosscut', move: 'CROSSCUT' },
+      { id: 'executioner', name: 'Executioner', desc: 'A slow, devastating finishing blow.', cost: 1, requires: ['rising-fang'], actionId: 'swordsmanExecutioner', move: 'EXECUTIONER' },
+      { id: 'blade-tempest', name: 'Blade Tempest', desc: 'A long advancing flurry that keeps pressure on a target.', cost: 2, requires: ['crosscut', 'executioner'], actionId: 'swordsmanTempest', move: 'BLADE TEMPEST' },
     ],
   },
   bulwark: {
     id: 'bulwark',
     name: 'Bulwark',
-    short: 'Shield defense, poise and survivability.',
+    short: 'Deliberate martial defence built around impact, control and counter-attacks.',
     trainer: 'Ser Corvin',
     color: '#d8dce5',
     nodes: [
-      { id: 'iron-guard', name: 'Iron Guard', desc: '+5 armour.', cost: 1, effect: '+5 armour' },
-      { id: 'fortified', name: 'Fortified', desc: '+20 maximum health.', cost: 1, requires: ['iron-guard'], effect: '+20 max health' },
-      { id: 'steadfast', name: 'Steadfast', desc: '+20% stamina regeneration.', cost: 1, requires: ['iron-guard'], effect: '+20% stamina regen' },
-      { id: 'aegis', name: 'Aegis', desc: 'Block absorbs 8% more physical damage.', cost: 1, requires: ['fortified'], effect: '+8 block' },
-      { id: 'last-stand', name: 'Last Stand', desc: 'Take 12% less damage while below 40% health.', cost: 2, requires: ['steadfast', 'aegis'], effect: '-12% low-health damage' },
+      { id: 'breaker', name: 'Breaker', desc: 'A crushing opener built to stagger guarded foes.', cost: 1, actionId: 'bulwarkBreaker', move: 'BREAKER' },
+      { id: 'iron-charge', name: 'Iron Charge', desc: 'Drive forward through a guarded enemy with a heavy blow.', cost: 1, requires: ['breaker'], actionId: 'bulwarkCharge', move: 'IRON CHARGE' },
+      { id: 'counterblow', name: 'Counterblow', desc: 'A measured counterattack with exceptional poise damage.', cost: 1, requires: ['breaker'], actionId: 'bulwarkCounter', move: 'COUNTERBLOW' },
+      { id: 'bastion-crush', name: 'Bastion Crush', desc: 'A brutal overhead strike that trades speed for force.', cost: 1, requires: ['counterblow'], actionId: 'bulwarkCrush', move: 'BASTION CRUSH' },
+      { id: 'unyielding-advance', name: 'Unyielding Advance', desc: 'A huge advancing strike with the strongest stagger of the style.', cost: 2, requires: ['iron-charge', 'bastion-crush'], actionId: 'bulwarkAdvance', move: 'UNYIELDING ADVANCE' },
     ],
   },
 };
