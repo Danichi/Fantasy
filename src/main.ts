@@ -123,7 +123,7 @@ async function boot() {
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
   }, rewards, world.crypt.door);
   const dialogue = new DialogueUI();
-  const town = new Town(r.scene, r.camera, dialogue);
+  const town = new Town(r.scene, r.camera, dialogue, player);
   realm.overworldInteractables.push(...town.interactables());
   dialogue.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open;
@@ -136,9 +136,16 @@ async function boot() {
   }
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
-    writeSave(player, realm.seed, realm.maps, realm.progress);
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON());
   };
+  if (saveData) town.guild.fromJSON(saveData.guild);
   realm.onSave = save;
+  town.guild.onSave = save;
+  town.guild.onToggle = (open) => {
+    input.uiMode = open || inv.open || mapUI.open || dialogue.open;
+    if (open) input.exitLock();
+    else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
+  };
   mapUI.onChange = save;
   window.addEventListener('beforeunload', save);
   setInterval(save, 30000);
@@ -278,7 +285,7 @@ async function boot() {
       if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
       if (input.wasPressed('map')) {
         if (realm.mode === 'dungeon') mapUI.toggle();
-        else hud.toast('You have no map of the surface yet');
+        else town.guild.open('map');
       }
       slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
       player.update(STEP, input, cam);
