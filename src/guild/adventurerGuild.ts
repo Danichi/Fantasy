@@ -227,7 +227,7 @@ export class AdventurerGuild {
       g.traverse((o) => { (o as THREE.Mesh).castShadow = true; (o as THREE.Mesh).receiveShadow = true; });
       this.group.add(g);
     }
-    this.group.visible = false;
+    this.group.visible = true;
     this.scene.add(this.group);
     function woodMaterial(i: number) {
       return new THREE.MeshStandardMaterial({ color: [0x4f3829, 0x6e5135, 0x3d4b2d][i % 3], roughness: 0.95 });
