@@ -4,8 +4,6 @@ import { physics } from '../physics/physics';
 import { pbr } from '../world/props';
 import { mats, paintedWood } from '../items/materials';
 import { generateFloor, Grid, type Cell, type FloorLayout } from './generator';
-import { Slime, type SlimeKind } from '../enemies/slime';
-import { LivingArmour } from '../enemies/livingArmour';
 import { OrcWarlord } from '../enemies/orc';
 import { Goblin } from '../enemies/goblin';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -107,8 +105,6 @@ export class DungeonInstance {
   private gate: { bars: THREE.Group; collider: RAPIER.Collider | null; t: number; opening: boolean } | null = null;
   private portal: THREE.Group | null = null;
   goblins: Goblin[] = [];
-  slimes: Slime[] = [];
-  armours: LivingArmour[] = [];
   private boss: OrcWarlord | null = null;
   /** resolves when async content (the boss model) has loaded */
   ready: Promise<void> = Promise.resolve();
