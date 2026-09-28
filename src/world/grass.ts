@@ -115,8 +115,8 @@ export class Grass {
         .replace('#include <common>', `#include <common>\nvarying float vTip; varying float vVar;`)
         .replace(
           '#include <color_fragment>',
-          `vec3 base = vec3(0.07, 0.13, 0.03);
-          vec3 tipCol = mix(vec3(0.24, 0.42, 0.1), vec3(0.36, 0.48, 0.14), vVar);
+          `vec3 base = vec3(0.09, 0.20, 0.045);
+          vec3 tipCol = mix(vec3(0.28, 0.52, 0.12), vec3(0.40, 0.62, 0.18), vVar);
           diffuseColor.rgb = mix(base, tipCol, smoothstep(0.0, 1.0, vTip));`,
         );
     };

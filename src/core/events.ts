@@ -20,6 +20,10 @@ export interface GameEvents {
   pickup: { kind: 'xp' | 'gold' };
   bossSlam: { at: Vector3 };
   equipmentChanged: {};
+  disciplineChanged: { discipline: 'gale' | 'boundary' | 'crossblade'; momentum: number; focus: number; openings: number; };
+  masteryChanged: { discipline: 'gale' | 'boundary' | 'crossblade'; mastery: number; level: number; };
+  boundaryIntercept: { at: Vector3; perfect: boolean; };
+  originAbility: { origin: string; ability: string; };
   slimeLand: { at: Vector3; size: number };
 }
 

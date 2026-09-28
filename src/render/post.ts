@@ -93,16 +93,16 @@ const FINAL_FRAG = /* glsl */ `
     col += texture2D(tBloom, vUv).rgb * uBloom;
     col = aces(col * uExposure);
 
-    // Warm, rich grade: gentle S-curve, lifted warm highlights, cool shadows,
-    // extra saturation in the mids (greens and sky stay vivid).
+    // Bright fantasy grade: luminous skies, clear greens/blues, warm magical highlights.
     float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    col = mix(vec3(luma), col, 1.16);
-    col = mix(col, col * vec3(1.05, 1.0, 0.92), smoothstep(0.35, 1.0, luma));
-    col = mix(col, col * vec3(0.94, 0.98, 1.06), 1.0 - smoothstep(0.0, 0.35, luma));
-    col = col * col * (3.0 - 2.0 * col) * 0.35 + col * 0.65;
+    col = mix(vec3(luma), col, 1.22);
+    col = mix(col, col * vec3(1.06, 1.03, 0.96), smoothstep(0.32, 1.0, luma));
+    col = mix(col, col * vec3(0.97, 1.02, 1.06), 1.0 - smoothstep(0.0, 0.32, luma));
+    col += vec3(0.015, 0.018, 0.022) * (1.0 - luma);
+    col = col * col * (3.0 - 2.0 * col) * 0.26 + col * 0.74;
     // Vignette.
     vec2 q = vUv - 0.5;
-    col *= 1.0 - dot(q, q) * 0.55;
+    col *= 1.0 - dot(q, q) * 0.22;
     gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
   }`;
 
@@ -166,9 +166,9 @@ export class Post {
         tColor: { value: null }, tDepth: { value: null }, tBloom: { value: null }, tNoise: { value: noiseTexture() },
         uProjInv: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() },
         uCamPos: { value: new THREE.Vector3() }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
-        uSunColor: { value: new THREE.Color(1.0, 0.86, 0.62) }, uHazeColor: { value: new THREE.Color(0.66, 0.77, 0.9) },
+        uSunColor: { value: new THREE.Color(1.0, 0.93, 0.78) }, uHazeColor: { value: new THREE.Color(0.72, 0.86, 0.96) },
         uNear: { value: 0.1 }, uFar: { value: 900 }, uTime: { value: 0 },
-        uExposure: { value: 1.0 }, uBloom: { value: 0.5 }, uHaze: { value: 0.0012 }, uClouds: { value: 1.0 },
+        uExposure: { value: 1.08 }, uBloom: { value: 0.42 }, uHaze: { value: 0.0009 }, uClouds: { value: 1.0 },
       },
       depthTest: false,
       depthWrite: false,

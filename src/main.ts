@@ -22,6 +22,7 @@ import { InventoryUI, buildOverlays } from './ui/inventory';
 import { CharPreview } from './ui/charPreview';
 import { events } from './core/events';
 import { buildWorld } from './world/props';
+import { FrontierRegion } from './world/frontier';
 import { Grass } from './world/grass';
 import { River } from './world/water';
 import { Foliage } from './world/foliage';
@@ -84,6 +85,8 @@ async function boot() {
   events.on('enemyDied', ({ at, kind }) => {
     const [xp, gold] = XP_FOR_KIND[kind] ?? [10, 2];
     rewards.spawn(at, xp, gold);
+    // Combat Legacy learns from the whole fight, not only the pickup meter.
+    player.prog.combat.addHeroicXp(Math.max(1, xp * 0.08));
   });
   events.on('bossSlam', ({ at }) => cam.shake(Math.max(0.15, 0.6 - at.distanceTo(player.pos) * 0.04)));
   events.on('levelUp', () => {
@@ -108,6 +111,7 @@ async function boot() {
   const preview = new CharPreview(r.renderer, r.scene, player, [r.sun, r.hemi]);
   const inv = new InventoryUI(player, preview);
   const mapUI = new DungeonMapUI();
+  let frontier!: FrontierRegion;
   const realm = new Realm(r, player, cam, fx, hud, mapUI, {
     hide: (h) => {
       terrain.group.visible = !h;
@@ -117,12 +121,17 @@ async function boot() {
       foliage.setVisible(!h);
       town.setVisible(!h);
     },
-    clearEnemies: () => slimes.clear(),
+    clearEnemies: () => { slimes.clear(); frontier?.dispose(); },
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
   }, rewards, world.crypt.door);
   const dialogue = new DialogueUI();
-  const town = new Town(r.scene, r.camera, dialogue);
-  realm.overworldInteractables.push(...town.interactables());
+  const town = new Town(r.scene, r.camera, dialogue, player);
+  frontier = new FrontierRegion(
+    r.scene, player, fx, dialogue,
+    (msg) => hud.toast(msg),
+    () => town.guild.open('board'),
+  );
+  realm.overworldInteractables.push(...town.interactables(), ...frontier.interactables);
   dialogue.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open;
     if (open) input.exitLock();
@@ -134,9 +143,16 @@ async function boot() {
   }
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
-    writeSave(player, realm.seed, realm.maps, realm.progress);
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON());
   };
+  if (saveData) town.guild.fromJSON(saveData.guild);
   realm.onSave = save;
+  town.guild.onSave = save;
+  town.guild.onToggle = (open) => {
+    input.uiMode = open || inv.open || mapUI.open || dialogue.open;
+    if (open) input.exitLock();
+    else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
+  };
   mapUI.onChange = save;
   window.addEventListener('beforeunload', save);
   setInterval(save, 30000);
@@ -151,12 +167,13 @@ async function boot() {
   // overlay is always visible while paused, so the game never freezes silently.
   let pausedByUser = false;
   let hadLock = false;
-  const overlays = buildOverlays(() => {
+  const overlays = buildOverlays((origin) => {
+    player.prog.combat.origin = origin;
     started = true;
     pausedByUser = false;
     input.fallbackLook = true;
     input.requestLock();
-  });
+  }, player.prog.combat.origin);
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
   hud.onSlotDrop = (mode, slot, uid) => {
@@ -275,11 +292,11 @@ async function boot() {
       if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
       if (input.wasPressed('map')) {
         if (realm.mode === 'dungeon') mapUI.toggle();
-        else hud.toast('You have no map of the surface yet');
+        else town.guild.open('map');
       }
       slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
       player.update(STEP, input, cam);
-      if (realm.mode === 'overworld') slimes.update(STEP, player);
+      if (realm.mode === 'overworld') { slimes.update(STEP, player); frontier.update(STEP); }
       realm.update(STEP);
       rewards.update(STEP, player.center);
       // Interaction: nearest enabled thing in reach.

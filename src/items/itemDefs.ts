@@ -21,6 +21,7 @@ export interface ItemStats {
   manaCost?: number;
   heal?: number;
   restoreMana?: number;
+  restoreStamina?: number;
   // bonuses (armour and accessories)
   maxHp?: number;
   maxStamina?: number;
@@ -159,6 +160,22 @@ export const ITEMS: Record<string, ItemDef> = {
   manaPotion: {
     id: 'manaPotion', name: 'Mana Draught', kind: 'consumable', rarity: 'common', stack: true,
     desc: 'Restores 50 mana.', stats: { restoreMana: 50 },
+  },
+  sungrass: {
+    id: 'sungrass', name: 'Sungrass', kind: 'consumable', rarity: 'common', stack: true,
+    desc: 'A warm prairie herb. Eating it restores a little health.', stats: { heal: 18 },
+  },
+  moongrass: {
+    id: 'moongrass', name: 'Moongrass', kind: 'consumable', rarity: 'fine', stack: true,
+    desc: 'A pale river herb that leaves a cool taste in the mouth. Restores mana.', stats: { restoreMana: 18 },
+  },
+  wildmint: {
+    id: 'wildmint', name: 'Wild Mint', kind: 'consumable', rarity: 'common', stack: true,
+    desc: 'Sharp and refreshing. Restores stamina immediately.', stats: { restoreStamina: 28 },
+  },
+  ironleaf: {
+    id: 'ironleaf', name: 'Ironleaf', kind: 'consumable', rarity: 'fine', stack: true,
+    desc: 'A tough mineral-rich leaf. Restores a modest amount of health and stamina.', stats: { heal: 12, restoreStamina: 20 },
   },
 };
 

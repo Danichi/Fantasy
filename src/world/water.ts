@@ -77,7 +77,7 @@ export class River {
       uSize: { value: WORLD_SIZE },
       uLevel: { value: RIVER_LEVEL },
     };
-    const mat = new THREE.MeshStandardMaterial({ color: 0x2a5560, roughness: 0.12, metalness: 0.0, transparent: true, envMapIntensity: 0.0 });
+    const mat = new THREE.MeshStandardMaterial({ color: 0x4aaec8, roughness: 0.08, metalness: 0.0, transparent: true, envMapIntensity: 0.7 });
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.uniforms);
       sh.vertexShader = sh.vertexShader
@@ -97,7 +97,7 @@ export class River {
           `float ground = texture2D(tHeight, vWPos.xz / uSize + 0.5).r;
           wDepth = max(0.0, uLevel - ground);
           // Shallow water shows the tinted bed; deep water goes dark teal.
-          vec3 shallow = vec3(0.2, 0.28, 0.22), deep = vec3(0.03, 0.09, 0.11);
+          vec3 shallow = vec3(0.30, 0.68, 0.65), deep = vec3(0.045, 0.24, 0.32);
           diffuseColor.rgb = mix(shallow, deep, smoothstep(0.0, 1.1, wDepth));
           // Foam lines along the banks.
           float foam = smoothstep(0.12, 0.01, wDepth) * (0.5 + 0.5 * sin(vWPos.z * 0.9 + uTime * 1.6));
@@ -109,7 +109,7 @@ export class River {
           `// Fresnel: the sky shows at grazing angles, the depths when looking down.
           float cosV = clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0);
           float fres = 0.03 + 0.97 * pow(1.0 - cosV, 5.0);
-          vec3 skyCol = vec3(0.55, 0.68, 0.82);
+          vec3 skyCol = vec3(0.60, 0.82, 0.96);
           outgoingLight = mix(outgoingLight, skyCol, fres * 0.8);
           diffuseColor.a = mix(diffuseColor.a, 1.0, fres * 0.6);
           #include <opaque_fragment>`,

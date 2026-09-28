@@ -51,6 +51,8 @@ export class HUD {
   private bossEl: HTMLDivElement;
   private fadeEl: HTMLDivElement;
   private levelEl: HTMLDivElement;
+  private disciplineEl!: HTMLDivElement;
+  private combatBar!: HTMLDivElement;
   private boss: { hp: number; maxHp: number; alive: boolean } | null = null;
   private bossTrail = 1;
   onSlotDrop?: (mode: 'items' | 'moves', slot: number, uid: number) => void;
@@ -69,6 +71,9 @@ export class HUD {
       return { root, fill, trail, num, trailV: 1, trailHold: 0, last: 1 };
     };
     this.bars = { hp: mk('hp', 'HEALTH'), st: mk('st', 'STAMINA'), mp: mk('mp', 'MANA') };
+    const discipline = el('div', 'discipline-hud', this.root);
+    this.disciplineEl = el('div', 'discipline-name', discipline);
+    this.combatBar = el('div', 'discipline-resource', discipline);
     const xpRow = el('div', 'xprow', vit);
     xpRow.innerHTML = '<span class="lv">LV 1</span><div class="xpbar"><i></i></div><span class="gold">0</span>';
     this.xpFill = xpRow.querySelector('.xpbar i')!;
@@ -135,6 +140,7 @@ export class HUD {
       requestAnimationFrame(() => requestAnimationFrame(() => this.vignette.classList.remove('hurt')));
     });
     events.on('playerDied', () => this.death.classList.add('show'));
+    events.on('originAbility', ({ ability }) => this.showBanner(ability.toUpperCase()));
     events.on('playerRespawned', () => this.death.classList.remove('show'));
   }
 
@@ -254,6 +260,13 @@ export class HUD {
 
   update(dt: number, lockTargetId: number | null) {
     const p = this.player;
+    const cp = p.prog.combat;
+    const rt = p.combat;
+    const name = cp.primary === 'gale' ? 'GALE' : cp.primary === 'boundary' ? 'BOUNDARY' : 'CROSSBLADE';
+    const value = cp.primary === 'gale' ? rt.momentum / 6 : cp.primary === 'boundary' ? rt.focus / 100 : rt.openings / 3;
+    const resource = cp.primary === 'gale' ? `${rt.momentum}/6 MOMENTUM` : cp.primary === 'boundary' ? `${Math.round(rt.focus)} FOCUS` : `${rt.openings}/3 OPENINGS`;
+    this.disciplineEl.textContent = `${name} · LV ${cp.disciplines[cp.primary].level} · ${Math.round(cp.disciplines[cp.primary].mastery)}% MASTERY`;
+    this.combatBar.innerHTML = `<b style="transform:scaleX(${Math.max(0, Math.min(1, value))})"></b><span>${resource}</span>`;
     // Bar length grows with the stat's maximum, Souls-style.
     this.updateBar(this.bars.hp, p.hp, p.maxHp, dt, 120 + p.maxHp * 1.6);
     this.updateBar(this.bars.st, p.stamina, p.maxStamina, dt, 110 + p.maxStamina * 1.5);
