@@ -84,6 +84,8 @@ async function boot() {
   events.on('enemyDied', ({ at, kind }) => {
     const [xp, gold] = XP_FOR_KIND[kind] ?? [10, 2];
     rewards.spawn(at, xp, gold);
+    // Combat Legacy learns from the whole fight, not only the pickup meter.
+    player.prog.combat.addHeroicXp(Math.max(1, xp * 0.08));
   });
   events.on('bossSlam', ({ at }) => cam.shake(Math.max(0.15, 0.6 - at.distanceTo(player.pos) * 0.04)));
   events.on('levelUp', () => {
