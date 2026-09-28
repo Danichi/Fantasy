@@ -78,7 +78,8 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     const k = idx(uid);
     if (k !== null && k >= 0) equipped[slot as Slot] = k;
   }
-  const clean = (list: (number | null)[]) => list.map((u) => {
+  const clean = (list: (number | string | null)[]) => list.map((u) => {
+    if (typeof u === 'string') return u;
     const k = idx(u);
     return k === null || k < 0 ? null : k;
   });
@@ -127,7 +128,8 @@ export function applySave(player: Player, d: SaveData) {
     if (u != null) eq.equip(u, slot as Slot);
   }
   eq.quick = d.quick.map(uid);
-  eq.moves = d.moves.map(uid);
+  const moveRef = (k: number | string | null) => typeof k === 'string' ? k : uid(k);
+  eq.moves = d.moves.map(moveRef);
   const sp = uid(d.activeSpell);
   if (sp != null) eq.equip(sp);
   player.hp = player.maxHp;
