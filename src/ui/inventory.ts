@@ -39,7 +39,10 @@ export class InventoryUI {
     this.stats = this.el.querySelector('.stats')!;
     events.on('equipmentChanged', () => this.open && this.render());
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape' && this.open) this.toggle(false);
+      if (e.code === 'Escape' && this.open) {
+        e.stopImmediatePropagation(); // closing the inventory shouldn't also pause
+        this.toggle(false);
+      }
     });
   }
 

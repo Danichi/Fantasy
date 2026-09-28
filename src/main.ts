@@ -48,10 +48,17 @@ async function boot() {
   const hud = new HUD(player, r.camera);
   const inv = new InventoryUI(player);
   let started = TEST_MODE;
+  // Paused only when the player releases the mouse with Esc; the pause
+  // overlay is always visible while paused, so the game never freezes silently.
+  let pausedByUser = false;
+  let hadLock = false;
   const overlays = buildOverlays(() => {
     started = true;
+    pausedByUser = false;
+    input.fallbackLook = true;
     input.requestLock();
   });
+  input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
   hud.onHotbarDrop = (slot, uid) => {
     const eq = player.equip;
@@ -64,8 +71,21 @@ async function boot() {
     if (open) input.exitLock();
     else input.requestLock();
   };
+  const pause = () => {
+    if (!started || TEST_MODE || inv.open) return;
+    pausedByUser = true;
+    overlays.showPaused(true);
+  };
   document.addEventListener('pointerlockchange', () => {
-    if (!input.locked && started && !inv.open && !TEST_MODE) overlays.showPaused(true);
+    if (input.locked) hadLock = true;
+    // Losing a lock we had (Esc, alt-tab) pauses; a lock that never took doesn't.
+    else if (hadLock) {
+      hadLock = false;
+      pause();
+    }
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape' && !input.locked && !inv.open && !pausedByUser) pause();
   });
 
   const useHotbar = (i: number) => {
@@ -109,7 +129,7 @@ async function boot() {
     last = now;
     const dt = dtMs / 1000;
     // Pause the world while the title/pause overlay is up (never in tests).
-    const overlayUp = !TEST_MODE && (!started || (!input.locked && !inv.open));
+    const overlayUp = !TEST_MODE && (!started || pausedByUser);
     acc += dt;
     let steps = 0;
     if (paused || overlayUp) acc = 0;
@@ -135,7 +155,6 @@ async function boot() {
     }
     if (steps >= 5) acc = 0;
     const t1 = performance.now();
-    if (input.locked && !overlays.start.classList.contains('hidden')) overlays.showPaused(false);
 
     const alpha = acc / STEP;
     player.renderPosition(alpha, renderPos);

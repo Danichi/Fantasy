@@ -118,7 +118,7 @@ export class Player {
 
   /** Placeholder rig: dress the mannequin in a dark gambeson so armour reads well on it. */
   private styleBody() {
-    if (!this.char.usingPlaceholder) return;
+    if (this.char.manifest.model !== 'Xbot.glb') return;
     for (const m of this.char.meshes) {
       const mats = Array.isArray(m.material) ? m.material : [m.material];
       for (const mat of mats as THREE.MeshStandardMaterial[]) {

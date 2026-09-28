@@ -56,7 +56,10 @@ export class Character {
   meshes: THREE.SkinnedMesh[] = [];
 
   async load(base = '/assets/character/') {
+    const loader = new GLTFLoader();
     let manifest = FALLBACK;
+    // Dev preview: ?char=candidates/Soldier.glb swaps the model, keeping the fallback clips.
+    const override = new URLSearchParams(location.search).get('char');
     try {
       const res = await fetch(base + 'manifest.json');
       if (res.ok && res.headers.get('content-type')?.includes('json')) {
@@ -64,9 +67,16 @@ export class Character {
         this.usingPlaceholder = false;
       }
     } catch {}
+    if (override) {
+      // Prefer the model's own idle/walk/run when it has them.
+      const own = (await loader.loadAsync(base + override)).animations.map((a: THREE.AnimationClip) => a.name);
+      const pick = (k: string) => own.find((n: string) => n.toLowerCase() === k);
+      const clips: Record<string, ClipEntry> = {};
+      for (const k of ['idle', 'walk', 'run']) clips[k] = pick(k) ? { file: override, name: pick(k), loop: true } : FALLBACK.clips[k];
+      manifest = { ...FALLBACK, model: override, clips };
+    }
     this.manifest = manifest;
 
-    const loader = new GLTFLoader();
     const cache = new Map<string, Promise<any>>();
     const get = (f: string) => {
       if (!cache.has(f)) cache.set(f, loader.loadAsync(base + f));

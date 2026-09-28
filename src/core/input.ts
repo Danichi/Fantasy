@@ -41,6 +41,9 @@ export class Input {
   uiMode = false;
   /** Tracks modifier state for UI shortcuts like shift-click. */
   shift = false;
+  /** Mouse-look without pointer lock (used if the browser refuses to lock). */
+  fallbackLook = false;
+  onLockFailed?: () => void;
 
   constructor(private canvas: HTMLElement) {
     window.addEventListener('keydown', (e) => {
@@ -59,16 +62,15 @@ export class Input {
     });
     canvas.addEventListener('mousedown', (e) => {
       if (this.uiMode) return;
-      if (!this.locked) {
-        this.requestLock();
-        return;
-      }
+      // Try to (re)capture the mouse, but never swallow the click: if the
+      // browser refuses the lock, the game still has to be playable.
+      if (!this.locked) this.requestLock();
       e.preventDefault();
       this.press('Mouse' + e.button);
     });
     window.addEventListener('mouseup', (e) => this.release('Mouse' + e.button));
     window.addEventListener('mousemove', (e) => {
-      if (!this.locked) return;
+      if (!this.locked && !(this.fallbackLook && !this.uiMode)) return;
       this.mouseDX += e.movementX;
       this.mouseDY += e.movementY;
     });
@@ -85,8 +87,12 @@ export class Input {
   requestLock() {
     // requestPointerLock returns a promise in modern browsers; ignore rejection
     // (it rejects when the user exits lock and clicks again too quickly).
-    const r = this.canvas.requestPointerLock?.() as unknown as Promise<void> | undefined;
-    r?.catch?.(() => {});
+    try {
+      const r = this.canvas.requestPointerLock?.() as unknown as Promise<void> | undefined;
+      r?.catch?.(() => this.onLockFailed?.());
+    } catch {
+      this.onLockFailed?.();
+    }
   }
 
   exitLock() {
