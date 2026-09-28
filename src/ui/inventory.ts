@@ -254,7 +254,7 @@ export class InventoryUI {
       const col = (i % 2) + 1;
       const reqNames = node.requires?.map((req) => selected.nodes.find((n) => n.id === req)?.name ?? req).join(' · ') ?? 'Starting move';
       const ref = `skill:${selected.id}:${node.id}`;
-      return `<button class="skill-node ${owned ? 'owned' : ''} ${canBuy ? 'available' : ''}" data-skill="${node.id}" data-move="${ref}" ${owned ? 'draggable="true"' : ''} style="grid-column:${col};grid-row:${row}" title="${node.desc}">
+      return `<button class="skill-node ${owned ? 'owned' : ''} ${canBuy ? 'available' : ''}" data-skill="${node.id}" data-move="${ref}" ${owned && node.actionId ? 'draggable="true"' : ''} style="grid-column:${col};grid-row:${row}" title="${node.desc}">
         <span class="node-num">${String(i + 1).padStart(2, '0')}</span>
         <b>${node.name}</b>
         <small>${owned ? 'MASTERED · DRAG TO MOVES' : lockedReason}</small>
@@ -307,7 +307,8 @@ export class InventoryUI {
       });
       b.addEventListener('dragstart', (e) => {
         const ref = b.dataset.move;
-        if (ref && prog.hasSkill(selected.id, b.dataset.skill!)) e.dataTransfer?.setData('text/move', ref);
+        const node = selected.nodes.find((n) => n.id === b.dataset.skill!);
+        if (ref && node?.actionId && prog.hasSkill(selected.id, b.dataset.skill!)) e.dataTransfer?.setData('text/move', ref);
       });
     });
 
