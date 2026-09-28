@@ -227,7 +227,7 @@ export class DungeonMapUI {
       this.onChange?.();
     });
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape' && this.open) {
+      if (this.open && (e.code === 'Escape' || e.code === 'KeyM')) {
         e.preventDefault();
         e.stopImmediatePropagation();
         this.toggle(false);
