@@ -614,3 +614,62 @@ html, body {
   .heroic-card { flex-direction:column; align-items:flex-start; }
   .discipline-hud { left:12px; right:12px; min-width:0; }
 }
+
+
+/* ===== ADVENTURER'S GUILD ===== */
+.guild-ui {
+  position:absolute; inset:4.5vh 5vw; z-index:80; display:flex; flex-direction:column;
+  pointer-events:auto; overflow:hidden; border:1px solid rgba(76,120,141,.28);
+  border-radius:20px; background:linear-gradient(180deg,rgba(255,255,255,.985),rgba(242,249,252,.985));
+  box-shadow:0 28px 90px rgba(31,78,103,.28), inset 0 1px 0 rgba(255,255,255,.95);
+}
+.guild-ui.hidden { display:none; }
+.guild-head { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:22px 26px 16px; border-bottom:1px solid rgba(98,135,153,.18); }
+.guild-head .eyebrow { display:block; color:#9a6c1c; font:700 9px/1 var(--sans); letter-spacing:.2em; text-transform:uppercase; }
+.guild-head h1 { margin:6px 0 4px; color:#2f596f; font:700 28px/1 var(--serif); letter-spacing:.08em; }
+.guild-rank { margin:0; color:#667c89; font:600 11px/1.4 var(--sans); }
+.guild-close { border:1px solid rgba(91,132,151,.28); border-radius:999px; padding:9px 15px; background:#fff8df; color:#77551d; font:700 10px/1 var(--sans); cursor:pointer; letter-spacing:.1em; }
+.guild-tabs { display:flex; padding:0 18px; border-bottom:1px solid rgba(98,135,153,.15); }
+.guild-tabs button { border:0; border-bottom:2px solid transparent; background:transparent; color:#718794; padding:12px 18px; cursor:pointer; font:700 10px/1 var(--serif); letter-spacing:.16em; }
+.guild-tabs button:hover { color:#385f73; }
+.guild-tabs button.on { color:#9a6c1c; border-bottom-color:#d2a84d; }
+.guild-body { min-height:0; flex:1; overflow:auto; padding:18px 22px; }
+.guild-board { display:grid; gap:18px; }
+.guild-section h2 { margin:0 0 10px; color:#a7771f; font:700 12px/1 var(--serif); letter-spacing:.16em; }
+.guild-section h2 span { color:#788b96; margin-left:8px; letter-spacing:0; }
+.guild-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.guild-quest { padding:13px; border:1px solid rgba(93,132,149,.18); border-radius:12px; background:rgba(255,255,255,.7); box-shadow:0 6px 18px rgba(45,91,112,.06); }
+.guild-quest.active { border-color:rgba(191,149,58,.38); background:linear-gradient(180deg,#fffdf3,#fff9e8); }
+.quest-top { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; }
+.quest-rank { flex:none; color:#9a6c1c; font:700 8px/1 var(--sans); letter-spacing:.11em; }
+.guild-quest h3 { margin:0; flex:1; color:#31586b; font:700 13px/1.2 var(--serif); }
+.guild-quest p { margin:0 0 9px; color:#667c89; font:500 11px/1.45 var(--sans); }
+.quest-progress { display:block; color:#385f73; font:700 10px/1.2 var(--sans); }
+.quest-reward { margin-top:7px; color:#8b6a26; font:600 10px/1.25 var(--sans); }
+.guild-quest button { width:100%; margin-top:10px; border:1px solid rgba(92,131,149,.22); border-radius:8px; padding:7px 8px; background:#f8fbfd; color:#36586a; cursor:pointer; font:700 9px/1 var(--sans); letter-spacing:.08em; }
+.guild-quest button:hover:not(:disabled) { border-color:#d1a546; background:#fffaf0; }
+.guild-quest button:disabled { opacity:.45; cursor:default; }
+.guild-empty { margin:0; color:#7c8d97; font:500 12px/1.5 var(--sans); }
+.guild-map { width:100%; height:auto; max-height:calc(100vh - 250px); object-fit:contain; border:1px solid rgba(141,112,71,.3); border-radius:12px; box-shadow:0 12px 30px rgba(51,91,107,.1); }
+.guild-roster { display:grid; gap:14px; }
+.guild-roster-intro h2 { margin:0 0 7px; color:#a7771f; font:700 12px/1 var(--serif); letter-spacing:.15em; }
+.guild-roster-intro p { margin:0; color:#667c89; font:500 11px/1.45 var(--sans); }
+.roster-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.adventurer-card { padding:10px 11px; min-height:90px; border:1px solid rgba(93,132,149,.17); border-radius:10px; background:#f9fcfd; }
+.adventurer-card .adv-rank { display:block; font:700 8px/1 var(--sans); letter-spacing:.1em; }
+.adventurer-card h3 { margin:7px 0 3px; color:#31586b; font:700 11px/1.2 var(--serif); }
+.adventurer-card p { margin:0 0 7px; color:#71838e; font:600 9px/1 var(--sans); }
+.adventurer-card small { color:#86969f; font:500 9px/1.2 var(--sans); }
+.guild-foot { display:flex; justify-content:space-between; gap:20px; padding:10px 20px; border-top:1px solid rgba(98,135,153,.16); color:#718590; font:500 9px/1.3 var(--sans); }
+.npc-tag { pointer-events:none; }
+@media (max-width: 1000px) {
+  .guild-ui { inset:2vh 2vw; }
+  .guild-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .roster-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+@media (max-width: 650px) {
+  .guild-head { padding:16px; }
+  .guild-head h1 { font-size:20px; }
+  .guild-grid, .roster-grid { grid-template-columns:1fr; }
+  .guild-foot { display:none; }
+}
