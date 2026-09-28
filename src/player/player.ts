@@ -84,6 +84,8 @@ export class Player {
   private staminaDelay = 0;
   private hot = { rate: 0, left: 0 };
   private burn = { dps: 0, left: 0 };
+  mounted = false;
+  private mountVisual = new THREE.Group();
   private originCooldown = 0;
 
   act: ActiveAction | null = null;
@@ -140,6 +142,7 @@ export class Player {
     this.boundaryField.add(this.boundaryRing);
     this.boundaryField.visible = false;
     this.char.root.add(this.boundaryField);
+    this.buildMountVisual();
     for (const b of ['Head', 'Spine2', 'RightArm', 'LeftArm', 'RightForeArm', 'LeftForeArm', 'RightHand', 'LeftHand', 'RightUpLeg', 'LeftUpLeg', 'RightLeg', 'LeftLeg', 'RightFoot', 'LeftFoot']) {
       this.equip.limb(b);
     }
@@ -172,6 +175,41 @@ export class Player {
         mat.needsUpdate = true;
       }
     }
+  }
+
+  private buildMountVisual() {
+    const coat = new THREE.MeshStandardMaterial({ color: 0x6f4b35, roughness: 0.95 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x35261f, roughness: 1 });
+    const horse = this.mountVisual;
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.0, 5, 8), coat);
+    body.rotation.z = Math.PI / 2;
+    body.position.y = 0.72;
+    horse.add(body);
+    const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.68, 4, 7), coat);
+    neck.position.set(0.55, 1.18, 0);
+    neck.rotation.z = -0.38;
+    horse.add(neck);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.4, 0.34), coat);
+    head.position.set(0.91, 1.42, 0);
+    horse.add(head);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.62, 7), dark);
+      leg.position.set(sx * 0.3, 0.34, sz * 0.18);
+      horse.add(leg);
+    }
+    const mane = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.62, 0.06), dark);
+    mane.position.set(0.26, 1.28, 0);
+    horse.add(mane);
+    horse.position.set(0, -0.6, 0.05);
+    horse.visible = false;
+    horse.traverse((o) => ((o as THREE.Mesh).isMesh && ((o.castShadow = true), (o.receiveShadow = true))));
+    this.char.root.add(horse);
+  }
+
+  toggleMount() {
+    if (this.dead || this.act) return;
+    this.mounted = !this.mounted;
+    this.stamina = Math.min(this.maxStamina, this.stamina + 15);
   }
 
   get forward() {
@@ -491,7 +529,7 @@ export class Player {
     const intent = this.moveIntent;
     let targetSpeed = 0;
     if (!a && intent.lengthSq() > 0) {
-      targetSpeed = this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2;
+      targetSpeed = this.mounted ? (this.sprinting ? 15 : this.lock ? 6.2 : 11.5) : (this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2);
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
       // Wading slows you down.
       const wade = waterDepthAt(this.pos.x, this.pos.z);
@@ -625,6 +663,8 @@ export class Player {
   present(alpha: number, dt: number) {
     const root = this.char.root;
     root.position.lerpVectors(this.prevPos, this.pos, alpha);
+    root.position.y -= this.mounted ? 0.72 : 0;
+    this.mountVisual.visible = this.mounted;
     root.rotation.y = this.prevYaw + wrapAngle(this.yaw - this.prevYaw) * alpha;
     const yawR = root.rotation.y;
     this.idleClock += dt;
@@ -672,7 +712,7 @@ export class Player {
     const base: ProcPose = {};
     if (!this.armsFromClips) {
       // Placeholder rig: hold the weapons up in a guard with IK.
-      this.guardW = damp(this.guardW, this.sprinting ? 0 : speed > 3.2 ? 0.35 : 1, 8, dt);
+      this.guardW = damp(this.guardW, this.mounted || this.sprinting ? 0 : speed > 3.2 ? 0.35 : 1, 8, dt);
       if (eq.mainWeapon) base.right = { ...GUARD_R, w: this.guardW };
       if (eq.hasShield) {
         const sh = this.blockW > 0.01 ? blendHandSimple(SHIELD_CARRY_L, SHIELD_BLOCK_L, this.blockW) : SHIELD_CARRY_L;
@@ -897,6 +937,10 @@ export class Player {
     }
   }
 
+  takeDamage(amount: number) {
+    this.applyDamage(amount);
+  }
+
   respawn(at: THREE.Vector3) {
     this.dead = false;
     this.anim.stopAll();
@@ -934,6 +978,7 @@ export class Player {
     const st = it.def.stats;
     if (st.heal) this.hot = { rate: st.heal / 1.2, left: 1.2 };
     if (st.restoreMana) this.mana = Math.min(this.maxMana, this.mana + st.restoreMana);
+    if (st.restoreStamina) this.stamina = Math.min(this.maxStamina, this.stamina + st.restoreStamina);
     this.equip.consume(uid);
     this.onSpell?.(st.heal ? 'potionHeal' : 'potionMana', this.center, this.forward, null);
   }
