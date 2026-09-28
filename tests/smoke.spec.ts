@@ -91,7 +91,13 @@ test('fireball spends mana and hits', async ({ page }) => {
     const p = g.player;
     const s = g.slimes.spawn('green', p.pos.x, p.pos.z - 7);
     p.yaw = Math.PI;
+    g.cam.yaw = Math.PI;
     await new Promise((r) => setTimeout(r, 200));
+    // Offensive spells need a lock-on target.
+    g.input.press('Mouse1');
+    await new Promise((r) => setTimeout(r, 40));
+    g.input.release('Mouse1');
+    await new Promise((r) => setTimeout(r, 100));
     const m0 = p.mana, hp0 = s.hp;
     g.input.press('KeyR');
     await new Promise((r) => setTimeout(r, 40));
@@ -139,4 +145,21 @@ test('dual wield: off-hand attack and equip armour', async ({ page }) => {
   expect(res.dual).toBe(true);
   expect(res.act).toBe('offslash1');
   expect(res.armor).toBeGreaterThan(15);
+});
+
+test('offensive spells refuse to cast without a lock-on', async ({ page }) => {
+  await boot(page);
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game;
+    const p = g.player;
+    g.slimes.spawn('green', p.pos.x, p.pos.z - 7);
+    const m0 = p.mana;
+    g.input.press('KeyR');
+    await new Promise((r) => setTimeout(r, 40));
+    g.input.release('KeyR');
+    await new Promise((r) => setTimeout(r, 600));
+    return { dMana: m0 - p.mana, toast: document.querySelector('.toast')?.textContent ?? '' };
+  });
+  expect(res.dMana).toBeLessThan(1);
+  expect(res.toast).toContain('Lock on');
 });

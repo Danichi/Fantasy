@@ -2,13 +2,14 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Character } from './character';
 import { RigLayer, blendPose, overlayPose, type ProcPose } from './rigLayer';
+import { Animator } from './animator';
 import { ThirdPersonCamera } from './camera';
 import { Input } from '../core/input';
 import { physics, groups, G_PLAYER, STATIC_ONLY } from '../physics/physics';
-import { clamp, damp, stepAngle, wrapAngle, segmentSegmentDistance, smoothstep } from '../core/math';
+import { clamp, damp, wrapAngle, segmentSegmentDistance, smoothstep } from '../core/math';
 import { events } from '../core/events';
 import { Equipment } from '../items/equipment';
-import { ACTIONS, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, type ActionDef } from '../combat/actions';
+import { ACTIONS, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, resolveAction, type ActionDef } from '../combat/actions';
 import { targets, hurtSegment, type Target, type IncomingAttack, type DefenceResult } from '../combat/targets';
 import { surfaceAt } from '../world/terrain';
 
@@ -16,24 +17,35 @@ const CAPSULE_HALF = 0.55;
 const CAPSULE_R = 0.32;
 const CENTER_Y = CAPSULE_HALF + CAPSULE_R;
 const GRAVITY = 22;
+const JUMP_V = 5.8;
 const BUFFER_TIME = 0.35;
+export const SIM_STEP = 1 / 60;
 
 type Buffered = 'attack' | 'offhand' | 'dodge' | 'parry' | 'cast';
 
 interface ActiveAction {
-  def: ActionDef;
+  def: ActionDef; // resolved (clip timing applied when the clip is loaded)
   t: number;
   speed: number;
   hitSet: Set<number>;
   rollDir?: THREE.Vector3;
   charge: number;
+  charging: boolean;
   fired: boolean;
   usingClip: boolean;
+  landed: boolean;
 }
 
+/**
+ * The player. `update()` runs on the fixed 60Hz simulation step and owns
+ * gameplay (movement, timers, damage). `present()` runs once per rendered
+ * frame: it interpolates between steps and poses the character, so motion
+ * stays smooth at any frame rate.
+ */
 export class Player {
   readonly char = new Character();
   rig!: RigLayer;
+  anim!: Animator;
   equip!: Equipment;
   body!: RAPIER.RigidBody;
   collider!: RAPIER.Collider;
@@ -43,7 +55,12 @@ export class Player {
   private prevPos = new THREE.Vector3();
   vel = new THREE.Vector3();
   yaw = Math.PI; // facing: forward = (sin yaw, 0, cos yaw)
+  private prevYaw = Math.PI;
+  private yawVel = 0;
   grounded = true;
+  private airTime = 0;
+  private landT = 1; // seconds since landing (drives the landing half of the jump clip)
+  private fallSpeed = 0;
 
   maxHp = 120; hp = 120;
   maxStamina = 100; stamina = 100;
@@ -61,39 +78,38 @@ export class Player {
   private deadT = 0;
   invulnerable = false; // debug
 
-  // animation state
-  private loco: Record<string, THREE.AnimationAction> = {};
-  private clipAction: THREE.AnimationAction | null = null;
+  // presentation state
+  private armsFromClips = false;
   private guardW = 1;
   private blockW = 0;
+  private blockHitT = 9;
   private poseFrom: ProcPose | null = null;
   private poseFade = 1;
   private lastPose: ProcPose = {};
   private moveIntent = new THREE.Vector3();
   private push = new THREE.Vector3();
   private bladePrev: Record<'main' | 'off', [THREE.Vector3, THREE.Vector3] | null> = { main: null, off: null };
-  private stepPhase = 0;
+  private lastPresentT = -1;
+  private lastPhase = 0;
+  private idleClock = 0;
 
-  /** camera look direction, used to aim spells with no target */
+  /** camera look direction */
   aimDir = new THREE.Vector3(0, 0, -1);
 
   onHitStop?: (sec: number) => void;
   onShake?: (amt: number) => void;
   onSpell?: (spell: string, from: THREE.Vector3, dir: THREE.Vector3, target: Target | null) => void;
+  onPlungeLand?: (at: THREE.Vector3) => void;
 
   async init(scene: THREE.Scene, spawn: THREE.Vector3) {
     await this.char.load();
     scene.add(this.char.root);
-    for (const k of ['idle', 'walk', 'run', 'sprint', 'strafe_l', 'strafe_r', 'walk_back']) {
-      const clip = this.char.clips.get(k);
-      if (!clip) continue;
-      const a = this.char.mixer.clipAction(clip);
-      a.play();
-      a.setEffectiveWeight(k === 'idle' ? 1 : 0);
-      this.loco[k] = a;
-    }
-    // Pose the rig in idle before measuring hand frames and limb sockets.
-    this.char.animate(0.3);
+    this.anim = new Animator(this.char);
+    // Real clips hold the sword and shield themselves; the placeholder's
+    // idle/walk/run don't, so the rig poses its arms procedurally.
+    this.armsFromClips = this.char.has('attack_light_1') || this.char.has('block_idle');
+    // Pose in idle before measuring hand frames and limb sockets.
+    this.anim.update(0.3, { local: { x: 0, z: 0 }, grounded: true });
     this.char.root.updateMatrixWorld(true);
     this.rig = new RigLayer(this.char);
     this.rig.setup();
@@ -116,21 +132,18 @@ export class Player {
     this.prevPos.copy(spawn);
   }
 
-  /** Placeholder rig: dress the mannequin in a dark gambeson so armour reads well on it. */
+  /** Stock mannequins: dress them in a dark gambeson so armour reads well. */
   private styleBody() {
-    if (this.char.manifest.model !== 'Xbot.glb') return;
+    if (this.char.manifest.model !== 'Xbot.glb' && !this.char.manifest.placeholderStyle) return;
     for (const m of this.char.meshes) {
       const mats = Array.isArray(m.material) ? m.material : [m.material];
       for (const mat of mats as THREE.MeshStandardMaterial[]) {
-        if (mat.name.includes('Joints')) {
-          mat.color.set(0x2b211a);
-          mat.roughness = 0.8;
-          mat.metalness = 0;
-        } else {
-          mat.color.set(0x4e4436);
-          mat.roughness = 0.88;
-          mat.metalness = 0;
-        }
+        const joint = /joint/i.test(mat.name);
+        mat.map = null;
+        mat.color.set(joint ? 0x2b211a : 0x4e4436);
+        mat.roughness = joint ? 0.8 : 0.88;
+        mat.metalness = 0;
+        mat.needsUpdate = true;
       }
     }
   }
@@ -149,23 +162,24 @@ export class Player {
     return !!(a && a.def.iframes && a.t >= a.def.iframes[0] && a.t <= a.def.iframes[1]);
   }
 
-  // ------------------------------------------------------------------------
+  // ==========================================================================
+  // Simulation (fixed step)
+  // ==========================================================================
   update(dt: number, input: Input, cam: ThirdPersonCamera) {
     this.prevPos.copy(this.pos);
+    this.prevYaw = this.yaw;
     this.updateStats(dt);
+    this.blockHitT += dt;
 
     if (this.dead) {
       this.deadT += dt;
-      this.animate(dt, 0);
       return;
     }
-
     if (!input.uiMode) this.readInput(input, cam);
+    else this.moveIntent.set(0, 0, 0);
     this.updateAction(dt, input);
     this.updateLock(cam);
-    const speed = this.move(dt);
-    this.animate(dt, speed);
-    this.detectHits();
+    this.move(dt);
   }
 
   private readInput(input: Input, cam: ThirdPersonCamera) {
@@ -186,17 +200,20 @@ export class Player {
     if (input.wasPressed('cast')) buf('cast');
     this.blocking = input.held('offhand') && this.equip.hasShield && (!this.act || this.act.def.id === 'parryShield');
     if (input.wasPressed('jump') && this.grounded && !this.act) {
-      this.vel.y = 6.4;
+      this.vel.y = JUMP_V;
       this.grounded = false;
+      this.airTime = 0;
     }
     if (input.wasPressed('lockOn')) this.toggleLock(cam);
-    this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0 && !this.blocking && this.stamina > 0 && !this.act;
+    this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0 && !this.blocking && this.stamina > 0 && !this.act && this.grounded;
   }
 
   // ---- actions --------------------------------------------------------------
-  private startAction(id: string, t0 = 0): boolean {
-    const def = ACTIONS[id];
-    if (!def) return false;
+  private startAction(id: string, t0?: number): boolean {
+    const raw = ACTIONS[id];
+    if (!raw) return false;
+    const usingClip = !!raw.clip && this.char.has(raw.clip);
+    const def = resolveAction(raw, usingClip);
     if (def.stamina > 0 && this.stamina <= 0) {
       events.emit('notEnough', { stat: 'stamina' });
       return false;
@@ -204,28 +221,16 @@ export class Player {
     this.stamina = Math.max(0, this.stamina - def.stamina);
     if (def.stamina > 0) this.staminaDelay = 0.65;
     const w = def.hit?.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
-    const speed = def.weaponSpeed ? w?.def.stats.speed ?? 1 : 1;
-    const usingClip = !!def.clip && this.char.has(def.clip);
-    // Cross-fade from whatever pose we were in.
+    const speed = (def.weaponSpeed ? w?.def.stats.speed ?? 1 : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1);
     this.poseFrom = this.lastPose;
     this.poseFade = 0;
-    this.act = { def, t: t0, speed, hitSet: new Set(), charge: 0, fired: false, usingClip };
+    this.act = { def, t: t0 ?? def.startAt ?? 0, speed, hitSet: new Set(), charge: 0, charging: false, fired: false, usingClip, landed: false };
     this.bladePrev.main = this.bladePrev.off = null;
+    this.lastPresentT = -1;
 
     if (def.roll) {
       const dir = def.roll.back ? this.forward.negate() : this.moveIntent.lengthSq() > 0 ? this.moveIntent.clone() : this.forward;
       this.act.rollDir = dir;
-      if (!def.roll.back) this.yaw = Math.atan2(dir.x, dir.z);
-    }
-    if (usingClip) {
-      const a = this.char.mixer.clipAction(this.char.clips.get(def.clip!)!);
-      a.reset().setLoop(THREE.LoopOnce, 1);
-      a.clampWhenFinished = true;
-      a.timeScale = speed;
-      a.time = t0;
-      a.fadeIn(0.1).play();
-      this.clipAction?.fadeOut(0.1);
-      this.clipAction = a;
     }
     if (def.hit) events.emit('swing', { heavy: id === 'heavy' });
     return true;
@@ -235,8 +240,6 @@ export class Player {
     this.poseFrom = this.lastPose;
     this.poseFade = 0;
     this.act = null;
-    this.clipAction?.fadeOut(0.2);
-    this.clipAction = null;
   }
 
   /** Start whatever the buffered input asks for, if the current state allows it. */
@@ -253,18 +256,18 @@ export class Player {
     const offCombo = (d: ActionDef) => d.id.startsWith('offslash');
     let next: string | null = null;
     if (!a) {
-      if (b.a === 'attack' && eq.mainWeapon) next = 'slash1';
+      if (b.a === 'attack' && eq.mainWeapon) next = !this.grounded ? 'airAttack' : this.sprinting ? 'sprintAttack' : 'slash1';
       else if (b.a === 'offhand' && eq.dualWield) next = 'offslash1';
-      else if (b.a === 'dodge') next = this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep';
+      else if (b.a === 'dodge') next = this.grounded ? (this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep') : null;
       else if (b.a === 'parry') next = eq.hasShield ? 'parryShield' : eq.dualWield ? 'parryDual' : null;
       else if (b.a === 'cast') next = this.spellAction();
-      if (b.a === 'attack' && !eq.mainWeapon) next = null;
+      if (next === null && b.a === 'dodge' && !this.grounded) return; // keep it for landing
     } else {
       const d = a.def;
       const comboOpen = d.combo && a.t >= d.combo.from;
       if (b.a === 'attack' && eq.mainWeapon && comboOpen) next = mainCombo(d) && d.combo ? d.combo.next : 'slash1';
       else if (b.a === 'offhand' && eq.dualWield && comboOpen) next = offCombo(d) && d.combo ? d.combo.next : 'offslash1';
-      else if (b.a === 'dodge' && a.t >= d.cancel) next = this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep';
+      else if (b.a === 'dodge' && a.t >= d.cancel && this.grounded) next = this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep';
       else if (b.a === 'parry' && a.t >= d.cancel) next = eq.hasShield ? 'parryShield' : eq.dualWield ? 'parryDual' : null;
       else return; // keep buffering
     }
@@ -275,6 +278,12 @@ export class Player {
   private spellAction(): string | null {
     const sp = this.equip.get(this.equip.activeSpell);
     if (!sp) return null;
+    const offensive = sp.def.id === 'fireball';
+    // Offensive spells need a lock-on target.
+    if (offensive && !this.lock?.alive) {
+      events.emit('needTarget', {});
+      return null;
+    }
     const cost = sp.def.stats.manaCost ?? 0;
     if (this.mana < cost) {
       events.emit('notEnough', { stat: 'mana' });
@@ -282,7 +291,7 @@ export class Player {
     }
     this.mana -= cost;
     events.emit('spellCast', { spell: sp.def.id });
-    return sp.def.id === 'fireball' ? 'castFireball' : 'castHeal';
+    return offensive ? 'castFireball' : 'castHeal';
   }
 
   private updateAction(dt: number, input: Input) {
@@ -291,18 +300,24 @@ export class Player {
     if (!a) return;
     const d = a.def;
 
-    // Light attack held long enough turns into a charged heavy.
+    // A light attack held long enough turns into a charged heavy.
     if (d.id === 'slash1' && d.hit && a.t < d.hit.from && input.held('attack') && input.heldFor('attack') > 0.28) {
-      this.startAction('heavy', 0.3);
+      const heavy = resolveAction(ACTIONS.heavy, !!ACTIONS.heavy.clip && this.char.has(ACTIONS.heavy.clip));
+      this.startAction('heavy', heavy.chargeAt !== undefined ? heavy.chargeAt * heavy.dur * 0.6 : 0.3);
       return;
     }
     // Charging: hold at the charge point while the button stays down.
+    a.charging = false;
     if (d.chargeAt !== undefined && a.t >= d.chargeAt * d.dur && input.held('attack') && a.charge < 0.9) {
       a.charge += dt;
-      if (this.clipAction) this.clipAction.paused = true;
+      a.charging = true;
       return;
     }
-    if (this.clipAction) this.clipAction.paused = false;
+    // Air attack: hold the falling pose until we actually land.
+    if (d.air && !this.grounded && d.hit && a.t >= d.hit.from + 0.1) {
+      a.t = d.hit.from + 0.1;
+      return;
+    }
 
     a.t += dt * a.speed;
     if (d.event && !a.fired && a.t >= d.event.at) {
@@ -321,9 +336,8 @@ export class Player {
       const from = new THREE.Vector3();
       if (main) main.localToWorld(from.set(0, main.userData.bladeTip ?? 0.5, 0));
       else from.copy(this.center).addScaledVector(this.forward, 0.6).setY(this.pos.y + 1.4);
-      const target = this.aimTarget(24);
-      let dir = this.aimDir.clone();
-      if (target) dir = target.center.clone().sub(from).normalize();
+      const target = this.lock?.alive ? this.lock : null;
+      const dir = target ? target.center.clone().sub(from).normalize() : this.forward;
       this.onSpell?.('fireball', from, dir, target);
     } else {
       const sp = this.equip.get(this.equip.activeSpell);
@@ -334,8 +348,8 @@ export class Player {
   }
 
   /**
-   * Target for aiming: the lock-on target, or else the best enemy in a cone in
-   * front of the player (soft lock / aim assist).
+   * Melee aim assist: the lock-on target, or else the best enemy in a cone in
+   * front of the player.
    */
   aimTarget(range: number): Target | null {
     if (this.lock?.alive) return this.lock;
@@ -343,7 +357,7 @@ export class Player {
     let best: Target | null = null;
     let bestScore = Infinity;
     for (const t of targets) {
-      if (!t.alive || !t.lockable || t.kind === 'dummy' && range > 8) continue;
+      if (!t.alive || !t.lockable || (t.kind === 'dummy' && range > 8)) continue;
       const to = t.center.clone().sub(this.pos).setY(0);
       const d = to.length();
       if (d > range || d < 0.01) continue;
@@ -390,70 +404,84 @@ export class Player {
   }
 
   // ---- movement ---------------------------------------------------------------
+  /** Turn toward `want` with a critically damped spring (smooth in and out). */
+  private turnToward(want: number, dt: number, stiffness = 170, maxRate = 14) {
+    const diff = wrapAngle(want - this.yaw);
+    const c = 2 * Math.sqrt(stiffness);
+    this.yawVel += (stiffness * diff - c * this.yawVel) * dt;
+    this.yawVel = clamp(this.yawVel, -maxRate, maxRate);
+    this.yaw = wrapAngle(this.yaw + this.yawVel * dt);
+  }
+
+  /** Forward distance an action has travelled by time t (root motion). */
+  private travelAt(a: ActiveAction, t: number): number {
+    const def = a.def;
+    const info = a.usingClip ? this.char.clipInfo.get(def.clip!) : undefined;
+    if (info?.rootCurve && info.rootCurve.length > 1 && !def.roll) {
+      const f = clamp(t, 0, (info.rootCurve.length - 1) / 30) * 30;
+      const i = Math.floor(f), u = f - i;
+      const c = info.rootCurve;
+      return c[i] + ((c[Math.min(i + 1, c.length - 1)] ?? c[i]) - c[i]) * u;
+    }
+    if (def.roll) {
+      // Rolls: fast start, long glide out (ease-out cubic).
+      const t1 = def.dur * (def.roll.back ? 0.6 : 0.7);
+      const u = clamp((t - 0.02) / (t1 - 0.02), 0, 1);
+      return (1 - Math.pow(1 - u, 3)) * def.roll.dist;
+    }
+    if (def.move) return smoothstep(def.move.from, def.move.to, t) * def.move.dist;
+    return 0;
+  }
+
   private move(dt: number) {
     const a = this.act;
     const intent = this.moveIntent;
     let targetSpeed = 0;
-    if (!a) {
-      if (intent.lengthSq() > 0) {
-        targetSpeed = this.blocking ? 1.9 : this.sprinting ? 6.4 : this.lock ? 3.4 : 4.4;
-      }
+    if (!a && intent.lengthSq() > 0) {
+      targetSpeed = this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2;
+      if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
     }
     if (this.sprinting) {
       this.stamina = Math.max(0, this.stamina - 13 * dt);
       this.staminaDelay = 0.5;
     }
 
-    // Horizontal velocity.
     const hv = new THREE.Vector3(this.vel.x, 0, this.vel.z);
-    if (a && (a.def.roll || a.def.move)) {
-      // Root-motion style displacement along a curve.
-      const def = a.def;
-      let dist = 0, t0 = 0, t1 = 1, dir = this.forward;
-      if (def.roll) {
-        dist = def.roll.dist;
-        t0 = 0.02;
-        t1 = def.dur * (def.roll.back ? 0.55 : 0.64);
-        dir = a.rollDir!;
-      } else if (def.move) {
-        dist = def.move.dist;
-        t0 = def.move.from;
-        t1 = def.move.to;
-        // Don't lunge into an enemy we're already touching.
-        if (this.lock && this.lock.center.distanceTo(this.center) < 1.4) dist *= 0.2;
-      }
-      // Real clips carry their own travel distance (extracted by the importer).
-      const clipDist = a.usingClip ? this.char.clipInfo.get(def.clip!)?.rootMotion : undefined;
-      if (clipDist !== undefined && Math.abs(clipDist) > 0.05) dist = Math.abs(clipDist);
-      const ease = (t: number) => smoothstep(t0, t1, t);
-      const v = ((ease(a.t + dt * a.speed) - ease(a.t)) * dist) / dt;
-      hv.copy(dir).multiplyScalar(v);
+    if (a && (a.def.roll || a.def.move || a.usingClip)) {
+      // Root motion: follow the action's travel curve along its direction.
+      const dir = a.rollDir ?? this.forward;
+      let d = this.travelAt(a, a.t + (a.charging ? 0 : dt * a.speed)) - this.travelAt(a, a.t);
+      // Don't lunge through an enemy we're already touching.
+      if (!a.def.roll && this.lock && this.lock.center.distanceTo(this.center) < 1.4) d *= 0.2;
+      const v = d / dt;
+      // Blend in so the transition from running isn't a hard stop.
+      const keep = a.t < 0.12 ? Math.exp(-18 * dt) : 0;
+      hv.multiplyScalar(keep).addScaledVector(dir, v * (1 - keep));
     } else if (a) {
-      hv.multiplyScalar(Math.exp(-14 * dt));
+      hv.multiplyScalar(Math.exp(-12 * dt));
     } else {
       const want = intent.clone().multiplyScalar(targetSpeed);
-      const rate = targetSpeed > hv.length() ? 9 : 12;
-      hv.x = damp(hv.x, want.x, rate, dt);
-      hv.z = damp(hv.z, want.z, rate, dt);
+      const accel = this.grounded ? (targetSpeed > hv.length() ? 8 : 11) : 2.5;
+      hv.x = damp(hv.x, want.x, accel, dt);
+      hv.z = damp(hv.z, want.z, accel, dt);
     }
 
     // Facing.
     const toLock = this.lock ? Math.atan2(this.lock.position.x - this.pos.x, this.lock.position.z - this.pos.z) : null;
     if (a) {
-      if (a.t < a.def.track) {
-        const soft = a.def.hit || a.def.event ? this.aimTarget(a.def.event ? 20 : 4) : null;
+      if (a.def.roll && !a.def.roll.back) {
+        this.turnToward(Math.atan2(a.rollDir!.x, a.rollDir!.z), dt, 500, 22);
+      } else if (a.t < a.def.track) {
+        const soft = a.def.hit ? this.aimTarget(4) : null;
         const toSoft = soft ? Math.atan2(soft.position.x - this.pos.x, soft.position.z - this.pos.z) : null;
         const want = toLock ?? toSoft ?? (intent.lengthSq() > 0 ? Math.atan2(intent.x, intent.z) : this.yaw);
-        this.yaw = stepAngle(this.yaw, want, 11 * dt);
-      }
+        this.turnToward(want, dt, 220);
+      } else this.yawVel *= Math.exp(-20 * dt);
     } else if (toLock !== null && !this.sprinting) {
-      this.yaw = stepAngle(this.yaw, toLock, 12 * dt);
+      this.turnToward(toLock, dt, 200);
     } else if (intent.lengthSq() > 0) {
-      const want = Math.atan2(intent.x, intent.z);
-      // Turn quickly but not instantly; sharp reversals feel weighty.
-      this.yaw = stepAngle(this.yaw, want, (this.sprinting ? 9 : 12) * dt);
-    }
-    this.yaw = wrapAngle(this.yaw);
+      this.turnToward(Math.atan2(intent.x, intent.z), dt, this.sprinting ? 110 : 160);
+    } else this.yawVel *= Math.exp(-16 * dt);
 
     // Vertical.
     this.vel.y -= GRAVITY * dt;
@@ -481,16 +509,49 @@ export class Player {
     const next = { x: cur.x + m.x, y: cur.y + m.y, z: cur.z + m.z };
     this.body.setNextKinematicTranslation(next);
     this.collider.setTranslation(next); // keep queries in sync before the world steps
+    // Walls redirect velocity (slide) instead of it piling up against them.
+    if (dt > 0 && !(a && (a.def.roll || a.usingClip || a.def.move))) {
+      this.vel.x = (m.x - this.push.x) / dt;
+      this.vel.z = (m.z - this.push.z) / dt;
+    }
     const wasGrounded = this.grounded;
-    this.grounded = this.kcc.computedGrounded();
-    if (this.grounded && !wasGrounded && this.vel.y < -8) this.onShake?.(0.15);
+    this.grounded = this.kcc.computedGrounded() && this.vel.y <= 0.1;
+    if (!this.grounded) {
+      this.airTime += dt;
+      this.fallSpeed = Math.max(this.fallSpeed, -this.vel.y);
+    }
+    if (this.grounded && !wasGrounded) this.onLand();
     if (this.grounded && this.vel.y < 0) this.vel.y = 0;
     this.pos.set(next.x, next.y - CENTER_Y - 0.02, next.z);
 
-    // Fell out of the world: put us back.
     if (this.pos.y < -30) this.teleport(new THREE.Vector3(0, 2, 10));
+  }
 
-    return Math.hypot(m.x, m.z) / dt;
+  private onLand() {
+    const a = this.act;
+    if (this.fallSpeed > 8) this.onShake?.(Math.min(0.35, this.fallSpeed * 0.02));
+    if (this.airTime > 0.15) this.landT = 0;
+    if (a?.def.air && !a.landed) {
+      a.landed = true;
+      if (a.def.hit) a.t = Math.max(a.t, a.def.hit.from + 0.1);
+      this.onPlungeLand?.(this.pos.clone());
+      this.onShake?.(0.3 + Math.min(0.3, this.fallSpeed * 0.02));
+      // Shockwave: everything close takes a hit.
+      const base = this.equip.mainWeapon?.def.stats.damage ?? 10;
+      for (const t of targets) {
+        if (!t.alive || a.hitSet.has(t.id)) continue;
+        const d = t.position.distanceTo(this.pos);
+        if (d > 2.6 + t.radius) continue;
+        a.hitSet.add(t.id);
+        const dir = t.position.clone().sub(this.pos).setY(0).normalize();
+        const dmg = Math.round(base * 1.2 * (1 - (d / (2.6 + t.radius)) * 0.5));
+        t.takeHit({ damage: dmg, poise: 60, dir, at: t.center.clone(), crit: false, source: 'melee' });
+        events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: false, enemyId: t.id });
+      }
+    }
+    this.airTime = 0;
+    this.fallSpeed = 0;
+    this.consumeBuffer(); // a dodge pressed in the air fires on landing
   }
 
   teleport(p: THREE.Vector3) {
@@ -502,133 +563,138 @@ export class Player {
     this.vel.set(0, 0, 0);
   }
 
-  // ---- animation --------------------------------------------------------------
-  private animate(dt: number, speed: number) {
+  // ==========================================================================
+  // Presentation (once per rendered frame)
+  // ==========================================================================
+  present(alpha: number, dt: number) {
+    const root = this.char.root;
+    root.position.lerpVectors(this.prevPos, this.pos, alpha);
+    root.rotation.y = this.prevYaw + wrapAngle(this.yaw - this.prevYaw) * alpha;
+    const yawR = root.rotation.y;
+    this.idleClock += dt;
+
+    // Action time at this exact frame.
     const a = this.act;
-    const clipDriven = !!(a && a.usingClip);
-    // Locomotion blend by speed. Real action clips are full-body, so locomotion
-    // steps aside entirely while one plays (the mixer would otherwise average them).
-    const locoW = clipDriven ? 0 : 1;
-    const s = a ? 0 : speed;
-    const wIdle = 1 - smoothstep(0.1, 1.8, s);
-    const wRun = smoothstep(2.4, 4.2, s);
-    const wWalk = Math.max(0, 1 - wIdle - wRun);
-    const setW = (k: string, w: number) => this.loco[k]?.setEffectiveWeight(w * locoW);
-    const sprintBlend = this.loco.sprint ? smoothstep(4.6, 6.2, s) : 0;
-    // Locked on with strafe clips: blend forward / back / left / right by the
-    // direction of travel relative to facing.
-    let fw = 1, bk = 0, lf = 0, rt = 0;
-    if (this.lock && this.loco.strafe_l && this.loco.strafe_r && s > 0.2) {
-      const c = Math.cos(-this.yaw), sn = Math.sin(-this.yaw);
-      const lx = this.vel.x * c + this.vel.z * sn, lz = -this.vel.x * sn + this.vel.z * c;
-      const len = Math.hypot(lx, lz) || 1;
-      fw = Math.max(0, lz) / len;
-      bk = this.loco.walk_back ? Math.max(0, -lz) / len : 0;
-      lf = Math.max(0, lx) / len;
-      rt = Math.max(0, -lx) / len;
-      const sum = fw + bk + lf + rt || 1;
-      fw /= sum; bk /= sum; lf /= sum; rt /= sum;
-    }
-    const moving = 1 - wIdle;
-    setW('idle', wIdle);
-    setW('walk', wWalk * fw);
-    setW('run', wRun * (1 - sprintBlend) * fw);
-    setW('sprint', wRun * sprintBlend * fw);
-    setW('strafe_l', moving * lf);
-    setW('strafe_r', moving * rt);
-    setW('walk_back', moving * bk);
-    if (this.loco.walk) this.loco.walk.timeScale = clamp(s / 1.6, 0.6, 1.6);
-    if (this.loco.run) this.loco.run.timeScale = clamp(s / 4.3, 0.8, this.loco.sprint ? 1.2 : 1.5);
-    this.char.animate(dt);
+    const at = a ? Math.min(a.def.dur, a.t + (a.charging ? 0 : alpha * SIM_STEP * a.speed)) : 0;
 
-    // Footsteps from the locomotion phase.
-    if (this.grounded && s > 0.5 && !a) {
-      this.stepPhase += dt * (s > 3 ? s / 1.5 : s / 0.8);
-      if (this.stepPhase > 1) {
-        this.stepPhase -= 1;
-        events.emit('footstep', { at: this.pos.clone(), surface: surfaceAt(this.pos.x, this.pos.z) });
-      }
-    }
+    // Local velocity for directional locomotion.
+    const c = Math.cos(-yawR), s = Math.sin(-yawR);
+    const local = { x: this.vel.x * c + this.vel.z * s, z: -this.vel.x * s + this.vel.z * c };
+    if (a) local.x = local.z = 0;
 
-    // ---- procedural pose -------------------------------------------------
-    const eq = this.equip;
-    const running = s > 3.2;
-    this.guardW = damp(this.guardW, this.sprinting ? 0 : running ? 0.35 : 1, 8, dt);
+    // ---- clip layers ------------------------------------------------------
+    const anim = this.anim;
+    const rolling = a?.def.roll && !a.def.roll.back;
+    if (this.dead && anim.has('death')) anim.setFull('death', this.deadT, 0.15);
+    else if (a?.usingClip) anim.setFull(a.def.clip!, at, a.t < 0.05 ? 0.1 : 0.12, 0.2);
+    else if (rolling && anim.has('jump_air')) anim.setFull('jump_air', 0.42, 0.06, 0.18); // tucked ball for the roll
+    else if (!a && (!this.grounded || this.landT < 0.34) && anim.has('jump_air')) {
+      // Jump clip time follows the physical arc: rise, apex, fall, land.
+      const vy = this.vel.y;
+      const t = !this.grounded ? (vy > 0 ? 0.27 + (1 - vy / JUMP_V) * 0.2 : 0.47 + Math.min(1, -vy / JUMP_V) * 0.15) : 0.62 + this.landT;
+      anim.setFull('jump_air', t, 0.08, 0.22);
+    } else anim.setFull(null, 0);
+
     this.blockW = damp(this.blockW, this.blocking ? 1 : 0, 16, dt);
+    if (this.armsFromClips) {
+      anim.setUpper('block_idle', this.blocking, this.idleClock, 0.1);
+      anim.setUpper('block_hit', this.blockHitT < 0.45, this.blockHitT, 0.06);
+    }
+    this.landT += dt;
+    anim.update(dt, { local, grounded: this.grounded || !!a });
 
+    // Footsteps: once per half locomotion cycle.
+    const ph = anim.locoPhase;
+    const speed = Math.hypot(this.vel.x, this.vel.z);
+    if (this.grounded && !a && speed > 0.6 && Math.floor(ph * 2) !== Math.floor(this.lastPhase * 2)) {
+      events.emit('footstep', { at: this.pos.clone(), surface: surfaceAt(this.pos.x, this.pos.z) });
+    }
+    this.lastPhase = ph;
+
+    // ---- procedural layer ---------------------------------------------------
+    const eq = this.equip;
     const base: ProcPose = {};
-    if (eq.mainWeapon) base.right = { ...GUARD_R, w: this.guardW };
-    if (eq.hasShield) {
-      const sh = this.blockW > 0.01 ? blendHandSimple(SHIELD_CARRY_L, SHIELD_BLOCK_L, this.blockW) : SHIELD_CARRY_L;
-      base.left = { ...sh, w: Math.max(this.guardW, this.blockW) };
-      base.hipsDrop = 0.05 * this.blockW;
-      base.spinePitch = 0.08 * this.blockW;
-    } else if (eq.dualWield) {
-      base.left = { ...OFFHAND_GUARD_L, w: this.guardW };
+    if (!this.armsFromClips) {
+      // Placeholder rig: hold the weapons up in a guard with IK.
+      this.guardW = damp(this.guardW, this.sprinting ? 0 : speed > 3.2 ? 0.35 : 1, 8, dt);
+      if (eq.mainWeapon) base.right = { ...GUARD_R, w: this.guardW };
+      if (eq.hasShield) {
+        const sh = this.blockW > 0.01 ? blendHandSimple(SHIELD_CARRY_L, SHIELD_BLOCK_L, this.blockW) : SHIELD_CARRY_L;
+        base.left = { ...sh, w: Math.max(this.guardW, this.blockW) };
+        base.hipsDrop = 0.05 * this.blockW;
+        base.spinePitch = 0.08 * this.blockW;
+      } else if (eq.dualWield) base.left = { ...OFFHAND_GUARD_L, w: this.guardW };
+    } else if (eq.dualWield && !a) {
+      base.left = { ...OFFHAND_GUARD_L, w: 0.6 };
+    }
+    // Lean into turns and accelerate with the torso.
+    if (!a && this.grounded) {
+      base.spineRoll = clamp(-this.yawVel * speed * 0.012, -0.22, 0.22);
+      base.spinePitch = (base.spinePitch ?? 0) + (this.sprinting ? 0.12 : 0);
     }
 
     let pose: ProcPose = base;
     if (a && !a.usingClip && a.def.proc) {
-      pose = overlayPose(base, a.def.proc(clamp(a.t / a.def.dur, 0, 1)));
-      if (a.def.hit) pose = this.aimLow(pose, a);
-    } else if (a && !a.usingClip && a.def.roll && !a.def.roll.back) {
-      pose = { ...base, legTuck: smoothstep(0.02, 0.2, a.t) * (1 - smoothstep(0.5, 0.7, a.t)), spinePitch: 0.8 * smoothstep(0.02, 0.15, a.t) * (1 - smoothstep(0.5, 0.72, a.t)) };
-    } else if (clipDriven) {
-      pose = {}; // real animation drives everything
-    }
-    if (!this.grounded && !a) pose = { ...pose, legTuck: 0.35 };
+      pose = overlayPose(base, a.def.proc(clamp(at / a.def.dur, 0, 1)));
+      if (a.def.hit) pose = this.aimLow(pose, a, at, true);
+    } else if (a && a.usingClip && a.def.hit) {
+      pose = this.aimLow({}, a, at, false);
+    } else if (rolling && !anim.has('jump_air')) {
+      pose = { ...base, legTuck: smoothstep(0.02, 0.2, at) * (1 - smoothstep(0.5, 0.7, at)), spinePitch: 0.8 * smoothstep(0.02, 0.15, at) * (1 - smoothstep(0.5, 0.72, at)) };
+    } else if (a?.usingClip) pose = {};
+    if (!this.grounded && !a && !anim.has('jump_air')) pose = { ...pose, legTuck: 0.35 };
     if (this.dead) pose = {};
 
     if (this.poseFrom && this.poseFade < 1) {
-      this.poseFade = Math.min(1, this.poseFade + dt / 0.12);
+      this.poseFade = Math.min(1, this.poseFade + dt / 0.18);
       pose = blendPose(this.poseFrom, pose, smoothstep(0, 1, this.poseFade));
     }
     this.lastPose = pose;
 
-    // Root transform and procedural roll for rigs without a roll clip.
-    const root = this.char.root;
-    root.position.copy(this.pos);
-    root.rotation.y = this.yaw;
+    // Procedural roll: rotate the tucked body around its middle.
     const vis = this.char.visual;
     vis.rotation.set(0, 0, 0);
     vis.position.set(0, 0, 0);
-    if (a && a.def.roll && !a.usingClip && !a.def.roll.back) {
-      const k = smoothstep(0.06, 0.6, a.t);
+    if (rolling) {
+      const k = smoothstep(0.04, 0.58, at);
       const ang = k * Math.PI * 2;
-      const pivot = 0.55;
+      const pivot = 0.5;
       vis.rotation.x = ang;
       vis.position.set(0, pivot - Math.cos(ang) * pivot, -Math.sin(ang) * pivot);
-      vis.position.y -= Math.sin(k * Math.PI) * 0.35;
+      vis.position.y -= Math.sin(k * Math.PI) * 0.3;
     }
-    if (this.dead && !this.char.has('death')) {
+    if (this.dead && !anim.has('death')) {
       const k = smoothstep(0, 0.9, this.deadT);
       vis.rotation.x = -k * Math.PI * 0.48;
       vis.position.y = -k * 0.05;
       vis.position.z = -k * 0.2;
     }
     this.rig.apply(pose);
+
+    // Blade hit detection against the pose we just drew.
+    if (a && at !== this.lastPresentT) this.detectHits(a, at);
+    this.lastPresentT = at;
   }
 
   /**
-   * Bend a procedural swing down toward low targets (slimes sit well below
-   * chest height): lower the grip, tip the blade down, lean and bend the knees
-   * around the strike window.
+   * Bend a swing down toward low targets (slimes sit well below chest height).
+   * On procedural poses the grip itself drops; on real clips the spine leans
+   * and the knees bend around the strike window.
    */
-  private aimLow(pose: ProcPose, a: ActiveAction): ProcPose {
+  private aimLow(pose: ProcPose, a: ActiveAction, at: number, moveHands: boolean): ProcPose {
     const h = a.def.hit!;
     const tgt = this.aimTarget(4.5);
     if (!tgt) return pose;
     const top = tgt.center.y + (tgt.halfHeight ?? 0) + tgt.radius * 0.4 - this.pos.y;
     const drop = clamp(1.2 - top, 0, 0.75);
     if (drop <= 0.01) return pose;
-    const k = smoothstep(h.from - 0.22, h.from, a.t) * (1 - smoothstep(h.to + 0.05, h.to + 0.3, a.t));
+    const k = smoothstep(h.from - 0.25, h.from, at) * (1 - smoothstep(h.to + 0.05, h.to + 0.35, at));
     const d = drop * k;
+    const out: ProcPose = { ...pose, spinePitch: (pose.spinePitch ?? 0) + d * (moveHands ? 0.9 : 1.1), hipsDrop: (pose.hipsDrop ?? 0) + d * 0.3 };
     const side = h.hand === 'off' ? 'left' : 'right';
     const hp = pose[side];
-    const out: ProcPose = { ...pose, spinePitch: (pose.spinePitch ?? 0) + d * 0.9, hipsDrop: (pose.hipsDrop ?? 0) + d * 0.3 };
-    if (hp) {
-      const dir: [number, number, number] = [hp.dir[0], hp.dir[1] - d * 1.3, hp.dir[2]];
-      out[side] = { ...hp, grip: [hp.grip[0], hp.grip[1] - d * 0.55, hp.grip[2] + d * 0.15], dir };
+    if (moveHands && hp) {
+      out[side] = { ...hp, grip: [hp.grip[0], hp.grip[1] - d * 0.55, hp.grip[2] + d * 0.15], dir: [hp.dir[0], hp.dir[1] - d * 1.3, hp.dir[2]] };
     }
     return out;
   }
@@ -641,38 +707,38 @@ export class Player {
     return [m.localToWorld(new THREE.Vector3(0, m.userData.bladeBase, 0)), m.localToWorld(new THREE.Vector3(0, m.userData.bladeTip + 0.03, 0))];
   }
 
-  private detectHits() {
-    const a = this.act;
-    if (!a || !a.def.hit) return;
+  private detectHits(a: ActiveAction, at: number) {
+    if (!a.def.hit) return;
     const h = a.def.hit;
     const seg = this.bladeSegment(h.hand);
     const prev = this.bladePrev[h.hand];
     this.bladePrev[h.hand] = seg;
-    if (!seg || a.t < h.from || a.t > h.to) return;
+    if (!seg || at < h.from || at > h.to) return;
     const from = prev ?? seg;
     const weapon = h.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
     const base = weapon?.def.stats.damage ?? 10;
     const b = new THREE.Vector3(), t = new THREE.Vector3();
     for (const tg of targets) {
       if (!tg.alive || a.hitSet.has(tg.id)) continue;
-      if (tg.center.distanceTo(this.center) > 3.4) continue;
-      // Sweep: test interpolated blade positions between last step and this one.
-      for (let i = 0; i <= 4; i++) {
-        const u = i / 4;
+      if (tg.center.distanceTo(this.center) > 3.6) continue;
+      // Sweep between the blade's previous and current positions.
+      for (let i = 0; i <= 6; i++) {
+        const u = i / 6;
         b.lerpVectors(from[0], seg[0], u);
         t.lerpVectors(from[1], seg[1], u);
         const [ha, hb] = hurtSegment(tg);
-        if (segmentSegmentDistance(b, t, ha, hb) < tg.radius + 0.05) {
+        if (segmentSegmentDistance(b, t, ha, hb) < tg.radius + 0.06) {
           a.hitSet.add(tg.id);
           const crit = tg.stunned;
           const charge = 1 + a.charge * 0.6;
           const dmg = Math.round(base * h.dmg * charge * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
           const dir = tg.position.clone().sub(this.pos).setY(0).normalize();
-          const at = tg.center.clone().addScaledVector(dir, -tg.radius * 0.8);
-          tg.takeHit({ damage: dmg, poise: h.poise * charge, dir, at, crit, source: 'melee' });
-          events.emit('enemyHit', { at, amount: dmg, crit, enemyId: tg.id });
-          this.onHitStop?.(crit ? 0.14 : a.def.id === 'heavy' ? 0.11 : 0.065);
-          this.onShake?.(crit ? 0.4 : a.def.id === 'heavy' ? 0.3 : 0.16);
+          const at2 = tg.center.clone().addScaledVector(dir, -tg.radius * 0.8);
+          tg.takeHit({ damage: dmg, poise: h.poise * charge, dir, at: at2, crit, source: 'melee' });
+          events.emit('enemyHit', { at: at2, amount: dmg, crit, enemyId: tg.id });
+          const heavy = a.def.id === 'heavy' || a.def.id === 'airAttack';
+          this.onHitStop?.(crit ? 0.16 : heavy ? 0.12 : 0.07);
+          this.onShake?.(crit ? 0.4 : heavy ? 0.3 : 0.16);
           break;
         }
       }
@@ -689,7 +755,7 @@ export class Player {
     if (a?.def.parry && a.t >= a.def.parry[0] && a.t <= a.def.parry[1] && att.parryable && facing > 0.1) {
       att.onParried?.();
       events.emit('parrySuccess', { at: this.center.addScaledVector(toAtt, 0.6) });
-      this.onHitStop?.(0.16);
+      this.onHitStop?.(0.18);
       this.onShake?.(0.25);
       return 'parried';
     }
@@ -698,6 +764,7 @@ export class Player {
       const cost = att.damage * (1 - (st.stability ?? 0.4)) * 1.7 + 6;
       this.stamina -= cost;
       this.staminaDelay = 0.8;
+      this.blockHitT = 0;
       const through = att.damage * (1 - (st.block ?? 80) / 100);
       const at = this.center.addScaledVector(toAtt, 0.5);
       if (this.stamina < 0) {
@@ -718,9 +785,9 @@ export class Player {
     const dmg = att.damage * (100 / (100 + armor * 5));
     this.applyDamage(dmg);
     if (att.burn) this.burn = { dps: att.burn, left: 3 };
-    const heavyArmor = a?.def.id === 'heavy' && a.t > 0.8 && a.t < 1.15; // hyper-armour mid-swing
+    // Hyper-armour through the middle of heavy swings.
+    const heavyArmor = (a?.def.id === 'heavy' || a?.def.id === 'airAttack') && a.def.hit && a.t > a.def.hit.from - 0.2 && a.t < a.def.hit.to;
     if (!this.dead && !heavyArmor && att.poise > this.equip.poise * 0.8) {
-      if (this.act?.usingClip) this.endAction();
       this.startAction('stagger');
       this.vel.addScaledVector(toAtt, -3.5);
     }
@@ -737,22 +804,13 @@ export class Player {
       this.deadT = 0;
       this.act = null;
       this.lock = null;
-      if (this.char.has('death')) {
-        const d = this.char.mixer.clipAction(this.char.clips.get('death')!);
-        d.reset().setLoop(THREE.LoopOnce, 1);
-        d.clampWhenFinished = true;
-        d.fadeIn(0.15).play();
-        this.clipAction = d;
-        for (const l of Object.values(this.loco)) l.setEffectiveWeight(0);
-      }
       events.emit('playerDied', {});
     }
   }
 
   respawn(at: THREE.Vector3) {
     this.dead = false;
-    this.clipAction?.stop();
-    this.clipAction = null;
+    this.anim.stopAll();
     this.hp = this.maxHp;
     this.stamina = this.maxStamina;
     this.mana = this.maxMana;
@@ -794,12 +852,9 @@ export class Player {
     if (!this.act) return;
     this.act.t = t;
     this.poseFade = 1;
-    this.animate(0, 0);
-  }
-
-  /** Interpolated position for rendering between fixed steps. */
-  renderPosition(alpha: number, out = new THREE.Vector3()) {
-    return out.lerpVectors(this.prevPos, this.pos, alpha);
+    this.prevPos.copy(this.pos);
+    this.prevYaw = this.yaw;
+    for (let i = 0; i < 12; i++) this.present(1, 1 / 30); // let fades settle
   }
 }
 

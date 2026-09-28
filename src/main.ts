@@ -43,6 +43,10 @@ async function boot() {
   const cam = new ThirdPersonCamera(r.camera, input);
   cam.snapTo(player.pos);
   player.onShake = (a) => cam.shake(a);
+  player.onPlungeLand = (at) => {
+    fx.dust(at, 3);
+    fx.add.spawn({ pos: at.clone().setY(at.y + 0.2), spread: 7, count: 30, life: [0.2, 0.5], size: [0.12, 0.02], color: 0xfff1c8, color2: 0xff9a3a, gravity: 6, upBias: 0.3 });
+  };
 
   // ---- UI ------------------------------------------------------------------
   const hud = new HUD(player, r.camera);
@@ -130,17 +134,16 @@ async function boot() {
     const dt = dtMs / 1000;
     // Pause the world while the title/pause overlay is up (never in tests).
     const overlayUp = !TEST_MODE && (!started || pausedByUser);
-    acc += dt;
+    // Hit-stop is a brief slow-motion rather than a hard freeze.
+    const timeScale = hitStop > 0 ? 0.1 : 1;
+    hitStop = Math.max(0, hitStop - dt);
+    const simDt = dt * timeScale;
+    acc += simDt;
     let steps = 0;
     if (paused || overlayUp) acc = 0;
     while (acc >= STEP && steps < 5) {
       acc -= STEP;
       steps++;
-      if (hitStop > 0) {
-        hitStop -= STEP;
-        input.endStep();
-        continue;
-      }
       simSteps++;
       if (input.wasPressed('inventory')) inv.toggle();
       if (input.wasPressed('help')) overlays.toggleHelp();
@@ -157,8 +160,8 @@ async function boot() {
     const t1 = performance.now();
 
     const alpha = acc / STEP;
-    player.renderPosition(alpha, renderPos);
-    player.char.root.position.copy(renderPos);
+    if (!paused) player.present(alpha, overlayUp ? 0 : simDt);
+    renderPos.copy(player.char.root.position);
     cam.update(dt, renderPos, player.sprinting);
     r.camera.getWorldDirection(player.aimDir);
     grass.update(dt, r.camera.position, renderPos);

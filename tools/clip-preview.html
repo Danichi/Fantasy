@@ -1,0 +1,52 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Clip preview</title>
+<style>body{margin:0;background:#15171a;color:#ddd;font:12px sans-serif}.row{display:flex;align-items:center;gap:2px;margin:2px}.row b{width:130px;flex:none;padding-left:6px}canvas{display:block}</style></head>
+<body><div id="out"></div>
+<script type="module">
+// Dev tool: renders frame strips of animation clips on the character.
+//   /tools/clip-preview.html?dir=/.tmp/conv&model=X%20Bot.glb&clips=a.glb,b.glb&frames=8&view=side
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+const q = new URLSearchParams(location.search);
+const dir = q.get('dir'), frames = +(q.get('frames') || 8), view = q.get('view') || 'side';
+const clips = q.get('clips').split(',');
+const W = 150, H = 190;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2a2e33);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.2));
+const dl = new THREE.DirectionalLight(0xffffff, 2); dl.position.set(2, 4, 3); scene.add(dl);
+const grid = new THREE.GridHelper(6, 12, 0x666666, 0x444444); scene.add(grid);
+const cam = new THREE.PerspectiveCamera(40, W / H, 0.1, 50);
+const L = new GLTFLoader();
+const base = await L.loadAsync(`${dir}/${q.get('model')}`);
+const model = base.scene; scene.add(model);
+model.traverse((o) => (o.frustumCulled = false));
+const mixer = new THREE.AnimationMixer(model);
+const out = document.getElementById('out');
+for (const c of clips) {
+  const g = await L.loadAsync(`${dir}/${c}`);
+  const clip = g.animations[0];
+  mixer.stopAllAction();
+  const a = mixer.clipAction(clip); a.reset().play();
+  const row = document.createElement('div'); row.className = 'row';
+  row.innerHTML = `<b>${decodeURIComponent(c).replace('.glb','')}<br>${clip.duration.toFixed(2)}s</b>`;
+  for (let i = 0; i < frames; i++) {
+    const t = (clip.duration * i) / (frames - 1);
+    a.time = t; mixer.update(0);
+    model.updateMatrixWorld(true);
+    const hips = model.getObjectByName('mixamorigHips');
+    const hp = hips.getWorldPosition(new THREE.Vector3());
+    if (view === 'side') cam.position.set(hp.x + 4.2, 1.1, hp.z); else if (view === 'front') cam.position.set(hp.x, 1.2, hp.z + 4.2); else cam.position.set(hp.x + 3, 2.2, hp.z + 3);
+    cam.lookAt(hp.x, 0.95, hp.z);
+    renderer.render(scene, cam);
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d'); ctx.drawImage(renderer.domElement, 0, 0);
+    ctx.fillStyle = '#fff'; ctx.fillText(t.toFixed(2), 4, 12);
+    row.appendChild(cv);
+  }
+  out.appendChild(row);
+}
+window.__done = true;
+</script></body></html>

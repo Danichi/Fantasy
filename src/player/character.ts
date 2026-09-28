@@ -20,12 +20,20 @@ export interface ClipEntry {
   rootMotionRatio?: number;
   /** the same in metres for the loaded character (computed at load) */
   rootMotion?: number;
+  /** forward travel over time, 30 fps, as a fraction of hips height */
+  rootCurve?: number[];
+  /** locomotion: travel speed as a fraction of hips height per second */
+  speedRatio?: number;
+  /** locomotion: travel direction in the character frame (+X left, +Z forward) */
+  dir?: [number, number];
 }
 
 export interface CharacterManifest {
   model: string;
   height?: number;
   clips: Record<string, ClipEntry>;
+  /** stock Mixamo mannequin: the game restyles it as a gambeson */
+  placeholderStyle?: boolean;
   /** fine tuning for items attached to bones (per character) */
   sockets?: Record<string, { pos?: [number, number, number]; rot?: [number, number, number] }>;
 }
@@ -54,6 +62,8 @@ export class Character {
   manifest!: CharacterManifest;
   usingPlaceholder = true;
   meshes: THREE.SkinnedMesh[] = [];
+  /** standing hips height in metres (after height normalisation) */
+  hipsHeight = 1;
 
   async load(base = '/assets/character/') {
     const loader = new GLTFLoader();
@@ -117,6 +127,7 @@ export class Character {
     // Load every clip, remapping bone prefixes to match this model.
     const modelPrefix = this.detectPrefix(this.model);
     const hipsY = this.bones.get('Hips')?.getWorldPosition(new THREE.Vector3()).y ?? 1;
+    this.hipsHeight = hipsY;
     for (const [key, entry] of Object.entries(manifest.clips)) {
       try {
         const g = await get(entry.file);
@@ -127,11 +138,16 @@ export class Character {
         const clip = this.retarget(src.clone(), modelPrefix, !!entry.inPlace);
         clip.name = key;
         this.clips.set(key, clip);
-        this.clipInfo.set(key, { ...entry, rootMotion: entry.rootMotionRatio !== undefined ? entry.rootMotionRatio * hipsY : undefined });
+        this.clipInfo.set(key, {
+          ...entry,
+          rootMotion: entry.rootMotionRatio !== undefined ? entry.rootMotionRatio * hipsY : undefined,
+          rootCurve: entry.rootCurve?.map((v) => v * hipsY), // now in metres
+        });
       } catch (e) {
         console.warn('clip failed', key, e);
       }
     }
+    this.deriveGroundedClips(modelPrefix);
   }
 
   private detectPrefix(obj: THREE.Object3D) {
@@ -192,6 +208,29 @@ export class Character {
     this.restoreCleanPose();
     this.mixer.update(dt);
     this.saveCleanPose();
+  }
+
+  /**
+   * Physics owns vertical movement for jumps and air attacks, so derive
+   * versions of those clips whose hips never rise above standing height
+   * (crouches and landings still dip).
+   */
+  private deriveGroundedClips(prefix: string) {
+    const pairs: [string, string][] = [['jump', 'jump_air'], ['attack_leap', 'attack_plunge']];
+    for (const [src, dst] of pairs) {
+      const clip = this.clips.get(src);
+      if (!clip) continue;
+      const c = clip.clone();
+      c.name = dst;
+      const t = c.tracks.find((tr) => tr.name === `${prefix}Hips.position`);
+      if (t) {
+        const v = t.values;
+        const y0 = v[1];
+        for (let i = 1; i < v.length; i += 3) v[i] = Math.min(v[i], y0);
+      }
+      this.clips.set(dst, c);
+      this.clipInfo.set(dst, { ...this.clipInfo.get(src)!, loop: false });
+    }
   }
 
   has(clip: string) {

@@ -89,6 +89,7 @@ export class HUD {
       void this.bars[stat === 'mana' ? 'mp' : 'st'].root.offsetWidth;
       this.bars[stat === 'mana' ? 'mp' : 'st'].root.classList.add('flash');
     });
+    events.on('needTarget', () => this.toast('Lock on to a target to cast this (middle mouse)'));
     events.on('enemyHit', ({ at, amount, crit }) => this.damageNumber(at, amount, crit));
     events.on('parrySuccess', () => this.showBanner('PARRIED'));
     events.on('blockImpact', ({ guardBroken }) => guardBroken && this.showBanner('GUARD BROKEN'));

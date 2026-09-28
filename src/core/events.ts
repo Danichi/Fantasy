@@ -14,6 +14,7 @@ export interface GameEvents {
   spellImpact: { at: Vector3; spell: string };
   footstep: { at: Vector3; surface: string };
   notEnough: { stat: 'stamina' | 'mana' };
+  needTarget: {};
   equipmentChanged: {};
   slimeLand: { at: Vector3; size: number };
 }

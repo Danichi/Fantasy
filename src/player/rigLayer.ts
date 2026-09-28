@@ -85,6 +85,10 @@ export class RigLayer {
     const F = knuckles.clone().sub(wrist).normalize(); // fingers
     const A = p('HandIndex1').sub(p('HandPinky1')); // across knuckles toward thumb side
     A.addScaledVector(F, -A.dot(F)).normalize();
+    // A real grip runs diagonally across the palm (heel of the hand to the
+    // index knuckle), so the blade leans toward the fingers.
+    const GRIP_TILT = 0.52;
+    A.multiplyScalar(Math.cos(GRIP_TILT)).addScaledVector(F, Math.sin(GRIP_TILT)).normalize();
     // Palm normal: which way the palm faces. Differs in sign per side.
     const P = side === 'Right' ? new THREE.Vector3().crossVectors(A, F) : new THREE.Vector3().crossVectors(F, A);
     P.normalize();

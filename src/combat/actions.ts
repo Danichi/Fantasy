@@ -27,6 +27,17 @@ export interface ActionDef {
   weaponSpeed?: boolean;
   /** charge: hold the pose at this normalised time while the button is held */
   chargeAt?: number;
+  /** start the action at this time (seconds) */
+  startAt?: number;
+  /** airborne action: gravity keeps acting; lands with a shockwave */
+  air?: boolean;
+  /** timing for the real Mixamo clip (measured from the clip), replacing the procedural timing */
+  clipTiming?: Partial<Omit<ActionDef, 'id' | 'clip' | 'proc' | 'clipTiming'>> & { speed?: number };
+}
+
+/** The effective definition: real-clip timing when that clip is loaded. */
+export function resolveAction(def: ActionDef, hasClip: boolean): ActionDef {
+  return hasClip && def.clipTiming ? { ...def, ...def.clipTiming } : def;
 }
 
 // ---- pose building blocks (character space: +Z forward, +X left) ----------
@@ -159,24 +170,40 @@ export const ACTIONS: Record<string, ActionDef> = {
     hit: { from: 0.36, to: 0.52, dmg: 1, poise: 20, hand: 'main' },
     combo: { next: 'slash2', from: 0.5 }, cancel: 0.62,
     move: { dist: 0.55, from: 0.28, to: 0.5 }, track: 0.32, weaponSpeed: true,
+    clipTiming: { dur: 1.5, hit: { from: 0.5, to: 0.72, dmg: 1, poise: 20, hand: 'main' }, combo: { next: 'slash2', from: 0.7 }, cancel: 0.82, track: 0.45, speed: 1.15 },
   },
   slash2: {
     id: 'slash2', dur: 0.95, stamina: 14, clip: 'attack_light_2', proc: slash2,
     hit: { from: 0.36, to: 0.54, dmg: 1.05, poise: 20, hand: 'main' },
     combo: { next: 'slash3', from: 0.52 }, cancel: 0.64,
     move: { dist: 0.5, from: 0.26, to: 0.5 }, track: 0.32, weaponSpeed: true,
+    clipTiming: { dur: 1.0, hit: { from: 0.34, to: 0.54, dmg: 1.05, poise: 20, hand: 'main' }, combo: { next: 'slash3', from: 0.55 }, cancel: 0.62, track: 0.3, speed: 1.1 },
   },
   slash3: {
     id: 'slash3', dur: 1.15, stamina: 18, clip: 'attack_light_3', proc: slash3,
     hit: { from: 0.5, to: 0.66, dmg: 1.35, poise: 35, hand: 'main' },
     combo: { next: 'slash1', from: 0.78 }, cancel: 0.8,
     move: { dist: 0.8, from: 0.4, to: 0.64 }, track: 0.42, weaponSpeed: true,
+    clipTiming: { dur: 1.54, hit: { from: 0.72, to: 0.95, dmg: 1.35, poise: 35, hand: 'main' }, combo: { next: 'slash1', from: 1.02 }, cancel: 1.08, track: 0.6, speed: 1.1 },
   },
   heavy: {
     id: 'heavy', dur: 1.55, stamina: 28, clip: 'attack_heavy', proc: heavy,
     hit: { from: 0.94, to: 1.1, dmg: 2.3, poise: 70, hand: 'main' },
     cancel: 1.2, chargeAt: 0.5,
     move: { dist: 1.1, from: 0.82, to: 1.05 }, track: 0.9, weaponSpeed: true,
+    clipTiming: { dur: 1.71, hit: { from: 0.55, to: 0.95, dmg: 2.3, poise: 70, hand: 'main' }, chargeAt: 0.26, cancel: 1.25, track: 0.5 },
+  },
+  sprintAttack: {
+    id: 'sprintAttack', dur: 1.15, stamina: 20, clip: 'attack_sprint', proc: slash3,
+    hit: { from: 0.5, to: 0.66, dmg: 1.5, poise: 45, hand: 'main' },
+    cancel: 0.85, move: { dist: 2.4, from: 0.05, to: 0.6 }, track: 0.25, weaponSpeed: true,
+    clipTiming: { dur: 1.29, hit: { from: 0.45, to: 0.75, dmg: 1.5, poise: 45, hand: 'main' }, cancel: 0.95, track: 0.25 },
+  },
+  airAttack: {
+    id: 'airAttack', dur: 1.55, stamina: 16, clip: 'attack_plunge', proc: heavy, air: true, startAt: 0.75,
+    hit: { from: 0.9, to: 1.15, dmg: 1.7, poise: 55, hand: 'main' },
+    cancel: 1.3, track: 1.0, weaponSpeed: true,
+    clipTiming: { dur: 2.33, startAt: 0.95, hit: { from: 1.0, to: 1.32, dmg: 1.7, poise: 55, hand: 'main' }, cancel: 1.75, track: 1.1 },
   },
   // ---- off-hand (dual wield) -------------------------------------------------
   offslash1: {
@@ -196,6 +223,7 @@ export const ACTIONS: Record<string, ActionDef> = {
     id: 'parryShield', dur: 0.75, stamina: 12, clip: 'parry_shield',
     proc: (t) => ({ left: hand(SHIELD_PARRY, t), right: GUARD_R, spineYaw: sampleF([[0, 0], [0.14, -0.25], [0.3, 0.35], [1, 0]], t) }),
     parry: [0.05, 0.32], cancel: 0.5, track: 0.1,
+    clipTiming: { dur: 0.62, parry: [0.03, 0.3], cancel: 0.42 },
   },
   parryDual: {
     id: 'parryDual', dur: 0.7, stamina: 12, clip: 'parry_dual',
@@ -224,19 +252,23 @@ export const ACTIONS: Record<string, ActionDef> = {
     id: 'castFireball', dur: 1.0, stamina: 0, clip: 'cast_fireball',
     proc: (t) => ({ right: hand(CAST, t), spineYaw: sampleF([[0, 0], [0.32, -0.35], [0.48, 0.12], [1, 0]], t), spinePitch: sampleF([[0, 0], [0.48, 0.12], [1, 0]], t) }),
     event: { at: 0.48, name: 'fireball' }, cancel: 0.7, track: 0.46,
+    clipTiming: { dur: 1.0, event: { at: 0.42, name: 'fireball' }, cancel: 0.7, track: 0.42 },
   },
   castHeal: {
     id: 'castHeal', dur: 1.3, stamina: 0, clip: 'cast_heal',
     proc: (t) => ({ right: hand(HEAL, t), headPitch: sampleF([[0, 0], [0.3, 0.25], [0.8, 0.25], [1, 0]], t) }),
     event: { at: 0.45, name: 'heal' }, cancel: 1.0, track: 0,
+    clipTiming: { dur: 2.33, event: { at: 0.55, name: 'heal' }, cancel: 1.5, speed: 1.35 },
   },
   // ---- reactions --------------------------------------------------------------
   stagger: {
     id: 'stagger', dur: 0.55, stamina: 0, clip: 'hit_react', cancel: 0.55, track: 0,
+    clipTiming: { dur: 0.67, cancel: 0.5 },
     proc: (t) => ({ spinePitch: sampleF([[0, 0], [0.12, -0.35], [0.5, -0.1], [1, 0]], t), spineRoll: sampleF([[0, 0], [0.12, 0.15], [1, 0]], t), hipsDrop: sampleF([[0, 0], [0.12, 0.08], [1, 0]], t) }),
   },
   guardBreak: {
     id: 'guardBreak', dur: 1.1, stamina: 0, clip: 'guard_break', cancel: 1.1, track: 0,
+    clipTiming: { dur: 0.95, cancel: 0.95 },
     proc: (t) => ({ spinePitch: sampleF([[0, 0], [0.15, -0.45], [0.7, -0.3], [1, 0]], t), hipsDrop: sampleF([[0, 0], [0.15, 0.12], [1, 0]], t), left: { ...SHIELD_CARRY_L, grip: [0.4, 1.2, 0.0], w: sampleF([[0, 0], [0.15, 1], [0.8, 1], [1, 0]], t) } }),
   },
 };
