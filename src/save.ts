@@ -46,7 +46,7 @@ export function loadSave(): SaveData | null {
     const raw = localStorage.getItem(KEY) ?? OLD_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
     if (!raw) return null;
     const d = JSON.parse(raw) as any;
-    const defaultGuild: GuildSaveData = { rank: 'Novice', rep: 0, completed: 0, nextQuestId: 1, active: [], available: [], explored: [] };
+    const defaultGuild: GuildSaveData = { rank: 'D', rep: 0, completed: 0, nextQuestId: 1, active: [], available: [], explored: [] };
     if (d.v === 3) return d as SaveData;
     if (d.v === 2) return { ...d, v: 3, guild: defaultGuild } as SaveData;
     if (d.v === 1) {
