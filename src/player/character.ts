@@ -50,7 +50,7 @@ const FALLBACK: CharacterManifest = {
 };
 
 const BONE_PREFIX = /^mixamorig\d*[:_]?/;
-export const shortBoneName = (n: string) => n.replace(BONE_PREFIX, '').replace(/^.*[.:]/, '');
+export const shortBoneName = (n: string) => n.replace(BONE_PREFIX, '');
 
 export class Character {
   readonly root = new THREE.Group(); // positioned at the feet, yaw only
