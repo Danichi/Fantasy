@@ -251,6 +251,7 @@ export class HUD {
         s.title = `${style.name}: ${node.name}`;
         return;
       }
+      if (typeof ref !== 'number') return;
       const it = eq.get(ref);
       if (!it) return;
       s.innerHTML += `<img src="${iconFor(it.def.id)}" alt="">`;
