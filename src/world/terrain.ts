@@ -19,12 +19,13 @@ export const WORLD_SIZE = 1024;
 export const TERRAIN_SIZE = WORLD_SIZE; // alias used by the grass and splat maps
 export const PLAZA_CENTER = new THREE.Vector2(0, -4);
 export const PLAZA_R = 12;
-export const TOWN_R = 80;
+export const TOWN_R = 110;
 export const PALISADE_R = TOWN_R;
 export const GATES = {
   south: new THREE.Vector2(0, TOWN_R),
   north: new THREE.Vector2(0, -TOWN_R),
   east: new THREE.Vector2(TOWN_R, 0),
+  west: new THREE.Vector2(-TOWN_R, 0),
 };
 export const RIVER_LEVEL = -0.6;
 export const CRYPT = new THREE.Vector2(0, -318); // entrance in the hillside
@@ -43,13 +44,20 @@ const ROADS: P[][] = [
   [[0, -TOWN_R + 6], [6, -150], [-8, -225], [0, -300]],
   // east gate over the bridge
   [[TOWN_R - 6, 0], [120, 4], [BRIDGE.x, BRIDGE.y], [230, 22], [330, 60], [500, 70]],
+  // west gate into the forest logging road
+  [[-TOWN_R + 6, 0], [-145, 8], [-230, 80], [-320, 118]],
 ];
 const STREETS: P[][] = [
   [[0, -4], [0, TOWN_R - 6]],
   [[0, -4], [0, -TOWN_R + 6]],
   [[0, -4], [TOWN_R - 6, 0]],
-  [[-40, -30], [40, -30]], // house row
-  [[-55, 20], [-8, 6]], // to the inn and market
+  [[0, -4], [-TOWN_R + 6, 0]],
+  [[-55, -40], [55, -40]],
+  [[-60, -5], [60, -5]],
+  [[-55, 28], [55, 28]],
+  [[-28, -60], [-28, 55]],
+  [[28, -60], [28, 55]],
+  [[-55, 55], [55, 55]],
 ];
 
 function segDist(px: number, pz: number, a: P, b: P) {
