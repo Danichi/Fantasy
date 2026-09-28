@@ -23,6 +23,8 @@ import { Flowers } from './world/flowers';
 import { Rewards, XP_FOR_KIND } from './progression/progression';
 import { DungeonMapUI } from './ui/dungeonMap';
 import { Realm } from './dungeon/realm';
+import { Town } from './npc/town';
+import { DialogueUI } from './ui/dialogue';
 import { loadSave, writeSave, applySave, hasSave, clearSave } from './save';
 
 const STEP = 1 / 60;
@@ -106,10 +108,19 @@ async function boot() {
       flowers.mesh.visible = !h;
       river.mesh.visible = !h;
       foliage.setVisible(!h);
+      town.setVisible(!h);
     },
     clearEnemies: () => slimes.clear(),
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
   }, rewards, world.crypt.door);
+  const dialogue = new DialogueUI();
+  const town = new Town(r.scene, r.camera, dialogue);
+  realm.overworldInteractables.push(...town.interactables());
+  dialogue.onToggle = (open) => {
+    input.uiMode = open || inv.open || mapUI.open;
+    if (open) input.exitLock();
+    else input.requestLock();
+  };
   if (saveData) {
     realm.progress = saveData.dungeon;
     realm.maps = saveData.maps;
@@ -278,7 +289,8 @@ async function boot() {
         }
       }
       hud.prompt(best ? best.label() : null);
-      if (best && input.wasPressed('interact')) best.action();
+      if (dialogue.open) hud.prompt(null);
+      else if (best && input.wasPressed('interact')) best.action();
       spells.update(STEP);
       world.update(STEP);
       river.update(STEP);
@@ -302,6 +314,8 @@ async function boot() {
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
     mapUI.update();
+    dialogue.update(dt);
+    if (realm.mode === 'overworld') town.update(dt, player.pos);
     physDebug?.update();
     r.followShadow(renderPos);
     r.render(dt);
@@ -321,6 +335,8 @@ async function boot() {
     }
     requestAnimationFrame(frame);
   };
+  await town.ready;
+  mark('npcs');
   // Compile every material's shaders up front, in parallel where the
   // browser supports it, instead of stalling the first frames one by one.
   r.followShadow(player.pos);
@@ -340,7 +356,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

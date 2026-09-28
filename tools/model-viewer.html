@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><title>model viewer</title></head><body style="margin:0;background:#2b2f35">
+<script type="module">
+// Dev tool: front and side views of models. ?files=a.gltf,b.gltf
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+const files = new URLSearchParams(location.search).get('files').split(',');
+const W = 300, H = 400;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(W, H); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x3a4048);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2)); const d = new THREE.DirectionalLight(0xffffff, 2.5); d.position.set(2, 4, 3); scene.add(d);
+const cam = new THREE.PerspectiveCamera(30, W / H, 0.01, 1000);
+const out = document.createElement('div'); out.style.cssText = 'display:flex;flex-wrap:wrap;gap:2px'; document.body.appendChild(out);
+const info = {};
+for (const f of files) {
+  let g;
+  try { g = await new GLTFLoader().loadAsync(f); } catch (e) { info[f] = 'ERR ' + e.message; continue; }
+  const m = g.scene; scene.add(m); m.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(m); const size = box.getSize(new THREE.Vector3()); const c = box.getCenter(new THREE.Vector3());
+  info[f] = size.toArray().map(v => +v.toFixed(2));
+  for (const [dx, dz] of [[0, 1], [1, 0]]) {
+    const dist = Math.max(size.y, size.x, size.z) * 2.1;
+    cam.position.set(c.x + dx * dist, c.y, c.z + dz * dist); cam.lookAt(c); cam.near = dist / 100; cam.far = dist * 10; cam.updateProjectionMatrix();
+    r.render(scene, cam);
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; cv.getContext('2d').drawImage(r.domElement, 0, 0); out.appendChild(cv);
+  }
+  scene.remove(m);
+}
+window.__info = info; window.__done = true;
+</script></body></html>

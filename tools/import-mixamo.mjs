@@ -17,7 +17,7 @@ const OUT = 'public/assets/character';
 // Source file name (lower case, no extension) -> game clip key.
 // Covers the checklist names plus Mixamo's "Pro Sword and Shield Pack".
 const ALIASES = {
-  'x bot': 'character', 'y bot': 'character',
+  'x bot': 'character', 'y bot': 'character', 'paladin j nordstrom': 'character',
   'sword and shield idle': 'idle',
   'sword and shield walk': 'walk', 'sword and shield walk (2)': 'walk_back',
   'sword and shield run': 'run', 'sword and shield run (2)': 'run_back',

@@ -1,0 +1,11 @@
+Model Information:
+* title:	Uruk Hai - LOTR
+* source:	https://sketchfab.com/3d-models/uruk-hai-lotr-c86d316b3f314d11bf3234771b2cc212
+* author:	Ulrik Langvandsbråten (https://sketchfab.com/best3deu)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Uruk Hai - LOTR" (https://sketchfab.com/3d-models/uruk-hai-lotr-c86d316b3f314d11bf3234771b2cc212) by Ulrik Langvandsbråten (https://sketchfab.com/best3deu) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

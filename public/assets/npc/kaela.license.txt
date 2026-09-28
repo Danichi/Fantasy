@@ -1,0 +1,11 @@
+Model Information:
+* title:	Female_NPC
+* source:	https://sketchfab.com/3d-models/female-npc-e272631fbb6a477a9d530cb93ea85987
+* author:	lissandroamorarios (https://sketchfab.com/lissandroamorarios)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Female_NPC" (https://sketchfab.com/3d-models/female-npc-e272631fbb6a477a9d530cb93ea85987) by lissandroamorarios (https://sketchfab.com/lissandroamorarios) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
