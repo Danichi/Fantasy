@@ -1,10 +1,15 @@
-# Orc assets
+# Orc dungeon assets
 
-This branch expects two user-supplied GLB assets:
+Place these three binary GLB files in exactly these paths:
 
-- `public/assets/npc/orc_house.glb` — visible overworld entrance to the first dungeon.
-- `public/assets/npc/orc_warrior.glb` — visible model used for Grukk, the Orc Warlord.
+- `public/assets/npc/orc_warrior.glb` — regular Orc mobs in the first dungeon.
+- `public/assets/npc/orc_warchief.glb` — final boss / Orc Warchief model.
+- `public/assets/npc/orc_house.glb` — overworld dungeon entrance.
 
-The house is a static GLB. The Orc Warrior GLB is also static (no embedded animation clips); the existing boss combat/animation rig remains active for gameplay timing while the supplied model is rendered as the visible body.
+The game code already references these paths, so adding the files to GitHub at those exact locations is enough for Vite to serve them automatically. No import statement or additional asset registration is required.
 
-The overworld interaction remains bound to the game's existing **E / Interact** control when the player is within the house doorway's interaction radius.
+The supplied Orc Warchief model was inspected and contains no embedded animation clips. The existing boss animation/combat rig is therefore retained underneath the visible Warchief model.
+
+The regular Orc Warrior asset is expected to be static; the regular Orc mob behavior is handled by the enemy controller.
+
+Keep the asset licenses/attribution files with the project when required by the asset source.
