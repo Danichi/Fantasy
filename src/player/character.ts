@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { RIG_PROFILES, detectRigFamily, type RigFamily, type RigProfile } from './rigProfile';
 
 // ---------------------------------------------------------------------------
 // Character rig: loads the skinned model plus any animation files listed in
@@ -49,7 +50,7 @@ const FALLBACK: CharacterManifest = {
 };
 
 const BONE_PREFIX = /^mixamorig\d*[:_]?/;
-export const shortBoneName = (n: string) => n.replace(BONE_PREFIX, '');
+export const shortBoneName = (n: string) => n.replace(BONE_PREFIX, '').replace(/^.*[.:]/, '');
 
 export class Character {
   readonly root = new THREE.Group(); // positioned at the feet, yaw only
@@ -60,6 +61,8 @@ export class Character {
   clips = new Map<string, THREE.AnimationClip>();
   clipInfo = new Map<string, ClipEntry>();
   manifest!: CharacterManifest;
+  rigFamily: RigFamily = 'generic';
+  rigProfile: RigProfile = RIG_PROFILES.generic;
   usingPlaceholder = true;
   meshes: THREE.SkinnedMesh[] = [];
   /** standing hips height in metres (after height normalisation) */
@@ -109,6 +112,9 @@ export class Character {
         }
       }
     });
+
+    this.rigFamily = detectRigFamily(this.bones.keys());
+    this.rigProfile = RIG_PROFILES[this.rigFamily];
 
     // Normalise height so gameplay distances are in real metres.
     this.model.updateMatrixWorld(true);
@@ -238,7 +244,14 @@ export class Character {
   }
 
   bone(name: string) {
-    return this.bones.get(name);
+    const candidates = [name, ...(this.rigProfile.aliases[name] ?? [])];
+    for (const candidate of candidates) {
+      const direct = this.bones.get(candidate);
+      if (direct) return direct;
+      const short = this.bones.get(shortBoneName(candidate));
+      if (short) return short;
+    }
+    return undefined;
   }
 
   /** Create an attachment point on a bone that ignores the rig's unit scale. */
