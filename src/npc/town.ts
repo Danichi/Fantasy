@@ -7,7 +7,6 @@ import { buildSword } from '../items/weaponModels';
 import type { DialogueUI } from '../ui/dialogue';
 import type { Interactable } from '../dungeon/instance';
 import type { Player } from '../player/player';
-import type { Realm } from '../dungeon/realm';
 import type { CombatStyleId } from '../progression/styles';
 import { trainingOption, magicOptions, shopOptions } from './services';
 
@@ -125,7 +124,7 @@ export class Town {
   private tags = new Map<string, HTMLDivElement>();
   private tmp = new THREE.Vector3();
 
-  constructor(private scene: THREE.Scene, private camera: THREE.Camera, private dialogue: DialogueUI, private player: Player, private realm: Realm) {
+  constructor(private scene: THREE.Scene, private camera: THREE.Camera, private dialogue: DialogueUI, private player: Player) {
     this.npcs = NPCS.map((s) => new NPC(s, scene));
     // Fröst's stall stands between him and the square.
     const f = NPCS.find((n) => n.id === 'froest')!;
