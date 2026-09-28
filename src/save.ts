@@ -8,17 +8,17 @@ import type { DungeonProgress } from './dungeon/instance';
 // the whole game state lives here: progression, inventory, loadout, dungeon
 // progress and every map you've drawn.
 
-const KEY = 'fantasy-rpg-save-v2';
-const LEGACY_KEY = 'fantasy-rpg-save-v1';
+const KEY = 'fantasy-rpg-save-v3';
+const LEGACY_KEYS = ['fantasy-rpg-save-v2', 'fantasy-rpg-save-v1'];
 
 export interface SaveData {
-  v: 2;
+  v: 3;
   seed: number;
-  prog: { level: number; xp: number; gold: number; sp: number; learnedStyles: string[]; activeStyle: string | null; learnedSkills: Record<string, string[]>; styleSwapUnlocked: boolean };
+  prog: { level: number; xp: number; gold: number; sp: number; learnedStyles: string[]; activeStyle: string | null; learnedSkills: Record<string, string[]> };
   items: { id: string; qty: number }[];
   equipped: Partial<Record<Slot, number>>; // slot -> index into items
   quick: (number | null)[];
-  moves: (number | null)[];
+  moves: (number | string | null)[];
   activeSpell: number | null;
   maps: Record<string, MapData>;
   dungeon: DungeonProgress;
@@ -26,7 +26,7 @@ export interface SaveData {
 
 export function hasSave() {
   try {
-    return !!(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY));
+    return !!(localStorage.getItem(KEY) || LEGACY_KEYS.some((k) => localStorage.getItem(k)));
   } catch {
     return false;
   }
@@ -35,30 +35,36 @@ export function hasSave() {
 export function clearSave() {
   try {
     localStorage.removeItem(KEY);
-    localStorage.removeItem(LEGACY_KEY);
+    for (const k of LEGACY_KEYS) localStorage.removeItem(k);
   } catch {}
 }
 
 export function loadSave(): SaveData | null {
   try {
-    const raw = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY);
+    const raw = localStorage.getItem(KEY) ?? LEGACY_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
     if (!raw) return null;
     const d = JSON.parse(raw) as SaveData & { v: number; prog: any };
-    if (d.v === 2) return d as SaveData;
-    if (d.v === 1) {
-      return {
-        ...d,
-        v: 2,
-        prog: {
-          ...d.prog,
-          learnedStyles: [],
-          activeStyle: null,
-          learnedSkills: { swordsman: [], mage: [], bulwark: [] },
-          styleSwapUnlocked: false,
+    if (d.v === 3) return d as SaveData;
+    const oldSkills = d.prog?.learnedSkills ?? {};
+    const learnedStyles = (d.prog?.learnedStyles ?? []).filter((id: string) => id === 'swordsman' || id === 'bulwark');
+    const activeStyle = learnedStyles.includes(d.prog?.activeStyle) ? d.prog.activeStyle : (learnedStyles[0] ?? null);
+    return {
+      ...d,
+      v: 3,
+      prog: {
+        level: d.prog?.level ?? 1,
+        xp: d.prog?.xp ?? 0,
+        gold: d.prog?.gold ?? 0,
+        sp: d.prog?.sp ?? 0,
+        learnedStyles,
+        activeStyle,
+        learnedSkills: {
+          swordsman: [...(oldSkills.swordsman ?? [])],
+          bulwark: [...(oldSkills.bulwark ?? [])],
         },
-      } as SaveData;
-    }
-    return null;
+      },
+      moves: (d.moves ?? []).map((m: unknown) => typeof m === 'number' || typeof m === 'string' ? m : null),
+    } as SaveData;
   } catch {
     return null;
   }
@@ -77,9 +83,9 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     return k === null || k < 0 ? null : k;
   });
   const data: SaveData = {
-    v: 2,
+    v: 3,
     seed,
-    prog: { level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints, learnedStyles: [...player.prog.learnedStyles], activeStyle: player.prog.activeStyle, learnedSkills: structuredClone(player.prog.learnedSkills), styleSwapUnlocked: player.prog.styleSwapUnlocked },
+    prog: { level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints, learnedStyles: [...player.prog.learnedStyles], activeStyle: player.prog.activeStyle, learnedSkills: structuredClone(player.prog.learnedSkills) },
     items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty })),
     equipped,
     quick: clean(eq.quick),
@@ -101,11 +107,9 @@ export function applySave(player: Player, d: SaveData) {
   p.xp = d.prog.xp;
   p.gold = d.prog.gold;
   p.skillPoints = d.prog.sp;
-  p.learnedStyles = (d.prog.learnedStyles ?? []) as any;
-  p.activeStyle = (d.prog.activeStyle ?? null) as any;
-  p.learnedSkills = { swordsman: [], mage: [], bulwark: [], ...(d.prog.learnedSkills ?? {}) } as any;
-  p.styleSwapUnlocked = !!d.prog.styleSwapUnlocked;
-  p.updateStyleSwapUnlock();
+  p.learnedStyles = (d.prog.learnedStyles ?? []).filter((id): id is 'swordsman' | 'bulwark' => id === 'swordsman' || id === 'bulwark');
+  p.activeStyle = p.learnedStyles.includes(d.prog.activeStyle as 'swordsman' | 'bulwark') ? (d.prog.activeStyle as 'swordsman' | 'bulwark') : (p.learnedStyles[0] ?? null);
+  p.learnedSkills = { swordsman: [], bulwark: [], ...(d.prog.learnedSkills ?? {}) };
   eq.items = [];
   const uids: number[] = [];
   for (const it of d.items) {
