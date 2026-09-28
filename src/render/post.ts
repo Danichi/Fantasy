@@ -93,13 +93,13 @@ const FINAL_FRAG = /* glsl */ `
     col += texture2D(tBloom, vUv).rgb * uBloom;
     col = aces(col * uExposure);
 
-    // Warm, rich grade: gentle S-curve, lifted warm highlights, cool shadows,
-    // extra saturation in the mids (greens and sky stay vivid).
+    // Bright fantasy grade: luminous skies, clear greens/blues, warm magical highlights.
     float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    col = mix(vec3(luma), col, 1.16);
-    col = mix(col, col * vec3(1.05, 1.0, 0.92), smoothstep(0.35, 1.0, luma));
-    col = mix(col, col * vec3(0.94, 0.98, 1.06), 1.0 - smoothstep(0.0, 0.35, luma));
-    col = col * col * (3.0 - 2.0 * col) * 0.35 + col * 0.65;
+    col = mix(vec3(luma), col, 1.22);
+    col = mix(col, col * vec3(1.06, 1.03, 0.96), smoothstep(0.32, 1.0, luma));
+    col = mix(col, col * vec3(0.97, 1.02, 1.06), 1.0 - smoothstep(0.0, 0.32, luma));
+    col += vec3(0.015, 0.018, 0.022) * (1.0 - luma);
+    col = col * col * (3.0 - 2.0 * col) * 0.26 + col * 0.74;
     // Vignette.
     vec2 q = vUv - 0.5;
     col *= 1.0 - dot(q, q) * 0.22;
