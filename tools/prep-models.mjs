@@ -12,7 +12,8 @@ import { MeshoptSimplifier } from 'meshoptimizer';
 
 const SRC = 'assets-src/incoming';
 const OUT = 'public/assets/npc';
-// name -> [source folder, triangle budget (0 = keep), texture size, keep skin?, simplify error, sloppy?]
+// name -> [source folder or .glb, triangle budget (0 = keep), texture size, keep skin?, simplify error, sloppy?, options]
+// options: out (output folder), keepFlat (don't strip flat ground planes)
 const JOBS = {
   froest: ['mr._frost__vgdc', 0, 1024, true],
   kaela: ['female_npc', 0, 1024, true],
@@ -20,7 +21,25 @@ const JOBS = {
   corvin: ['fallen_paladin_in_corrupted_black_plate_armor', 60000, 1024, false, 0.02, true],
   rustyArmour: ['old_rusty_gothic_worn_armor', 30000, 1024, false, 0.02, true],
   urukStatue: ['uruk_hai_-_lotr', 45000, 1024, false],
+  orcWarrior: ['orc_warrior.glb', 0, 1024, false, 0.03, false, { keepFlat: true }],
+  orcWarchief: ['orc_warchief_with_iron_crown_and_cleaver.glb', 60000, 2048, false, 0.02, false, { keepFlat: true }],
+  orcHouse: ['orc_house.glb', 50000, 1024, false, 0.02, false, { out: 'public/assets/models', keepFlat: true }],
 };
+
+// Sketchfab .glb downloads have no license.txt beside them; rebuild one from
+// the credit Sketchfab embeds in asset.extras.
+const licenseText = ({ title, source, author, license }) => `Model Information:
+* title:\t${title}
+* source:\t${source}
+* author:\t${author}
+
+Model License:
+* license type:\t${license}
+* requirements:\tAuthor must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "${title}" (${source}) by ${author} licensed under ${license}
+`;
 
 await MeshoptSimplifier.ready;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
@@ -30,9 +49,11 @@ const tris = (doc) => {
   for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) t += (p.getIndices()?.getCount() ?? p.getAttribute('POSITION').getCount()) / 3;
   return Math.round(t);
 };
-for (const [name, [dir, budget, texSize, skinned, err = 0.03, sloppy = false]] of Object.entries(JOBS)) {
+for (const [name, [dir, budget, texSize, skinned, err = 0.03, sloppy = false, opts = {}]] of Object.entries(JOBS)) {
   if (process.argv[2] && process.argv[2] !== name) continue;
-  const doc = await io.read(path.join(SRC, dir, 'scene.gltf'));
+  const isGlb = dir.endsWith('.glb');
+  const doc = await io.read(isGlb ? path.join(SRC, dir) : path.join(SRC, dir, 'scene.gltf'));
+  const credit = doc.getRoot().getAsset().extras;
   const before = tris(doc);
   if (!skinned) {
     // AI-generated scans carry tangents and extra UV sets that stop vertices
@@ -46,7 +67,7 @@ for (const [name, [dir, budget, texSize, skinned, err = 0.03, sloppy = false]] o
   // thinnest dimension is tiny next to their widest, in any orientation.
   for (const node of doc.getRoot().listNodes()) {
     const mesh = node.getMesh();
-    if (!mesh || skinned) continue;
+    if (!mesh || skinned || opts.keepFlat) continue;
     const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
     for (const prim of mesh.listPrimitives()) {
       const pos = prim.getAttribute('POSITION');
@@ -81,8 +102,12 @@ for (const [name, [dir, budget, texSize, skinned, err = 0.03, sloppy = false]] o
   steps.push(textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [texSize, texSize], quality: 85 }));
   steps.push(prune());
   await doc.transform(...steps);
-  const out = path.join(OUT, `${name}.glb`);
+  const outDir = opts.out ?? OUT;
+  fs.mkdirSync(outDir, { recursive: true });
+  const out = path.join(outDir, `${name}.glb`);
   await io.write(out, doc);
-  fs.copyFileSync(path.join(SRC, dir, 'license.txt'), path.join(OUT, `${name}.license.txt`));
+  const lic = path.join(outDir, `${name}.license.txt`);
+  if (isGlb) fs.writeFileSync(lic, licenseText(credit));
+  else fs.copyFileSync(path.join(SRC, dir, 'license.txt'), lic);
   console.log(`${name.padEnd(12)} ${before} -> ${tris(doc)} tris, ${(fs.statSync(out).size / 1e6).toFixed(1)} MB`);
 }

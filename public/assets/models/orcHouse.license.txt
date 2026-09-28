@@ -1,0 +1,11 @@
+Model Information:
+* title:	Orc House
+* source:	https://sketchfab.com/3d-models/orc-house-0e58b172979f4f54b64d0f2cde8f69ff
+* author:	arloopa (https://sketchfab.com/arloopa)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Orc House" (https://sketchfab.com/3d-models/orc-house-0e58b172979f4f54b64d0f2cde8f69ff) by arloopa (https://sketchfab.com/arloopa) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

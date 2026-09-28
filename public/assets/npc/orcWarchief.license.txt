@@ -1,0 +1,11 @@
+Model Information:
+* title:	Orc Warchief with Iron Crown and Cleaver
+* source:	https://sketchfab.com/3d-models/orc-warchief-with-iron-crown-and-cleaver-2df6bfe33e7145cc953838f7eccd677b
+* author:	Pigcraft (https://sketchfab.com/s8819296)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Orc Warchief with Iron Crown and Cleaver" (https://sketchfab.com/3d-models/orc-warchief-with-iron-crown-and-cleaver-2df6bfe33e7145cc953838f7eccd677b) by Pigcraft (https://sketchfab.com/s8819296) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

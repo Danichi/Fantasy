@@ -7,6 +7,9 @@
 - **Female_NPC** by lissandroamorarios — https://sketchfab.com/lissandroamorarios (Kaela Voss)
 - **Mr. Fröst | VGDC** by MooKorea — https://sketchfab.com/MooKorea (Master Fröst)
 - **Uruk Hai - LOTR** by Ulrik Langvandsbråten — https://sketchfab.com/best3deu (statue)
+- **Orc warrior** by valkiriaixda — https://sketchfab.com/valkiriaixda
+- **Orc Warchief with Iron Crown and Cleaver** by Pigcraft — https://sketchfab.com/s8819296
+- **Orc House** by arloopa — https://sketchfab.com/arloopa
 
 Models were simplified and their textures resized for real-time use.
 

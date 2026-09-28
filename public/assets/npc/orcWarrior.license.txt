@@ -1,0 +1,11 @@
+Model Information:
+* title:	Orc warrior
+* source:	https://sketchfab.com/3d-models/orc-warrior-d5a86322d7b54c1483c5e5f6b936702f
+* author:	valkiriaixda (https://sketchfab.com/valkiriaixda)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Orc warrior" (https://sketchfab.com/3d-models/orc-warrior-d5a86322d7b54c1483c5e5f6b936702f) by valkiriaixda (https://sketchfab.com/valkiriaixda) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
