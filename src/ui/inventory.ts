@@ -4,6 +4,7 @@ import type { ItemInstance } from '../items/equipment';
 import { events } from '../core/events';
 import { iconFor, wideIconFor } from './icons';
 import type { CharPreview } from './charPreview';
+import { DISCIPLINES, SPECIALIZATIONS, LEARNED_CLASSES } from '../progression/combatProgression';
 
 // Inventory & equipment screen (I).
 //   left:   armour slots          centre: live 3D character + weapons + summary
@@ -227,11 +228,51 @@ export class InventoryUI {
   }
 
   private renderSkills() {
+    const p = this.player.prog.combat;
+    const primary = p.primary;
+    const secondary = p.secondary;
+    const disciplineCards = (Object.values(DISCIPLINES)).map((d) => {
+      const s = p.disciplines[d.id];
+      const isPrimary = primary === d.id;
+      const isSecondary = secondary === d.id;
+      const button = isPrimary ? 'PRIMARY' : isSecondary ? 'SECONDARY' : 'CHOOSE PRIMARY';
+      const disabled = !isPrimary && !isSecondary && p.heroic.level < 1 ? 'disabled' : '';
+      return `<div class="discipline-card ${isPrimary ? 'primary' : isSecondary ? 'secondary' : ''}">
+        <div class="dc-head"><h3>${d.name}</h3><span>LV ${s.level}</span></div>
+        <p>${d.summary}</p>
+        <div class="dc-meta">${Math.round(s.mastery)}% mastery · ${Math.round(s.xp)} XP</div>
+        <button class="discipline-pick" data-discipline="${d.id}" ${disabled}>${button}</button>
+      </div>`;
+    }).join('');
+    const learned = Object.entries(p.learnedClasses);
+    const learnedHtml = learned.length
+      ? learned.map(([id, s]) => `<div class="class-card learned"><h3>${LEARNED_CLASSES[id as keyof typeof LEARNED_CLASSES]?.name ?? id}</h3><span>LV ${s.level} · ${Math.round(s.mastery)}% mastery</span></div>`).join('')
+      : '<div class="class-card empty"><h3>No learned classes yet</h3><span>Class quests and trainers unlock professions.</span></div>';
+    const starter = Object.values(LEARNED_CLASSES).filter((x) => x.rarity === 'common').slice(0, 10);
+    const starterHtml = starter.map((x) => `<div class="class-card"><h3>${x.name}</h3><span>${x.summary}</span></div>`).join('');
     this.body.innerHTML = `
-      <p class="lead">Each class has its own skill tree. Learn a class from its trainer in town, then spend skill points as you level. Any learned skill can go on your moveset bar (<b>Tab</b>).</p>
-      <div class="classes">${CLASSES.map(
-        (c) => `<div class="class locked"><h3>${c.name}</h3><p>${c.blurb}</p><span class="how">Learn from ${c.where}</span></div>`,
-      ).join('')}</div>`;
+      <div class="discipline-panel">
+        <div class="heroic-card"><b>HEROIC LEGACY · LV ${p.heroic.level}</b><span>Legendary origin path · slow progression · ${Math.round(p.heroic.mastery)}% mastery</span></div>
+        <div class="origin-line"><b>Origin:</b> ${p.origin} · <b>Primary:</b> ${DISCIPLINES[primary].name} · <b>Secondary:</b> ${secondary ? DISCIPLINES[secondary].name : 'Locked until Heroic Legacy 10'}</div>
+        <div class="discipline-grid">${disciplineCards}</div>
+        <div class="hybrid-line"><b>Hybrid techniques:</b> ${p.hybridUnlocks.length ? p.hybridUnlocks.join(', ') : 'Earned by reaching discipline level/mastery requirements.'}</div>
+      </div>
+      <p class="lead">Combat disciplines define how you fight. Learned classes define what you can do outside that core. Mastery is earned from actual use rather than a second level bar.</p>
+      <h2 class="skills-title">LEARNED CLASSES</h2>
+      <div class="classes">${learnedHtml}${starterHtml}</div>`;
+    this.body.querySelectorAll<HTMLButtonElement>('.discipline-pick').forEach((b) => {
+      b.addEventListener('click', () => {
+        const id = b.dataset.discipline as keyof typeof DISCIPLINES;
+        if (id === secondary) {
+          p.secondary = null;
+        } else if (id !== primary) {
+          if (p.heroic.level >= 10 && primary !== id && secondary === null) p.unlockSecondary(id);
+          else p.setPrimary(id);
+        } else return;
+        events.emit('equipmentChanged', {});
+        this.render();
+      });
+    });
   }
 
   private renderStats() {
