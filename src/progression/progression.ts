@@ -23,6 +23,7 @@ export class Progression {
 
   /** The first school chosen after the three starter introductions. */
   primaryStyle: CombatStyleId | null = null;
+  activeStyle: CombatStyleId | null = null;
   /** A later secondary school slot; progression systems can unlock this without changing the primary. */
   secondaryStyle: CombatStyleId | null = null;
   /** Which schools the player has heard about from their village mentors. */
@@ -32,10 +33,6 @@ export class Progression {
 
   get learnedStyles(): CombatStyleId[] {
     return [this.primaryStyle, this.secondaryStyle].filter((id): id is CombatStyleId => id !== null);
-  }
-
-  get activeStyle() {
-    return this.primaryStyle;
   }
 
   get starterStyleQuestComplete() {
@@ -75,6 +72,7 @@ export class Progression {
   choosePrimaryStyle(id: CombatStyleId) {
     if (!COMBAT_STYLES[id] || this.primaryStyle || !this.starterStyleQuestComplete) return false;
     this.primaryStyle = id;
+    this.activeStyle = id;
     events.emit('progressChanged', {});
     return true;
   }
@@ -88,10 +86,8 @@ export class Progression {
 
   setActiveStyle(id: CombatStyleId) {
     if (id !== this.primaryStyle && id !== this.secondaryStyle) return false;
-    // The primary remains the default active style; secondary switching is allowed
-    // only once a future mastery gate explicitly unlocks the secondary slot.
-    if (id === this.secondaryStyle && !this.secondaryStyle) return false;
-    if (id !== this.primaryStyle) return false;
+    this.activeStyle = id;
+    events.emit('progressChanged', {});
     return true;
   }
 
