@@ -674,3 +674,35 @@ html, body {
   color: #fff;
 }
 .style-resource.hidden { display: none; }
+
+.quest-tracker {
+  position: fixed;
+  left: 26px;
+  top: 112px;
+  width: 280px;
+  padding: 12px 14px;
+  border: 1px solid rgba(213,177,88,.42);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(17,25,31,.86), rgba(8,14,18,.72));
+  box-shadow: 0 10px 30px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.06);
+  pointer-events: none;
+  display: grid;
+  gap: 3px;
+}
+.quest-tracker .q-kicker {
+  font: 700 9px/1 Inter, sans-serif;
+  letter-spacing: .22em;
+  color: rgba(255,214,125,.86);
+}
+.quest-tracker b {
+  font: 700 12px/1.2 Cinzel, serif;
+  letter-spacing: .08em;
+  color: #f7f1df;
+}
+.quest-tracker small {
+  font: 500 10px/1.45 Inter, sans-serif;
+  color: rgba(233,239,236,.68);
+}
+@media (max-width: 900px) {
+  .quest-tracker { left: 14px; top: 96px; width: 235px; }
+}
