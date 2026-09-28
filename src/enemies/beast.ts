@@ -324,24 +324,7 @@ export class Beast implements Target {
 
     if (this.model) {
       this.model.rotation.y = dampAngle(this.model.rotation.y, this.yaw + Math.PI, 12, dt);
-      const squash = this.state === 'hurt' ? 0.94 : 1;
-      this.model.scale.x = Math.abs(this.model.scale.x) * squash;
-      this.model.scale.y = (this.modelHeight / Math.max(0.01, this.modelHeight)) * (this.state === 'hurt' ? 0.96 : 1);
-      this.model.scale.z = Math.abs(this.model.scale.z);
-      if (this.hitFlash > 0) {
-        this.model.traverse((obj) => {
-          const mesh = obj as THREE.Mesh;
-          if (!mesh.isMesh) return;
-          const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-          for (const material of materials) {
-            const mat = material as THREE.MeshStandardMaterial;
-            if ('emissive' in mat) {
-              mat.emissive.setHex(0xff7045);
-              mat.emissiveIntensity = 0.6;
-            }
-          }
-        });
-      }
+      this.group.scale.setScalar(this.state === 'hurt' ? 0.97 : 1);
     }
   }
 
