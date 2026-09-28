@@ -22,7 +22,7 @@ const assets = [
   ['grass-common-short', 'Grass_Common_Short.glb'],
   ['grass-common-tall', 'Grass_Common_Tall.glb'],
   ['grass-wispy-tall', 'Grass_Wispy_Tall.glb'],
-] as const;
+];
 
 mkdirSync(targetDir, { recursive: true });
 
