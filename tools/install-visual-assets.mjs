@@ -1,0 +1,70 @@
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, copyFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+const root = resolve(new URL('..', import.meta.url).pathname);
+const targetDir = join(root, 'public', 'assets', 'vendor', 'stylized');
+
+const assets = [
+  ['common-tree-1', 'CommonTree_1.glb'],
+  ['common-tree-2', 'CommonTree_2.glb'],
+  ['common-tree-3', 'CommonTree_3.glb'],
+  ['common-tree-4', 'CommonTree_4.glb'],
+  ['common-tree-5', 'CommonTree_5.glb'],
+  ['pine-1', 'Pine_1.glb'],
+  ['pine-2', 'Pine_2.glb'],
+  ['pine-4', 'Pine_4.glb'],
+  ['pine-5', 'Pine_5.glb'],
+  ['fern-1', 'Fern_1.glb'],
+  ['flower-3-group', 'Flower_3_Group.glb'],
+  ['mushroom-common', 'Mushroom_Common.glb'],
+  ['grass-common-short', 'Grass_Common_Short.glb'],
+  ['grass-common-tall', 'Grass_Common_Tall.glb'],
+  ['grass-wispy-tall', 'Grass_Wispy_Tall.glb'],
+] as const;
+
+mkdirSync(targetDir, { recursive: true });
+
+const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+
+function installAsset(slug: string) {
+  const result = spawnSync(
+    npx,
+    ['--yes', '@drawcall/market@0.8.10', 'install', slug],
+    { cwd: root, stdio: 'inherit', env: { ...process.env, CI: '1' } },
+  );
+  if (result.status !== 0) {
+    console.warn('[visual-assets] Could not install ' + slug + '; keeping any existing/fallback visuals.');
+  }
+}
+
+for (const [slug, filename] of assets) {
+  const target = join(targetDir, filename);
+  if (existsSync(target)) continue;
+
+  const installed = join(root, 'public', 'model', filename);
+  if (!existsSync(installed)) installAsset(slug);
+  if (existsSync(installed)) {
+    copyFileSync(installed, target);
+  } else if (!existsSync(target)) {
+    console.warn('[visual-assets] Missing ' + filename + ' after install attempt.');
+  }
+}
+
+writeFileSync(
+  join(targetDir, 'README.md'),
+  [
+    '# Stylized visual asset manifest',
+    '',
+    'Runtime source: Quaternius packs mirrored through Drawcall Market.',
+    'All listed Quaternius assets are CC0 1.0 / public domain.',
+    '',
+    'Sources:',
+    '- https://quaternius.com/packs/stylizednaturemegakit.html',
+    '- https://quaternius.itch.io/stylized-nature-megakit',
+    '- https://market.drawcall.ai/',
+    '',
+    'Drawcall Market assets are fetched at development/build time so the game keeps its runtime assets local.',
+    '',
+  ].join('\n'),
+);
