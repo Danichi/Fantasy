@@ -8,13 +8,13 @@ import type { DungeonProgress } from './dungeon/instance';
 // the whole game state lives here: progression, inventory, loadout, dungeon
 // progress and every map you've drawn.
 
-const KEY = 'fantasy-rpg-save-v3';
-const LEGACY_KEYS = ['fantasy-rpg-save-v2', 'fantasy-rpg-save-v1'];
+const KEY = 'fantasy-rpg-save-v4';
+const LEGACY_KEYS = ['fantasy-rpg-save-v3', 'fantasy-rpg-save-v2', 'fantasy-rpg-save-v1'];
 
 export interface SaveData {
-  v: 3;
+  v: 4;
   seed: number;
-  prog: { level: number; xp: number; gold: number; sp: number; learnedStyles: string[]; activeStyle: string | null; learnedSkills: Record<string, string[]> };
+  prog: { level: number; xp: number; gold: number; sp: number; primaryStyle: string | null; secondaryStyle: string | null; activeStyle: string | null; styleIntroductions: string[]; learnedSkills: Record<string, string[]>; styleMastery: Record<string, number> };
   items: { id: string; qty: number }[];
   equipped: Partial<Record<Slot, number>>; // slot -> index into items
   quick: (number | null)[];
@@ -44,26 +44,24 @@ export function loadSave(): SaveData | null {
     const raw = localStorage.getItem(KEY) ?? LEGACY_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
     if (!raw) return null;
     const d = JSON.parse(raw) as SaveData & { v: number; prog: any };
-    if (d.v === 3) return d as SaveData;
-    const oldSkills = d.prog?.learnedSkills ?? {};
-    const learnedStyles = (d.prog?.learnedStyles ?? []).filter((id: string) => id === 'swordsman' || id === 'bulwark');
-    const activeStyle = learnedStyles.includes(d.prog?.activeStyle) ? d.prog.activeStyle : (learnedStyles[0] ?? null);
+    if (d.v === 4) return d as SaveData;
+    const oldProg = d.prog ?? {};
     return {
       ...d,
-      v: 3,
+      v: 4,
       prog: {
-        level: d.prog?.level ?? 1,
-        xp: d.prog?.xp ?? 0,
-        gold: d.prog?.gold ?? 0,
-        sp: d.prog?.sp ?? 0,
-        learnedStyles,
-        activeStyle,
-        learnedSkills: {
-          swordsman: [...(oldSkills.swordsman ?? [])],
-          bulwark: [...(oldSkills.bulwark ?? [])],
-        },
+        level: oldProg.level ?? 1,
+        xp: oldProg.xp ?? 0,
+        gold: oldProg.gold ?? 0,
+        sp: oldProg.sp ?? 0,
+        primaryStyle: null,
+        secondaryStyle: null,
+        activeStyle: null,
+        styleIntroductions: [],
+        learnedSkills: { gale: [], boundary: [], cross: [] },
+        styleMastery: { gale: 0, boundary: 0, cross: 0 },
       },
-      moves: (d.moves ?? []).map((m: unknown) => typeof m === 'number' || typeof m === 'string' ? m : null),
+      moves: (d.moves ?? []).map((m: unknown) => typeof m === 'number' ? m : null),
     } as SaveData;
   } catch {
     return null;
@@ -84,9 +82,9 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     return k === null || k < 0 ? null : k;
   });
   const data: SaveData = {
-    v: 3,
+    v: 4,
     seed,
-    prog: { level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints, learnedStyles: [...player.prog.learnedStyles], activeStyle: player.prog.activeStyle, learnedSkills: structuredClone(player.prog.learnedSkills) },
+    prog: { level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints, primaryStyle: player.prog.primaryStyle, secondaryStyle: player.prog.secondaryStyle, activeStyle: player.prog.activeStyle, styleIntroductions: [...player.prog.styleIntroductions], learnedSkills: structuredClone(player.prog.learnedSkills), styleMastery: structuredClone(player.prog.styleMastery) },
     items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty })),
     equipped,
     quick: clean(eq.quick),
@@ -108,9 +106,12 @@ export function applySave(player: Player, d: SaveData) {
   p.xp = d.prog.xp;
   p.gold = d.prog.gold;
   p.skillPoints = d.prog.sp;
-  p.learnedStyles = (d.prog.learnedStyles ?? []).filter((id): id is 'swordsman' | 'bulwark' => id === 'swordsman' || id === 'bulwark');
-  p.activeStyle = p.learnedStyles.includes(d.prog.activeStyle as 'swordsman' | 'bulwark') ? (d.prog.activeStyle as 'swordsman' | 'bulwark') : (p.learnedStyles[0] ?? null);
-  p.learnedSkills = { swordsman: [], bulwark: [], ...(d.prog.learnedSkills ?? {}) };
+  p.primaryStyle = (d.prog.primaryStyle === 'gale' || d.prog.primaryStyle === 'boundary' || d.prog.primaryStyle === 'cross') ? d.prog.primaryStyle : null;
+  p.secondaryStyle = (d.prog.secondaryStyle === 'gale' || d.prog.secondaryStyle === 'boundary' || d.prog.secondaryStyle === 'cross') ? d.prog.secondaryStyle : null;
+  p.activeStyle = (d.prog.activeStyle === 'gale' || d.prog.activeStyle === 'boundary' || d.prog.activeStyle === 'cross') ? d.prog.activeStyle : p.primaryStyle;
+  p.styleIntroductions = (d.prog.styleIntroductions ?? []).filter((id): id is 'gale' | 'boundary' | 'cross' => id === 'gale' || id === 'boundary' || id === 'cross');
+  p.learnedSkills = { gale: [], boundary: [], cross: [], ...(d.prog.learnedSkills ?? {}) };
+  p.styleMastery = { gale: 0, boundary: 0, cross: 0, ...(d.prog.styleMastery ?? {}) };
   eq.items = [];
   const uids: number[] = [];
   for (const it of d.items) {
