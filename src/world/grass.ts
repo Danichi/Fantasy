@@ -7,17 +7,18 @@ import { mulberry32 } from '../core/math';
 // from a heightmap texture and density from the grass splat weight, so the
 // field follows the terrain without any CPU work per frame.
 
-const TILE = 30; // metres covered around the player
+const TILE = 52; // broad meadow tile kept centered on the camera
 
 function bladeGeometry() {
   // A tuft: three curved, tapering blades fanned around the centre.
-  const W = 0.024, H = 1;
+  const W = 0.032, H = 1.35;
   const pos: number[] = [];
   const idx: number[] = [];
   const blades: [number, number, number, number][] = [
     [0, 0, 0, 1],
-    [0.06, 0.03, 2.1, 0.8],
-    [-0.05, -0.04, 4.2, 0.9],
+    [0.08, 0.04, 1.65, 0.88],
+    [-0.07, -0.03, 3.25, 0.96],
+    [0.03, -0.08, 5.0, 0.74],
   ];
   for (const [ox, oz, rot, hs] of blades) {
     const base = pos.length / 3;
@@ -66,7 +67,7 @@ export class Grass {
       uTile: { value: TILE },
       uPlayer: { value: new THREE.Vector3() },
     };
-    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide, roughness: 0.94, metalness: 0 });
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, this.uniforms);
       sh.vertexShader = sh.vertexShader
@@ -89,7 +90,7 @@ export class Grass {
           // Thin out toward the tile edge and where there's no grass.
           float edge = 1.0 - smoothstep(uTile * 0.36, uTile * 0.5, length(world - uCenter));
           float keep = step(aOff.w, dens * 1.1) * edge;
-          float scale = (0.2 + aOff.w * 0.3) * keep * (0.55 + dens * 0.5);
+          float scale = (0.28 + aOff.w * 0.52) * keep * (0.72 + dens * 0.72);
           vec3 p = position;
           p.y *= scale;
           p.xz *= mix(0.8, 1.2, fract(aOff.w * 7.3)) * keep; // culled tufts collapse to a point
@@ -97,9 +98,9 @@ export class Grass {
           p.xz = mat2(c, -s, s, c) * p.xz;
           float tip = clamp(position.y, 0.0, 1.0);
           // Wind: slow gusts plus flutter, stronger at the tip.
-          float gust = sin(world.x * 0.12 + uTime * 1.3) * 0.5 + sin(world.y * 0.17 + uTime * 0.9) * 0.5;
+          float gust = sin(world.x * 0.10 + uTime * 1.15) * 0.5 + sin(world.y * 0.14 + uTime * 0.82) * 0.5;
           float flutter = sin(uTime * 4.0 + aOff.w * 20.0) * 0.25;
-          vec2 bend = vec2(0.55, 0.35) * (gust * 0.6 + flutter) * 0.12;
+          vec2 bend = vec2(0.52, 0.30) * (gust * 0.65 + flutter) * 0.11;
           // Push away from the player.
           vec2 away = world - uPlayer.xz;
           float d = length(away);
