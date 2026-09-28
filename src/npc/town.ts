@@ -23,7 +23,7 @@ export const NPCS: NpcSpec[] = [
     greeting: 'Feet apart. Shoulders loose. You hold that blade like it owes you money.',
     lines: [
       { q: 'Who are you?', a: "Kaela Voss. I trained the town watch, back when the watch still came home. The crypt up north swallows good steel." },
-      { q: 'Teach me the sword.', a: "Not yet. The drill yard's still being cleared. Come back soon and I'll show you techniques worth the bruises." },
+      { q: 'Teach me the sword.', a: 'I can. Choose Learn Swordsman in this conversation to begin training, then spend your skill points on her moves.' },
       { q: 'Any advice?', a: "Slimes crouch before they leap. Parry the leap, and they're yours for the taking. Big ones take longer to wind up. Be patient." },
     ],
     trainerStyle: 'swordsman',
@@ -42,7 +42,7 @@ export const NPCS: NpcSpec[] = [
     kind: 'statue',
     greeting: 'The ley lines are restless tonight. Can you feel it? No? Hm. You will.',
     lines: [
-      { q: 'Teach me magic.', a: 'Soon. Magic is not handed out like bread. Survive the crypt first, then we will see what wakes in you.' },
+      { q: 'Teach me magic.', a: 'Magic is separate from martial styles. Choose one of my spell lessons to learn it, then equip the spell on your MOVES bar.' },
       { q: 'The glowing sigil on the crypt?', a: 'A warding seal. It kept the dead in for three hundred years. Someone broke it, and from the inside.' },
       { q: 'Any advice?', a: 'Fire does not care about armour. Lock your eyes on your foe before you cast, or the flame goes wherever it pleases.' },
     ],
@@ -54,7 +54,7 @@ export const NPCS: NpcSpec[] = [
     greeting: 'You have the look of someone headed north. Most who take that road do not walk it twice.',
     lines: [
       { q: 'Why the black armour?', a: 'I swore an oath to guard this road, and failed it once. The armour remembers, even when the town forgets.' },
-      { q: 'Teach me the shield.', a: "A shield is a promise that you'll still be standing. When you have earned it, I will teach you the Bulwark." },
+      { q: 'Teach me the shield.', a: 'A shield is a promise that you will still be standing. Choose Learn Bulwark in this conversation when you are ready to train its moves.' },
       { q: 'About the Warlord...', a: 'Grukk swings a blade taller than you and reaches for a bow when you back away. Watch the steel redden before his heavy cut. That is your moment to parry.' },
     ],
     trainerStyle: 'bulwark',
