@@ -8,12 +8,12 @@ import type { DungeonProgress } from './dungeon/instance';
 // the whole game state lives here: progression, inventory, loadout, dungeon
 // progress and every map you've drawn.
 
-const KEY = 'fantasy-rpg-save-v1';
+const KEY = 'fantasy-rpg-save-v2';
 
 export interface SaveData {
-  v: 1;
+  v: 2;
   seed: number;
-  prog: { level: number; xp: number; gold: number; sp: number };
+  prog: { level: number; xp: number; gold: number; sp: number; combat: ReturnType<Player['prog']['combat']['toJSON']> };
   items: { id: string; qty: number }[];
   equipped: Partial<Record<Slot, number>>; // slot -> index into items
   quick: (number | null)[];
@@ -42,7 +42,7 @@ export function loadSave(): SaveData | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const d = JSON.parse(raw) as SaveData;
-    return d.v === 1 ? d : null;
+    return (d.v === 2 ? d : null);
   } catch {
     return null;
   }
@@ -63,7 +63,7 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
   const data: SaveData = {
     v: 1,
     seed,
-    prog: { level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints },
+    prog: { level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints, combat: player.prog.combat.toJSON() },
     items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty })),
     equipped,
     quick: clean(eq.quick),
@@ -85,6 +85,7 @@ export function applySave(player: Player, d: SaveData) {
   p.xp = d.prog.xp;
   p.gold = d.prog.gold;
   p.skillPoints = d.prog.sp;
+  p.combat.fromJSON(d.prog.combat);
   eq.items = [];
   const uids: number[] = [];
   for (const it of d.items) {
