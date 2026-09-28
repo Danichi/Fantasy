@@ -2,7 +2,7 @@ name: Fantasy CI
 
 on:
   push:
-    branches: ["main", "feat/progression-combat-visuals"]
+    branches: ["main"]
   pull_request:
     branches: ["main"]
 
