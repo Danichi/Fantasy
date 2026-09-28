@@ -7,7 +7,7 @@ import { buildSword } from '../items/weaponModels';
 import type { DialogueUI } from '../ui/dialogue';
 import type { Interactable } from '../dungeon/instance';
 import type { Player } from '../player/player';
-import type { CombatStyleId } from '../progression/styles';
+import { COMBAT_STYLES, type CombatStyleId } from '../progression/styles';
 import { trainingOption, starterChoiceOptions, magicOptions, shopOptions } from './services';
 
 // The townsfolk: who they are, where they stand, and what they teach or sell.
@@ -166,6 +166,11 @@ export class Town {
   }
 
   talk(s: NpcSpec, text = s.greeting) {
+    if (s.trainerStyle && text === s.greeting && !this.player.prog.styleIntroductions.includes(s.trainerStyle)) {
+      this.player.prog.markStyleIntroduction(s.trainerStyle);
+      const style = COMBAT_STYLES[s.trainerStyle];
+      text = `${s.greeting} ${style.name} is the art of ${style.mechanic.charAt(0).toLowerCase() + style.mechanic.slice(1)}`;
+    }
     const opts = s.lines.map((l) => ({ label: l.q, run: () => this.talk(s, l.a) }));
     if (s.trainerStyle) {
       const train = trainingOption(this.player, s.trainerStyle, (next) => this.talk(s, next));
