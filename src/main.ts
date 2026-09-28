@@ -151,12 +151,13 @@ async function boot() {
   // overlay is always visible while paused, so the game never freezes silently.
   let pausedByUser = false;
   let hadLock = false;
-  const overlays = buildOverlays(() => {
+  const overlays = buildOverlays((origin) => {
+    player.prog.combat.origin = origin;
     started = true;
     pausedByUser = false;
     input.fallbackLook = true;
     input.requestLock();
-  });
+  }, player.prog.combat.origin);
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
   hud.onSlotDrop = (mode, slot, uid) => {
