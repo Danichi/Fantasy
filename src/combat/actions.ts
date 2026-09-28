@@ -289,6 +289,23 @@ Object.assign(ACTIONS, {
   bulwarkAdvance: { ...ACTIONS.sprintAttack, id: 'bulwarkAdvance', dur: 1.4, stamina: 28, hit: { from: 0.5, to: 0.82, dmg: 2.85, poise: 140, hand: 'main' }, move: { dist: 2.5, from: 0.05, to: 0.8 }, track: 0.38 },
 });
 
+Object.assign(ACTIONS, {
+  galeStep: { ...ACTIONS.slash1, id: 'galeStep', dur: 0.72, stamina: 11, hit: { from: 0.28, to: 0.44, dmg: 1.05, poise: 18, hand: 'main' }, move: { dist: 0.95, from: 0.12, to: 0.46 }, track: 0.38 },
+  galeRush: { ...ACTIONS.slash2, id: 'galeRush', dur: 0.76, stamina: 12, hit: { from: 0.26, to: 0.46, dmg: 1.1, poise: 20, hand: 'main' }, move: { dist: 1.2, from: 0.1, to: 0.5 }, track: 0.36 },
+  galeCrosswind: { ...ACTIONS.slash3, id: 'galeCrosswind', dur: 0.9, stamina: 14, hit: { from: 0.36, to: 0.58, dmg: 1.3, poise: 26, hand: 'main' }, move: { dist: 0.8, from: 0.25, to: 0.62 }, track: 0.46 },
+  galeFinish: { ...ACTIONS.heavy, id: 'galeFinish', dur: 1.32, stamina: 24, hit: { from: 0.72, to: 0.98, dmg: 2.6, poise: 70, hand: 'main' }, move: { dist: 1.0, from: 0.62, to: 1.02 }, track: 0.78 },
+  galeTempest: { ...ACTIONS.sprintAttack, id: 'galeTempest', dur: 1.05, stamina: 19, hit: { from: 0.36, to: 0.68, dmg: 2.0, poise: 44, hand: 'main' }, move: { dist: 2.4, from: 0.03, to: 0.7 }, track: 0.34 },
+
+  boundaryPulse: { ...ACTIONS.slash3, id: 'boundaryPulse', dur: 0.95, stamina: 15, hit: { from: 0.38, to: 0.62, dmg: 1.4, poise: 64, hand: 'main' }, move: { dist: 0.2, from: 0.35, to: 0.62 }, track: 0.52 },
+  boundaryCounter: { ...ACTIONS.heavy, id: 'boundaryCounter', dur: 1.4, stamina: 22, hit: { from: 0.78, to: 1.04, dmg: 2.55, poise: 92, hand: 'main' }, move: { dist: 0.75, from: 0.66, to: 1.08 }, track: 0.86 },
+
+  crossParry: { ...ACTIONS.parryDual, id: 'crossParry', dur: 0.66, stamina: 9, parry: [0.05, 0.34], cancel: 0.45, track: 0.12 },
+  crossLunge: { ...ACTIONS.slash1, id: 'crossLunge', dur: 0.78, stamina: 13, hit: { from: 0.28, to: 0.48, dmg: 1.5, poise: 42, hand: 'main' }, move: { dist: 1.3, from: 0.12, to: 0.52 }, track: 0.4 },
+  crossFeint: { ...ACTIONS.slash2, id: 'crossFeint', dur: 0.75, stamina: 12, hit: { from: 0.25, to: 0.46, dmg: 1.3, poise: 34, hand: 'main' }, move: { dist: 0.7, from: 0.1, to: 0.5 }, track: 0.34 },
+  crossExecution: { ...ACTIONS.heavy, id: 'crossExecution', dur: 1.45, stamina: 25, hit: { from: 0.8, to: 1.08, dmg: 2.9, poise: 96, hand: 'main' }, move: { dist: 0.95, from: 0.64, to: 1.1 }, track: 0.9 },
+  crossMaster: { ...ACTIONS.sprintAttack, id: 'crossMaster', dur: 1.0, stamina: 18, hit: { from: 0.34, to: 0.62, dmg: 2.1, poise: 68, hand: 'main' }, move: { dist: 1.9, from: 0.04, to: 0.68 }, track: 0.32 },
+});
+
 export const LIGHT_COMBO_START = 'slash1';
 export const OFF_COMBO_START = 'offslash1';
 
