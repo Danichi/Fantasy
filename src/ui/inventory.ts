@@ -325,7 +325,7 @@ export class InventoryUI {
   }
 }
 
-export function buildOverlays(onStart: () => void) {
+export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon') => void, initialOrigin: 'human' | 'dragon' | 'demon' = 'human') {
   const root = document.getElementById('ui')!;
   const controls = `
     <div class="controls">
@@ -333,21 +333,37 @@ export function buildOverlays(onStart: () => void) {
       <span><kbd>Shift</kbd> Sprint · attack while sprinting to lunge</span><span><kbd>Space</kbd> Dodge roll</span>
       <span><kbd>LMB</kbd> Attack · hold for heavy</span><span><kbd>RMB</kbd> Block / off-hand attack</span>
       <span><kbd>F</kbd> Parry</span><span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on</span>
-      <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span>
+      <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span><span><kbd>B</kbd> Boundary stance when Boundary is primary</span><span><kbd>V</kbd> Origin ability</span>
       <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory</span>
       <span><kbd>E</kbd> Interact (doors, chests, gates)</span><span><kbd>M</kbd> Draw the dungeon map</span>
     </div>`;
   const start = document.createElement('div');
   start.className = 'overlay';
-  start.innerHTML = `<div class="title-card"><h1>THE TRAINING GROUNDS</h1><p class="sub">Slimes have overrun the field outside town. Take up your sword.</p><span class="cta">CLICK TO BEGIN</span><p class="mobile-note">Best played with a keyboard and mouse on a larger screen.</p>${controls}</div>`;
+  start.innerHTML = `<div class="title-card"><h1>THE TRAINING GROUNDS</h1><p class="sub">A bright fantasy training world. Choose your origin, then shape your Heroic Legacy.</p>
+  <div class="origin-picker">
+    <button class="origin-choice" data-origin="human"><b>HUMAN</b><span>Adaptable learning</span></button>
+    <button class="origin-choice" data-origin="dragon"><b>DRAGON</b><span>Fire resistance · flight · breath</span></button>
+    <button class="origin-choice" data-origin="demon"><b>DEMON</b><span>Regeneration · infernal abilities</span></button>
+  </div>
+  <span class="cta">CLICK TO BEGIN</span><p class="mobile-note">Best played with a keyboard and mouse on a larger screen.</p>${controls}</div>`;
   root.appendChild(start);
+  let selectedOrigin = initialOrigin;
+  const originChoices = [...start.querySelectorAll<HTMLButtonElement>('.origin-choice')];
+  originChoices.forEach((b) => {
+    b.classList.toggle('selected', b.dataset.origin === selectedOrigin);
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectedOrigin = b.dataset.origin as 'human' | 'dragon' | 'demon';
+      originChoices.forEach((x) => x.classList.toggle('selected', x === b));
+    });
+  });
   const help = document.createElement('div');
   help.className = 'overlay hidden';
   help.innerHTML = `<div class="title-card"><h1>CONTROLS</h1><p class="sub">Parry a slime's leap with good timing to stagger it, then strike for a critical riposte.</p>${controls}<p class="sub" style="margin-top:22px">Press H or click to close</p></div>`;
   root.appendChild(help);
   start.addEventListener('click', () => {
     start.classList.add('hidden');
-    onStart();
+    onStart(selectedOrigin);
   });
   // Desktop build: Quit and fullscreen buttons on the title/pause screen.
   const desktop = (window as any).desktop as { quit(): void; toggleFullscreen(): void } | undefined;
