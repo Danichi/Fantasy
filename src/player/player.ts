@@ -356,6 +356,7 @@ export class Player {
   }
 
   private endAction() {
+    if (this.activeCombatStyle === 'gale' && this.act?.def.hit && this.act.hitSet.size === 0) this.breakMomentum(24);
     this.poseFrom = this.lastPose;
     this.poseFade = 0;
     this.act = null;
