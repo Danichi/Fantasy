@@ -164,18 +164,22 @@ async function boot() {
   });
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
-  hud.onSlotDrop = (mode, slot, uid) => {
+  hud.onSlotDrop = (mode, slot, ref) => {
     const eq = player.equip;
+    const uid = typeof ref === 'number' ? ref : 0;
     const it = eq.get(uid);
     if (!it) return;
-    // Quick items take consumables; the moveset takes spells (and skills later).
+    // Quick items take consumables; the moveset takes spells and learned martial moves.
     if (mode === 'items' && it.def.kind === 'consumable' && slot < eq.quick.length) {
       eq.quick = eq.quick.map((u) => (u === uid ? null : u));
       eq.quick[slot] = uid;
-    } else if (mode === 'moves' && it.def.kind === 'spell') {
-      eq.moves = eq.moves.map((u) => (u === uid ? null : u));
-      eq.moves[slot] = uid;
-    } else hud.toast(mode === 'items' ? 'Quick slots take potions and other usables' : 'The moveset takes spells and skills');
+    } else if (mode === 'moves' && typeof ref === 'number' && it.def.kind === 'spell') {
+      eq.moves = eq.moves.map((u) => (u === ref ? null : u));
+      eq.moves[slot] = ref;
+    } else if (mode === 'moves' && typeof ref === 'string' && ref.startsWith('skill:')) {
+      eq.moves = eq.moves.map((u) => (u === ref ? null : u));
+      eq.moves[slot] = ref;
+    } else hud.toast(mode === 'items' ? 'Quick slots take potions and other usables' : 'The moveset takes spells and learned martial moves');
     hud.markHotbarDirty();
   };
   inv.onToggle = (open) => {
@@ -227,10 +231,10 @@ async function boot() {
       if (it.def.kind === 'consumable') player.useConsumable(it.uid);
       hud.markHotbarDirty();
     } else {
-      const it = eq.get(eq.moves[i]);
-      if (!it) return;
+      const ref = eq.moves[i];
+      if (ref == null) return;
       hud.pulseSlot(i);
-      player.castMove(it.uid);
+      player.useMove(ref);
       hud.markHotbarDirty();
     }
   };
