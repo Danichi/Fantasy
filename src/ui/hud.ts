@@ -31,6 +31,8 @@ interface BarEls {
 export class HUD {
   readonly root: HTMLElement;
   private bars: Record<'hp' | 'st' | 'mp', BarEls>;
+  private momentumEl: HTMLDivElement;
+  private focusEl: HTMLDivElement;
   private slots: HTMLDivElement[] = [];
   private hands: Record<'main' | 'off', HTMLDivElement>;
   private barTitle: HTMLDivElement;
@@ -70,6 +72,8 @@ export class HUD {
       return { root, fill, trail, num, trailV: 1, trailHold: 0, last: 1 };
     };
     this.bars = { hp: mk('hp', 'HEALTH'), st: mk('st', 'STAMINA'), mp: mk('mp', 'MANA') };
+    this.momentumEl = el('div', 'style-resource momentum hidden', vit, '<span class="sr-label">MOMENTUM</span><i></i><b></b>');
+    this.focusEl = el('div', 'style-resource focus hidden', vit, '<span class="sr-label">FOCUS</span><i></i><b></b>');
     const xpRow = el('div', 'xprow', vit);
     xpRow.innerHTML = '<span class="lv">LV 1</span><div class="xpbar"><i></i></div><span class="gold">0</span>';
     this.xpFill = xpRow.querySelector('.xpbar i')!;
@@ -274,6 +278,15 @@ export class HUD {
     this.updateBar(this.bars.hp, p.hp, p.maxHp, dt, 120 + p.maxHp * 1.6);
     this.updateBar(this.bars.st, p.stamina, p.maxStamina, dt, 110 + p.maxStamina * 1.5);
     this.updateBar(this.bars.mp, p.mana, p.maxMana, dt, 100 + p.maxMana * 1.5);
+    const style = p.prog.activeStyle;
+    const showMomentum = style === 'gale';
+    const showFocus = style === 'boundary';
+    this.momentumEl.classList.toggle('hidden', !showMomentum);
+    this.focusEl.classList.toggle('hidden', !showFocus);
+    (this.momentumEl.querySelector('i') as HTMLElement).style.transform = `scaleX(${p.momentum / 100})`;
+    (this.focusEl.querySelector('i') as HTMLElement).style.transform = `scaleX(${p.focus / 100})`;
+    (this.momentumEl.querySelector('b') as HTMLElement).textContent = `${Math.round(p.momentum)}`;
+    (this.focusEl.querySelector('b') as HTMLElement).textContent = `${Math.round(p.focus)}`;
     if (this.hotbarDirty) {
       this.hotbarDirty = false;
       this.renderHotbar();
