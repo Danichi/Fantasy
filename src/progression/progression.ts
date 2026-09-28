@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { events } from '../core/events';
 import { heightAt } from '../world/terrain';
-import { COMBAT_STYLES, STYLE_SWAP_LEVEL, type CombatStyleId } from './styles';
+import { COMBAT_STYLES, type CombatStyleId } from './styles';
 
 // Levels, XP, gold and skill points, plus the glowing orbs and coins that
 // burst out of defeated enemies and fly to the player.
