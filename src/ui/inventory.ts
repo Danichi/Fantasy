@@ -402,7 +402,21 @@ export function buildOverlays(onStart: () => void) {
     start,
     help,
     showPaused(show: boolean) {
-      start.querySelector('.cta')!.textContent = 'CLICK TO RESUME';
+      const title = start.querySelector('h1')!;
+      const sub = start.querySelector('.sub')!;
+      const cta = start.querySelector('.cta')!;
+      const controlsEl = start.querySelector('.controls') as HTMLElement | null;
+      if (show) {
+        title.textContent = 'PAUSED';
+        sub.textContent = 'The world is frozen. Resume when you are ready.';
+        cta.textContent = 'RESUME';
+        controlsEl?.classList.add('pause-hide');
+      } else {
+        title.textContent = 'THE TRAINING GROUNDS';
+        sub.textContent = 'A living fantasy world. Learn from its people before you master its power.';
+        cta.textContent = 'CLICK TO BEGIN';
+        controlsEl?.classList.remove('pause-hide');
+      }
       start.classList.toggle('hidden', !show);
     },
     toggleHelp() {
