@@ -39,7 +39,7 @@ export class Progression {
   }
 
   addCombatXp(id: DisciplineId, amount: number, event: Parameters<CombatProgression['addCombatEvent']>[0] = 'attackHit') {
-    this.combat.addDisciplineXp(id, amount, event ? undefined : 0);
+    this.combat.addDisciplineXp(id, amount, 0);
     events.emit('masteryChanged', { discipline: id, mastery: this.combat.disciplines[id].mastery, level: this.combat.disciplines[id].level });
   }
 
