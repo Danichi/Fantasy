@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><title>tree probe</title></head><body style="margin:0;background:#8fb3d9">
+<script type="module">
+import * as THREE from 'three';
+import { Tree } from '@dgreenheck/ez-tree';
+const out = {};
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(1200, 500); document.body.appendChild(r.domElement);
+r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x9fc3e6);
+scene.add(new THREE.HemisphereLight(0xdfefff, 0x4a5a30, 1.4)); const sun = new THREE.DirectionalLight(0xfff0d8, 3); sun.position.set(-20, 40, 30); scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x4d6b2a })); scene.add(ground);
+const presets = ['Oak Medium', 'Ash Medium', 'Aspen Medium', 'Pine Medium', 'Oak Large', 'Bush 1'];
+presets.forEach((p, i) => {
+  const t0 = performance.now();
+  const tree = new Tree(); tree.loadPreset(p); tree.options.seed = 1234 + i; tree.generate();
+  const ms = performance.now() - t0;
+  const tri = (m) => (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
+  const box = new THREE.Box3().setFromObject(tree);
+  out[p] = { ms: Math.round(ms), branchTris: tri(tree.branchesMesh), leafTris: tri(tree.leavesMesh), height: +(box.max.y - box.min.y).toFixed(1), mats: [tree.branchesMesh.material.type, tree.leavesMesh.material.type] };
+  tree.scale.setScalar(0.18);
+  tree.position.set((i - 2.5) * 14, 0, 0);
+  scene.add(tree);
+});
+const cam = new THREE.PerspectiveCamera(40, 1200 / 500, 0.1, 500); cam.position.set(0, 6, 60); cam.lookAt(0, 7, 0);
+const trees = scene.children.filter((c) => c instanceof Tree);
+const clock = new THREE.Clock();
+const loop = () => { const t = clock.getElapsedTime(); trees.forEach((tr) => tr.update(t)); r.render(scene, cam); requestAnimationFrame(loop); };
+loop();
+window.__out = out; setTimeout(() => (window.__done = true), 2500);
+</script></body></html>

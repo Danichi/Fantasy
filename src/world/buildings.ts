@@ -7,6 +7,7 @@ import { mulberry32 } from '../core/math';
 
 export interface WorldMats {
   stone: THREE.Material;
+  bridgeStone?: THREE.Material;
   plaster: THREE.Material;
   timber: THREE.Material;
   slate: THREE.Material;
@@ -57,7 +58,7 @@ export interface HouseSpec {
 export function buildHouse(spec: HouseSpec, m: WorldMats) {
   const rnd = mulberry32(spec.seed);
   const parts: Record<keyof WorldMats, THREE.BufferGeometry[]> = {
-    stone: [], plaster: [], timber: [], slate: [], thatch: [], planks: [], glass: [], bark: [],
+    stone: [], bridgeStone: [], plaster: [], timber: [], slate: [], thatch: [], planks: [], glass: [], bark: [],
   };
   const { w, d } = spec;
   const plinth = 0.7;
@@ -195,7 +196,7 @@ export function buildHouse(spec: HouseSpec, m: WorldMats) {
     });
     const merged = mergeGeometries(norm, false);
     if (!merged) continue;
-    const mesh = new THREE.Mesh(merged, m[key]);
+    const mesh = new THREE.Mesh(merged, m[key] ?? m.stone);
     mesh.castShadow = key !== 'glass';
     mesh.receiveShadow = true;
     group.add(mesh);

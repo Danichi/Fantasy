@@ -1,11 +1,7 @@
 import * as THREE from 'three';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { Q } from '../core/settings';
+import { Post } from './post';
 
 // Sun in the south-west: lights the town facades and the player's usual view north.
 export const SUN_DIR = new THREE.Vector3(-0.5, 0.6, 0.55).normalize();
@@ -17,16 +13,17 @@ export class Renderer {
   readonly camera: THREE.PerspectiveCamera;
   readonly sun: THREE.DirectionalLight;
   readonly hemi: THREE.HemisphereLight;
-  private composer: EffectComposer | null = null;
-  private bloom?: UnrealBloomPass;
-  private smaa?: SMAAPass;
+  readonly post: Post | null = null;
   private basePixelRatio = Q.pixelRatio;
   private dynScale = 1;
   private frameTimes: number[] = [];
   private lastDynAdjust = 0;
+  private frameNo = 0;
 
   constructor(container: HTMLElement) {
-    const r = new THREE.WebGLRenderer({ antialias: Q.msaa, powerPreference: 'high-performance', stencil: false });
+    // With post-processing the scene renders into an MSAA target, so the
+    // canvas itself doesn't need antialiasing.
+    const r = new THREE.WebGLRenderer({ antialias: !Q.post && Q.msaa, powerPreference: 'high-performance', stencil: false });
     r.setPixelRatio(this.basePixelRatio);
     r.setSize(window.innerWidth, window.innerHeight);
     r.shadowMap.enabled = true;
@@ -39,37 +36,24 @@ export class Renderer {
     container.appendChild(r.domElement);
     this.renderer = r;
 
-    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 900);
-    this.scene.fog = new THREE.Fog(FOG_COLOR, 60, 420);
+    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1400);
+    // The post pass draws atmospheric haze from depth; Low falls back to fog.
+    if (!Q.post) this.scene.fog = new THREE.Fog(FOG_COLOR, 80, 600);
 
     // Sun: warm key light with a tight shadow box that follows the player.
-    this.sun = new THREE.DirectionalLight(0xfff1dc, 3.1);
+    this.sun = new THREE.DirectionalLight(0xffe9cc, 3.3);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(Q.shadowMapSize, Q.shadowMapSize);
     const s = this.sun.shadow.camera;
-    s.left = -26; s.right = 26; s.top = 26; s.bottom = -26; s.near = 1; s.far = 140;
+    s.left = -30; s.right = 30; s.top = 30; s.bottom = -30; s.near = 1; s.far = 160;
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.035;
     this.scene.add(this.sun, this.sun.target);
 
-    this.hemi = new THREE.HemisphereLight(0xcfe3ff, 0x5b5142, 0.55);
+    this.hemi = new THREE.HemisphereLight(0xd6e8ff, 0x5f5236, 0.62);
     this.scene.add(this.hemi);
 
-    // Post-processing chain (High only). HalfFloat keeps HDR values for bloom.
-    if (Q.bloom || Q.smaa) {
-      const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
-      this.composer = new EffectComposer(r, rt);
-      this.composer.addPass(new RenderPass(this.scene, this.camera));
-      if (Q.bloom) {
-        this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.4, 2.2);
-        this.composer.addPass(this.bloom);
-      }
-      this.composer.addPass(new OutputPass());
-      if (Q.smaa) {
-        this.smaa = new SMAAPass();
-        this.composer.addPass(this.smaa);
-      }
-    }
+    if (Q.post) this.post = new Post(r, Q.msaa ? 4 : 0);
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
@@ -81,9 +65,9 @@ export class Renderer {
     const env = pmrem.fromEquirectangular(tex).texture;
     pmrem.dispose();
     this.scene.environment = env;
-    this.scene.environmentIntensity = 0.7;
+    this.scene.environmentIntensity = 0.75;
     this.scene.background = tex;
-    this.scene.backgroundIntensity = 0.85;
+    this.scene.backgroundIntensity = 0.9;
     this.scene.backgroundBlurriness = 0.02;
   }
 
@@ -94,20 +78,17 @@ export class Renderer {
     const pr = this.basePixelRatio * this.dynScale;
     this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h);
-    this.composer?.setPixelRatio(pr);
-    this.composer?.setSize(w, h);
-    // Bloom at half resolution is plenty and saves a lot on integrated GPUs.
-    this.bloom?.setSize(Math.floor((w * pr) / 2), Math.floor((h * pr) / 2));
+    this.post?.setSize(Math.floor(w * pr), Math.floor(h * pr));
   }
 
   /** Keep the shadow frustum centred on the player so it stays sharp. */
   followShadow(focus: THREE.Vector3) {
-    const texel = (26 * 2) / Q.shadowMapSize;
+    const texel = (30 * 2) / Q.shadowMapSize;
     // Snap to shadow texels to stop shimmering as the player moves.
     const fx = Math.round(focus.x / texel) * texel;
     const fz = Math.round(focus.z / texel) * texel;
     this.sun.target.position.set(fx, focus.y, fz);
-    this.sun.position.set(fx, focus.y, fz).addScaledVector(SUN_DIR, 70);
+    this.sun.position.set(fx, focus.y, fz).addScaledVector(SUN_DIR, 80);
   }
 
   /** Nudge render resolution to hold ~60fps. */
@@ -130,11 +111,9 @@ export class Renderer {
     return this.dynScale;
   }
 
-  private frameNo = 0;
-
-  render() {
+  render(dt = 1 / 60) {
     this.renderer.shadowMap.needsUpdate = this.frameNo++ % 2 === 0;
-    if (this.composer) this.composer.render();
+    if (this.post) this.post.render(this.scene, this.camera, SUN_DIR, dt);
     else this.renderer.render(this.scene, this.camera);
   }
 }

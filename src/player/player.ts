@@ -12,6 +12,7 @@ import { Equipment } from '../items/equipment';
 import { ACTIONS, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, resolveAction, type ActionDef } from '../combat/actions';
 import { targets, hurtSegment, type Target, type IncomingAttack, type DefenceResult } from '../combat/targets';
 import { surfaceAt } from '../world/terrain';
+import { waterDepthAt } from '../world/water';
 
 const CAPSULE_HALF = 0.55;
 const CAPSULE_R = 0.32;
@@ -449,6 +450,9 @@ export class Player {
     if (!a && intent.lengthSq() > 0) {
       targetSpeed = this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2;
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
+      // Wading slows you down.
+      const wade = waterDepthAt(this.pos.x, this.pos.z);
+      if (wade > 0.25) targetSpeed *= 0.5;
     }
     if (this.sprinting) {
       this.stamina = Math.max(0, this.stamina - 13 * dt);

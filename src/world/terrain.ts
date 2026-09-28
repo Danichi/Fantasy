@@ -1,58 +1,167 @@
 import * as THREE from 'three';
+import type RAPIER from '@dimforge/rapier3d-compat';
 import { fbm, smoothstep, clamp } from '../core/math';
 import { physics } from '../physics/physics';
 
 // ---------------------------------------------------------------------------
-// Layout of the Training Grounds (metres, +z = south, spawn faces north)
-//   plaza   : cobblestone disc at PLAZA_CENTER, radius PLAZA_R
-//   field   : packed dirt ring around the plaza plus roads to the gate/houses
-//   town    : timber houses along the north edge
-//   palisade: ring at PALISADE_R with a gate to the south
+// The overworld: about 1 km square, +z = south.
+//   town      walled by a palisade (TOWN_R) with gates south, north and east;
+//             the training plaza sits in the middle
+//   roads     south to the meadows, north to the crypt in the hills, east over
+//             the river bridge
+//   river     winds north-south east of town
+//   forest    covers the west; meadows lie south and east
+//   hills     rise to the north; mountains close the world in on every side
+// Heights are generated once into a 1 m grid; heightAt() samples it.
 // ---------------------------------------------------------------------------
+export const WORLD_SIZE = 1024;
+export const TERRAIN_SIZE = WORLD_SIZE; // alias used by the grass and splat maps
 export const PLAZA_CENTER = new THREE.Vector2(0, -4);
 export const PLAZA_R = 12;
-export const PALISADE_R = 58;
-export const TERRAIN_SIZE = 320;
+export const TOWN_R = 80;
+export const PALISADE_R = TOWN_R;
+export const GATES = {
+  south: new THREE.Vector2(0, TOWN_R),
+  north: new THREE.Vector2(0, -TOWN_R),
+  east: new THREE.Vector2(TOWN_R, 0),
+};
+export const RIVER_LEVEL = -0.6;
+export const CRYPT = new THREE.Vector2(0, -318); // entrance in the hillside
+export const BRIDGE = new THREE.Vector2(0, 6); // x filled in from the river below
 
-function roadDist(x: number, z: number) {
-  // South road to the gate, gently wandering.
-  const southX = Math.sin(z * 0.05) * 3;
-  const dSouth = z > -4 ? Math.abs(x - southX) : 1e9;
-  // North road to the houses.
-  const dNorth = z < -4 && z > -40 ? Math.abs(x + Math.sin(z * 0.08) * 1.5) : 1e9;
-  // Street in front of the houses.
-  const dStreet = Math.abs(z + 30) + Math.max(0, Math.abs(x) - 34);
-  return Math.min(dSouth, dNorth, dStreet);
+export function riverX(z: number) {
+  return 158 + Math.sin(z / 95) * 24 + Math.sin(z / 37 + 1.3) * 7;
+}
+BRIDGE.x = riverX(BRIDGE.y);
+
+type P = [number, number];
+const ROADS: P[][] = [
+  // south gate to the meadows and beyond
+  [[0, TOWN_R - 6], [0, 130], [-14, 210], [-8, 320], [12, 500]],
+  // north gate up the valley to the crypt
+  [[0, -TOWN_R + 6], [6, -150], [-8, -225], [0, -300]],
+  // east gate over the bridge
+  [[TOWN_R - 6, 0], [120, 4], [BRIDGE.x, BRIDGE.y], [230, 22], [330, 60], [500, 70]],
+];
+const STREETS: P[][] = [
+  [[0, -4], [0, TOWN_R - 6]],
+  [[0, -4], [0, -TOWN_R + 6]],
+  [[0, -4], [TOWN_R - 6, 0]],
+  [[-40, -30], [40, -30]], // house row
+  [[-55, 20], [-8, 6]], // to the inn and market
+];
+
+function segDist(px: number, pz: number, a: P, b: P) {
+  const vx = b[0] - a[0], vz = b[1] - a[1];
+  const t = clamp(((px - a[0]) * vx + (pz - a[1]) * vz) / (vx * vx + vz * vz), 0, 1);
+  return Math.hypot(px - a[0] - vx * t, pz - a[1] - vz * t);
+}
+function polyDist(px: number, pz: number, lines: P[][]) {
+  let d = 1e9;
+  for (const l of lines) for (let i = 0; i < l.length - 1; i++) d = Math.min(d, segDist(px, pz, l[i], l[i + 1]));
+  return d;
+}
+export function roadDist(x: number, z: number) {
+  return polyDist(x, z, ROADS);
+}
+export function streetDist(x: number, z: number) {
+  return polyDist(x, z, STREETS);
 }
 
-export function heightAt(x: number, z: number) {
-  const dx = x - PLAZA_CENTER.x, dz = z - PLAZA_CENTER.y;
-  const r = Math.sqrt(dx * dx + dz * dz);
-  const flatten = smoothstep(15, 38, r);
-  let h = (fbm(x / 38 + 3.1, z / 38 - 7.7, 4) - 0.5) * 3.2 * flatten;
-  // Keep roads and the house street level.
-  const road = smoothstep(7, 2, roadDist(x, z));
-  h *= 1 - road * 0.7;
-  // Hills rise outside the palisade to frame the scene.
-  const hill = smoothstep(PALISADE_R + 6, 150, r);
-  h += Math.pow(hill, 1.4) * 34 * (0.55 + 0.9 * fbm(x / 55, z / 55, 3));
+/** The procedural height function (slow). Use heightAt() at runtime. */
+function heightFn(x: number, z: number) {
+  const r = Math.hypot(x, z);
+  // Rolling countryside.
+  let h = (fbm(x / 110 + 3.1, z / 110 - 7.7, 4) - 0.5) * 12 + (fbm(x / 32, z / 32, 3) - 0.5) * 2.2;
+  // Town sits on a gentle, nearly level rise.
+  const town = smoothstep(TOWN_R + 35, TOWN_R - 5, r);
+  h = h * (1 - town * 0.88) + town * 0.4;
+  // Northern hills with the crypt entrance cut into their foot.
+  const north = smoothstep(-170, -330, z);
+  h += north * (18 + 22 * fbm(x / 70, z / 70, 3));
+  const cd = Math.hypot(x - CRYPT.x, (z - CRYPT.y) * 0.8);
+  const terrace = smoothstep(26, 12, Math.hypot(x - CRYPT.x, z - (CRYPT.y + 22)));
+  h = h * (1 - terrace) + (8 + 3 * fbm(x / 20, z / 20, 2)) * terrace;
+  // The hill face behind the entrance stays steep.
+  if (z < CRYPT.y + 4) h += smoothstep(24, 6, cd) * 6;
+  // Roads are smoothed and slightly raised.
+  const rd = roadDist(x, z);
+  const road = smoothstep(9, 2.5, rd);
+  h = h * (1 - road * 0.55);
+  // River: banks above the water, channel carved below it.
+  const dr = Math.abs(x - riverX(z));
+  const nearRiver = smoothstep(40, 14, dr);
+  h = Math.max(h, RIVER_LEVEL + 1.2) * nearRiver + h * (1 - nearRiver);
+  const channel = smoothstep(13, 5, dr);
+  // About a metre deep: wadeable, slowly.
+  h = h * (1 - channel) + (RIVER_LEVEL - 1.1 + (dr / 5) * 0.45) * channel;
+  // Mountains close the world in.
+  const edge = Math.max(Math.abs(x), Math.abs(z));
+  const m = smoothstep(330, 512, edge + (fbm(x / 90, z / 90, 3) - 0.5) * 60);
+  h += Math.pow(m, 1.6) * 95 * (0.6 + 0.8 * fbm(x / 70, z / 70, 4));
   return h;
 }
 
-/** Surface weights [stone, dirt, grass], summing to 1. */
+// ---- height grid ------------------------------------------------------------
+const GRID = WORLD_SIZE + 1; // 1 m spacing
+let heights: Float32Array | null = null;
+
+/** Build the 1 m height grid (about half a second). Call once at startup. */
+export function initTerrainData() {
+  heights = new Float32Array(GRID * GRID);
+  const H = WORLD_SIZE / 2;
+  for (let j = 0; j < GRID; j++) {
+    for (let i = 0; i < GRID; i++) heights[j * GRID + i] = heightFn(i - H, j - H);
+  }
+}
+
+export function heightAt(x: number, z: number) {
+  if (!heights) return heightFn(x, z);
+  const H = WORLD_SIZE / 2;
+  const fx = clamp(x + H, 0, WORLD_SIZE - 1e-3), fz = clamp(z + H, 0, WORLD_SIZE - 1e-3);
+  const i = Math.floor(fx), j = Math.floor(fz);
+  const u = fx - i, v = fz - j;
+  const a = heights[j * GRID + i], b = heights[j * GRID + i + 1];
+  const c = heights[(j + 1) * GRID + i], d = heights[(j + 1) * GRID + i + 1];
+  return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+}
+
+/** Heights as a half-float texture (1 m texels) for GPU-placed foliage. */
+export function heightTexture() {
+  const N = WORLD_SIZE;
+  const data = new Uint16Array(N * N);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) data[j * N + i] = THREE.DataUtils.toHalfFloat(heights ? heights[j * GRID + i] : 0);
+  const t = new THREE.DataTexture(data, N, N, THREE.RedFormat, THREE.HalfFloatType);
+  t.magFilter = t.minFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
+}
+
+export function normalAt(x: number, z: number, out = new THREE.Vector3()) {
+  const e = 1;
+  return out.set(heightAt(x - e, z) - heightAt(x + e, z), 2 * e, heightAt(x, z - e) - heightAt(x, z + e)).normalize();
+}
+
+/** Surface weights [stone, dirt, grass], summing to 1 (rock comes from slope in the shader). */
 export function splatAt(x: number, z: number): [number, number, number] {
   const dx = x - PLAZA_CENTER.x, dz = z - PLAZA_CENTER.y;
   const r = Math.sqrt(dx * dx + dz * dz);
   const n = fbm(x * 0.11, z * 0.11, 3);
-  const stone = smoothstep(PLAZA_R + 0.6, PLAZA_R - 0.6, r + (n - 0.5) * 2.2);
-  const rd = roadDist(x, z);
+  const inTown = Math.hypot(x, z) < TOWN_R - 2;
+  let stone = smoothstep(PLAZA_R + 0.6, PLAZA_R - 0.6, r + (n - 0.5) * 2.2);
+  if (inTown) stone = Math.max(stone, smoothstep(2.8, 1.6, streetDist(x, z) + (n - 0.5) * 1.4));
+  // Stone apron in front of the crypt.
+  stone = Math.max(stone, smoothstep(9, 6, Math.hypot(x - CRYPT.x, z - (CRYPT.y + 10)) + (n - 0.5) * 2));
   const fieldEdge = 22 + (fbm(x * 0.05 + 9, z * 0.05, 3) - 0.5) * 12;
   let dirt = Math.max(
     smoothstep(fieldEdge + 3, fieldEdge - 3, r),
-    smoothstep(3.4, 1.6, rd + (n - 0.5) * 2.5),
+    smoothstep(3.6, 1.8, roadDist(x, z) + (n - 0.5) * 2.5),
   );
-  // Worn dirt patches scattered in the grass.
-  dirt = Math.max(dirt, smoothstep(0.66, 0.74, fbm(x * 0.045 - 3, z * 0.045 + 5, 3)) * 0.85);
+  // River banks: mud and gravel.
+  const dr = Math.abs(x - riverX(z));
+  dirt = Math.max(dirt, smoothstep(17, 11, dr + (n - 0.5) * 4));
+  // Worn patches scattered in the grass.
+  dirt = Math.max(dirt, smoothstep(0.68, 0.76, fbm(x * 0.045 - 3, z * 0.045 + 5, 3)) * 0.8);
   dirt = clamp(dirt * (1 - stone), 0, 1);
   const grass = clamp(1 - stone - dirt, 0, 1);
   return [stone, dirt, grass];
@@ -64,6 +173,7 @@ export function surfaceAt(x: number, z: number): Surface {
   return s >= d && s >= g ? 'stone' : d >= g ? 'dirt' : 'grass';
 }
 
+// ---- rendering ----------------------------------------------------------------
 function loadTex(loader: THREE.TextureLoader, url: string, srgb: boolean, aniso: number) {
   const t = loader.load(url);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -73,12 +183,12 @@ function loadTex(loader: THREE.TextureLoader, url: string, srgb: boolean, aniso:
 }
 
 function buildSplatTexture() {
-  const N = 512;
+  const N = 1024;
   const data = new Uint8Array(N * N * 4);
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
-      const x = ((i + 0.5) / N - 0.5) * TERRAIN_SIZE;
-      const z = ((j + 0.5) / N - 0.5) * TERRAIN_SIZE;
+      const x = ((i + 0.5) / N - 0.5) * WORLD_SIZE;
+      const z = ((j + 0.5) / N - 0.5) * WORLD_SIZE;
       const [s, d, g] = splatAt(x, z);
       const k = (j * N + i) * 4;
       data[k] = s * 255;
@@ -95,16 +205,7 @@ function buildSplatTexture() {
   return tex;
 }
 
-export function buildTerrain(scene: THREE.Scene, renderer: THREE.WebGLRenderer) {
-  const SEG = 170;
-  const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, SEG, SEG);
-  geo.rotateX(-Math.PI / 2);
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < pos.count; i++) {
-    pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
-  }
-  geo.computeVertexNormals();
-
+function terrainMaterial(renderer: THREE.WebGLRenderer) {
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const L = new THREE.TextureLoader();
   const base = '/assets/textures/';
@@ -116,30 +217,33 @@ export function buildTerrain(scene: THREE.Scene, renderer: THREE.WebGLRenderer) 
   const stone = set('cobblestone_floor_08');
   const dirt = set('brown_mud_leaves_01');
   const grass = set('aerial_grass_rock');
+  const rock = set('rock_face_03');
 
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
   const uniforms = {
     tSplat: { value: buildSplatTexture() },
-    uSize: { value: TERRAIN_SIZE },
+    uSize: { value: WORLD_SIZE },
     dS: { value: stone.diff }, nS: { value: stone.nor }, aS: { value: stone.arm },
     dD: { value: dirt.diff }, nD: { value: dirt.nor }, aD: { value: dirt.arm },
     dG: { value: grass.diff }, nG: { value: grass.nor }, aG: { value: grass.arm },
+    dR: { value: rock.diff }, nR: { value: rock.nor },
   };
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWN;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWN = normal;');
     sh.fragmentShader = sh.fragmentShader
       .replace(
         '#include <common>',
         `#include <common>
         varying vec3 vWPos;
-        uniform sampler2D tSplat, dS, nS, aS, dD, nD, aD, dG, nG, aG;
+        varying vec3 vWN;
+        uniform sampler2D tSplat, dS, nS, aS, dD, nD, aD, dG, nG, aG, dR, nR;
         uniform float uSize;
-        vec3 tW; // blended surface weights, shared by later chunks
-        float tFar;
-        vec2 uvS, uvD, uvG;
+        vec3 tW;
+        float tFar, tRock;
+        vec2 uvS, uvD, uvG, uvR;
         vec3 heightBlend(vec3 w, vec3 h) {
           vec3 x = w + h * 0.55;
           float m = max(max(x.r, x.g), x.b) - 0.28;
@@ -153,20 +257,29 @@ export function buildTerrain(scene: THREE.Scene, renderer: THREE.WebGLRenderer) 
         uvS = vWPos.xz / 2.6; uvD = vWPos.xz / 3.4; uvG = vWPos.xz / 4.2;
         float far = smoothstep(18.0, 80.0, length(vWPos - cameraPosition));
         tFar = far;
-        // Raw splat decides which layers are present; only those get sampled.
-        // Far away, a much larger UV scale keeps the hills from tiling.
-        // Big regions are a single layer, so most pixels take one path.
+        // Only layers that are present get sampled; big regions take one path.
         vec3 cS = vec3(0.0), cD = vec3(0.0), cG = vec3(0.0);
         vec2 uv2 = mat2(0.8, -0.6, 0.6, 0.8) * vWPos.xz;
         float mv = smoothstep(0.3, 0.7, sp.a);
         if (sp.r > 0.004) cS = texture2D(dS, uvS).rgb * 0.62;
         if (sp.g > 0.004) cD = texture2D(dD, far > 0.5 ? uv2 / 3.4 * 0.1 : uvD).rgb * vec3(0.95, 0.9, 0.85);
-        if (sp.b > 0.004) cG = texture2D(dG, far > 0.5 ? uv2 / 4.2 * 0.09 : uvG).rgb * vec3(0.78, 0.98, 0.62);
+        if (sp.b > 0.004) cG = texture2D(dG, far > 0.5 ? uv2 / 4.2 * 0.09 : uvG).rgb * vec3(0.72, 0.95, 0.55);
         vec3 hts = vec3(dot(cS, vec3(0.5)), dot(cD, vec3(0.4)), dot(cG, vec3(0.5)));
         tW = heightBlend(sp.rgb, hts);
         vec3 col = cS * tW.r + cD * tW.g + cG * tW.b;
-        // Large-scale tint variation so the field isn't uniform.
         col *= mix(vec3(0.9, 0.93, 0.86), vec3(1.07, 1.03, 0.98), mix(sp.a, mv, 0.5));
+        // Steep ground turns to rock (triplanar-lite: project on the dominant side).
+        vec3 wn = normalize(vWN);
+        tRock = smoothstep(0.28, 0.45, 1.0 - wn.y);
+        if (tRock > 0.01) {
+          // Triplanar on steep faces: blend the X- and Z-facing projections.
+          float bx = abs(wn.x) / (abs(wn.x) + abs(wn.z) + 1e-4);
+          uvR = bx > 0.5 ? vWPos.zy / 7.0 : vWPos.xy / 7.0;
+          float rs = mix(7.0, 30.0, far); // much larger scale far away hides tiling
+          vec3 cR = mix(texture2D(dR, vWPos.xy / rs).rgb, texture2D(dR, vWPos.zy / rs).rgb, bx);
+          cR = mix(vec3(dot(cR, vec3(0.33))), cR, 0.35) * vec3(0.86, 0.88, 0.9); // weathered grey stone
+          col = mix(col, cR, tRock);
+        }
         diffuseColor.rgb *= col;`,
       )
       .replace(
@@ -179,7 +292,7 @@ export function buildTerrain(scene: THREE.Scene, renderer: THREE.WebGLRenderer) 
           if (tW.b > 0.01) arm += texture2D(aG, uvG).rgb * tW.b;
           arm = mix(arm, vec3(1.0, 0.9, 0.0), far);
           roughnessFactor *= mix(0.75, 1.0, arm.g);
-          diffuseColor.rgb *= mix(1.0, arm.r, 0.8);
+          diffuseColor.rgb *= mix(1.0, arm.r, 0.8 * (1.0 - tRock));
         }`,
       )
       .replace(
@@ -189,6 +302,7 @@ export function buildTerrain(scene: THREE.Scene, renderer: THREE.WebGLRenderer) 
           if (tW.r > 0.01) nm += (texture2D(nS, uvS).xyz * 2.0 - 1.0) * tW.r;
           if (tW.g > 0.01) nm += (texture2D(nD, uvD).xyz * 2.0 - 1.0) * tW.g;
           if (tW.b > 0.01) nm += (texture2D(nG, uvG).xyz * 2.0 - 1.0) * tW.b;
+          if (tRock > 0.01) nm = mix(nm, texture2D(nR, uvR).xyz * 2.0 - 1.0, tRock);
           nm.xy *= 1.1 * (1.0 - tFar);
           nm.z = max(nm.z, 0.2);
           vec3 Nv = normal;
@@ -199,31 +313,142 @@ export function buildTerrain(scene: THREE.Scene, renderer: THREE.WebGLRenderer) 
         }`,
       );
   };
+  return { mat, splat: uniforms.tSplat.value };
+}
 
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.receiveShadow = true;
-  mesh.name = 'terrain';
-  scene.add(mesh);
+const CHUNK = 128;
+const LODS = [64, 32, 12]; // segments per chunk: 2 m, 4 m, ~10 m
+const LOD_DIST = [190, 420];
 
-  // Collision: a 1m trimesh over the playable area (inside the hills).
-  const C = 150, HALF = 75;
-  const verts = new Float32Array((C + 1) * (C + 1) * 3);
+/** Chunk grid geometry with a skirt around the edge to hide LOD cracks. */
+function chunkGeometry(cx: number, cz: number, seg: number) {
+  const n = seg + 1;
+  const step = CHUNK / seg;
+  const count = n * n + 4 * n;
+  const pos = new Float32Array(count * 3);
+  const nor = new Float32Array(count * 3);
+  const v = new THREE.Vector3();
   let k = 0;
-  for (let j = 0; j <= C; j++) {
-    for (let i = 0; i <= C; i++) {
-      const x = -HALF + (i / C) * HALF * 2, z = -HALF + (j / C) * HALF * 2;
-      verts[k++] = x; verts[k++] = heightAt(x, z); verts[k++] = z;
+  const put = (x: number, z: number, drop: number) => {
+    normalAt(x, z, v);
+    pos[k * 3] = x; pos[k * 3 + 1] = heightAt(x, z) - drop; pos[k * 3 + 2] = z;
+    nor[k * 3] = v.x; nor[k * 3 + 1] = v.y; nor[k * 3 + 2] = v.z;
+    k++;
+  };
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) put(cx + i * step, cz + j * step, 0);
+  const idx: number[] = [];
+  for (let j = 0; j < seg; j++) {
+    for (let i = 0; i < seg; i++) {
+      const a = j * n + i, b = a + 1, c = a + n, d = c + 1;
+      idx.push(a, c, b, b, c, d);
     }
   }
-  const idx = new Uint32Array(C * C * 6);
-  k = 0;
-  for (let j = 0; j < C; j++) {
-    for (let i = 0; i < C; i++) {
-      const a = j * (C + 1) + i, b = a + 1, c = a + C + 1, d = c + 1;
-      idx[k++] = a; idx[k++] = c; idx[k++] = b;
-      idx[k++] = b; idx[k++] = c; idx[k++] = d;
+  // Skirts: a strip hanging 4 m down from each edge.
+  const edges: number[][] = [
+    Array.from({ length: n }, (_, i) => i),
+    Array.from({ length: n }, (_, i) => (n - 1) * n + i),
+    Array.from({ length: n }, (_, j) => j * n),
+    Array.from({ length: n }, (_, j) => j * n + n - 1),
+  ];
+  for (const e of edges) {
+    const base = k;
+    for (const vi of e) put(pos[vi * 3], pos[vi * 3 + 2], 4);
+    for (let i = 0; i < n - 1; i++) {
+      const a = e[i], b = e[i + 1], c = base + i, d = base + i + 1;
+      idx.push(a, b, c, b, d, c, a, c, b, b, c, d);
     }
   }
-  physics.addTrimesh(verts, idx);
-  return mesh;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  g.setIndex(idx);
+  g.computeBoundingSphere();
+  return g;
+}
+
+interface Chunk {
+  mesh: THREE.Mesh;
+  geos: (THREE.BufferGeometry | null)[];
+  cx: number;
+  cz: number;
+  lod: number;
+  collider: RAPIER.Collider | null;
+}
+
+export class Terrain {
+  readonly group = new THREE.Group();
+  readonly splat: THREE.DataTexture;
+  private chunks: Chunk[] = [];
+  private mat: THREE.Material;
+
+  constructor(scene: THREE.Scene, renderer: THREE.WebGLRenderer) {
+    const { mat, splat } = terrainMaterial(renderer);
+    this.mat = mat;
+    this.splat = splat;
+    const H = WORLD_SIZE / 2;
+    for (let z = -H; z < H; z += CHUNK) {
+      for (let x = -H; x < H; x += CHUNK) {
+        const geos: (THREE.BufferGeometry | null)[] = [null, null, chunkGeometry(x, z, LODS[2])];
+        const mesh = new THREE.Mesh(geos[2]!, mat);
+        mesh.receiveShadow = true;
+        mesh.name = 'terrain';
+        this.group.add(mesh);
+        this.chunks.push({ mesh, geos, cx: x, cz: z, lod: 2, collider: null });
+      }
+    }
+    this.group.name = 'terrain';
+    scene.add(this.group);
+  }
+
+  /** Swap chunk detail by distance and stream collision around the player. */
+  update(camera: THREE.Vector3, player: THREE.Vector3) {
+    for (const c of this.chunks) {
+      const mx = c.cx + CHUNK / 2, mz = c.cz + CHUNK / 2;
+      const dCam = Math.max(0, Math.hypot(camera.x - mx, camera.z - mz) - CHUNK * 0.7);
+      const lod = dCam < LOD_DIST[0] ? 0 : dCam < LOD_DIST[1] ? 1 : 2;
+      if (lod !== c.lod) {
+        c.geos[lod] ??= chunkGeometry(c.cx, c.cz, LODS[lod]);
+        c.mesh.geometry = c.geos[lod]!;
+        c.lod = lod;
+      }
+      // Collision for the player's chunk and its neighbours.
+      const near = Math.abs(player.x - mx) < CHUNK * 1.2 && Math.abs(player.z - mz) < CHUNK * 1.2;
+      if (near && !c.collider) c.collider = this.buildCollider(c);
+      else if (!near && c.collider && (Math.abs(player.x - mx) > CHUNK * 1.8 || Math.abs(player.z - mz) > CHUNK * 1.8)) {
+        physics.world.removeCollider(c.collider, false);
+        c.collider = null;
+      }
+    }
+  }
+
+  /** Build every chunk's collision now (tests and spawning use this). */
+  warm(player: THREE.Vector3) {
+    this.update(player, player);
+  }
+
+  private buildCollider(c: Chunk) {
+    const seg = 64, n = seg + 1, step = CHUNK / seg;
+    const verts = new Float32Array(n * n * 3);
+    let k = 0;
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const x = c.cx + i * step, z = c.cz + j * step;
+        verts[k++] = x; verts[k++] = heightAt(x, z); verts[k++] = z;
+      }
+    }
+    const idx = new Uint32Array(seg * seg * 6);
+    k = 0;
+    for (let j = 0; j < seg; j++) {
+      for (let i = 0; i < seg; i++) {
+        const a = j * n + i, b = a + 1, cc = a + n, d = cc + 1;
+        idx[k++] = a; idx[k++] = cc; idx[k++] = b;
+        idx[k++] = b; idx[k++] = cc; idx[k++] = d;
+      }
+    }
+    return physics.addTrimesh(verts, idx);
+  }
+
+  dispose() {
+    this.mat.dispose();
+  }
 }

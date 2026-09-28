@@ -18,6 +18,8 @@ export class ThirdPersonCamera {
   fovBase = 58;
   private fov = 58;
   lockTarget: THREE.Vector3 | null = null;
+  /** debug: leave the camera wherever it was put */
+  frozen = false;
 
   constructor(readonly camera: THREE.PerspectiveCamera, private input: Input) {}
 
@@ -37,6 +39,7 @@ export class ThirdPersonCamera {
   }
 
   update(dt: number, focus: THREE.Vector3, sprinting: boolean) {
+    if (this.frozen) return;
     this.time += dt;
     const inp = this.input;
     if (!inp.uiMode) {

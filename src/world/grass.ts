@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { heightAt, splatAt, TERRAIN_SIZE } from './terrain';
+import { heightTexture, TERRAIN_SIZE } from './terrain';
 import { Q } from '../core/settings';
 import { mulberry32 } from '../core/math';
 
@@ -8,29 +8,6 @@ import { mulberry32 } from '../core/math';
 // field follows the terrain without any CPU work per frame.
 
 const TILE = 30; // metres covered around the player
-const MAP = 512;
-
-function dataTextures() {
-  const h = new Uint16Array(MAP * MAP);
-  const m = new Uint8Array(MAP * MAP * 4);
-  for (let j = 0; j < MAP; j++) {
-    for (let i = 0; i < MAP; i++) {
-      const x = ((i + 0.5) / MAP - 0.5) * TERRAIN_SIZE;
-      const z = ((j + 0.5) / MAP - 0.5) * TERRAIN_SIZE;
-      h[j * MAP + i] = THREE.DataUtils.toHalfFloat(heightAt(x, z));
-      const [, dirt, grass] = splatAt(x, z);
-      m[(j * MAP + i) * 4] = Math.min(255, Math.max(0, grass - 0.15 * dirt) * 255);
-      m[(j * MAP + i) * 4 + 3] = 255;
-    }
-  }
-  const ht = new THREE.DataTexture(h, MAP, MAP, THREE.RedFormat, THREE.HalfFloatType);
-  ht.magFilter = ht.minFilter = THREE.LinearFilter;
-  ht.needsUpdate = true;
-  const mt = new THREE.DataTexture(m, MAP, MAP, THREE.RGBAFormat);
-  mt.magFilter = mt.minFilter = THREE.LinearFilter;
-  mt.needsUpdate = true;
-  return { ht, mt };
-}
 
 function bladeGeometry() {
   // A tuft: three curved, tapering blades fanned around the centre.
@@ -65,7 +42,8 @@ export class Grass {
   readonly mesh: THREE.InstancedMesh;
   private uniforms: Record<string, THREE.IUniform>;
 
-  constructor(scene: THREE.Scene) {
+  /** `splat` is the terrain's splat map (b = grass weight). */
+  constructor(scene: THREE.Scene, splat: THREE.Texture) {
     const count = Q.grassCount;
     const geo = bladeGeometry();
     const offs = new Float32Array(count * 4);
@@ -77,7 +55,8 @@ export class Grass {
       offs[i * 4 + 3] = rnd(); // variation seed
     }
     geo.setAttribute('aOff', new THREE.InstancedBufferAttribute(offs, 4));
-    const { ht, mt } = dataTextures();
+    const ht = heightTexture();
+    const mt = splat;
     this.uniforms = {
       uCenter: { value: new THREE.Vector2() },
       uTime: { value: 0 },
@@ -105,7 +84,8 @@ export class Grass {
           vec2 world = uCenter + mod(aOff.xy - uCenter + uTile * 0.5, uTile) - uTile * 0.5;
           vec2 uvT = world / uSize + 0.5;
           float h = texture2D(uHeight, uvT).r;
-          float dens = texture2D(uMask, uvT).r;
+          vec4 spl = texture2D(uMask, uvT);
+          float dens = clamp(spl.b - 0.15 * spl.g, 0.0, 1.0);
           // Thin out toward the tile edge and where there's no grass.
           float edge = 1.0 - smoothstep(uTile * 0.36, uTile * 0.5, length(world - uCenter));
           float keep = step(aOff.w, dens * 1.1) * edge;

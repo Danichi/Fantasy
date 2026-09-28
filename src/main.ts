@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Renderer } from './render/renderer';
 import { physics, PhysicsDebug } from './physics/physics';
-import { buildTerrain, heightAt } from './world/terrain';
+import { Terrain, initTerrainData, heightAt } from './world/terrain';
 import { Input } from './core/input';
 import { Player } from './player/player';
 import { ThirdPersonCamera } from './player/camera';
@@ -17,6 +17,8 @@ import { CharPreview } from './ui/charPreview';
 import { events } from './core/events';
 import { buildWorld } from './world/props';
 import { Grass } from './world/grass';
+import { River } from './world/water';
+import { Foliage } from './world/foliage';
 
 const STEP = 1 / 60;
 
@@ -26,10 +28,12 @@ async function boot() {
   const input = new Input(r.renderer.domElement);
   await physics.init();
   await r.loadSky('/assets/hdri/sky_1k.hdr');
-  buildTerrain(r.scene, r.renderer);
+  initTerrainData();
+  const terrain = new Terrain(r.scene, r.renderer);
 
   const player = new Player();
   const spawn = new THREE.Vector3(0, heightAt(0, 10), 10);
+  terrain.warm(spawn);
   await player.init(r.scene, spawn);
   setupLoadout(player.equip);
   buildIcons(r.renderer, r.scene.environment);
@@ -39,7 +43,9 @@ async function boot() {
   if (TEST_MODE) slimes.enabled = false;
   const spells = new Spells(r.scene, fx, player);
   const world = await buildWorld(r.scene, r.renderer, fx);
-  const grass = new Grass(r.scene);
+  const grass = new Grass(r.scene, terrain.splat);
+  const river = new River(r.scene);
+  const foliage = new Foliage(r.scene, r.renderer);
   const physDebug = new URLSearchParams(location.search).get('debug') === 'physics' ? new PhysicsDebug(r.scene) : null;
 
   const cam = new ThirdPersonCamera(r.camera, input);
@@ -171,6 +177,7 @@ async function boot() {
       slimes.update(STEP, player);
       spells.update(STEP);
       world.update(STEP);
+      river.update(STEP);
       fx.update(STEP, r.renderer.domElement.height, r.camera.fov);
       physics.step(STEP);
       input.endStep();
@@ -184,11 +191,13 @@ async function boot() {
     cam.update(dt, renderPos, player.sprinting);
     r.camera.getWorldDirection(player.aimDir);
     grass.update(dt, r.camera.position, renderPos);
+    terrain.update(r.camera.position, player.pos);
+    foliage.update(dt, r.camera.position);
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
     physDebug?.update();
     r.followShadow(renderPos);
-    r.render();
+    r.render(dt);
     if (inv.open) preview.render();
     const t2 = performance.now();
     perf.sim = perf.sim * 0.9 + (t1 - t0) * 0.1;

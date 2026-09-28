@@ -21,10 +21,11 @@ export class SlimeSpawner {
 
   constructor(private scene: THREE.Scene, private fx: FX) {
     const S = (x: number, z: number, kind: SlimeKind): Spot => ({ pos: new THREE.Vector2(x, z), kind, slime: null, timer: 0 });
+    // Meadows outside the south and east gates.
     this.spots = [
-      S(-26, 6, 'green'), S(-30, 14, 'green'), S(-22, 20, 'green'),
-      S(28, 8, 'green'), S(24, 22, 'blue'), S(33, 16, 'green'),
-      S(-18, 34, 'blue'), S(20, 36, 'magma'), S(0, 42, 'green'),
+      S(-22, 112, 'green'), S(18, 118, 'green'), S(-35, 140, 'green'), S(30, 150, 'blue'),
+      S(-10, 175, 'green'), S(40, 190, 'magma'), S(-45, 205, 'blue'), S(12, 230, 'green'),
+      S(105, 40, 'green'), S(115, -30, 'green'), S(100, 70, 'blue'),
     ];
   }
 

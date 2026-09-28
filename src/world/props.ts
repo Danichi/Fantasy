@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { heightAt, PALISADE_R, PLAZA_CENTER, PLAZA_R } from './terrain';
+import { heightAt, PALISADE_R, PLAZA_CENTER, PLAZA_R, GATES } from './terrain';
 import { physics } from '../physics/physics';
 import { buildHouse, worldUV, type WorldMats } from './buildings';
-import { mulberry32, fbm } from '../core/math';
+import { buildBridge } from './water';
+import { mulberry32, wrapAngle as wrap } from '../core/math';
 import { newTargetId, targets, type HitInfo, type Target } from '../combat/targets';
 import type { FX } from '../fx/particles';
 
@@ -120,47 +121,6 @@ class Dummy implements Target {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Conifers for the hills: trunk + four jittered cone skirts, instanced.
-// ---------------------------------------------------------------------------
-function coniferGeometry(seed: number) {
-  const r = mulberry32(seed);
-  const cones: THREE.BufferGeometry[] = [];
-  const layers = 7;
-  for (let i = 0; i < layers; i++) {
-    const t = i / (layers - 1);
-    const rad = 2.3 * (1 - t * 0.82);
-    const h = 2.6 * (1 - t * 0.3);
-    const g = new THREE.ConeGeometry(rad, h, 10, 2, true);
-    const p = g.attributes.position as THREE.BufferAttribute;
-    for (let k = 0; k < p.count; k++) {
-      const y = p.getY(k);
-      // Droop the skirt edge and jitter it so silhouettes aren't perfect cones.
-      const edge = y < -h / 2 + 0.01;
-      const j = 1 + (r() - 0.5) * 0.35;
-      p.setXYZ(k, p.getX(k) * j, y - (edge ? 0.25 + r() * 0.3 : 0), p.getZ(k) * j);
-    }
-    g.rotateY(r() * Math.PI);
-    g.translate((r() - 0.5) * 0.15, 2.0 + i * 1.3 + h / 2, (r() - 0.5) * 0.15);
-    cones.push(g);
-  }
-  const foliage = mergeGeometries(cones.map((g) => g.toNonIndexed()))!;
-  foliage.computeVertexNormals();
-  // Vertex colour: darker inside/under each skirt.
-  const p = foliage.attributes.position as THREE.BufferAttribute;
-  const col = new Float32Array(p.count * 3);
-  for (let k = 0; k < p.count; k++) {
-    const rr = Math.hypot(p.getX(k), p.getZ(k));
-    const shade = 0.55 + Math.min(1, rr / 1.8) * 0.45;
-    const v = 0.85 + ((k * 7919) % 13) / 60;
-    col.set([0.07 * shade * v, 0.13 * shade * v, 0.06 * shade], k * 3);
-  }
-  foliage.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const trunk = new THREE.CylinderGeometry(0.16, 0.34, 4.5, 8);
-  trunk.translate(0, 2.25, 0);
-  return { foliage, trunk };
-}
-
 /**
  * Exact static collision for a placed prop: its (already simplified) meshes
  * baked into one world-space triangle mesh.
@@ -195,6 +155,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const m: WorldMats = {
     stone: pbr(L, 'castle_brick_07', { color: 0xb0aaa0 }, aniso),
+    bridgeStone: pbr(L, 'rock_face_03', { color: 0x9c9a94 }, aniso),
     plaster: pbr(L, 'white_plaster_rough_01', { color: 0xe8dcc4 }, aniso),
     timber: pbr(L, 'weathered_peeling_timber', { color: 0x5a4636 }, aniso),
     slate: pbr(L, 'roof_slates_02', { color: 0x8a8a92 }, aniso),
@@ -226,7 +187,9 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     physics.addBox(new THREE.Vector3(h.x, gy + half.y, h.z), half, q);
   }
 
-  // ---- palisade --------------------------------------------------------------
+  buildBridge(scene, m);
+
+  // ---- palisade with three open gates -------------------------------------------
   const logGeo = (() => {
     const shaft = new THREE.CylinderGeometry(0.17, 0.19, 1, 7, 1);
     shaft.translate(0, 0.5, 0);
@@ -234,82 +197,79 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     tip.translate(0, 1.2, 0);
     return mergeGeometries([shaft.toNonIndexed(), tip.toNonIndexed()])!;
   })();
-  const gateHalf = 3.2; // metres of gap either side of the road
+  const gateHalf = 3.4; // metres of opening either side of each road
+  const gateAngles = Object.values(GATES).map((g) => Math.atan2(g.x, g.y));
+  const inGate = (a: number, pad: number) => gateAngles.some((ga) => Math.abs(wrap(a - ga)) * PALISADE_R < gateHalf + pad);
   const rnd = mulberry32(99);
   const logs: THREE.Matrix4[] = [];
-  const circumference = Math.PI * 2 * PALISADE_R;
-  const n = Math.floor(circumference / 0.35);
+  const n = Math.floor((Math.PI * 2 * PALISADE_R) / 0.35);
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2;
+    if (inGate(a, 0)) continue;
     const x = Math.sin(a) * PALISADE_R, z = Math.cos(a) * PALISADE_R;
-    if (z > 0 && Math.abs(x) < gateHalf) continue;
     const h = 3.3 + rnd() * 0.7;
-    const y = heightAt(x, z) - 0.4;
-    const mt = new THREE.Matrix4().compose(
-      new THREE.Vector3(x, y, z),
+    logs.push(new THREE.Matrix4().compose(
+      new THREE.Vector3(x, heightAt(x, z) - 0.4, z),
       new THREE.Quaternion().setFromEuler(new THREE.Euler((rnd() - 0.5) * 0.04, rnd() * 6, (rnd() - 0.5) * 0.04)),
       new THREE.Vector3(1, h, 1),
-    );
-    logs.push(mt);
+    ));
   }
-  // Bark UVs repeat along the log; scale y is baked per instance, fine for bark.
   const palisade = new THREE.InstancedMesh(logGeo, m.bark, logs.length);
   logs.forEach((mt, i) => palisade.setMatrixAt(i, mt));
   palisade.castShadow = true;
   palisade.receiveShadow = true;
   scene.add(palisade);
-  // Colliders: short boxes around the ring (the gate gets its own).
-  for (let i = 0; i < 96; i++) {
-    const a = ((i + 0.5) / 96) * Math.PI * 2;
+  const segs = 128;
+  for (let i = 0; i < segs; i++) {
+    const a = ((i + 0.5) / segs) * Math.PI * 2;
+    if (inGate(a, 1)) continue;
     const x = Math.sin(a) * PALISADE_R, z = Math.cos(a) * PALISADE_R;
-    if (z > 0 && Math.abs(x) < gateHalf + 1) continue;
-    const seg = (Math.PI * 2 * PALISADE_R) / 96;
+    const seg = (Math.PI * 2 * PALISADE_R) / segs;
     physics.addBox(new THREE.Vector3(x, heightAt(x, z) + 2, z), new THREE.Vector3(seg / 2 + 0.2, 3, 0.3), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, a, 0)));
   }
-  // Gatehouse: two towers and closed doors.
-  const gz = Math.sqrt(PALISADE_R * PALISADE_R - gateHalf * gateHalf);
-  const gy = heightAt(0, gz);
+  // Gatehouses: twin towers and a lintel over each open gate.
   const towerParts: THREE.BufferGeometry[] = [];
   const plankParts: THREE.BufferGeometry[] = [];
-  for (const sx of [-1, 1]) {
-    const cx = sx * (gateHalf + 1.4);
-    for (const [px, pz] of [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]]) {
-      const g = new THREE.CylinderGeometry(0.2, 0.22, 7.5, 8);
-      g.translate(cx + px, gy + 3.75 - 0.3, gz + pz);
-      towerParts.push(g);
+  for (const ga of gateAngles) {
+    const out = new THREE.Vector3(Math.sin(ga), 0, Math.cos(ga));
+    const side = new THREE.Vector3(out.z, 0, -out.x);
+    const centre = out.clone().multiplyScalar(PALISADE_R);
+    const gy = heightAt(centre.x, centre.z);
+    const rotY = Math.atan2(out.x, out.z);
+    const place = (g: THREE.BufferGeometry, local: THREE.Vector3) => {
+      g.rotateY(rotY);
+      const w = centre.clone().addScaledVector(side, local.x).addScaledVector(out, local.z);
+      g.translate(w.x, gy + local.y, w.z);
+      return g;
+    };
+    for (const sx of [-1, 1]) {
+      const cx = sx * (gateHalf + 1.4);
+      for (const [px, pz] of [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]]) {
+        towerParts.push(place(new THREE.CylinderGeometry(0.2, 0.22, 7.5, 8), new THREE.Vector3(cx + px, 3.45, pz)));
+      }
+      plankParts.push(worldUV(place(new THREE.BoxGeometry(3.2, 0.25, 3.2), new THREE.Vector3(cx, 5, 0))));
+      const roof = new THREE.ConeGeometry(2.7, 2, 4);
+      roof.rotateY(Math.PI / 4);
+      towerParts.push(place(roof, new THREE.Vector3(cx, 8.2, 0)));
+      for (let k = 0; k < 4; k++) {
+        const rail = new THREE.BoxGeometry(3.2, 0.12, 0.12);
+        rail.rotateY((k * Math.PI) / 2);
+        const off = new THREE.Vector3(0, 0, 1.55).applyAxisAngle(new THREE.Vector3(0, 1, 0), (k * Math.PI) / 2);
+        plankParts.push(worldUV(place(rail, new THREE.Vector3(cx + off.x, 6, off.z))));
+      }
+      const tc = centre.clone().addScaledVector(side, cx);
+      physics.addBox(new THREE.Vector3(tc.x, gy + 3, tc.z), new THREE.Vector3(1.6, 4, 1.6), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rotY, 0)));
     }
-    const floor = new THREE.BoxGeometry(3.2, 0.25, 3.2);
-    floor.translate(cx, gy + 5, gz);
-    plankParts.push(worldUV(floor));
-    const roof = new THREE.ConeGeometry(2.7, 2, 4);
-    roof.rotateY(Math.PI / 4);
-    roof.translate(cx, gy + 8.2, gz);
-    towerParts.push(roof);
-    for (let k = 0; k < 4; k++) {
-      const rail = new THREE.BoxGeometry(3.2, 0.12, 0.12);
-      rail.rotateY((k * Math.PI) / 2);
-      const off = new THREE.Vector3(0, 0, 1.55).applyAxisAngle(new THREE.Vector3(0, 1, 0), (k * Math.PI) / 2);
-      rail.translate(cx + off.x, gy + 6, gz + off.z);
-      plankParts.push(worldUV(rail));
+    const lintel = new THREE.CylinderGeometry(0.2, 0.2, gateHalf * 2 + 3, 8);
+    lintel.rotateZ(Math.PI / 2);
+    towerParts.push(place(lintel, new THREE.Vector3(0, 4.6, 0)));
+    // Doors stand open against the inside of the wall.
+    for (const sx of [-1, 1]) {
+      const door = new THREE.BoxGeometry(gateHalf, 3.6, 0.18);
+      door.rotateY(sx * 1.35);
+      plankParts.push(worldUV(place(door, new THREE.Vector3(sx * (gateHalf - 0.35), 1.8, -gateHalf * 0.5))));
     }
-    physics.addBox(new THREE.Vector3(cx, gy + 3, gz), new THREE.Vector3(1.6, 4, 1.6));
   }
-  const doorW = gateHalf;
-  for (const sx of [-1, 1]) {
-    const door = new THREE.BoxGeometry(doorW, 3.6, 0.18);
-    door.translate(sx * doorW / 2, gy + 1.8, gz);
-    plankParts.push(worldUV(door));
-    for (const y of [0.6, 1.8, 3.0]) {
-      const bar = new THREE.BoxGeometry(doorW - 0.1, 0.2, 0.1);
-      bar.translate(sx * doorW / 2, gy + y, gz - 0.14);
-      plankParts.push(worldUV(bar));
-    }
-  }
-  const lintel = new THREE.CylinderGeometry(0.2, 0.2, gateHalf * 2 + 3, 8);
-  lintel.rotateZ(Math.PI / 2);
-  lintel.translate(0, gy + 4.4, gz);
-  towerParts.push(lintel);
-  physics.addBox(new THREE.Vector3(0, gy + 2, gz), new THREE.Vector3(gateHalf, 2.5, 0.35));
   const clean = (list: THREE.BufferGeometry[]) =>
     list.map((g) => {
       const gg = g.index ? g.toNonIndexed() : g;
@@ -322,32 +282,6 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     o.castShadow = o.receiveShadow = true;
     scene.add(o);
   }
-
-  // ---- trees on the hills -------------------------------------------------------
-  const { foliage, trunk } = coniferGeometry(3);
-  const needleMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide, envMapIntensity: 0.35 });
-  const treeMats: THREE.Matrix4[] = [];
-  const tr = mulberry32(7);
-  for (let i = 0; i < 700 && treeMats.length < 260; i++) {
-    const a = tr() * Math.PI * 2;
-    const rr = PALISADE_R + 9 + tr() * 90;
-    const x = Math.sin(a) * rr, z = Math.cos(a) * rr;
-    // Cluster into groves using noise, and keep the gate road clear.
-    if (fbm(x * 0.03, z * 0.03, 3) < 0.48) continue;
-    if (z > 0 && Math.abs(x) < 10) continue;
-    const s = 0.8 + tr() * 0.7;
-    treeMats.push(new THREE.Matrix4().compose(new THREE.Vector3(x, heightAt(x, z) - 0.2, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, tr() * 6, 0)), new THREE.Vector3(s, s * (0.9 + tr() * 0.3), s)));
-  }
-  const fol = new THREE.InstancedMesh(foliage, needleMat, treeMats.length);
-  const trk = new THREE.InstancedMesh(trunk, m.bark, treeMats.length);
-  treeMats.forEach((mt, i) => {
-    fol.setMatrixAt(i, mt);
-    trk.setMatrixAt(i, mt);
-  });
-  // Trees stand outside the shadow box around the player; skip them in the shadow pass.
-  fol.castShadow = trk.castShadow = false;
-  fol.receiveShadow = true;
-  scene.add(fol, trk);
 
   // ---- training dummies ----------------------------------------------------------
   const woodMat = m.planks;
