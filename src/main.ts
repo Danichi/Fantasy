@@ -126,7 +126,7 @@ async function boot() {
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
   }, rewards, world.crypt.door);
   const dialogue = new DialogueUI();
-  const town = new Town(r.scene, r.camera, dialogue, player, realm);
+  const town = new Town(r.scene, r.camera, dialogue, player);
   realm.overworldInteractables.push(...town.interactables());
   dialogue.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open;
