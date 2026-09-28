@@ -175,11 +175,15 @@ function buildTremison(scene: THREE.Scene) {
     scene.add(m);
     physics.addBox(new THREE.Vector3(x, y + h / 2, z), new THREE.Vector3(w / 2, h / 2, d / 2));
   };
-  wall(cx - 72, cz, 2, 150, 7);
+  // Main King's Road enters from the west; leave a generous city gate there.
+  wall(cx - 72, cz - 50, 2, 46, 7);
+  wall(cx - 72, cz + 50, 2, 46, 7);
   wall(cx + 72, cz - 10, 2, 130, 7);
-  wall(cx, cz + 73, 145, 2, 7);
-  const gate = new THREE.Mesh(new THREE.BoxGeometry(14, 10, 2.2), wallMat);
-  gate.position.set(cx - 4, heightAt(cx - 4, cz - 73) + 5, cz - 73);
+  wall(cx + 4, cz + 73, 137, 2, 7);
+  wall(cx - 63, cz + 73, 17, 2, 7);
+  const gate = new THREE.Mesh(new THREE.BoxGeometry(18, 10, 2.2), wallMat);
+  gate.position.set(cx - 72, heightAt(cx - 72, cz) + 5, cz);
+  gate.rotation.y = Math.PI / 2;
   scene.add(gate);
 
   const buildings: [number, number, number, number, number][] = [
@@ -193,6 +197,22 @@ function buildTremison(scene: THREE.Scene) {
     addBuilding(scene, x, z, w, d, h, true);
   }
   for (const [x, z] of [[cx - 63, cz + 59], [cx + 63, cz + 58], [cx - 63, cz - 59], [cx + 63, cz - 54]]) addTower(scene, x, z, 5, 11);
+  // Deep water begins at the eastern edge of the coastal plain. The city sits
+  // just above sea level while the harbor opens directly into this water.
+  const sea = new THREE.Mesh(
+    new THREE.PlaneGeometry(105, 330),
+    new THREE.MeshStandardMaterial({ color: 0x2f7180, roughness: 0.2, metalness: 0.05, transparent: true, opacity: 0.96 }),
+  );
+  sea.rotation.x = -Math.PI / 2;
+  sea.position.set(472, -1.18, 76);
+  sea.receiveShadow = true;
+  scene.add(sea);
+  const shore = new THREE.Mesh(
+    new THREE.BoxGeometry(12, 0.06, 250),
+    new THREE.MeshStandardMaterial({ color: 0xb7a980, roughness: 1 }),
+  );
+  shore.position.set(431, -0.82, 76);
+  scene.add(shore);
 
   // A dense visual population keeps the port from feeling like an empty prop set.
   const colors = [0xc66e54, 0x4c708a, 0x8d6e47, 0x5c826b, 0x8a527e, 0x9a844e];
