@@ -176,6 +176,20 @@ export class AdventurerGuild {
       }
     }, true);
     this.ensureBoard();
+    events.on('enemyDied', ({ kind }) => {
+      let changed = false;
+      for (const q of this.active) {
+        if (q.objective !== 'kill' || q.progress >= (q.targetCount ?? 1)) continue;
+        if (q.targetKind === 'any' || q.targetKind === kind) {
+          q.progress++;
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.onSave?.();
+        this.render();
+      }
+    });
   }
 
   private buildHallCrowd() {
