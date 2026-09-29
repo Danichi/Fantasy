@@ -135,6 +135,8 @@ export class StylizedNature {
   private smalls: Record<'fern' | 'flower' | 'mushroom', number[]> = { fern: [], flower: [], mushroom: [] };
 
   readonly ready: Promise<void>;
+  /** extra (x, z, radius) spots kept free of trees: pastures, mills, barns */
+  clearings: [number, number, number][] = [];
 
   /** `town`: extra tree and flower spots chosen by the village layout. */
   constructor(
@@ -310,6 +312,7 @@ export class StylizedNature {
 
   /** Keep clear of towns, roads, the river and the crypt apron. */
   private clearSpot(x: number, z: number) {
+    for (const [cx, cz, cr] of this.clearings) if ((x - cx) ** 2 + (z - cz) ** 2 < cr * cr) return false;
     const r = Math.hypot(x, z);
     if (r < TOWN_R + 8) return false;
     if (roadDist(x, z) < 6.5) return false;

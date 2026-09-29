@@ -25,6 +25,8 @@ import { InventoryUI, buildOverlays } from './ui/inventory';
 import { Music } from './audio/music';
 import { Ambient } from './world/ambient';
 import { WorldTime } from './world/worldTime';
+import { Fauna } from './world/fauna';
+import { buildFarmstead } from './world/farmstead';
 import { Weather } from './world/weather';
 import { Precipitation } from './world/precipitation';
 import { Ambience } from './audio/ambience';
@@ -105,7 +107,9 @@ async function boot() {
   mark('grass');
   const river = new River(r.scene);
   mark('river');
+  const farm = buildFarmstead(r.scene, world.mats);
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
+  stylizedNature.clearings = farm.clearings;
   await stylizedNature.ready;
   stylizedNature.warm(spawn, spawn);
   const foliage = stylizedNature.loaded ? null : new Foliage(r.scene, r.renderer);
@@ -136,6 +140,22 @@ async function boot() {
     npcs.addSettlement(folk.settlement);
     for (const rec of folk.records) npcs.add(rec);
   }
+  // Livestock in their pens and pastures; wild deer and foxes stream per tile.
+  const fauna = new Fauna(r.scene);
+  fauna.addHerd('cow', 7, farm.ranges.cows);
+  fauna.addHerd('bull', 1, farm.ranges.cows);
+  fauna.addHerd('sheep', 12, farm.ranges.sheep);
+  fauna.addHerd('alpaca', 2, farm.ranges.sheep);
+  fauna.addHerd('horse', 3, farm.ranges.horses);
+  fauna.addHerd('horse_white', 1, farm.ranges.horses);
+  fauna.addHerd('donkey', 1, farm.ranges.horses);
+  fauna.addHerd('pig', 5, farm.ranges.pigs);
+  fauna.addHerd('chicken', 7, farm.ranges.chickens);
+  fauna.addHerd('chick', 4, farm.ranges.chickens);
+  fauna.addHerd('dog', 2, farm.ranges.dogs);
+  fauna.addHerd('shiba', 1, farm.ranges.dogs);
+  fauna.addHerd('cat', 3, { center: new THREE.Vector3(0, 0, -4), radius: 45 });
+  fauna.addHerd('pigeon', 8, { center: new THREE.Vector3(0, 0, -4), radius: 14 });
   void ocean;
   mark('flowers');
   const rewards = new Rewards(r.scene, player.prog);
@@ -177,6 +197,7 @@ async function boot() {
       ocean.setVisible(!h);
       precip.setVisible(!h);
       npcs.setVisible(!h);
+      fauna.setVisible(!h);
       flowers.mesh.visible = !h;
       river.mesh.visible = !h;
       foliage?.setVisible(!h);
@@ -492,6 +513,8 @@ async function boot() {
       world.village.lanternMat.emissiveIntensity = 0.6 + ts.night * 2.6;
       npcs.raining = wp.rain > 0.45;
       if (worldRunning) npcs.update(dt, player.pos, r.camera.position, ts.night);
+      if (worldRunning) fauna.update(dt, player.pos, ts.night);
+      farm.update(dt, wp.wind);
       folkTalk.npc = npcs.nearest(player.pos);
       if (folkTalk.npc) folkTalk.pos.copy(folkTalk.npc.pos);
       else folkTalk.pos.set(0, -999, 0);
@@ -552,7 +575,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

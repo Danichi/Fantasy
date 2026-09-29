@@ -40,3 +40,7 @@ The visual overhaul uses CC0 assets from Quaternius, installed locally by `tools
 
 - Characters, outfits and hairstyles: Quaternius, [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html) and [Modular Character Outfits – Fantasy](https://quaternius.com/packs/modularcharacteroutfitsfantasy.html). Converted by `tools/prep-characters.mjs`.
 - NPC idle, talk, walk and sit clips: Quaternius [Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html), via the Drawcall Market mirror.
+
+## Animals (CC0)
+
+- Farm animals, pets and wildlife (cow, bull, sheep, pig, chicken, chick, horse, donkey, alpaca, dog, husky, shiba, cat, deer, stag, fox, pigeon): Quaternius animated animals, CC0 1.0, via [Poly Pizza](https://poly.pizza/u/Quaternius). Converted by `tools/prep-animals.mjs`.
