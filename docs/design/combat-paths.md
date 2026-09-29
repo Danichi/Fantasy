@@ -5,6 +5,34 @@ starting point to tune, and every name is a placeholder you can veto.
 
 ---
 
+## Draft 2: the chosen model (this replaces sections 1, 2 and 9 below)
+
+Visual mockups: https://claude.ai/artifact/2e8Focia4DPWqk66fh9zj6
+
+- **XP is a currency.** You bank the XP you earn and invest it in any discipline you
+  have learned. A discipline's level is simply how much XP has been invested in it.
+- **Cost curve:** going from level L to L+1 costs `100 * L^1.5` XP (level 0 to 1 costs 100).
+  Breadth is cheap and depth is expensive. About 118k XP buys one discipline at 25,
+  two at 19, or five spread from 8 to 15.
+- **Three families of disciplines, each with its own tree:**
+  - **Combat Styles** (Gale Style, Cross Style, Boundary Style, Blade of Light,
+    Ironroot...). Only **one is active** at a time; it drives your base moveset
+    (light, heavy, combo, dodge) and its resource meter. Techniques from other
+    learned styles can still go on the bar.
+  - **Magic Schools** (Fire, Wind, Frost, Storm, Earth, Light, Shadow...). Learn any
+    number and level each one separately. Two schools at level 10+ unlock their
+    cross-school **reactions** (Fire + Wind = Firestorm).
+  - **Callings** (Herbalism, Dungeoneering, Smithing, Cooking, Runecraft, Cartography...).
+    These are balanced as real power: a level-18 Herbalist's tonics roughly match a
+    level-18 combat node, so specialising in a craft is a valid build.
+- **Character level** comes from total XP invested and gives attribute points
+  (Vigor, Endurance, Might, Finesse, Intellect, Faith, Spirit).
+- **Tree tiers** unlock at discipline level 1 / 5 / 10 / 15 / 20; capstones at 25; cap 30.
+- **Moves bar:** the active style owns the mouse buttons. Keys 1-6 mix techniques,
+  spells and brews from any discipline, plus an ultimate slot for capstones and reactions.
+
+---
+
 ## 0. What already exists (and what we build on)
 
 | Piece | Where | Notes |
