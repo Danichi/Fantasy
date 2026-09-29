@@ -7,7 +7,7 @@ const ts = times.split(',').map(Number);
 const browser = await chromium.launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 640 } });
 page.on('pageerror', (e) => console.log('pageerror', e.message));
-await page.goto('http://localhost:5190/?test');
+await page.goto('http://localhost:5190/?test' + (opts.q ? '&' + opts.q : ''));
 await page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 });
 // Wait until shaders have compiled and the simulation is actually running.
 await page.waitForFunction(() => (window.__game?.steps ?? 0) > 60, null, { timeout: 60000 });

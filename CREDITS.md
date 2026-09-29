@@ -35,3 +35,8 @@ The visual overhaul uses CC0 assets from Quaternius, installed locally by `tools
 
 - "Global Equator" (village / overworld theme) by lobozack
 - "Sonic Ladder" (crypt theme) by malachif2740
+
+## Stylised characters (CC0)
+
+- Characters, outfits and hairstyles: Quaternius, [Universal Base Characters](https://quaternius.com/packs/universalbasecharacters.html) and [Modular Character Outfits – Fantasy](https://quaternius.com/packs/modularcharacteroutfitsfantasy.html). Converted by `tools/prep-characters.mjs`.
+- NPC idle, talk, walk and sit clips: Quaternius [Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html), via the Drawcall Market mirror.

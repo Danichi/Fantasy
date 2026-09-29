@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { NPC, type NpcSpec } from './npc';
+import { CAST } from './cast';
 import { heightAt } from '../world/terrain';
 import { physics } from '../physics/physics';
 import { mats, paintedWood } from '../items/materials';
@@ -178,6 +179,15 @@ export class Town {
   private tmp = new THREE.Vector3();
 
   constructor(private scene: THREE.Scene, private camera: THREE.Camera, private dialogue: DialogueUI, private player: Player) {
+    // Swap in the stylised cast (src/npc/cast.ts) for every character that has a look.
+    for (const s of NPCS) {
+      const look = CAST[s.id];
+      if (look) {
+        s.kind = 'built';
+        s.look = look;
+        s.height = look.body === 'female' ? 1.72 : 1.82;
+      }
+    }
     this.npcs = NPCS.map((s) => new NPC(s, scene));
     const f = NPCS.find((n) => n.id === 'froest')!;
     const fwd = new THREE.Vector2(Math.sin(f.yaw), Math.cos(f.yaw));
@@ -276,6 +286,8 @@ export class Town {
   }
 
   talk(s: NpcSpec, text = s.greeting) {
+    const npc = this.npcs.find((n) => n.spec.id === s.id);
+    if (npc) npc.talkT = 6 + text.length * 0.035;
     if (this.talkShop(s)) return;
     if (s.trainerStyle && text === s.greeting && !this.player.prog.styleIntroductions.includes(s.trainerStyle)) {
       this.player.prog.markStyleIntroduction(s.trainerStyle);

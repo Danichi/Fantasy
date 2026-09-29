@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { HERO } from '../npc/cast';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Character } from './character';
 import { RigLayer, blendPose, overlayPose, type ProcPose } from './rigLayer';
@@ -130,7 +131,9 @@ export class Player {
   onPlungeLand?: (at: THREE.Vector3) => void;
 
   async init(scene: THREE.Scene, spawn: THREE.Vector3) {
-    await this.char.load();
+    // The stylised hero (docs/ART-DIRECTION.md §7); ?paladin keeps the old Mixamo model.
+    const paladin = new URLSearchParams(location.search).has('paladin');
+    await this.char.load(undefined, undefined, paladin ? undefined : HERO);
     scene.add(this.char.root);
     const ringMat = new THREE.MeshBasicMaterial({ color: COMBAT_STYLES.boundary.color, transparent: true, opacity: 0.72, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
     const outerMat = new THREE.MeshBasicMaterial({ color: 0xfff0b0, transparent: true, opacity: 0.13, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });

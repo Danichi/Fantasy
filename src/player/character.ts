@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { RIG_PROFILES, detectRigFamily, type RigFamily, type RigProfile } from './rigProfile';
+import { buildCharacter, type Look } from '../npc/charBuilder';
+import { captureRest, retargetClip, MIXAMO_TO_UE } from '../anim/retarget';
 
 // ---------------------------------------------------------------------------
 // Character rig: loads the skinned model plus any animation files listed in
@@ -85,8 +87,17 @@ export class Character {
   meshes: THREE.SkinnedMesh[] = [];
   /** standing hips height in metres (after height normalisation) */
   hipsHeight = 1;
+  /** built from the stylised kits (Mixamo clips are retargeted onto it) */
+  built = false;
+  private hipsTrack = 'mixamorigHips.position';
 
-  async load(base = '/assets/character/', body?: BodyOptions) {
+  /**
+   * `body`: another model on the hero's Mixamo skeleton (tools/rig-orcs.mjs).
+   * `look`: build the body from the stylised character kits instead; the
+   * manifest's Mixamo clips are retargeted onto it and its bones are also
+   * registered under their Mixamo names.
+   */
+  async load(base = '/assets/character/', body?: BodyOptions, look?: Look) {
     const loader = new GLTFLoader();
     let manifest = FALLBACK;
     // Dev preview: ?char=candidates/Soldier.glb swaps the model, keeping the fallback clips.
@@ -112,7 +123,16 @@ export class Character {
     const get = (f: string) => loadShared(f.startsWith('/') ? f : base + f);
 
     const gltf = await get(manifest.model);
-    this.model = SkeletonUtils.clone(gltf.scene);
+    let mixamoRest: ReturnType<typeof captureRest> | null = null;
+    if (look) {
+      // The manifest model is still read for its Mixamo rest pose (the clips' source rig).
+      mixamoRest = captureRest(gltf.scene, shortBoneName);
+      const hero = await buildCharacter(look, []);
+      this.model = hero.model;
+      this.built = true;
+    } else {
+      this.model = SkeletonUtils.clone(gltf.scene);
+    }
     this.model.traverse((o: THREE.Object3D) => {
       if ((o as THREE.Bone).isBone) this.bones.set(shortBoneName(o.name), o as THREE.Bone);
       const m = o as THREE.SkinnedMesh;
@@ -130,6 +150,14 @@ export class Character {
       }
     });
 
+    if (this.built) {
+      // Gameplay, IK and sockets address bones by Mixamo names.
+      for (const [mix, ue] of Object.entries(MIXAMO_TO_UE)) {
+        const b = this.bones.get(ue);
+        if (b) this.bones.set(mix, b);
+      }
+      this.hipsTrack = 'pelvis.position';
+    }
     this.rigFamily = detectRigFamily(this.bones.keys());
     this.rigProfile = RIG_PROFILES[this.rigFamily];
 
@@ -149,8 +177,11 @@ export class Character {
 
     // Load every clip, remapping bone prefixes to match this model.
     const modelPrefix = this.detectPrefix(this.model);
+    if (!this.built) this.hipsTrack = `${modelPrefix}Hips.position`;
+    this.model.updateMatrixWorld(true);
     const hipsY = this.bones.get('Hips')?.getWorldPosition(new THREE.Vector3()).y ?? 1;
     this.hipsHeight = hipsY;
+    const heroRest = this.built ? captureRest(this.model) : null;
     for (const [key, entry] of Object.entries(manifest.clips)) {
       if (body?.clips && !body.clips.includes(key)) continue;
       try {
@@ -159,7 +190,8 @@ export class Character {
           ? g.animations.find((a: THREE.AnimationClip) => a.name === entry.name)
           : g.animations[0];
         if (!src) continue;
-        const clip = this.retarget(src.clone(), modelPrefix, !!entry.inPlace);
+        let clip = this.retarget(src.clone(), mixamoRest ? 'mixamorig' : modelPrefix, !!entry.inPlace);
+        if (mixamoRest && heroRest) clip = retargetClip(clip, mixamoRest, heroRest, MIXAMO_TO_UE, { srcName: shortBoneName, hips: 'pelvis' });
         clip.name = key;
         this.clips.set(key, clip);
         this.clipInfo.set(key, {
@@ -246,7 +278,8 @@ export class Character {
       if (!clip) continue;
       const c = clip.clone();
       c.name = dst;
-      const t = c.tracks.find((tr) => tr.name === `${prefix}Hips.position`);
+      const t = c.tracks.find((tr) => tr.name === this.hipsTrack);
+      void prefix;
       if (t) {
         const v = t.values;
         const y0 = v[1];

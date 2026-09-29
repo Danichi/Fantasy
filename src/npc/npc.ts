@@ -5,6 +5,7 @@ import { heightAt } from '../world/terrain';
 import { rotateWorld } from '../player/ik';
 import { damp } from '../core/math';
 import type { CombatStyleId } from '../progression/styles';
+import { buildCharacter, type Look } from './charBuilder';
 
 // ---------------------------------------------------------------------------
 // Town NPCs. Three kinds of body:
@@ -24,7 +25,9 @@ export interface NpcSpec {
   height: number;
   pos: [number, number];
   yaw: number;
-  kind: 'clip' | 'rigged' | 'statue';
+  kind: 'clip' | 'rigged' | 'statue' | 'built';
+  /** built: assembled from the stylised character kits (src/npc/cast.ts) */
+  look?: Look;
   clip?: string;
   /** rigged: bone names for arms/spine/head */
   bones?: { upperArmL: string; upperArmR: string; spine: string[]; head: string };
@@ -47,6 +50,11 @@ export class NPC {
   private uniforms = { uBreath: { value: 0 } };
   private t = Math.random() * 10;
   private headYaw = 0;
+  private idleAction: THREE.AnimationAction | null = null;
+  private talkAction: THREE.AnimationAction | null = null;
+  private talking = false;
+  /** seconds left in the talking animation (refreshed by each dialogue line) */
+  talkT = 0;
   loaded: Promise<void>;
 
   constructor(readonly spec: NpcSpec, scene: THREE.Scene) {
@@ -60,6 +68,18 @@ export class NPC {
   }
 
   private async load() {
+    if (this.spec.kind === 'built' && this.spec.look) {
+      const c = await buildCharacter(this.spec.look, ['idle', 'talk']);
+      this.root.add(c.root);
+      this.mixer = c.mixer;
+      const acts = (c.mixer as unknown as { _actions: THREE.AnimationAction[] })._actions;
+      this.idleAction = acts.find((a) => a.getClip().name === 'idle') ?? null;
+      this.talkAction = acts.find((a) => a.getClip().name === 'talk') ?? null;
+      // Offset each NPC's idle so the town doesn't breathe in unison.
+      if (this.idleAction) this.idleAction.play().time = Math.random() * 3;
+      this.bones = { head: c.bones.get('Head') };
+      return;
+    }
     const g = await loader.loadAsync(`/assets/npc/${this.spec.file}`);
     const model = g.scene;
     // Normalise height, feet on the ground, centred on the origin.
@@ -128,6 +148,24 @@ export class NPC {
   update(dt: number, player: THREE.Vector3) {
     this.t += dt;
     this.uniforms.uBreath.value = Math.sin(this.t * 1.6) * 0.5 + 0.5;
+    if (this.spec.kind === 'built') {
+      this.talkT = Math.max(0, this.talkT - dt);
+      const want = this.talkT > 0;
+      if (want !== this.talking && this.idleAction && this.talkAction) {
+        this.talking = want;
+        const [from, to] = want ? [this.idleAction, this.talkAction] : [this.talkAction, this.idleAction];
+        to.reset().play();
+        from.crossFadeTo(to, 0.4, false);
+      }
+      this.mixer?.update(dt);
+      // Turn the head toward the player when close (on top of the clip).
+      const to = player.clone().sub(this.pos);
+      const yawTo = Math.atan2(to.x, to.z) - this.root.rotation.y;
+      const wantYaw = to.length() < 7 ? Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(yawTo), Math.cos(yawTo)))) : 0;
+      this.headYaw = damp(this.headYaw, wantYaw, 4, dt);
+      if (this.bones.head) rotateWorld(this.bones.head, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.headYaw * 0.75));
+      return;
+    }
     this.mixer?.update(dt);
     if (this.spec.kind !== 'rigged' || !this.rest.size) return;
     // Restore the rest pose, then layer the idle on top.
