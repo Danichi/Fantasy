@@ -31,6 +31,27 @@ Visual mockups: https://claude.ai/artifact/2e8Focia4DPWqk66fh9zj6
 - **Moves bar:** the active style owns the mouse buttons. Keys 1-6 mix techniques,
   spells and brews from any discipline, plus an ultimate slot for capstones and reactions.
 
+### Draft 3 decisions (locked in)
+- **Skills screen:** the Discipline Atlas lists disciplines by family. Clicking one opens its tree.
+- **Tree look per family:** Combat Styles use the Sigil Wheel, Magic Schools use a
+  Constellation, Callings use a Living Tree.
+- **Tree points:** each discipline level gives 1 tree point (+1 bonus every 5 levels), spent
+  in that discipline's tree only. Points buy new nodes **or rank up owned skills** (I to V,
+  1 point per rank; rank III unlocks a Form).
+- **Inactive styles do nothing.** Their passives and techniques only work while that style
+  is active. You switch active style at the style's mentor.
+- **Invest anywhere:** XP and attribute points can be spent anywhere on the map.
+- **Respec:** only at a mentor, refunds 75% of the full-price XP invested. Mastery is kept.
+- **Level caps:** 30 per discipline, capstones at 25.
+- **Mastery (separate from level):** grows only by doing the thing (fighting in a style,
+  casting a school, brewing, exploring). Ranks 0-10 (Novice to Grandmaster); each rank
+  makes that discipline's future levels 3.5% cheaper, up to 35%.
+- **Visibility:** the Atlas shows only the basic disciplines (Gale, Cross, Boundary, Blade
+  of Light, Ironroot; Fire, Wind, Light, Frost, Shadow; Herbalism, Dungeoneering, Smithing,
+  Cooking, Runecraft). Basic ones you have not learned appear greyed with their mentor.
+  **Secret disciplines** (Oathbreaker, Void, Beastbinding, the hybrids...) are not listed
+  at all, not even as a hint, until you learn them somewhere in the world.
+
 ---
 
 ## 0. What already exists (and what we build on)
