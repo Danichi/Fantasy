@@ -74,6 +74,8 @@ export class Weather {
 
   update(dt: number, regionId: string) {
     if (this.forced) {
+      // Forced weather (debug, tests, scripted scenes) applies at once.
+      if (this.kind !== this.forced || this.blend < 1) Object.assign(this.p, PRESET[this.forced]);
       this.kind = this.next = this.forced;
       this.blend = 1;
     } else {

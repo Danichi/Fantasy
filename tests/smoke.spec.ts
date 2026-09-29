@@ -42,7 +42,8 @@ test('sword swing damages a beast', async ({ page }) => {
     g.input.press('Mouse0');
     await new Promise((r) => setTimeout(r, 50));
     g.input.release('Mouse0');
-    await new Promise((r) => setTimeout(r, 900));
+    // The swing lands within a second of game time; allow for slow frames.
+    for (let k = 0; k < 30 && s.hp === before; k++) await new Promise((r) => setTimeout(r, 100));
     return { before, after: s.hp };
   });
   expect(hp.after).toBeLessThan(hp.before);

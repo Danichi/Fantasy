@@ -48,7 +48,9 @@ test('terrain and trees stream in and out without leaking', async ({ page }) => 
       tiles: g.terrain.tileCount,
       veg: g.stylizedNature.tileCount,
     });
+    // Baseline once the home tiles have finished streaming in.
     await settle(1500);
+    for (let k = 0; k < 20 && g.terrain.tileCount < 81; k++) await settle(250);
     const base = snap();
     // Travel 3 km east and north, then come home.
     const trip = [[1500, 150], [3000, 150], [2200, -1400], [600, -2600], [0, 10]];

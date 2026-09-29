@@ -239,6 +239,7 @@ export class NpcManager {
 
   /** Heavy rain sends people at leisure under a roof: adults to the inn, children home. */
   raining = false;
+  private lastBuild = 0;
   /** The harvest festival: the town gathers on the plaza on this day's evening. */
   festivalDay = -1;
 
@@ -354,8 +355,13 @@ export class NpcManager {
     const list = this.pool.get(key);
     const free = list?.find((a) => !a.built.root.visible);
     if (free) return free;
-    // Nothing free: build another in the background (two at a time), try next tick.
-    if (this.building.size < 2) void this.buildActor(key, st.rec.look);
+    // Nothing free: build another in the background (one at a time: each build
+    // is a burst of main-thread work), try next tick.
+    const now = performance.now();
+    if (this.building.size === 0 && now - this.lastBuild > 350) {
+      this.lastBuild = now;
+      void this.buildActor(key, st.rec.look);
+    }
     return null;
   }
 
