@@ -31,6 +31,12 @@ import { buildCrops } from './world/crops';
 import { FarmLife } from './world/farmLife';
 import { buildRoadFurniture } from './world/roadNetwork';
 import { Foraging } from './world/foraging';
+import { buildKingsRoad } from './world/kingsRoad';
+import { Horses } from './world/horses';
+import { Encounters } from './world/encounters';
+import { Caravans } from './world/caravans';
+import { setupRoadQuests } from './quests/roadQuests';
+import { road, distanceAlong } from './world/roadNetwork';
 import { buildGlenLandmarks, LANDMARK_CLEARINGS } from './world/glenLandmarks';
 import { QuestLog } from './quests/questLog';
 import { setupElderGlenQuests } from './quests/elderGlenQuests';
@@ -121,8 +127,9 @@ async function boot() {
   const farm = buildFarmstead(r.scene, world.mats);
   const crops = buildCrops(r.scene);
   buildGlenDressing(r.scene, world.mats);
+  const kingsRoad = buildKingsRoad(r.scene, world.mats, fx);
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings];
   await stylizedNature.ready;
   stylizedNature.warm(spawn, spawn);
   const foliage = stylizedNature.loaded ? null : new Foliage(r.scene, r.renderer);
@@ -161,6 +168,11 @@ async function boot() {
     npcs.addSettlement(folk.settlement);
     for (const rec of folk.records) npcs.add(rec);
     for (const rec of named.records) npcs.add(rec);
+    // The King's Road: the Wayfarer's Rest, Millbrook, the chapel and the Lantern Camp.
+    for (const k of kingsRoad.settlements) {
+      npcs.addSettlement(k.settlement);
+      for (const rec of k.records) npcs.add(rec);
+    }
   }
   // Livestock in their pens and pastures; wild deer and foxes stream per tile.
   const fauna = new Fauna(r.scene);
@@ -176,6 +188,9 @@ async function boot() {
   fauna.addHerd('chick', 4, farm.ranges.chickens);
   fauna.addHerd('dog', 2, farm.ranges.dogs);
   fauna.addHerd('shiba', 1, farm.ranges.dogs);
+  fauna.addHerd('horse', 3, kingsRoad.paddock);
+  fauna.addHerd('horse_white', 1, kingsRoad.paddock);
+  fauna.addHerd('sheep', 6, { center: new THREE.Vector3(600, 0, 34), radius: 22 });
   fauna.addHerd('cat', 3, { center: new THREE.Vector3(0, 0, -4), radius: 45 });
   fauna.addHerd('pigeon', 8, { center: new THREE.Vector3(0, 0, -4), radius: 14 });
   void ocean;
@@ -222,13 +237,16 @@ async function boot() {
       fauna.setVisible(!h);
       questUI?.setVisible(!h);
       foraging?.setVisible(!h);
+      horses?.setVisible(!h);
+      caravans?.setVisible(!h);
+      encounters?.setVisible(!h);
       flowers.mesh.visible = !h;
       river.mesh.visible = !h;
       foliage?.setVisible(!h);
       stylizedNature.setVisible(!h && stylizedNature.loaded);
       town.setVisible(!h);
     },
-    clearEnemies: () => { slimes.clear(); frontier?.dispose(); },
+    clearEnemies: () => { slimes.clear(); frontier?.dispose(); encounters?.clear(); },
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
   }, rewards, world.crypt.door);
   const dialogue = new DialogueUI();
@@ -250,6 +268,40 @@ async function boot() {
       },
     },
   );
+  // Services offered by townsfolk (beds, shops, stables), keyed by NPC id.
+  type FolkShow = (t: string, opts: { label: string; run: () => void }[]) => void;
+  const folkServices = new Map<string, (show: FolkShow, back: () => void) => { label: string; run: () => void }[]>();
+  folkServices.set('hester', (show, back) => [
+    {
+      label: 'Rent a bed until morning — 12g',
+      run: () => {
+        if (player.prog.gold < 12) return show('Twelve silver for a bed, love. Come back with coin.', [{ label: 'Back.', run: back }]);
+        player.prog.addGold(-12);
+        time.skipTo(7);
+        player.hp = player.maxHp;
+        player.mana = player.maxMana;
+        player.stamina = player.maxStamina;
+        save();
+        show('You sleep like a stone and wake to birdsong and the smell of bacon. It is seven in the morning.', [{ label: 'Good morning.', run: () => dialogue.close() }]);
+      },
+    },
+    {
+      label: 'A bowl of hot stew — 4g',
+      run: () => {
+        if (player.prog.gold < 4) return show('Four coppers for the stew.', [{ label: 'Back.', run: back }]);
+        player.prog.addGold(-4);
+        player.hp = Math.min(player.maxHp, player.hp + 45);
+        player.stamina = player.maxStamina;
+        show('Thick with barley and Millbrook lamb. You feel it all the way down.', [{ label: 'Thanks.', run: back }]);
+      },
+    },
+  ]);
+  folkServices.set('zarek', () => [{
+    label: 'Browse exotic wares',
+    run: () => town.showShop('Zarek the Wanderer', 'Travelling Merchant', 'From the dunes of the Golden Expanse to the vineyards of Valoria: everything has a price, and my prices are fair.', [
+      ['healthPotion', 22], ['manaPotion', 26], ['honeycomb', 14], ['duskbloom', 40], ['emberroot', 20], ['silverthistle', 16], ['pumpkinSeed', 5], ['ringSage', 230],
+    ]),
+  }]);
   // Townsfolk: one interactable that follows whoever is nearest.
   const folkTalk = {
     pos: new THREE.Vector3(0, -999, 0),
@@ -267,7 +319,12 @@ async function boot() {
       const title = n.rec.title ?? n.rec.job.charAt(0).toUpperCase() + n.rec.job.slice(1) + ' of Elder Glen';
       const back = () => folkTalk.action();
       const show = (t: string, opts: { label: string; run: () => void }[]) => dialogue.show(n.rec.name, title, t, opts);
-      show(npcs.lineFor(n), [...quests.options(n.rec.id, show, back), { label: 'Farewell.', run: () => dialogue.close() }]);
+      show(npcs.lineFor(n), [
+        ...quests.options(n.rec.id, show, back),
+        ...(folkServices.get(n.rec.id)?.(show, back) ?? []),
+        ...town.sellOptions(n.rec.id, n.rec.name, title, back),
+        { label: 'Farewell.', run: () => dialogue.close() },
+      ]);
     },
   };
   realm.overworldInteractables.push(folkTalk);
@@ -316,7 +373,64 @@ async function boot() {
     count: countItem, take: takeItem, give: giveItem, toast: (m) => hud.toast(m),
   });
   town.questOptions = (id, show, back) => quests.options(id, show, back);
-  realm.overworldInteractables.push(...roads.interactables, foraging.interactable, ...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables);
+  // ---- Road encounters, caravans and the King's Road quests (phase 4) ------------------
+  const encounters = new Encounters(r.scene, player, slimes, fx);
+  encounters.enabled = !TEST_MODE;
+  encounters.onTalk = (name, title, text, shop) => dialogue.show(name, title, text, [
+    ...(shop ? [{ label: 'Browse wares', run: () => town.showShop(name, title, 'Rope, rations and remedies. Road prices, but honest ones.', [['healthPotion', 24], ['manaPotion', 28], ['brambleBerries', 4], ['wheatSeed', 4], ['carrotSeed', 4]]) }] : []),
+    { label: 'Safe travels.', run: () => dialogue.close() },
+  ]);
+  const caravans = new Caravans(r.scene, world.mats, time);
+  const roadQuests = setupRoadQuests({
+    quests, scene: r.scene, player, mats: world.mats, encounters, beasts: slimes, toast: (m) => hud.toast(m),
+    talk: (who, title, text, opts) => dialogue.show(who, title, text, opts), close: () => dialogue.close(),
+  });
+  // ---- Horses and coaches -------------------------------------------------------------
+  const horses = new Horses(r.scene, player, (m) => hud.toast(m));
+  horses.fromJSON(saveData?.world?.horses, new THREE.Vector3(52, 0, -34));
+  horses.onChange = () => save();
+  const glenYard = new THREE.Vector3(52, 0, -34);
+  const kr = road('kings');
+  const stops = [
+    { id: 'elderGlen', name: 'Elder Glen', pos: glenYard, along: 0 },
+    { id: 'waystation', name: "The Wayfarer's Rest", pos: kingsRoad.stableYard, along: distanceAlong(kr, kingsRoad.stableYard.x, kingsRoad.stableYard.z) },
+    { id: 'portAurelle', name: 'Port Aurelle (West Gate)', pos: new THREE.Vector3(2600, 0, 160), along: distanceAlong(kr, 2600, 160) },
+  ];
+  const coachOptions = (here: string, show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) => {
+    const from = stops.find((s) => s.id === here)!;
+    const known = stops.filter((s) => s.id !== here && (s.id === 'elderGlen' || discovery.places.get(s.id) === 'visited'));
+    if (!known.length) return [];
+    return [{
+      label: 'Take the coach',
+      run: () => show('The coach leaves on the hour. Where to?', [
+        ...known.map((to) => {
+          const dist = Math.abs(to.along - from.along);
+          const fare = Math.max(5, Math.round(dist / 90));
+          const hours = dist / 6 / 120; // six metres a second; one game hour is two real minutes
+          return {
+            label: `${to.name} — ${fare}g, about ${Math.max(1, Math.round(hours * 2) / 2)} hours`,
+            run: () => {
+              if (player.prog.gold < fare) return show(`That's ${fare} gold, friend.`, [{ label: 'Back.', run: back }]);
+              player.prog.addGold(-fare);
+              if (player.mounted) horses.dismount();
+              dialogue.close();
+              const h = (time.hour + hours) % 24;
+              time.skipTo(h);
+              player.teleport(to.pos.clone().setY(heightAt(to.pos.x, to.pos.z) + 0.5));
+              hud.toast(`The coach rattles into ${to.name}.`);
+              save();
+            },
+          };
+        }),
+        { label: 'Not now.', run: back },
+      ]),
+    }];
+  };
+  const stableFor = (id: string, yard: THREE.Vector3, stop: string) => (show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) =>
+    [...horses.stableOptions(yard, show, back, () => player.prog.gold, (n) => player.prog.addGold(-n)), ...coachOptions(stop, show, back)];
+  town.serviceOptions = (id, show, back) => (id === 'stablemaster' ? stableFor(id, glenYard, 'elderGlen')(show, back) : []);
+  folkServices.set('dunmore', stableFor('dunmore', kingsRoad.stableYard, 'waystation'));
+  realm.overworldInteractables.push(encounters.interactable, ...roadQuests.interactables, horses.interactable, ...roads.interactables, foraging.interactable, ...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables);
   const questNpcIds = [...town.npcs.map((n) => n.spec.id), ...npcs.npcs.filter((n) => n.rec.named).map((n) => n.rec.id)];
   const questUI = new QuestUI(quests, hud, r.camera, (id) => {
     const svc = serviceNpc(id);
@@ -390,7 +504,7 @@ async function boot() {
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
     const pos = realm.mode === 'overworld' ? ([+player.pos.x.toFixed(2), +player.pos.y.toFixed(2), +player.pos.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON() });
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON() });
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   realm.onSave = save;
@@ -560,7 +674,11 @@ async function boot() {
       }
       slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
       player.update(STEP, input, cam);
-      if (realm.mode === 'overworld') { slimes.update(STEP, player); frontier.update(STEP); }
+      if (realm.mode === 'overworld') {
+        slimes.update(STEP, player);
+        frontier.update(STEP);
+        encounters.update(STEP, time.hour, weather.p.rain);
+      }
       realm.update(STEP);
       rewards.update(STEP, player.center);
       // Interaction: nearest enabled thing in reach.
@@ -624,6 +742,10 @@ async function boot() {
       livestock.update(player.pos);
       landmarks.update(dt, ts.night, gameHours());
       foraging.update(dt, player.pos);
+      kingsRoad.update(dt, ts.night);
+      horses.update(dt);
+      caravans.update(dt, player.pos);
+      if (worldRunning) roadQuests.update(dt);
       if (worldRunning) {
         quests.update(dt, player.pos);
         glenQuests.update(dt);
@@ -689,7 +811,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

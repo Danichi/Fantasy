@@ -10,7 +10,7 @@ import { newTargetId, targets, type HitInfo, type Target } from '../combat/targe
 import type { Player } from '../player/player';
 import type { FX } from '../fx/particles';
 
-export type BeastKind = 'green' | 'blue' | 'magma' | 'cave';
+export type BeastKind = 'green' | 'blue' | 'magma' | 'cave' | 'dire';
 
 interface BeastVariant {
   file: string;
@@ -29,6 +29,8 @@ export const BEAST_VARIANTS: Record<BeastKind, BeastVariant> = {
   blue: { file: 'stag.glb', height: 1.5, hp: 120, damage: 22, radius: 0.42, speed: 2.8, aggro: 17, attackRange: 2.0, attackCooldown: 1.7 },
   magma: { file: 'orc.glb', height: 1.85, hp: 145, damage: 28, radius: 0.43, speed: 2.45, aggro: 16, attackRange: 1.9, attackCooldown: 1.55 },
   cave: { file: 'goblin.glb', height: 1.45, hp: 85, damage: 18, radius: 0.36, speed: 3.0, aggro: 15, attackRange: 1.7, attackCooldown: 1.35 },
+  // A rare, huge wolf that stalks the road at night.
+  dire: { file: 'wolf.glb', height: 1.7, hp: 340, damage: 30, radius: 0.55, speed: 3.9, aggro: 22, attackRange: 2.3, attackCooldown: 1.4 },
 };
 
 const LOADER = compressedGltf;

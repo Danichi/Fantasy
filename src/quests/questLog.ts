@@ -104,7 +104,7 @@ export class QuestLog {
     for (const d of defs) this.defs.set(d.id, d);
   }
 
-  status(id: string) {
+  status(id: string): 'active' | 'done' | 'available' | 'locked' {
     return this.state[id]?.status ?? (this.canOffer(this.defs.get(id)!) ? 'available' : 'locked');
   }
 

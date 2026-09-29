@@ -178,7 +178,9 @@ const BUYS: Record<string, [string, number][]> = {
   innkeeper: [['apple', 3], ['pear', 3], ['milk', 4], ['egg', 3], ['pumpkin', 7]],
   tailor: [['wool', 7]],
   froest: [['ironOre', 9]],
-  apothecary: [['sungrass', 3], ['moongrass', 6], ['wildmint', 3], ['ironleaf', 6]],
+  apothecary: [['sungrass', 3], ['moongrass', 6], ['wildmint', 3], ['ironleaf', 6], ['redcap', 5], ['silverthistle', 8], ['duskbloom', 18], ['emberroot', 9]],
+  zarek: [['duskbloom', 22], ['emberroot', 11], ['silverthistle', 9], ['honeycomb', 8], ['wool', 8], ['ironOre', 10], ['riverReed', 3], ['wildGarlic', 3]],
+  hester: [['wheat', 4], ['milk', 5], ['egg', 3], ['apple', 3], ['pumpkin', 9], ['wildGarlic', 4], ['brambleBerries', 3], ['cabbage', 5], ['carrot', 3]],
 };
 
 export class Town {
@@ -186,6 +188,8 @@ export class Town {
   readonly guild: AdventurerGuild;
   /** quests add options (offers, turn-ins) to a townsperson's menu */
   questOptions?: (npcId: string, show: (text: string, opts: DialogueOption[]) => void, back: () => void) => DialogueOption[];
+  /** services from other systems (stables, coaches) */
+  serviceOptions?: (npcId: string, show: (text: string, opts: DialogueOption[]) => void, back: () => void) => DialogueOption[];
   private tags = new Map<string, HTMLDivElement>();
   private tmp = new THREE.Vector3();
 
@@ -231,7 +235,7 @@ export class Town {
     ];
   }
 
-  private showShop(speaker: string, title: string, intro: string, stock: [string, number][]) {
+  showShop(speaker: string, title: string, intro: string, stock: [string, number][]) {
     const opts = stock.map(([id, price]) => ({
       label: 'Buy ' + ITEMS[id].name + ' — ' + price + 'g',
       run: () => {
@@ -301,23 +305,23 @@ export class Town {
   }
 
   /** Sell everything of the kinds this merchant buys. */
-  private sellOptions(s: NpcSpec): DialogueOption[] {
-    const buys = BUYS[s.id];
+  sellOptions(id: string, name: string, title: string, back: () => void): DialogueOption[] {
+    const buys = BUYS[id];
     if (!buys) return [];
-    const have = buys.filter(([id]) => this.count(id) > 0);
+    const have = buys.filter(([item]) => this.count(item) > 0);
     if (!have.length) return [];
-    const total = have.reduce((g, [id, price]) => g + this.count(id) * price, 0);
+    const total = have.reduce((g, [item, price]) => g + this.count(item) * price, 0);
     return [{
-      label: `Sell produce and materials — ${total}g (${have.map(([id]) => this.count(id) + ' ' + ITEMS[id].name).join(', ')})`,
+      label: `Sell produce and materials — ${total}g (${have.map(([item]) => this.count(item) + ' ' + ITEMS[item].name).join(', ')})`,
       run: () => {
-        for (const [id] of have) {
-          const it = this.player.equip.items.find((i) => i.def.id === id);
+        for (const [item] of have) {
+          const it = this.player.equip.items.find((i) => i.def.id === item);
           if (it) this.player.equip.items.splice(this.player.equip.items.indexOf(it), 1);
         }
         this.player.prog.addGold(total);
         events.emit('equipmentChanged', {});
         events.emit('progressChanged', {});
-        this.dialogue.show(s.name, s.title, `A fair trade. ${total} gold for the lot.`, [{ label: 'Back.', run: () => this.talk(s, s.greeting, true) }, { label: 'Farewell.', run: () => this.dialogue.close() }]);
+        this.dialogue.show(name, title, `A fair trade. ${total} gold for the lot.`, [{ label: 'Back.', run: back }, { label: 'Farewell.', run: () => this.dialogue.close() }]);
       },
     }];
   }
@@ -328,8 +332,8 @@ export class Town {
     // Quests and trade come first; "Something else" opens the usual menu.
     if (!skipQuests) {
       const show = (t: string, opts: DialogueOption[]) => this.dialogue.show(s.name, s.title, t, opts);
-      const quest = this.questOptions?.(s.id, show, () => this.talk(s)) ?? [];
-      const sell = this.sellOptions(s);
+      const quest = [...(this.questOptions?.(s.id, show, () => this.talk(s)) ?? []), ...(this.serviceOptions?.(s.id, show, () => this.talk(s)) ?? [])];
+      const sell = this.sellOptions(s.id, s.name, s.title, () => this.talk(s, s.greeting, true));
       if (quest.length || sell.length) {
         this.dialogue.show(s.name, s.title, text, [...quest, ...sell, { label: BUYS[s.id] || s.id === 'innkeeper' ? 'Let me see your wares.' : 'Something else…', run: () => this.talk(s, text, true) }, { label: 'Farewell.', run: () => this.dialogue.close() }]);
         return;

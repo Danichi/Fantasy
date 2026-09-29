@@ -29,6 +29,8 @@ export interface WorldSave {
   landmarks?: { ore?: number[] };
   /** picked forage nodes (id -> game hour) until they regrow */
   forage?: Record<string, number>;
+  /** owned horses and where the active one stands */
+  horses?: import('./world/horses').HorseSave;
 }
 
 export interface SaveData {

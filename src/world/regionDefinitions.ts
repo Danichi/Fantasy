@@ -79,7 +79,7 @@ export const REGIONS: Record<string, RegionDef> = {
     id: 'cresha', name: 'The Kingdom of Cresha', subtitle: 'Unity · Trade · Prosperity', levels: [1, 18],
     weather: { clear: 5, cloudy: 3, rain: 2.2, heavyRain: 0.5, fog: 1, storm: 0.4 }, ambience: 'meadow', music: 'wild', encounters: 'creshaWilds', faction: 'cresha',
     resources: ['timber', 'herbs', 'game', 'stone', 'iron (hills)'], exports: ['grain', 'wool', 'timber'], imports: ['ore', 'spices', 'luxury goods'],
-    landmarks: [at('waystation', 'The Wayfarer’s Rest', 'landmark', 1380, 150), at('ridge', 'Gull Ridge Overlook', 'landmark', 2230, 120)],
+    landmarks: [at('waystation', 'The Wayfarer’s Rest', 'landmark', 1385, 100), at('ridge', 'Gull Ridge Overlook', 'landmark', 2234, 108), at('millbrook', 'Millbrook', 'town', 640, 70), at('chapel', 'Chapel of the Dawn', 'landmark', 668, 184), at('lanternCamp', 'The Lantern Camp', 'landmark', 1072, 46), at('hollowRidge', 'Hollow Ridge', 'dungeon', 1952, -182)],
     surface: ['hamlets, farms and roadside inns', 'the King’s Road', 'river crossings'],
     hidden: ['bandit hideouts in the hills', 'forgotten shrines'],
     deep: ['the sunken abbey beneath the marsh'],

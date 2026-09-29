@@ -221,6 +221,8 @@ const CLIP_FILES: Record<string, string> = {
   fix: '/assets/anims/fix.glb',
   dance: '/assets/anims/dance.glb',
   crouch: '/assets/anims/crouch.glb',
+  // Combat and work clips (phase 4): bandits, foraging, farming, fishing.
+  ...Object.fromEntries(['sword_idle', 'sword_attack', 'sword_combo', 'hit', 'death', 'jog', 'bow_aim', 'bow_shoot', 'pickup', 'harvest', 'plant', 'watering', 'pick_tree', 'fish_cast', 'fish_idle', 'fish_reel'].map((k) => [k, `/assets/anims/${k}.glb`])),
 };
 const clipCache = new Map<string, Promise<{ clip: THREE.AnimationClip; rest: ReturnType<typeof captureRest> } | null>>();
 function loadClip(key: string) {

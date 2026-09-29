@@ -23,9 +23,9 @@ const logs = [];
 page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
 await page.goto(url);
-await page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 });
+await page.waitForFunction(() => window.__ready === true, null, { timeout: 150000 });
 // Wait until shaders have compiled and the simulation is actually running.
-await page.waitForFunction(() => (window.__game?.steps ?? 0) > 60, null, { timeout: 60000 });
+await page.waitForFunction(() => (window.__game?.steps ?? 0) > 60, null, { timeout: 150000 });
 await page.waitForTimeout(Number(args.wait || 2500));
 if (args.script) {
   const src = fs.readFileSync(args.script, 'utf8');

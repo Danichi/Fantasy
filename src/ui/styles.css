@@ -929,3 +929,16 @@ html, body {
 .journal .j-track { margin-top: 16px; padding: 9px 14px; border-radius: 8px; border: 1px solid rgba(244,216,140,.6); background: rgba(244,216,140,.1); color: #f4d88c; font: 600 12px/1 var(--sans); letter-spacing: .1em; cursor: pointer; }
 .journal .j-empty { color: rgba(233,227,207,.55); font: 400 13px/1.5 var(--sans); }
 .journal footer { padding: 8px 20px; border-top: 1px solid rgba(213,177,88,.18); font: 500 11px/1 var(--sans); letter-spacing: .1em; color: rgba(233,227,207,.45); }
+
+/* ---- Horses: stamina bar while riding, naming dialog ---- */
+.horse-bar { position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%); display: grid; justify-items: center; gap: 5px; pointer-events: none; }
+.horse-bar.hidden { display: none; }
+.horse-bar b { font: 700 12px/1 var(--serif); letter-spacing: .14em; color: #f4d88c; text-shadow: 0 1px 3px #000; }
+.horse-bar span { width: 220px; height: 7px; border-radius: 4px; background: rgba(10, 16, 28, .75); border: 1px solid rgba(213,177,88,.45); overflow: hidden; }
+.horse-bar i { display: block; height: 100%; background: linear-gradient(90deg, #c9922a, #f4d88c); transform-origin: left; }
+.horse-bar.tired i { background: linear-gradient(90deg, #8a3a2a, #c9602a); }
+.name-prompt { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(4, 8, 16, .45); z-index: 30; }
+.name-prompt > div { display: grid; gap: 12px; padding: 22px 26px; min-width: 320px; background: linear-gradient(160deg, rgba(14, 24, 44, .98), rgba(7, 12, 24, .98)); border: 1px solid rgba(213,177,88,.6); border-radius: 12px; }
+.name-prompt b { font: 700 18px/1 var(--serif); letter-spacing: .12em; color: #f4d88c; }
+.name-prompt input { padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(213,177,88,.4); background: rgba(255,255,255,.05); color: #f7efd9; font: 500 15px/1 var(--sans); outline: none; }
+.name-prompt button { padding: 9px 14px; border-radius: 8px; border: 1px solid rgba(244,216,140,.6); background: rgba(244,216,140,.12); color: #f4d88c; font: 600 13px/1 var(--sans); letter-spacing: .08em; cursor: pointer; }

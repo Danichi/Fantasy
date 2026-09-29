@@ -46,6 +46,9 @@ interface ActiveAction {
  * frame: it interpolates between steps and poses the character, so motion
  * stays smooth at any frame rate.
  */
+/** How far the rider's root sits above the ground (horse back height minus leg length). */
+const RIDE_HEIGHT = 0.5;
+
 export class Player {
   readonly char = new Character();
   rig!: RigLayer;
@@ -224,6 +227,16 @@ export class Player {
     this.stamina = Math.min(this.maxStamina, this.stamina + 15);
   }
 
+  /** Riding (world/horses.ts): speeds come from the horse's breed; null dismounts. */
+  mountStats: { canter: number; gallop: number; accel: number } | null = null;
+  /** the horse has breath left to gallop */
+  mountCanGallop = true;
+  setMount(stats: { canter: number; gallop: number; accel: number } | null) {
+    this.mountStats = stats;
+    this.mounted = !!stats;
+    this.act = null;
+  }
+
   get forward() {
     return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
   }
@@ -370,7 +383,7 @@ export class Player {
       this.airTime = 0;
     }
     if (input.wasPressed('lockOn')) this.toggleLock(cam);
-    this.sprinting = !this.boundaryActive && input.held('sprint') && this.moveIntent.lengthSq() > 0 && !this.blocking && this.stamina > 0 && !this.act && this.grounded;
+    this.sprinting = !this.boundaryActive && input.held('sprint') && this.moveIntent.lengthSq() > 0 && !this.blocking && (this.mounted || this.stamina > 0) && !this.act && this.grounded;
     if (this.boundaryActive && this.moveIntent.lengthSq() > 0) this.breakBoundary();
   }
 
@@ -622,13 +635,14 @@ export class Player {
     const intent = this.moveIntent;
     let targetSpeed = 0;
     if (!a && intent.lengthSq() > 0) {
-      targetSpeed = this.mounted ? (this.sprinting ? 15 : this.lock ? 6.2 : 11.5) : (this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2);
+      const ms = this.mountStats ?? { canter: 11.5, gallop: 15, accel: 8 };
+      targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2);
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
       // Wading slows you down.
       const wade = waterDepthAt(this.pos.x, this.pos.z);
       if (wade > 0.25) targetSpeed *= 0.5;
     }
-    if (this.sprinting) {
+    if (this.sprinting && !this.mounted) {
       this.stamina = Math.max(0, this.stamina - 13 * dt);
       this.staminaDelay = 0.5;
     }
@@ -759,8 +773,9 @@ export class Player {
   present(alpha: number, dt: number) {
     const root = this.char.root;
     root.position.lerpVectors(this.prevPos, this.pos, alpha);
-    root.position.y -= this.mounted ? 0.72 : 0;
-    this.mountVisual.visible = this.mounted;
+    // In the saddle: the rider sits on the horse's back.
+    root.position.y += this.mounted && this.mountStats ? RIDE_HEIGHT : this.mounted ? -0.72 : 0;
+    this.mountVisual.visible = this.mounted && !this.mountStats;
     root.rotation.y = this.prevYaw + wrapAngle(this.yaw - this.prevYaw) * alpha;
     const yawR = root.rotation.y;
     this.idleClock += dt;
@@ -772,7 +787,7 @@ export class Player {
     // Local velocity for directional locomotion.
     const c = Math.cos(-yawR), s = Math.sin(-yawR);
     const local = { x: this.vel.x * c + this.vel.z * s, z: -this.vel.x * s + this.vel.z * c };
-    if (a) local.x = local.z = 0;
+    if (a || this.mounted) local.x = local.z = 0;
 
     // ---- clip layers ------------------------------------------------------
     const anim = this.anim;
@@ -862,6 +877,7 @@ export class Player {
       vis.position.z = -k * 0.2;
     }
     this.rig.apply(pose);
+    if (this.mounted && this.mountStats) this.ridePose();
 
     if (this.boundaryRing && this.boundaryOuterRing) {
       const visible = this.boundaryActive && this.activeCombatStyle === 'boundary' && !this.dead;
@@ -879,6 +895,30 @@ export class Player {
     // Blade hit detection against the pose we just drew.
     if (a && at !== this.lastPresentT) this.detectHits(a, at);
     this.lastPresentT = at;
+  }
+
+  /** Sit astride: thighs forward and apart, knees bent, feet in the stirrups. */
+  private ridePose() {
+    const up = this.char.root.quaternion;
+    // Rotating about +x lifts a hanging leg toward +z (forward) for a +z-facing rider.
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(up);
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(up);
+    const turn = (bone: THREE.Object3D | undefined, axis: THREE.Vector3, ang: number) => {
+      if (!bone || !bone.parent) return;
+      const wq = bone.getWorldQuaternion(new THREE.Quaternion());
+      const target = new THREE.Quaternion().setFromAxisAngle(axis, ang).multiply(wq);
+      const pq = bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+      bone.quaternion.copy(pq.multiply(target));
+      bone.updateMatrixWorld(true);
+    };
+    for (const [side, s] of [['Left', 1], ['Right', -1]] as const) {
+      const thigh = this.char.bone(side + 'UpLeg');
+      const shin = this.char.bone(side + 'Leg');
+      // Left is +x for a +z-facing rider: spread each thigh out over the barrel.
+      turn(thigh, fwd, s * 0.55);
+      turn(thigh, right, -0.7);
+      turn(shin, right, 1.05);
+    }
   }
 
   /**

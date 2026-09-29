@@ -13,6 +13,7 @@ export const disciplineToStyle = (id: DisciplineId): CombatStyleId => (id === 'c
 
 export const XP_FOR_KIND: Record<string, [xp: number, gold: number]> = {
   green: [12, 3], blue: [26, 6], magma: [30, 8], cave: [22, 5], armour: [48, 14], orc: [420, 0], dummy: [0, 0],
+  rat: [4, 1], dire: [140, 30], bandit: [34, 12], banditChief: [260, 120],
 };
 
 /** XP needed to go from `level` to `level + 1`. */

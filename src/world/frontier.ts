@@ -397,6 +397,7 @@ export class FrontierRegion {
   private herbs: HerbSpot[] = [];
   private beasts: RoadBeast[] = [];
   private beastTimer = 0;
+  spawnRoadBeasts = false;
   private time = 0;
 
   constructor(
@@ -422,16 +423,7 @@ export class FrontierRegion {
         action: () => this.gather(h),
       });
     }
-    this.interactables.push({
-      pos: new THREE.Vector3(48, heightAt(48, -39), -39),
-      radius: 3,
-      label: () => this.player.mounted ? 'Dismount horse' : 'Mount a horse',
-      enabled: () => true,
-      action: () => {
-        this.player.toggleMount();
-        this.toast(this.player.mounted ? 'Horseback travel' : 'On foot');
-      },
-    });
+    // (Horses are bought and ridden through world/horses.ts now.)
   }
 
   private buildTownHooks(): Interactable[] {
@@ -521,7 +513,8 @@ export class FrontierRegion {
 
     this.beastTimer -= dt;
     const onRoad = this.player.pos.x > 125 && this.player.pos.x < 350 && this.player.pos.z > -20 && this.player.pos.z < 95;
-    if (onRoad && this.beasts.length < 4 && this.beastTimer <= 0) {
+    // Road beasts now come from the encounter tables (world/encounters.ts).
+    if (this.spawnRoadBeasts && onRoad && this.beasts.length < 4 && this.beastTimer <= 0) {
       this.beastTimer = 7 + Math.random() * 7;
       this.spawnBeast();
     }
