@@ -165,12 +165,15 @@ export function buildCrypt(scene: THREE.Scene, m: WorldMats, fx: FX) {
     const h = Math.max(0.01, hb.max.y - hb.min.y);
     const scale = 8.2 / h;
     house.scale.setScalar(scale);
+    // The model's skull gate faces +X; turn it to face the approach (+Z).
+    house.rotation.y = -Math.PI / 2;
     house.updateMatrixWorld(true);
     const hb2 = new THREE.Box3().setFromObject(house);
     const center = hb2.getCenter(new THREE.Vector3());
-    // Face the same direction as the existing crypt approach: the player's
-    // interaction point is placed directly in front of the house.
-    house.position.set(CRYPT.x - center.x, baseY - hb2.min.y, gz + 0.2 - center.z);
+    // The house is a child of `group`, which already sits at the crypt, so this
+    // is local: the gate stands where the old archway was, the braziers and the
+    // doorway interaction point in front of it, the rest backs into the hill.
+    house.position.set(-center.x, -hb2.min.y, 1.2 - hb2.max.z);
     house.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) {
@@ -179,12 +182,9 @@ export function buildCrypt(scene: THREE.Scene, m: WorldMats, fx: FX) {
       }
     });
     group.add(house);
-    // The old stone facade remains only as the collision/tunnel foundation;
-    // the supplied Orc House is the visible landmark and doorway.
+    // The old stone facade remains only as the collision foundation; the Orc
+    // House is the visible landmark, with the dark tunnel still behind its gate.
     mesh.visible = false;
-    tunnel.visible = false;
-    back.visible = false;
-    gloom.visible = false;
     sigil.visible = false;
   }).catch((e) => console.warn('orc house failed to load', e));
   const world = braziers.map((b) => b.clone().applyMatrix4(group.matrixWorld));

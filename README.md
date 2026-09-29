@@ -84,6 +84,9 @@ tools/
   import-mixamo.mjs    FBX -> GLB, root-motion extraction, manifest
   fetch-polyhaven.mjs  download CC0 textures/models
   optimize-props.mjs   simplify Poly Haven photoscans to game budgets
+  prep-models.mjs      shrink downloaded Sketchfab models (triangles, WebP textures)
+  rig-orcs.mjs         skin the static orc models onto the hero skeleton so they
+                       play the hero's mocap clips (run prep-models first)
   shot.mjs, poses.mjs  screenshot + pose contact-sheet helpers
 tests/smoke.spec.ts    Playwright end-to-end checks
 ```

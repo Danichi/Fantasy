@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Character } from '../player/character';
 import { Animator } from '../player/animator';
@@ -30,6 +29,7 @@ import type { FX } from '../fx/particles';
 // ---------------------------------------------------------------------------
 
 export const ORC_SCALE = 1.42;
+const WARCHIEF_URL = '/assets/npc/orcWarchief.glb';
 /** Bone scales that turn the slim rig into a hulking orc (upper body inherits down the arms). */
 const BULK: Record<string, number> = { Spine1: 1.24, Head: 0.8, RightUpLeg: 1.12, LeftUpLeg: 1.12 };
 const UPPER = 1.24;
@@ -96,7 +96,8 @@ export class OrcWarlord implements Target {
   onDeath?: (o: OrcWarlord) => void;
 
   private char = new Character();
-  private model: THREE.Group | null = null;
+  /** wearing the rigged warchief model (otherwise the dressed-up hero rig) */
+  private skinned = false;
   private anim!: Animator;
   private rig!: RigLayer;
   private odachiHand!: THREE.Object3D;
@@ -142,40 +143,20 @@ export class OrcWarlord implements Target {
   }
 
   private async init(at: THREE.Vector3, yaw: number) {
-    const c = this.char;
-    await c.load();
-    c.root.scale.setScalar(ORC_SCALE);
-
-    // Use the supplied Orc Warrior model as the visible body. The model is
-    // static (no embedded animation clips), so the existing combat rig remains
-    // active underneath it for hit timing, movement, and boss behavior.
+    // Grukk wears the Orc Warchief model, skinned to the hero's skeleton by
+    // tools/rig-orcs.mjs, so the same mocap clips drive him. If it fails to
+    // load he falls back to the hero rig dressed up as an orc.
+    let c = this.char;
     try {
-      const gltf = await new GLTFLoader().loadAsync('/assets/npc/orcWarchief.glb');
-      const model = gltf.scene;
-      model.updateMatrixWorld(true);
-      const bb = new THREE.Box3().setFromObject(model);
-      const h = Math.max(0.01, bb.max.y - bb.min.y);
-      const scale = 2.8 / h;
-      model.scale.setScalar(scale);
-      model.updateMatrixWorld(true);
-      const bb2 = new THREE.Box3().setFromObject(model);
-      const center = bb2.getCenter(new THREE.Vector3());
-      model.position.set(-center.x, -bb2.min.y, -center.z);
-      model.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (m.isMesh) {
-          m.castShadow = true;
-          m.receiveShadow = true;
-        }
-      });
-      c.root.add(model);
-      this.model = model;
-      c.root.visible = false;
-      this.scene.add(model);
+      await c.load('/assets/character/', { model: WARCHIEF_URL });
+      this.skinned = true;
     } catch (e) {
-      console.warn('orc warrior model failed to load; using the rigged fallback', e);
+      console.warn('orc warchief model failed to load; dressing the hero rig instead', e);
+      c = this.char = new Character();
+      await c.load();
     }
-    for (const [b, k] of Object.entries(BULK)) c.bone(b)?.scale.setScalar(k);
+    c.root.scale.setScalar(ORC_SCALE);
+    if (!this.skinned) for (const [b, k] of Object.entries(BULK)) c.bone(b)?.scale.setScalar(k);
     c.root.updateMatrixWorld(true);
     this.scene.add(c.root);
     this.anim = new Animator(c);
@@ -183,7 +164,7 @@ export class OrcWarlord implements Target {
     c.root.updateMatrixWorld(true);
     this.rig = new RigLayer(c);
     this.rig.setup();
-    tintBody(c);
+    if (!this.skinned) tintBody(c);
     for (const m of c.meshes) {
       const mats = Array.isArray(m.material) ? m.material : [m.material];
       this.bodyMats.push(...(mats as THREE.MeshStandardMaterial[]));
@@ -210,8 +191,11 @@ export class OrcWarlord implements Target {
     this.bowBack.position.set(-0.02, 0.05, -0.2);
     this.bowBack.rotation.set(0, Math.PI / 2, -0.5);
     back.add(this.odachiBack, this.bowBack);
-
-    this.dressUp();
+    if (this.skinned) {
+      // The warchief's own axe is part of his mesh: the odachi only marks the
+      // blade for hit checks, and the helm, tusks and armour are already there.
+      for (const o of [this.odachiHand, this.odachiBack]) o.traverse((m) => (m as THREE.Mesh).isMesh && (m.visible = false));
+    } else this.dressUp();
     c.root.traverse((o) => ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
 
     this.position.copy(at);
@@ -349,7 +333,6 @@ export class OrcWarlord implements Target {
   dispose() {
     targets.delete(this);
     this.scene.remove(this.char.root);
-    if (this.model) this.scene.remove(this.model);
     for (const a of this.arrows) this.scene.remove(a.mesh);
     physics.world.removeCollider(this.col, false);
     physics.world.removeRigidBody(this.rb);
@@ -613,11 +596,6 @@ export class OrcWarlord implements Target {
     const root = this.char.root;
     root.position.lerpVectors(this.prevPos, this.position, alpha);
     root.rotation.y = this.prevYaw + wrapAngle(this.yaw - this.prevYaw) * alpha;
-    if (this.model) {
-      this.model.position.copy(root.position);
-      this.model.rotation.y = root.rotation.y;
-      this.model.scale.setScalar(this.model.scale.x);
-    }
     const s = this.state;
     const anim = this.anim;
     const c = Math.cos(-this.yaw), sn = Math.sin(-this.yaw);

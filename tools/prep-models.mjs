@@ -21,8 +21,8 @@ const JOBS = {
   corvin: ['fallen_paladin_in_corrupted_black_plate_armor', 60000, 1024, false, 0.02, true],
   rustyArmour: ['old_rusty_gothic_worn_armor', 30000, 1024, false, 0.02, true],
   urukStatue: ['uruk_hai_-_lotr', 45000, 1024, false],
-  orcWarrior: ['orc_warrior.glb', 0, 1024, false, 0.03, false, { keepFlat: true }],
-  orcWarchief: ['orc_warchief_with_iron_crown_and_cleaver.glb', 60000, 2048, false, 0.02, false, { keepFlat: true }],
+  orcWarrior: ['orc_warrior.glb', 0, 1024, false, 0.03, false, { out: 'assets-src/prepped', keepFlat: true }],
+  orcWarchief: ['orc_warchief_with_iron_crown_and_cleaver.glb', 60000, 2048, false, 0.02, false, { out: 'assets-src/prepped', keepFlat: true }],
   orcHouse: ['orc_house.glb', 50000, 1024, false, 0.02, false, { out: 'public/assets/models', keepFlat: true }],
 };
 

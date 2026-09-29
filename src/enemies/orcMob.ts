@@ -1,25 +1,24 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
 import { clamp, dampAngle, segmentPointDistance } from '../core/math';
 import { events } from '../core/events';
 import { newTargetId, targets, type HitInfo, type Target } from '../combat/targets';
+import { Character } from '../player/character';
+import { Animator } from '../player/animator';
 import type { Player } from '../player/player';
 import type { FX } from '../fx/particles';
 
+// The Orc Warrior model is skinned to the hero's skeleton (tools/rig-orcs.mjs),
+// so the crypt's orcs walk, swing, flinch and fall with the hero's mocap.
 const MODEL_URL = '/assets/npc/orcWarrior.glb';
-const HEIGHT = 1.65;
+const HEIGHT = 1.75;
 const GRAV = 20;
-
-let modelPromise: Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] } | null> | null = null;
-function loadOrcMobModel() {
-  return (modelPromise ??= new GLTFLoader().loadAsync(MODEL_URL).then((g) => ({ scene: g.scene, animations: g.animations })).catch((e) => {
-    console.warn('OrcMob model not found; using fallback:', e);
-    return null;
-  }));
-}
+const CLIPS = ['idle', 'walk', 'run', 'walk_back', 'run_back', 'strafe_l', 'strafe_r', 'attack_light_1', 'hit_react', 'death'];
+/** The swing, timed in clip seconds (the hero's light attack: slash1 clipTiming). */
+const SWING = { clip: 'attack_light_1', speed: 1.1, hitFrom: 0.5, hitTo: 0.72, lungeFrom: 0.3, lungeTo: 0.62 };
+const HURT = 0.55; // seconds of flinch
+const DEATH_CLIP = 2.2; // seconds of the death clip to play before sinking away
 
 function fallbackOrcMob() {
   const g = new THREE.Group();
@@ -74,7 +73,7 @@ export class OrcMob implements Target {
   center = new THREE.Vector3();
   readonly group = new THREE.Group();
 
-  private state: 'idle' | 'chase' | 'windup' | 'attack' | 'hurt' | 'dying' = 'idle';
+  private state: 'idle' | 'chase' | 'attack' | 'hurt' | 'dying' = 'idle';
   private st = 0;
   private cooldown = 0;
   private deathT = 0;
@@ -85,13 +84,13 @@ export class OrcMob implements Target {
   private rb: RAPIER.RigidBody;
   private col: RAPIER.Collider;
   private kcc: RAPIER.KinematicCharacterController;
-  private mixer: THREE.AnimationMixer | null = null;
-  private actions: Record<string, THREE.AnimationAction> = {};
-  private currentAction = '';
+  private char: Character | null = null;
+  private anim: Animator | null = null;
 
   constructor(at: THREE.Vector3, private scene: THREE.Scene, private fx: FX) {
     this.position.copy(at);
-    this.group.add(fallbackOrcMob());
+    const fallback = fallbackOrcMob();
+    this.group.add(fallback);
     scene.add(this.group);
 
     this.rb = physics.world.createRigidBody(
@@ -106,28 +105,16 @@ export class OrcMob implements Target {
     targets.add(this);
     this.syncVisual();
 
-    void loadOrcMobModel().then((source) => {
-      if (!source || !this.alive) return;
-      const model = SkeletonUtils.clone(source.scene) as THREE.Group;
-      model.updateMatrixWorld(true);
-      const bb = new THREE.Box3().setFromObject(model);
-      const h = Math.max(0.01, bb.max.y - bb.min.y);
-      const s = HEIGHT / h;
-      model.scale.setScalar(s);
-      model.updateMatrixWorld(true);
-      const bb2 = new THREE.Box3().setFromObject(model);
-      model.position.y = -bb2.min.y;
-      model.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (m.isMesh) m.castShadow = m.receiveShadow = true;
-      });
-
-      this.group.clear();
-      this.group.add(model);
-      this.mixer = new THREE.AnimationMixer(model);
-      for (const clip of source.animations) this.actions[clip.name] = this.mixer.clipAction(clip);
-      this.setAnimation('idle');
-    });
+    const c = new Character();
+    c.load('/assets/character/', { model: MODEL_URL, height: HEIGHT, clips: CLIPS }).then(() => {
+      if (!this.alive && this.state !== 'dying') return;
+      c.root.updateMatrixWorld(true);
+      this.anim = new Animator(c);
+      this.char = c;
+      this.group.remove(fallback);
+      this.group.add(c.root);
+      this.animate(0);
+    }).catch((e) => console.warn('OrcMob model not found; using fallback:', e));
   }
 
   takeHit(h: HitInfo) {
@@ -155,42 +142,24 @@ export class OrcMob implements Target {
   }
 
   get dead() {
-    return this.state === 'dying' && this.deathT > 1.0;
+    // With the rig: the death clip plays out, then the body sinks away.
+    return this.state === 'dying' && this.deathT > (this.char ? DEATH_CLIP + 1.2 : 1.0);
   }
 
   private setState(s: OrcMob['state']) {
     this.state = s;
     this.st = 0;
-    if (s === 'idle') this.setAnimation('idle');
-    else if (s === 'chase') this.setAnimation('walk');
-    else if (s === 'dying') this.setAnimation('death');
-    else if (s === 'hurt') this.setAnimation('hit');
-    else if (s === 'attack' || s === 'windup') this.setAnimation('attack');
-  }
-
-  private setAnimation(name: string) {
-    if (!this.mixer) return;
-    const keys = Object.keys(this.actions);
-    const wanted = keys.find((k) => k.toLowerCase().includes(name)) ??
-      (name === 'walk' ? keys.find((k) => k.toLowerCase().includes('run')) : undefined) ??
-      keys[0];
-    if (!wanted || wanted === this.currentAction) return;
-    const next = this.actions[wanted];
-    const prev = this.actions[this.currentAction];
-    if (prev) prev.fadeOut(0.12);
-    next.reset().fadeIn(0.12).play();
-    this.currentAction = wanted;
   }
 
   update(dt: number, player: Player) {
     this.st += dt;
     this.cooldown -= dt;
-    this.mixer?.update(dt);
 
     if (this.state === 'dying') {
       this.deathT += dt;
-      this.group.scale.y = clamp(1 - this.deathT, 0.01, 1);
-      this.syncVisual();
+      if (this.char) this.group.position.y = this.position.y - clamp((this.deathT - DEATH_CLIP) * 0.6, 0, 1);
+      else this.group.scale.y = clamp(1 - this.deathT, 0.01, 1);
+      this.animate(dt);
       return;
     }
 
@@ -198,39 +167,42 @@ export class OrcMob implements Target {
     const dist = Math.hypot(to.x, to.z);
     const aware = !player.dead && dist < 15;
     const wantYaw = Math.atan2(to.x, to.z);
+    const fwd = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
 
     if (this.state === 'idle') {
+      this.vel.x *= Math.exp(-10 * dt);
+      this.vel.z *= Math.exp(-10 * dt);
       if (aware) this.setState('chase');
     } else if (this.state === 'chase') {
       this.yaw = dampAngle(this.yaw, wantYaw, 8, dt);
       if (!aware) this.setState('idle');
-      else if (this.grounded && dist < 2.1 && this.cooldown <= 0) this.setState('windup');
-      else if (this.grounded) {
+      else if (this.grounded && dist < 2.1 && this.cooldown <= 0) {
+        this.hitDone = false;
+        this.setState('attack');
+      } else if (this.grounded) {
         const dir = to.setY(0).normalize();
         const speed = 1.45;
         this.vel.x = dir.x * speed;
         this.vel.z = dir.z * speed;
       }
-    } else if (this.state === 'windup') {
-      this.vel.x *= Math.exp(-12 * dt);
-      this.vel.z *= Math.exp(-12 * dt);
-      this.yaw = dampAngle(this.yaw, wantYaw, 12, dt);
-      if (this.st > 0.42) {
-        this.hitDone = false;
-        this.setState('attack');
-        const dir = to.setY(0).normalize();
-        this.vel.set(dir.x * 4.2, 2.6, dir.z * 4.2);
-      }
     } else if (this.state === 'attack') {
-      if (!this.hitDone) this.checkHit(player);
-      if (this.st > 0.32) {
+      const t = this.st * SWING.speed; // clip seconds
+      // Track the player through the windup, then commit to the swing.
+      if (t < SWING.lungeFrom) this.yaw = dampAngle(this.yaw, wantYaw, 10, dt);
+      const lunge = t > SWING.lungeFrom && t < SWING.lungeTo ? 2.2 : 0;
+      const k = Math.exp(-14 * dt);
+      this.vel.x = this.vel.x * k + fwd.x * lunge * (1 - k);
+      this.vel.z = this.vel.z * k + fwd.z * lunge * (1 - k);
+      if (!this.hitDone && t >= SWING.hitFrom && t <= SWING.hitTo) this.checkHit(player);
+      const dur = this.anim?.duration(SWING.clip) || 1.5;
+      if (t > dur - 0.15) {
         this.cooldown = 1.0 + Math.random() * 0.8;
         this.setState('chase');
       }
     } else if (this.state === 'hurt') {
       this.vel.x *= Math.exp(-8 * dt);
       this.vel.z *= Math.exp(-8 * dt);
-      if (this.grounded && this.st > 0.45) {
+      if (this.grounded && this.st > HURT) {
         this.stunned = false;
         this.setState('chase');
       }
@@ -249,12 +221,29 @@ export class OrcMob implements Target {
     this.position.set(next.x, next.y - 0.48, next.z);
     this.grounded = this.kcc.computedGrounded();
     this.syncVisual();
+    this.animate(dt);
+  }
+
+  /** Pose the rig: locomotion from the actual velocity, full-body clips for everything else. */
+  private animate(dt: number) {
+    const anim = this.anim;
+    if (!anim) return;
+    const s = this.state;
+    if (s === 'dying') anim.setFull('death', Math.min(this.deathT, DEATH_CLIP), 0.15);
+    else if (s === 'attack') anim.setFull(SWING.clip, this.st * SWING.speed, 0.12, 0.25);
+    else if (s === 'hurt') anim.setFull('hit_react', this.st * 1.1, 0.08, 0.2);
+    else anim.setFull(null, 0);
+    const c = Math.cos(-this.yaw), sn = Math.sin(-this.yaw);
+    const local = s === 'chase' || s === 'idle' ? { x: this.vel.x * c + this.vel.z * sn, z: -this.vel.x * sn + this.vel.z * c } : { x: 0, z: 0 };
+    anim.update(dt, { local, grounded: this.grounded });
   }
 
   private checkHit(player: Player) {
     const a = player.pos.clone().setY(player.pos.y + 0.35);
     const b = player.pos.clone().setY(player.pos.y + 1.45);
-    if (segmentPointDistance(a, b, this.center) > 1.15) return;
+    // Reach: a point in front of the orc at chest height.
+    const reach = this.center.clone().add(new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(0.9));
+    if (segmentPointDistance(a, b, reach) > 1.0) return;
     this.hitDone = true;
     const dir = this.position.clone().sub(player.pos).setY(0).normalize();
     player.receiveAttack({

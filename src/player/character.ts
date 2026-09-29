@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { RIG_PROFILES, detectRigFamily, type RigFamily, type RigProfile } from './rigProfile';
 
 // ---------------------------------------------------------------------------
@@ -52,6 +53,23 @@ const FALLBACK: CharacterManifest = {
 const BONE_PREFIX = /^mixamorig\d*[:_]?/;
 export const shortBoneName = (n: string) => n.replace(BONE_PREFIX, '');
 
+/** Another body on the hero's skeleton (tools/rig-orcs.mjs), playing the hero's clips. */
+export interface BodyOptions {
+  /** absolute URL of a model skinned to the hero skeleton */
+  model: string;
+  /** standing height to normalise the model's bind pose to (metres) */
+  height?: number;
+  /** load only these clips (keys from the manifest) */
+  clips?: string[];
+}
+
+// Parsed files are shared by every character (each model instance is cloned).
+const fileCache = new Map<string, Promise<any>>();
+const loadShared = (url: string) => {
+  if (!fileCache.has(url)) fileCache.set(url, new GLTFLoader().loadAsync(url));
+  return fileCache.get(url)!;
+};
+
 export class Character {
   readonly root = new THREE.Group(); // positioned at the feet, yaw only
   readonly visual = new THREE.Group(); // procedural roll/lean/hit offsets go here
@@ -68,7 +86,7 @@ export class Character {
   /** standing hips height in metres (after height normalisation) */
   hipsHeight = 1;
 
-  async load(base = '/assets/character/') {
+  async load(base = '/assets/character/', body?: BodyOptions) {
     const loader = new GLTFLoader();
     let manifest = FALLBACK;
     // Dev preview: ?char=candidates/Soldier.glb swaps the model, keeping the fallback clips.
@@ -88,16 +106,13 @@ export class Character {
       for (const k of ['idle', 'walk', 'run']) clips[k] = pick(k) ? { file: override, name: pick(k), loop: true } : FALLBACK.clips[k];
       manifest = { ...FALLBACK, model: override, clips };
     }
+    if (body) manifest = { ...manifest, model: body.model, height: body.height ?? manifest.height, placeholderStyle: false };
     this.manifest = manifest;
 
-    const cache = new Map<string, Promise<any>>();
-    const get = (f: string) => {
-      if (!cache.has(f)) cache.set(f, loader.loadAsync(base + f));
-      return cache.get(f)!;
-    };
+    const get = (f: string) => loadShared(f.startsWith('/') ? f : base + f);
 
     const gltf = await get(manifest.model);
-    this.model = gltf.scene;
+    this.model = SkeletonUtils.clone(gltf.scene);
     this.model.traverse((o: THREE.Object3D) => {
       if ((o as THREE.Bone).isBone) this.bones.set(shortBoneName(o.name), o as THREE.Bone);
       const m = o as THREE.SkinnedMesh;
@@ -106,6 +121,8 @@ export class Character {
         m.receiveShadow = true;
         m.frustumCulled = false; // skinned bounds are unreliable once animated
         if (m.isSkinnedMesh) this.meshes.push(m);
+        // Own materials: the parsed file is shared, and bodies get tinted or flashed.
+        m.material = Array.isArray(m.material) ? m.material.map((x) => x.clone()) : m.material.clone();
         const mats = Array.isArray(m.material) ? m.material : [m.material];
         for (const mat of mats as THREE.MeshStandardMaterial[]) {
           if (mat && 'envMapIntensity' in mat) mat.envMapIntensity = 0.9;
@@ -135,6 +152,7 @@ export class Character {
     const hipsY = this.bones.get('Hips')?.getWorldPosition(new THREE.Vector3()).y ?? 1;
     this.hipsHeight = hipsY;
     for (const [key, entry] of Object.entries(manifest.clips)) {
+      if (body?.clips && !body.clips.includes(key)) continue;
       try {
         const g = await get(entry.file);
         const src: THREE.AnimationClip | undefined = entry.name
