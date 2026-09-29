@@ -241,9 +241,10 @@ export const ACTIONS: Record<string, ActionDef> = {
   roll: {
     id: 'roll', dur: 0.78, stamina: 18, clip: 'roll',
     iframes: [0.06, 0.46], roll: { dist: 4.6 }, cancel: 0.62, track: 0.02,
-    // Mixamo "Stand To Roll" (2.33 s): skip the wind-up, play fast, stop once up.
-    // Times here are clip seconds; at 1.8x the whole dodge takes ~1 s.
-    clipTiming: { startAt: 0.22, dur: 1.95, speed: 1.8, iframes: [0.3, 1.25], cancel: 1.6, track: 0.3 },
+    // Mixamo "Stand To Roll" (2.33 s), played whole at 1.8x (~1.3 s) so the
+    // wind-up and the get-up stay smooth. Times here are clip seconds; you can
+    // still act from 1.6 s, before the get-up finishes.
+    clipTiming: { dur: 2.33, speed: 1.8, iframes: [0.3, 1.25], cancel: 1.6, track: 0.3 },
   },
   backstep: {
     id: 'backstep', dur: 0.5, stamina: 12, clip: 'backstep',

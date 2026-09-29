@@ -30,3 +30,8 @@ The visual overhaul uses CC0 assets from Quaternius, installed locally by `tools
 - Universal Base Characters: https://quaternius.com/packs/universalbasecharacters.html
 - Animated creatures (wolf, stag, goblin, orc): Quaternius CC0 assets mirrored in the public `Claude-gaming-world` asset repository; see its CREDITS.md for attribution: https://github.com/Master-Coder-Sudo/Claude-gaming-world/blob/main/CREDITS.md
 - Individual nature models are fetched through Drawcall Market: https://market.drawcall.ai/
+
+## Music
+
+- "Global Equator" (village / overworld theme) by lobozack
+- "Sonic Ladder" (crypt theme) by malachif2740

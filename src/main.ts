@@ -20,6 +20,7 @@ import { Spells } from './magic/spells';
 import { buildIcons } from './ui/icons';
 import { HUD } from './ui/hud';
 import { InventoryUI, buildOverlays } from './ui/inventory';
+import { Music } from './audio/music';
 import { CharPreview } from './ui/charPreview';
 import { events } from './core/events';
 import { buildWorld } from './world/props';
@@ -175,13 +176,15 @@ async function boot() {
   // overlay is always visible while paused, so the game never freezes silently.
   let pausedByUser = false;
   let hadLock = false;
+  const music = new Music();
   const overlays = buildOverlays((origin) => {
     player.prog.combat.origin = origin;
     started = true;
+    music.start();
     pausedByUser = false;
     input.fallbackLook = true;
     input.requestLock();
-  }, player.prog.combat.origin);
+  }, player.prog.combat.origin, music);
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
   hud.onSlotDrop = (mode, slot, ref) => {
@@ -287,6 +290,8 @@ async function boot() {
     const dtMs = Math.max(0, Math.min(100, now - last));
     last = now;
     const dt = dtMs / 1000;
+    music.setZone(realm.mode === 'dungeon' ? 'crypt' : 'village');
+    music.update(dt);
     // Pause the world while the title/pause overlay is up (never in tests).
     const overlayUp = !TEST_MODE && (!started || pausedByUser);
     // Hit-stop is a brief slow-motion rather than a hard freeze.

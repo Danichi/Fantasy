@@ -424,7 +424,7 @@ export class InventoryUI {
   }
 }
 
-export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon') => void, initialOrigin: 'human' | 'dragon' | 'demon' = 'human') {
+export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon') => void, initialOrigin: 'human' | 'dragon' | 'demon' = 'human', music?: { muted: boolean; setMuted(m: boolean): void }) {
   const root = document.getElementById('ui')!;
   const controls = `
     <div class="controls">
@@ -464,21 +464,25 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon') =>
     start.classList.add('hidden');
     onStart(selectedOrigin);
   });
-  // Desktop build: Quit and fullscreen buttons on the title/pause screen.
+  // Title/pause screen buttons: music on/off everywhere, plus Quit and fullscreen in the desktop build.
   const desktop = (window as any).desktop as { quit(): void; toggleFullscreen(): void } | undefined;
-  if (desktop) {
-    const row = document.createElement('div');
-    row.className = 'desk-row';
-    row.innerHTML = '<button data-a="fs">Toggle fullscreen (F11)</button><button data-a="quit">Quit game</button>';
-    row.addEventListener('click', (e) => {
-      const a = (e.target as HTMLElement).dataset.a;
-      if (!a) return;
-      e.stopPropagation();
-      if (a === 'quit') desktop.quit();
-      else desktop.toggleFullscreen();
-    });
-    start.querySelector('.title-card')!.appendChild(row);
-  }
+  const row = document.createElement('div');
+  row.className = 'desk-row';
+  const musicLabel = () => (music?.muted ? 'Music: Off' : 'Music: On');
+  if (music) row.innerHTML = `<button data-a="music">${musicLabel()}</button>`;
+  if (desktop) row.innerHTML += '<button data-a="fs">Toggle fullscreen (F11)</button><button data-a="quit">Quit game</button>';
+  row.addEventListener('click', (e) => {
+    const btn = e.target as HTMLElement;
+    const a = btn.dataset.a;
+    if (!a) return;
+    e.stopPropagation();
+    if (a === 'music' && music) {
+      music.setMuted(!music.muted);
+      btn.textContent = musicLabel();
+    } else if (a === 'quit') desktop?.quit();
+    else if (a === 'fs') desktop?.toggleFullscreen();
+  });
+  if (row.childElementCount) start.querySelector('.title-card')!.appendChild(row);
   help.addEventListener('click', () => help.classList.add('hidden'));
   return {
     start,
