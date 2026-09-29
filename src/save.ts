@@ -27,6 +27,8 @@ export interface WorldSave {
   farm?: import('./world/farmLife').FarmSave;
   /** mined-out ore nodes and similar landmark state */
   landmarks?: { ore?: number[] };
+  /** picked forage nodes (id -> game hour) until they regrow */
+  forage?: Record<string, number>;
 }
 
 export interface SaveData {

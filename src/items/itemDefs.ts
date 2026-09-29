@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { buildSword, buildRoundShield, buildKiteShield, buildOdachi } from './weaponModels';
 import { buildArmorPiece, type ArmorPieceId } from './armorModels';
 import { PRODUCE_ITEMS } from './produce';
+import { HERB_ITEMS } from './herbs';
 
 export type Slot =
   | 'main' | 'off'
@@ -179,6 +180,7 @@ export const ITEMS: Record<string, ItemDef> = {
     desc: 'A tough mineral-rich leaf. Restores a modest amount of health and stamina.', stats: { heal: 12, restoreStamina: 20 },
   },
   ...PRODUCE_ITEMS,
+  ...HERB_ITEMS,
 };
 
 export function buildItemModel(def: ItemDef): THREE.Object3D | null {

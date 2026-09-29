@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { fbm, smoothstep, clamp } from '../core/math';
 import { macroHeight, macroElevAt, reliefAt, RELIEF, SEA_LEVEL } from './worldMap';
+import { ROAD_POLYS } from './roadData';
 
 // ---------------------------------------------------------------------------
 // Terrain heights for the whole world (pure: no rendering, no physics, so the
@@ -44,16 +45,9 @@ export function riverX(z: number) {
 BRIDGE.x = riverX(BRIDGE.y);
 
 type P = [number, number];
-const ROADS: P[][] = [
-  // south gate to the meadows and beyond
-  [[0, TOWN_R - 6], [0, 130], [-14, 210], [-8, 320], [12, 500]],
-  // north gate up the valley to the crypt
-  [[0, -TOWN_R + 6], [6, -150], [-8, -225], [0, -300]],
-  // east gate over the bridge: the King's Road to Port Aurelle (phase 4 replaces this with the road network)
-  [[TOWN_R - 6, 0], [120, 4], [BRIDGE.x, BRIDGE.y], [230, 22], [300, 56], [360, 70], [520, 88], [760, 110], [1050, 124], [1380, 118], [1700, 130], [1960, 150], [2230, 152], [2690, 150]],
-  // west gate into the forest logging road
-  [[-TOWN_R + 6, 0], [-145, 8], [-230, 80], [-320, 118]],
-];
+// Roads come from the network data (roadData.ts); the King's Road crosses the
+// river exactly at the bridge.
+const ROADS: P[][] = ROAD_POLYS.map((l) => l.map((p) => (p[0] === 157.7 && p[1] === 22 ? [BRIDGE.x, BRIDGE.y] as P : p)));
 /** Road polylines in world metres (maps draw these). */
 export const ROAD_LINES: readonly (readonly [number, number])[][] = ROADS;
 const STREETS: P[][] = [

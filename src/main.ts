@@ -29,6 +29,8 @@ import { Fauna } from './world/fauna';
 import { buildFarmstead } from './world/farmstead';
 import { buildCrops } from './world/crops';
 import { FarmLife } from './world/farmLife';
+import { buildRoadFurniture } from './world/roadNetwork';
+import { Foraging } from './world/foraging';
 import { buildGlenLandmarks, LANDMARK_CLEARINGS } from './world/glenLandmarks';
 import { QuestLog } from './quests/questLog';
 import { setupElderGlenQuests } from './quests/elderGlenQuests';
@@ -219,6 +221,7 @@ async function boot() {
       npcs.setVisible(!h);
       fauna.setVisible(!h);
       questUI?.setVisible(!h);
+      foraging?.setVisible(!h);
       flowers.mesh.visible = !h;
       river.mesh.visible = !h;
       foliage?.setVisible(!h);
@@ -292,6 +295,10 @@ async function boot() {
   const livestock = farmLife.livestockInteractable();
   const landmarks = buildGlenLandmarks(r.scene, world.mats, giveItem, gameHours);
   town.guild.inventory = { count: countItem, take: takeItem };
+  // ---- The road network and foraging (phase 4) ----------------------------------------
+  const roads = buildRoadFurniture(r.scene, world.mats, (who, title, text) => dialogue.show(who, title, text, [{ label: 'Turn back.', run: () => dialogue.close() }]));
+  const foraging = new Foraging(r.scene, giveItem, gameHours, () => time.hour);
+  foraging.fromJSON(saveData?.world?.forage);
   const serviceNpc = (id: string) => town.npcs.find((n) => n.spec.id === id) ?? null;
   const quests = new QuestLog({
     count: countItem,
@@ -309,7 +316,7 @@ async function boot() {
     count: countItem, take: takeItem, give: giveItem, toast: (m) => hud.toast(m),
   });
   town.questOptions = (id, show, back) => quests.options(id, show, back);
-  realm.overworldInteractables.push(...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables);
+  realm.overworldInteractables.push(...roads.interactables, foraging.interactable, ...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables);
   const questNpcIds = [...town.npcs.map((n) => n.spec.id), ...npcs.npcs.filter((n) => n.rec.named).map((n) => n.rec.id)];
   const questUI = new QuestUI(quests, hud, r.camera, (id) => {
     const svc = serviceNpc(id);
@@ -383,7 +390,7 @@ async function boot() {
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
     const pos = realm.mode === 'overworld' ? ([+player.pos.x.toFixed(2), +player.pos.y.toFixed(2), +player.pos.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON() });
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON() });
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   realm.onSave = save;
@@ -616,6 +623,7 @@ async function boot() {
       farmLife.update(worldRunning ? dt : 0);
       livestock.update(player.pos);
       landmarks.update(dt, ts.night, gameHours());
+      foraging.update(dt, player.pos);
       if (worldRunning) {
         quests.update(dt, player.pos);
         glenQuests.update(dt);
@@ -681,7 +689,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

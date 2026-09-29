@@ -293,18 +293,6 @@ function buildPortAurelle(scene: THREE.Scene) {
   addSign(scene, 'GRAND MARKET', cx + 38, cz - 30, 5.4, 3.1);
 }
 
-function buildHerbMesh(herb: HerbId) {
-  const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: HERBS[herb].color, roughness: 0.9, emissive: HERBS[herb].color, emissiveIntensity: 0.08 });
-  for (let i = 0; i < 5; i++) {
-    const leaf = new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.22, 3, 5), mat);
-    leaf.position.set((i - 2) * 0.055, 0.12 + (i % 2) * 0.05, ((i * 7) % 3 - 1) * 0.045);
-    leaf.rotation.z = (i - 2) * 0.18;
-    g.add(leaf);
-  }
-  return g;
-}
-
 class RoadBeast implements Target {
   readonly id = newTargetId();
   readonly kind: 'boar' | 'wolf';
@@ -423,7 +411,7 @@ export class FrontierRegion {
     M = mats;
     buildFarmingVillage(scene);
     buildPortAurelle(scene);
-    this.buildHerbs();
+    // (Roadside herbs moved to the foraging system, world/foraging.ts.)
     this.interactables.push(...this.buildTownHooks());
     for (const h of this.herbs) {
       this.interactables.push({
@@ -444,24 +432,6 @@ export class FrontierRegion {
         this.toast(this.player.mounted ? 'Horseback travel' : 'On foot');
       },
     });
-  }
-
-  private buildHerbs() {
-    const points: [HerbId, number, number][] = [
-      // Roadside herbs along the whole King's Road to Port Aurelle.
-      ['sungrass', 132, 18], ['wildmint', 151, 30], ['moongrass', 178, 8], ['sungrass', 290, 70],
-      ['ironleaf', 480, 104], ['wildmint', 640, 118], ['moongrass', 790, 96], ['sungrass', 960, 136],
-      ['ironleaf', 1130, 108], ['wildmint', 1300, 132], ['moongrass', 1470, 110], ['sungrass', 1620, 140],
-      ['ironleaf', 1790, 124], ['wildmint', 1950, 162], ['moongrass', 2120, 138], ['sungrass', 2300, 166],
-      ['ironleaf', 2450, 136], ['wildmint', 2560, 164],
-    ];
-    for (const [herb, x, z] of points) {
-      const pos = new THREE.Vector3(x, heightAt(x, z), z);
-      const mesh = buildHerbMesh(herb);
-      mesh.position.copy(pos);
-      this.scene.add(mesh);
-      this.herbs.push({ pos, herb, mesh, available: true, timer: 0 });
-    }
   }
 
   private buildTownHooks(): Interactable[] {

@@ -18,6 +18,7 @@ import { FLOWER_GLSL } from './flowerNoise';
 //             Port Aurelle on the coast 2.5 km east
 // ---------------------------------------------------------------------------
 export * from './terrainHeight';
+import { buildRoadTexture, ROAD_RECT } from './roadNetwork';
 import { normalAt, splatAt, WORLD_SIZE, TILE, TILE_SEG, TILE_N, tileData, tileKey, hasTile, putTile, worldHeightFn, LOCAL_R1 } from './terrainHeight';
 import { macroTexture, paintedMapTexture, macroCells, macroHeight, WORLD_X0, WORLD_Z0, WORLD_W, WORLD_H, GW, GH, SEA_LEVEL } from './worldMap';
 // ---- rendering ----------------------------------------------------------------
@@ -47,6 +48,9 @@ function buildSplatTexture() {
 /** Shared wetness uniform for every terrain material (weather). */
 const WET = { value: 0 };
 
+let roadTex: THREE.DataTexture | null = null;
+const roadTexture = () => (roadTex ??= buildRoadTexture());
+
 function terrainMaterial(renderer: THREE.WebGLRenderer, splat: THREE.DataTexture) {
   // Painted ground (docs/ART-DIRECTION.md §3): each macro relief class has its
   // own painted palette (meadow, forest floor, rock strata, snow, dunes, mesa,
@@ -69,6 +73,8 @@ function terrainMaterial(renderer: THREE.WebGLRenderer, splat: THREE.DataTexture
     uGrid: { value: new THREE.Vector2(GW, GH) },
     uHole: { value: new THREE.Vector3(0, 0, 0) },
     uWet: WET,
+    tRoads: { value: roadTexture() },
+    uRoadRect: { value: new THREE.Vector4(ROAD_RECT.x0, ROAD_RECT.z0, ROAD_RECT.w, ROAD_RECT.h) },
   };
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms);
@@ -85,7 +91,8 @@ vWN = normal;`);
         `#include <common>
         varying vec3 vWPos;
         varying vec3 vWN;
-        uniform sampler2D tSplat, tNoise, tCobble, tDirt, tMacro, tMap;
+        uniform sampler2D tSplat, tNoise, tCobble, tDirt, tMacro, tMap, tRoads;
+        uniform vec4 uRoadRect;
         uniform float uSize;
         uniform vec4 uWorld;
         uniform vec2 uGrid;
@@ -172,6 +179,21 @@ vWN = normal;`);
           w /= max(w.r + w.g + w.b, 1e-4);
           vec3 local = cS * w.r + cD * w.g + biome * w.b;
           col = mix(biome, local, localW);
+        }
+
+        // The road network beyond the authored town splat: packed dirt, cobbles near towns.
+        vec2 ruv = (vWPos.xz - uRoadRect.xy) / uRoadRect.zw;
+        if (ruv.x > 0.0 && ruv.y > 0.0 && ruv.x < 1.0 && ruv.y < 1.0) {
+          vec2 rd = texture2D(tRoads, ruv).rg;
+          float outside = 1.0 - localW;
+          float edge = (fineN.r - 0.5) * 0.45 + (patchN.g - 0.5) * 0.2;
+          float wD = smoothstep(0.2, 0.62, rd.r + edge) * outside;
+          float wC = smoothstep(0.25, 0.6, rd.g + edge) * outside;
+          vec3 dirtC = texture2D(tDirt, vWPos.xz / 3.2).rgb;
+          // Two wheel ruts along the middle of the dirt.
+          dirtC *= mix(1.0, 0.86, smoothstep(0.8, 0.95, rd.r) * (0.5 + 0.5 * sin(fineN.b * 6.0)));
+          col = mix(col, dirtC, wD);
+          col = mix(col, texture2D(tCobble, vWPos.xz / 2.4).rgb, wC);
         }
 
         // Wildflowers on meadows: dots in the middle distance, a wash far away.

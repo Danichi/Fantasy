@@ -1,3 +1,4 @@
+import { roadCoverage } from './roadNetwork';
 import * as THREE from 'three';
 import { heightAt, WORLD_SIZE } from './terrainHeight';
 import { reliefAt, RELIEF, WORLD_X0, WORLD_Z0, CELL, SEA_LEVEL } from './worldMap';
@@ -81,6 +82,11 @@ export class GroundWindow {
           tint = 0;
         } else {
           [grass, flower, tint] = blendedGround(x, z);
+        }
+        const onRoad = roadCoverage(x, z);
+        if (onRoad > 0) {
+          grass *= 1 - onRoad;
+          flower *= 1 - onRoad;
         }
         for (const m of GRASS_MASKS) {
           const inside = m.r !== undefined ? Math.hypot(x - m.x, z - m.z) < m.r : Math.abs(x - m.x) < m.hx! && Math.abs(z - m.z) < m.hz!;
