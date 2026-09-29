@@ -190,8 +190,8 @@ export const PAINT = {
     return c;
   },
   dirt(rnd: () => number) {
-    const { c, g } = canvas('#98846a');
-    mottle(g, rnd, ['#8a7760', '#a8937a', '#847259', '#ad9a7e', '#7f8360'], 90, 30, 140, 0.4);
+    const { c, g } = canvas('#ad9676');
+    mottle(g, rnd, ['#a08a6b', '#bba584', '#9b8566', '#c2ad8c', '#98936a'], 90, 30, 140, 0.3);
     // Pebbles.
     for (let i = 0; i < 220; i++) {
       const x = rnd() * SIZE, y = rnd() * SIZE, r = 2 + rnd() * 5;

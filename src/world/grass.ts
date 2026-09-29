@@ -127,8 +127,8 @@ class GrassLayer {
           vT = t; vGust = gust;
           // Colour: root to body to tip, with dry and lush patches across the field.
           vec3 root = vec3(0.105, 0.2, 0.075);
-          vec3 body = mix(vec3(0.2, 0.39, 0.1), vec3(0.3, 0.45, 0.12), patchN.r);
-          vec3 tipC = mix(vec3(0.56, 0.68, 0.2), vec3(0.72, 0.66, 0.3), smoothstep(0.55, 0.85, patchN.g));
+          vec3 body = mix(vec3(0.19, 0.35, 0.1), vec3(0.28, 0.41, 0.12), patchN.r);
+          vec3 tipC = mix(vec3(0.5, 0.6, 0.2), vec3(0.66, 0.6, 0.28), smoothstep(0.55, 0.85, patchN.g));
           vCol = t < 0.5 ? mix(root, body, t * 2.0) : mix(body, tipC, (t - 0.5) * 2.0);
           vCol *= mix(0.9, 1.08, fract(aOff.w * 3.1));
           vec3 transformed = vec3(world.x + p.x, h + p.y - 0.02, world.y + p.z);`,

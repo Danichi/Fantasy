@@ -56,7 +56,7 @@ async function boot() {
   initCompressedGltf(r.renderer);
   const input = new Input(r.renderer.domElement);
   await physics.init();
-  await r.loadSky('/assets/hdri/sky_1k.hdr');
+  r.useStylizedSky();
   mark('sky');
   initTerrainData();
   mark('heights');
@@ -403,7 +403,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

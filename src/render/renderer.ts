@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { Q } from '../core/settings';
 import { Post } from './post';
+import { Sky, SKY } from './sky';
 
 // Sun in the south-west: lights the town facades and the player's usual view north.
 export const SUN_DIR = new THREE.Vector3(-0.5, 0.6, 0.55).normalize();
@@ -14,6 +14,7 @@ export class Renderer {
   readonly sun: THREE.DirectionalLight;
   readonly hemi: THREE.HemisphereLight;
   readonly post: Post | null = null;
+  sky: Sky | null = null;
   private basePixelRatio = Q.pixelRatio;
   private dynScale = 1;
   private frameTimes: number[] = [];
@@ -60,17 +61,18 @@ export class Renderer {
     window.addEventListener('resize', () => this.resize());
   }
 
-  async loadSky(url: string) {
-    const tex = await new HDRLoader().loadAsync(url);
-    tex.mapping = THREE.EquirectangularReflectionMapping;
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    const env = pmrem.fromEquirectangular(tex).texture;
-    pmrem.dispose();
-    this.scene.environment = env;
-    this.scene.environmentIntensity = 0.35; // the photo sky only adds a little ambient; the hemisphere fill leads
-    this.scene.background = tex;
-    this.scene.backgroundIntensity = 1.03;
-    this.scene.backgroundBlurriness = 0.012;
+  /** Painted sky dome + matching image-based ambient and haze (replaces the photo HDRI). */
+  useStylizedSky() {
+    this.sky = new Sky(SUN_DIR);
+    this.scene.add(this.sky.mesh);
+    this.scene.background = null;
+    this.scene.environment = this.sky.environment(this.renderer);
+    this.scene.environmentIntensity = 0.42;
+    if (this.post) {
+      const u = this.post.finalMat.uniforms;
+      (u.uHazeColor.value as THREE.Color).copy(SKY.horizon);
+      u.uHaze.value = 0.0012; // hills 300 m out read as layers
+    }
   }
 
   resize() {
@@ -114,6 +116,7 @@ export class Renderer {
   }
 
   render(dt = 1 / 60) {
+    this.sky?.update(dt, this.camera);
     this.renderer.shadowMap.needsUpdate = this.frameNo++ % 2 === 0;
     if (this.post) this.post.render(this.scene, this.camera, SUN_DIR, dt);
     else this.renderer.render(this.scene, this.camera);

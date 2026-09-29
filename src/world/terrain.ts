@@ -326,10 +326,12 @@ vWN = normal;`);
         vec3 wn = normalize(vWN);
         float tRock = smoothstep(0.26, 0.42, 1.0 - wn.y);
         if (tRock > 0.01) {
-          float band = fract(vWPos.y * 0.42 + fineN.g * 0.8 + patchN.r * 1.5);
-          vec3 r1 = vec3(0.42, 0.4, 0.36), r2 = vec3(0.55, 0.52, 0.46), r3 = vec3(0.34, 0.32, 0.3);
-          vec3 cR = band < 0.45 ? r1 : band < 0.85 ? r2 : r3;
-          cR *= mix(0.9, 1.08, fineN.b);
+          // Broad soft strata; they average out with distance instead of aliasing.
+          float band = sin(vWPos.y * 0.33 + fineN.g * 2.5 + patchN.r * 6.0) * 0.5 + 0.5;
+          band = mix(band, 0.5, smoothstep(60.0, 220.0, dist));
+          vec3 r1 = vec3(0.36, 0.34, 0.31), r2 = vec3(0.5, 0.47, 0.42);
+          vec3 cR = mix(r1, r2, smoothstep(0.3, 0.7, band));
+          cR *= mix(0.92, 1.06, fineN.b);
           float moss = smoothstep(0.62, 0.75, wn.y + (fineN.r - 0.5) * 0.3);
           cR = mix(cR, gNear * 1.1, moss);
           col = mix(col, cR, tRock);
