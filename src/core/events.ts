@@ -25,6 +25,9 @@ export interface GameEvents {
   boundaryIntercept: { at: Vector3; perfect: boolean; };
   originAbility: { origin: string; ability: string; };
   slimeLand: { at: Vector3; size: number };
+  mapRevealed: { cells: number };
+  regionEntered: { id: string; name: string; subtitle: string; first: boolean };
+  placeDiscovered: { id: string; name: string; kind: string };
 }
 
 type Handler<T> = (payload: T) => void;

@@ -197,6 +197,24 @@ export class HUD {
     this.toastT = 1.4;
   }
 
+  private regionCardEl: HTMLDivElement | null = null;
+  /** Big painted region title when the player enters a region (smaller on re-entry). */
+  regionCard(name: string, subtitle: string, first: boolean) {
+    if (!this.regionCardEl) {
+      this.regionCardEl = document.createElement('div');
+      this.regionCardEl.className = 'region-card';
+      this.root.appendChild(this.regionCardEl);
+    }
+    const el = this.regionCardEl;
+    el.innerHTML = `<div class="rc-name"></div><div class="rc-rule"></div><div class="rc-sub"></div>`;
+    el.querySelector('.rc-name')!.textContent = name;
+    el.querySelector('.rc-sub')!.textContent = subtitle;
+    el.classList.toggle('quiet', !first);
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  }
+
   showBanner(text: string) {
     this.banner.textContent = text;
     this.banner.classList.remove('show');

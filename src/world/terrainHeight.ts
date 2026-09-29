@@ -52,6 +52,8 @@ const ROADS: P[][] = [
   // west gate into the forest logging road
   [[-TOWN_R + 6, 0], [-145, 8], [-230, 80], [-320, 118]],
 ];
+/** Road polylines in world metres (maps draw these). */
+export const ROAD_LINES: readonly (readonly [number, number])[][] = ROADS;
 const STREETS: P[][] = [
   [[0, -4], [0, TOWN_R - 6]],
   [[0, -4], [0, -TOWN_R + 6]],

@@ -4,16 +4,26 @@ import { ITEMS } from './items/itemDefs';
 import type { MapData } from './ui/dungeonMap';
 import type { DungeonProgress } from './dungeon/instance';
 import type { GuildSaveData } from './guild/adventurerGuild';
+import type { DiscoverySave } from './world/discovery';
 
 // Browser save (localStorage). Hand-drawn maps have to survive a reload, so
 // the whole game state lives here: progression, inventory, loadout, dungeon
 // progress and every map you've drawn.
 
-const KEY = 'fantasy-rpg-save-v5';
-const LEGACY_KEYS = ['fantasy-rpg-save-v4', 'fantasy-rpg-save-v3', 'fantasy-rpg-save-v2', 'fantasy-rpg-save-v1'];
+const KEY = 'fantasy-rpg-save-v6';
+const LEGACY_KEYS = ['fantasy-rpg-save-v5', 'fantasy-rpg-save-v4', 'fantasy-rpg-save-v3', 'fantasy-rpg-save-v2', 'fantasy-rpg-save-v1'];
+
+/** World state (v6): exploration, flags and time; later phases add horses, ships, factions. */
+export interface WorldSave {
+  discovery?: DiscoverySave;
+  flags: Record<string, boolean | number | string>;
+  time?: number;
+  /** where the player stood (overworld), so a reload keeps them there */
+  pos?: [number, number, number];
+}
 
 export interface SaveData {
-  v: 5;
+  v: 6;
   seed: number;
   prog: {
     level: number; xp: number; gold: number; sp: number;
@@ -31,6 +41,7 @@ export interface SaveData {
   maps: Record<string, MapData>;
   dungeon: DungeonProgress;
   guild: GuildSaveData;
+  world: WorldSave;
 }
 
 export function hasSave() {
@@ -53,13 +64,13 @@ export function loadSave(): SaveData | null {
     const raw = localStorage.getItem(KEY) ?? LEGACY_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
     if (!raw) return null;
     const d = JSON.parse(raw) as any;
-    if (d.v === 5) return d as SaveData;
+    if (d.v === 6) return d as SaveData;
     // Older saves from either line of development: keep what exists, default the rest.
     const defaultGuild: GuildSaveData = { rank: 'D', rep: 0, completed: 0, nextQuestId: 1, active: [], available: [], explored: [] };
     const old = d.prog ?? {};
     return {
       ...d,
-      v: 5,
+      v: 6,
       prog: {
         level: old.level ?? 1,
         xp: old.xp ?? 0,
@@ -75,13 +86,14 @@ export function loadSave(): SaveData | null {
       },
       moves: (d.moves ?? []).map((m: unknown) => (typeof m === 'number' ? m : null)),
       guild: d.guild ?? defaultGuild,
+      world: d.world ?? { flags: {} },
     } as SaveData;
   } catch {
     return null;
   }
 }
 
-export function writeSave(player: Player, seed: number, maps: Record<string, MapData>, dungeon: DungeonProgress, guild: GuildSaveData) {
+export function writeSave(player: Player, seed: number, maps: Record<string, MapData>, dungeon: DungeonProgress, guild: GuildSaveData, world: WorldSave = { flags: {} }) {
   const eq = player.equip;
   const idx = (uid: number | null | undefined) => (uid == null ? null : eq.items.findIndex((i) => i.uid === uid));
   const equipped: SaveData['equipped'] = {};
@@ -99,7 +111,7 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     return k === null || k < 0 ? null : k;
   });
   const data: SaveData = {
-    v: 5,
+    v: 6,
     seed,
     prog: {
       level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints,
@@ -115,6 +127,7 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     maps,
     dungeon,
     guild,
+    world,
   };
   try {
     localStorage.setItem(KEY, JSON.stringify(data));

@@ -24,6 +24,8 @@ import { HUD } from './ui/hud';
 import { InventoryUI, buildOverlays } from './ui/inventory';
 import { Music } from './audio/music';
 import { Ambient } from './world/ambient';
+import { Discovery } from './world/discovery';
+import { WorldMapUI } from './ui/worldMap';
 import { Ocean } from './world/sea/ocean';
 import { GroundWindow } from './world/groundWindow';
 import { CharPreview } from './ui/charPreview';
@@ -164,6 +166,9 @@ async function boot() {
     ground.prime(p);
     stylizedNature.warm(p, p);
   };
+  // Resume where the player left off in the overworld (v6 saves).
+  const resume = saveData?.world?.pos;
+  if (resume && !TEST_MODE) player.teleport(new THREE.Vector3(resume[0], Math.max(resume[1], heightAt(resume[0], resume[2])) + 0.2, resume[2]));
   dialogue.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open;
     if (open) input.exitLock();
@@ -173,9 +178,31 @@ async function boot() {
     realm.progress = saveData.dungeon;
     realm.maps = saveData.maps;
   }
+  // Exploration: fog of war, regions and places (saved), the world map and minimap.
+  const discovery = new Discovery();
+  if (saveData) discovery.fromJSON(saveData.world?.discovery);
+  const worldMap = new WorldMapUI(discovery);
+  const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
+  events.on('mapRevealed', () => worldMap.markFogDirty());
+  events.on('regionEntered', ({ name, subtitle, first }) => {
+    worldMap.setRegionLabel(name);
+    if (started) hud.regionCard(name, subtitle, first);
+    if (first) save();
+  });
+  events.on('placeDiscovered', ({ name }) => {
+    hud.toast('Discovered: ' + name);
+    player.prog.addXp(25);
+    save();
+  });
+  worldMap.onToggle = (open) => {
+    input.uiMode = open || inv.open || mapUI.open || dialogue.open;
+    if (open) input.exitLock();
+    else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
+  };
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON());
+    const pos = realm.mode === 'overworld' ? ([+player.pos.x.toFixed(2), +player.pos.y.toFixed(2), +player.pos.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos });
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   realm.onSave = save;
@@ -264,6 +291,12 @@ async function boot() {
     }
   });
   window.addEventListener('keydown', (e) => {
+    if ((e.code === 'Escape' || e.code === 'KeyM') && worldMap.open) {
+      worldMap.toggle(false);
+      // This press must not reach the (paused) simulation and reopen the map.
+      setTimeout(() => input.endStep(), 0);
+      return;
+    }
     if (e.code === 'Escape' && (dialogue.open || mapUI.open || inv.open)) return;
     if (e.code === 'Escape' && !input.locked && !inv.open && !mapUI.open && !dialogue.open && !pausedByUser) pause();
   });
@@ -324,7 +357,7 @@ async function boot() {
     const simDt = dt * timeScale;
     acc += simDt;
     let steps = 0;
-    if (paused || overlayUp || mapUI.open) acc = 0;
+    if (paused || overlayUp || mapUI.open || worldMap.open) acc = 0;
     while (acc >= STEP && steps < 5) {
       acc -= STEP;
       steps++;
@@ -334,7 +367,7 @@ async function boot() {
       if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
       if (input.wasPressed('map')) {
         if (realm.mode === 'dungeon') mapUI.toggle();
-        else town.guild.open('map');
+        else worldMap.toggle();
       }
       slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
       player.update(STEP, input, cam);
@@ -384,6 +417,8 @@ async function boot() {
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
     mapUI.update();
+    if (realm.mode === 'overworld') discovery.update(player.pos);
+    worldMap.update(dt, player.pos, player.yaw, realm.mode === 'overworld' && !overlayUp);
     dialogue.update(dt);
     if (realm.mode === 'overworld') town.update(dt, player.pos);
     physDebug?.update();
@@ -426,7 +461,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

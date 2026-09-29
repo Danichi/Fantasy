@@ -37,7 +37,98 @@ const RELIEF = { deep: 0, shelf: 1, beach: 2, open: 3, forest: 4, mountain: 5, s
 // Legend panels, compass and title painted over the map: classified from neighbours instead.
 const MASKS = [[0, 0, 180, 254], [1298, 6, 1534, 338], [0, 830, 340, 1024], [1352, 786, 1536, 1024], [1370, 925, 1536, 1000]];
 
-const { data, info } = await sharp(SRC).raw().toBuffer({ resolveWithObject: true });
+// ---- clean the painted map: remove baked labels and legend panels ---------------
+// Label rectangles (map px, x0 y0 x1 y1) traced from the source image.
+const LABELS = [
+  [428, 50, 548, 84], [588, 97, 815, 137], [418, 238, 515, 256], [545, 224, 720, 262], [153, 295, 300, 332],
+  [338, 364, 470, 398], [484, 350, 706, 392], [578, 433, 668, 465], [776, 58, 878, 78], [1166, 148, 1270, 182],
+  [830, 244, 938, 262], [778, 444, 876, 480], [1046, 452, 1262, 497], [1326, 460, 1518, 497], [145, 518, 335, 556],
+  [555, 590, 720, 624], [100, 702, 292, 740], [455, 702, 605, 740], [650, 738, 722, 764], [395, 930, 570, 964],
+  [1026, 607, 1158, 640], [978, 802, 1072, 832], [1186, 860, 1288, 892], [892, 946, 996, 978],
+];
+// Legend panels, the inset map, the compass and the title card: filled from their surroundings.
+const PANELS = [[4, 6, 180, 254], [1304, 6, 1528, 334], [4, 834, 340, 1016], [1382, 778, 1508, 916], [1344, 924, 1530, 988]];
+async function cleanMap() {
+  const src = await sharp(SRC).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const W = src.info.width, H = src.info.height;
+  const out = Buffer.from(src.data);
+  // Panels: push-pull fill (weighted pyramid) from the pixels around them.
+  const mask = new Uint8Array(W * H);
+  for (const [x0, y0, x1, y1] of PANELS) for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) mask[y * W + x] = 1;
+  const LPAD = 6;
+  const labelMask = new Uint8Array(W * H);
+  for (const [x0, y0, x1, y1] of LABELS) for (let y = Math.max(0, y0 - LPAD); y < Math.min(H, y1 + LPAD); y++) for (let x = Math.max(0, x0 - LPAD); x < Math.min(W, x1 + LPAD); x++) { mask[y * W + x] = 1; labelMask[y * W + x] = 1; }
+  const levels = [];
+  let lw = W, lh = H;
+  let col = new Float32Array(W * H * 3), wt = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) if (!mask[i]) { wt[i] = 1; col[i * 3] = out[i * 3]; col[i * 3 + 1] = out[i * 3 + 1]; col[i * 3 + 2] = out[i * 3 + 2]; }
+  levels.push({ w: lw, h: lh, col, wt });
+  while (lw > 2 && lh > 2) {
+    const nw = Math.ceil(lw / 2), nh = Math.ceil(lh / 2);
+    const nc = new Float32Array(nw * nh * 3), nwt = new Float32Array(nw * nh);
+    for (let y = 0; y < lh; y++) for (let x = 0; x < lw; x++) {
+      const i = y * lw + x, j = (y >> 1) * nw + (x >> 1);
+      nwt[j] += wt[i];
+      nc[j * 3] += col[i * 3] * wt[i]; nc[j * 3 + 1] += col[i * 3 + 1] * wt[i]; nc[j * 3 + 2] += col[i * 3 + 2] * wt[i];
+    }
+    for (let j = 0; j < nw * nh; j++) if (nwt[j] > 0) { nc[j * 3] /= nwt[j]; nc[j * 3 + 1] /= nwt[j]; nc[j * 3 + 2] /= nwt[j]; nwt[j] = Math.min(1, nwt[j]); }
+    lw = nw; lh = nh; col = nc; wt = nwt;
+    levels.push({ w: lw, h: lh, col, wt });
+  }
+  for (let l = levels.length - 2; l >= 0; l--) {
+    const cur = levels[l], up = levels[l + 1];
+    for (let y = 0; y < cur.h; y++) for (let x = 0; x < cur.w; x++) {
+      const i = y * cur.w + x;
+      if (cur.wt[i] >= 1) continue;
+      // Bilinear sample of the coarser level.
+      const fx = Math.min(up.w - 1, Math.max(0, (x + 0.5) / 2 - 0.5)), fy = Math.min(up.h - 1, Math.max(0, (y + 0.5) / 2 - 0.5));
+      const ix = Math.floor(fx), iy = Math.floor(fy), ax = fx - ix, ay = fy - iy;
+      const ix1 = Math.min(up.w - 1, ix + 1), iy1 = Math.min(up.h - 1, iy + 1);
+      for (let c = 0; c < 3; c++) {
+        const v = (up.col[(iy * up.w + ix) * 3 + c] * (1 - ax) + up.col[(iy * up.w + ix1) * 3 + c] * ax) * (1 - ay)
+                + (up.col[(iy1 * up.w + ix) * 3 + c] * (1 - ax) + up.col[(iy1 * up.w + ix1) * 3 + c] * ax) * ay;
+        cur.col[i * 3 + c] = cur.col[i * 3 + c] * cur.wt[i] + v * (1 - cur.wt[i]);
+      }
+      cur.wt[i] = 1;
+    }
+  }
+  // Labels: borrow real terrain texture from beside each label (a clean patch
+  // of the same size), and shift its colour so its low frequencies match the
+  // push-pull fill: seamless edges, detailed interior.
+  const blurred = (await sharp(SRC).removeAlpha().blur(7).raw().toBuffer({ resolveWithObject: true })).data;
+  const F = levels[0].col;
+  const clean = (x0, y0, x1, y1) => {
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (x < 0 || y < 0 || x >= W || y >= H || mask[y * W + x]) return false;
+    return true;
+  };
+  for (const [lx0, ly0, lx1, ly1] of LABELS) {
+    const x0 = lx0 - LPAD, y0 = ly0 - LPAD, x1 = lx1 + LPAD, y1 = ly1 + LPAD;
+    const w = x1 - x0, h = y1 - y0;
+    const tries = [[0, -h - 2], [0, h + 2], [-w - 2, 0], [w + 2, 0], [0, -2 * h - 4], [0, 2 * h + 4], [-w - 2, -h - 2], [w + 2, h + 2]];
+    const off = tries.find(([dx, dy]) => clean(x0 + dx, y0 + dy, x1 + dx, y1 + dy));
+    for (let y = Math.max(0, y0); y < Math.min(H, y1); y++) for (let x = Math.max(0, x0); x < Math.min(W, x1); x++) {
+      const i = y * W + x;
+      for (let c = 0; c < 3; c++) {
+        let v = F[i * 3 + c];
+        if (off) {
+          const j = (y + off[1]) * W + (x + off[0]);
+          v += src.data[j * 3 + c] - blurred[j * 3 + c];
+        }
+        out[i * 3 + c] = Math.max(0, Math.min(255, Math.round(v)));
+      }
+    }
+  }
+  // Painterly grain over the filled panels so they don't read as flat smudges.
+  const hash = (x, y) => { const t = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453; return t - Math.floor(t); };
+  for (let i = 0; i < W * H; i++) {
+    if (!mask[i] || labelMask[i]) continue;
+    const x = i % W, y = (i / W) | 0;
+    const n = (hash(Math.floor(x / 3), Math.floor(y / 3)) - 0.5) * 10;
+    for (let c = 0; c < 3; c++) out[i * 3 + c] = Math.max(0, Math.min(255, Math.round(levels[0].col[i * 3 + c] + n)));
+  }
+  return { data: out, info: { width: W, height: H, channels: 3 } };
+}
+const { data, info } = await cleanMap();
 const ch = info.channels;
 
 // ---- region lookup ---------------------------------------------------------------
@@ -290,7 +381,8 @@ await sharp(rgba, { raw: { width: GW, height: GH, channels: 4 } }).png({ compres
 const mgrey = Buffer.alloc(N);
 for (let c = 0; c < N; c++) mgrey[c] = Math.round(Math.max(0, Math.min(1, mountain[c])) * 255);
 await sharp(mgrey, { raw: { width: GW, height: GH, channels: 1 } }).png({ compressionLevel: 9 }).toFile(`${OUT}/macro-mountain.png`);
-await sharp(SRC).webp({ quality: 86 }).toFile(`${OUT}/map.webp`);
+await sharp(data, { raw: { width: info.width, height: info.height, channels: 3 } }).webp({ quality: 88 }).toFile(`${OUT}/map.webp`);
+await sharp(data, { raw: { width: info.width, height: info.height, channels: 3 } }).png().toFile('screenshots/worldmap-clean.png');
 
 // Debug preview: relief colours, region borders darkened.
 const PAL = [[20, 40, 90], [40, 120, 160], [230, 215, 150], [120, 175, 70], [30, 95, 45], [120, 115, 110], [240, 245, 250], [235, 170, 80], [170, 95, 55], [80, 120, 90], [230, 70, 20], [60, 40, 45]];

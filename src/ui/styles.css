@@ -853,3 +853,38 @@ html, body {
   .guild-grid, .roster-grid { grid-template-columns:1fr; }
   .guild-foot { display:none; }
 }
+
+/* ===== World map (M) and minimap: the design board's navy + gold map style ===== */
+.wmap { position: absolute; inset: 0; z-index: 70; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 40%, rgba(12,26,50,0.72), rgba(4,8,18,0.9)); pointer-events: auto; }
+.wmap.hidden { display: none; }
+.wmap-frame { position: relative; width: min(94vw, 1500px); height: min(88vh, 960px); border: 2px solid rgba(220,189,112,0.75); border-radius: 10px; background: #0b1526; box-shadow: 0 30px 90px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,240,200,0.08); overflow: hidden; }
+.wmap-frame::before { content: ''; position: absolute; inset: 6px; border: 1px solid rgba(220,189,112,0.35); border-radius: 6px; pointer-events: none; z-index: 2; }
+.wmap canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; }
+.wmap canvas:active { cursor: grabbing; }
+.wmap-title { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); font: 700 22px/1 var(--serif); letter-spacing: 0.3em; color: #f4e2b0; text-shadow: 0 2px 8px #000; z-index: 3; pointer-events: none; }
+.wmap-legend { position: absolute; left: 18px; top: 18px; z-index: 3; min-width: 170px; padding: 12px 14px; background: linear-gradient(180deg, rgba(10,22,42,0.92), rgba(6,14,28,0.92)); border: 1px solid rgba(220,189,112,0.55); border-radius: 8px; font: 500 12px/1.7 var(--sans); color: #e9e1cf; pointer-events: none; }
+.wmap-legend .lg-title { font: 700 13px/1 var(--serif); letter-spacing: 0.12em; color: #f4d88c; margin-bottom: 8px; }
+.wmap-legend i { display: inline-block; width: 18px; font-style: normal; text-align: center; margin-right: 6px; }
+.wmap-legend .lg-road { height: 3px; background: #e7c98a; vertical-align: middle; border-radius: 2px; }
+.wmap-legend .lg-sea { height: 0; border-top: 2px dashed #8fd3ff; vertical-align: middle; }
+.wmap-info { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); z-index: 3; font: 600 14px/1 var(--serif); color: #f4e2b0; text-shadow: 0 2px 6px #000; pointer-events: none; }
+.wmap-help { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 3; font: 500 11px/1 var(--sans); color: rgba(233,225,207,0.7); pointer-events: none; }
+
+.wmini { position: absolute; left: 22px; top: 18px; width: 200px; height: 200px; pointer-events: none; filter: drop-shadow(0 6px 14px rgba(0,0,0,0.55)); }
+.wmini.hidden { display: none; }
+.wmini canvas { position: absolute; inset: 0; width: 200px; height: 200px; border-radius: 50%; }
+.wmini-ring { position: absolute; inset: -4px; border-radius: 50%; border: 3px solid rgba(220,189,112,0.85); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.6); }
+.wmini-n { position: absolute; left: 50%; top: -12px; transform: translateX(-50%); width: 22px; height: 22px; border-radius: 50%; background: #0b1526; border: 2px solid rgba(220,189,112,0.9); font: 700 11px/18px var(--serif); text-align: center; color: #f4d88c; }
+.wmini-lbl { position: absolute; left: 50%; top: 208px; transform: translateX(-50%); white-space: nowrap; font: 700 12px/1 var(--serif); letter-spacing: 0.12em; color: #f4e2b0; text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,0.7); }
+/* The minimap takes the top-left corner; discipline and quest panels sit below it. */
+.discipline-hud { top: 240px !important; }
+.quest-tracker { top: 318px !important; }
+
+/* Region title card: the name paints in like the map's labels. */
+.region-card { position: absolute; left: 50%; top: 20%; transform: translateX(-50%); text-align: center; pointer-events: none; opacity: 0; }
+.region-card.show { animation: regionCard 5.2s ease-out forwards; }
+.region-card .rc-name { font: 700 44px/1 var(--serif); letter-spacing: 0.14em; color: #f7e6b5; text-shadow: 0 3px 16px rgba(0,0,0,0.75), 0 0 30px rgba(240,200,110,0.35); }
+.region-card .rc-sub { margin-top: 10px; font: italic 500 16px/1 var(--sans); letter-spacing: 0.2em; color: rgba(244,226,176,0.9); text-shadow: 0 2px 8px #000; }
+.region-card .rc-rule { width: 280px; height: 1px; margin: 12px auto 0; background: linear-gradient(90deg, transparent, rgba(240,210,138,0.9), transparent); }
+.region-card.quiet .rc-name { font-size: 28px; }
+@keyframes regionCard { 0% { opacity: 0; transform: translate(-50%, 8px); } 12% { opacity: 1; transform: translate(-50%, 0); } 78% { opacity: 1; } 100% { opacity: 0; } }
