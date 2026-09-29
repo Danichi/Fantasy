@@ -22,6 +22,7 @@ import { buildIcons } from './ui/icons';
 import { HUD } from './ui/hud';
 import { InventoryUI, buildOverlays } from './ui/inventory';
 import { Music } from './audio/music';
+import { Ambient } from './world/ambient';
 import { CharPreview } from './ui/charPreview';
 import { events } from './core/events';
 import { buildWorld } from './world/props';
@@ -91,6 +92,7 @@ async function boot() {
   mark('foliage');
   mark('stylizedNature');
   const flowers = new Flowers(r.scene, terrain.splat);
+  const ambient = new Ambient(r.scene, world.village.flowerSpots);
   mark('flowers');
   const rewards = new Rewards(r.scene, player.prog);
   events.on('enemyDied', ({ at, kind }) => {
@@ -127,6 +129,7 @@ async function boot() {
     hide: (h) => {
       terrain.group.visible = !h;
       grass.mesh.visible = !h;
+      ambient.setVisible(!h);
       flowers.mesh.visible = !h;
       river.mesh.visible = !h;
       foliage?.setVisible(!h);
@@ -354,6 +357,7 @@ async function boot() {
     cam.update(dt, renderPos, player.sprinting);
     r.camera.getWorldDirection(player.aimDir);
     grass.update(dt, r.camera.position, renderPos);
+    ambient.update(dt, r.camera.position, now / 1000);
     flowers.update(dt, r.camera.position);
     terrain.update(r.camera.position, player.pos);
     foliage?.update(dt, r.camera.position);
