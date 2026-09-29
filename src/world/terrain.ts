@@ -11,7 +11,7 @@ import { FLOWER_GLSL } from './flowerNoise';
 // Elder Glen, the authored start (about 1 km square, +z = south):
 //   town      ElderGlen, a fortified farming village that feeds Cresha
 //   roads     south into the crop belt, north to the crypt, east over the river
-//             and onward along the King's Road to Tremison
+//             and onward along the King's Road to Port Aurelle
 //   river     winds north-south east of town
 //   forest    covers the west; broad farm country fills the south
 //   beyond     the continent from the painted world map (worldMap.ts), with
@@ -193,8 +193,13 @@ vWN = normal;`);
           cR = mix(cR, vec3(0.86, 0.9, 0.96), snowW * smoothstep(0.55, 0.8, wn.y + fineN.g * 0.2));
           col = mix(col, cR, tRock);
         }
-        // Below the waterline: pale sand shelving to darker seabed.
-        float under = smoothstep(${(SEA_LEVEL + 0.6).toFixed(2)}, ${(SEA_LEVEL - 0.4).toFixed(2)}, vWPos.y);
+        // Below the waterline (only where the map has sea): pale sand shelving to darker seabed.
+        vec2 ec = (vWPos.xz - uWorld.xy) / 60.0 - 0.5;
+        vec2 e0 = floor(ec), ef = fract(ec);
+        float me = mix(mix(texture2D(tMacro, (e0 + 0.5) / uGrid).b, texture2D(tMacro, (e0 + vec2(1.5, 0.5)) / uGrid).b, ef.x),
+                       mix(texture2D(tMacro, (e0 + vec2(0.5, 1.5)) / uGrid).b, texture2D(tMacro, (e0 + 1.5) / uGrid).b, ef.x), ef.y);
+        float seaHere = smoothstep(${(SEA_LEVEL + 1.4).toFixed(2)}, ${(SEA_LEVEL + 0.4).toFixed(2)}, -80.0 + me * 800.0);
+        float under = smoothstep(${(SEA_LEVEL + 0.6).toFixed(2)}, ${(SEA_LEVEL - 0.4).toFixed(2)}, vWPos.y) * seaHere;
         vec3 seabed = mix(vec3(0.86, 0.78, 0.56), vec3(0.36, 0.42, 0.36), smoothstep(${(SEA_LEVEL - 0.5).toFixed(2)}, ${(SEA_LEVEL - 12.0).toFixed(2)}, vWPos.y));
         col = mix(col, seabed * mix(0.94, 1.06, fineN.b), under);
         diffuseColor.rgb *= col;`,

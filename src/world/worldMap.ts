@@ -142,6 +142,12 @@ function ridged(x: number, z: number) {
   return sum;
 }
 
+/** Smoothed macro elevation only (no detail): land >= 0.4 m, sea below. */
+export function macroElevAt(x: number, z: number) {
+  if (!cells) return 2;
+  return sampleMacro(x, z).elev;
+}
+
 /** Macro terrain height (metres) away from authored areas. */
 export function macroHeight(x: number, z: number) {
   if (!cells) return 2;

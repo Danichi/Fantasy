@@ -748,7 +748,10 @@ export class Player {
     this.pos.copy(p);
     this.prevPos.copy(p);
     this.vel.set(0, 0, 0);
+    this.onTeleport?.(p);
   }
+  /** Called after a teleport so streamed ground and trees can load around the new spot. */
+  onTeleport?: (p: THREE.Vector3) => void;
 
   // ==========================================================================
   // Presentation (once per rendered frame)

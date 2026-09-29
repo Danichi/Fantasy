@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { events } from '../core/events';
-import { heightAt } from './terrain';
+import { heightAt, PORT_AURELLE, PORT_HARBOR } from './terrain';
 import { physics } from '../physics/physics';
 import { targets, newTargetId, type HitInfo, type Target } from '../combat/targets';
 import type { Player } from '../player/player';
@@ -14,8 +14,9 @@ import { mulberry32 } from '../core/math';
 // Painted materials shared with Elderglen (docs/ART-DIRECTION.md); set by FrontierRegion.
 let M: WorldMats;
 
-export const TREMISON = new THREE.Vector2(360, 76);
-export const TREMISON_HARBOR = new THREE.Vector2(423, 74);
+// Port Aurelle (formerly Tremison) on the eastern coast; phase 5 grows it into the full city.
+export const PORT = PORT_AURELLE;
+export const HARBOR = PORT_HARBOR;
 export const FARM_BELT_CENTER = new THREE.Vector2(0, 188);
 
 type HerbId = 'sungrass' | 'moongrass' | 'wildmint' | 'ironleaf';
@@ -229,8 +230,8 @@ function buildFarmingVillage(scene: THREE.Scene) {
   }
 }
 
-function buildTremison(scene: THREE.Scene) {
-  const cx = TREMISON.x, cz = TREMISON.y;
+function buildPortAurelle(scene: THREE.Scene) {
+  const cx = PORT.x, cz = PORT.y;
   const wallMat = M.stone;
   const wall = (x: number, z: number, w: number, d: number, h: number) => {
     const y = heightAt(x, z);
@@ -265,29 +266,16 @@ function buildTremison(scene: THREE.Scene) {
   for (const [x, z] of [[cx - 63, cz + 59], [cx + 63, cz + 58], [cx - 63, cz - 59], [cx + 63, cz - 54]]) addTower(scene, x, z, 5, 11);
   // Deep water begins at the eastern edge of the coastal plain. The city sits
   // just above sea level while the harbor opens directly into this water.
-  const sea = new THREE.Mesh(
-    new THREE.PlaneGeometry(105, 330),
-    new THREE.MeshStandardMaterial({ color: 0x2f7180, roughness: 0.2, metalness: 0.05, transparent: true, opacity: 0.96 }),
-  );
-  sea.rotation.x = -Math.PI / 2;
-  sea.position.set(472, -1.18, 76);
-  sea.receiveShadow = true;
-  scene.add(sea);
-  const shore = new THREE.Mesh(
-    new THREE.BoxGeometry(12, 0.06, 250),
-    new THREE.MeshStandardMaterial({ color: 0xb7a980, roughness: 1 }),
-  );
-  shore.position.set(431, -0.82, 76);
-  scene.add(shore);
+  // (The Grand Ocean now surrounds the harbour: src/world/sea/ocean.ts.)
 
   // (The capsule placeholder crowd is gone; real villagers will populate the port.)
 
   // Port district.
-  const dockY = heightAt(TREMISON_HARBOR.x - 24, TREMISON_HARBOR.y);
+  const dockY = heightAt(HARBOR.x - 24, HARBOR.y);
   const dockMat = M.planks;
   for (let i = 0; i < 4; i++) {
-    const x = TREMISON_HARBOR.x - 32 + i * 20;
-    const z = TREMISON_HARBOR.y + 14 + (i % 2) * 7;
+    const x = HARBOR.x - 32 + i * 20;
+    const z = HARBOR.y + 14 + (i % 2) * 7;
     const pier = new THREE.Mesh(new THREE.BoxGeometry(15, 0.35, 3.2), dockMat);
     pier.position.set(x, dockY + 0.2, z);
     pier.castShadow = pier.receiveShadow = true;
@@ -298,9 +286,9 @@ function buildTremison(scene: THREE.Scene) {
       scene.add(post);
     }
   }
-  addSign(scene, "TREMISON ADVENTURERS' GUILD", cx - 8, cz + 10, 7.7, 3.5);
+  addSign(scene, "PORT AURELLE ADVENTURERS' GUILD", cx - 8, cz + 10, 7.7, 3.5);
   addSign(scene, "KNIGHT'S ACADEMY", cx + 16, cz + 45, 6.3, 3.7);
-  addSign(scene, 'FISHERMEN\'S WHARF', TREMISON_HARBOR.x - 28, TREMISON_HARBOR.y + 12, 5.5, 2.8);
+  addSign(scene, 'FISHERMEN\'S WHARF', HARBOR.x - 28, HARBOR.y + 12, 5.5, 2.8);
   addSign(scene, 'WHITE MOUNTAIN MINING OFFICE', cx - 37, cz - 28, 8.2, 3.2);
   addSign(scene, 'GRAND MARKET', cx + 38, cz - 30, 5.4, 3.1);
 }
@@ -434,7 +422,7 @@ export class FrontierRegion {
   ) {
     M = mats;
     buildFarmingVillage(scene);
-    buildTremison(scene);
+    buildPortAurelle(scene);
     this.buildHerbs();
     this.interactables.push(...this.buildTownHooks());
     for (const h of this.herbs) {
@@ -460,10 +448,12 @@ export class FrontierRegion {
 
   private buildHerbs() {
     const points: [HerbId, number, number][] = [
-      ['sungrass', 132, 18], ['wildmint', 151, 30], ['moongrass', 178, 8], ['sungrass', 204, 42],
-      ['ironleaf', 228, 16], ['wildmint', 251, 53], ['moongrass', 273, 27], ['sungrass', 298, 65],
-      ['ironleaf', 320, 42], ['wildmint', 340, 83], ['moongrass', 248, 8], ['sungrass', 187, 64],
-      ['ironleaf', 309, 25], ['wildmint', 333, 54],
+      // Roadside herbs along the whole King's Road to Port Aurelle.
+      ['sungrass', 132, 18], ['wildmint', 151, 30], ['moongrass', 178, 8], ['sungrass', 290, 70],
+      ['ironleaf', 480, 104], ['wildmint', 640, 118], ['moongrass', 790, 96], ['sungrass', 960, 136],
+      ['ironleaf', 1130, 108], ['wildmint', 1300, 132], ['moongrass', 1470, 110], ['sungrass', 1620, 140],
+      ['ironleaf', 1790, 124], ['wildmint', 1950, 162], ['moongrass', 2120, 138], ['sungrass', 2300, 166],
+      ['ironleaf', 2450, 136], ['wildmint', 2560, 164],
     ];
     for (const [herb, x, z] of points) {
       const pos = new THREE.Vector3(x, heightAt(x, z), z);
@@ -475,25 +465,25 @@ export class FrontierRegion {
   }
 
   private buildTownHooks(): Interactable[] {
-    const academy = new THREE.Vector3(TREMISON.x + 16, heightAt(TREMISON.x + 16, TREMISON.y + 45), TREMISON.y + 45);
-    const dwarves = new THREE.Vector3(TREMISON.x - 37, heightAt(TREMISON.x - 37, TREMISON.y - 28), TREMISON.y - 28);
-    const fish = new THREE.Vector3(TREMISON_HARBOR.x - 28, heightAt(TREMISON_HARBOR.x - 28, TREMISON_HARBOR.y + 12), TREMISON_HARBOR.y + 12);
+    const academy = new THREE.Vector3(PORT.x + 16, heightAt(PORT.x + 16, PORT.y + 45), PORT.y + 45);
+    const dwarves = new THREE.Vector3(PORT.x - 37, heightAt(PORT.x - 37, PORT.y - 28), PORT.y - 28);
+    const fish = new THREE.Vector3(HARBOR.x - 28, heightAt(HARBOR.x - 28, HARBOR.y + 12), HARBOR.y + 12);
     return [
       {
         pos: academy, radius: 4.5, label: () => "Speak to the Knight's Academy registrar", enabled: () => true,
         action: () => this.dialogue.show(
           'Ser Elian Marrow', 'Knight-Captain & Academy Registrar',
-          'You survived the frontier. Good. The Knight\'s Academy in Tremison can turn raw strength into discipline. The road home begins with becoming strong enough to survive it.',
+          'You survived the frontier. Good. The Knight\'s Academy in Port Aurelle can turn raw strength into discipline. The road home begins with becoming strong enough to survive it.',
           [
             { label: 'Enroll in the Academy', run: () => { this.toast('MAIN QUEST: Enter the Knight\'s Academy and begin your combat training.'); this.dialogue.close(); } },
-            { label: 'Tell me about Tremison.', run: () => this.dialogue.show('Ser Elian Marrow', 'Knight-Captain & Academy Registrar', 'This city is Cresha\'s great western port. Ships leave daily for distant shores, and fighters from every corner of the nation pass through these gates.', [{ label: 'Understood.', run: () => this.dialogue.close() }]) },
+            { label: 'Tell me about Port Aurelle.', run: () => this.dialogue.show('Ser Elian Marrow', 'Knight-Captain & Academy Registrar', 'This city is Cresha\'s great western port. Ships leave daily for distant shores, and fighters from every corner of the nation pass through these gates.', [{ label: 'Understood.', run: () => this.dialogue.close() }]) },
             { label: 'Leave.', run: () => this.dialogue.close() },
           ],
         ),
       },
       {
-        pos: new THREE.Vector3(TREMISON.x - 8, heightAt(TREMISON.x - 8, TREMISON.y + 10), TREMISON.y + 10),
-        radius: 4.2, label: () => "Enter Tremison's Adventurer's Guild", enabled: () => true,
+        pos: new THREE.Vector3(PORT.x - 8, heightAt(PORT.x - 8, PORT.y + 10), PORT.y + 10),
+        radius: 4.2, label: () => "Enter Port Aurelle's Adventurer's Guild", enabled: () => true,
         action: () => this.openGuild(),
       },
       {
@@ -512,7 +502,7 @@ export class FrontierRegion {
         pos: dwarves, radius: 4.0, label: () => 'Speak with the dwarves', enabled: () => true,
         action: () => this.dialogue.show(
           'Bruni Stonevein', 'Dwarven Expedition Leader',
-          'We leave Tremison harbor in three days for the White Mountains. There is ore there that never reaches Cresha\'s markets. Come back before departure if you want a place on the mining crew.',
+          'We leave Port Aurelle harbor in three days for the White Mountains. There is ore there that never reaches Cresha\'s markets. Come back before departure if you want a place on the mining crew.',
           [
             { label: 'I want a place on the expedition.', run: () => { this.toast('DWARVEN EXPEDITION: Return before the White Mountain voyage departs.'); this.dialogue.close(); } },
             { label: 'Why the White Mountains?', run: () => this.dialogue.show('Bruni Stonevein', 'Dwarven Expedition Leader', 'The old mines are deeper than any pit on the mainland. We need blades, scouts and someone who can handle monsters underground.', [{ label: 'I understand.', run: () => this.dialogue.close() }]) },
@@ -540,7 +530,8 @@ export class FrontierRegion {
 
   private spawnBeast() {
     const spots = [
-      [175, 34], [203, 10], [231, 48], [265, 18], [294, 51], [323, 38], [342, 71],
+      // Beside the King's Road (never on it), from the river to the coastal meadows.
+      [420, 120], [610, 60], [820, 160], [1010, 80], [1240, 180], [1460, 70], [1680, 190], [1900, 90], [2150, 200], [2380, 95],
     ] as [number, number][];
     const s = spots[Math.floor(Math.random() * spots.length)];
     const kind = Math.random() < 0.55 ? 'boar' : 'wolf';
@@ -566,7 +557,7 @@ export class FrontierRegion {
     }
     for (const b of this.beasts) b.update(dt);
     this.beasts = this.beasts.filter((b) => b.alive || targets.has(b));
-    if (this.player.pos.distanceTo(new THREE.Vector3(TREMISON.x, this.player.pos.y, TREMISON.y)) < 65) {
+    if (this.player.pos.distanceTo(new THREE.Vector3(PORT.x, this.player.pos.y, PORT.y)) < 65) {
       // Keep the city feeling alive without a permanent combat lock.
       for (const b of this.beasts) if (b.alive && b.position.x > 335) b.dispose();
       this.beasts = this.beasts.filter((b) => b.alive);

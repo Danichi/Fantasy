@@ -111,6 +111,8 @@ export class Ocean {
           float e00 = texture2D(tMacro, (i0 + 0.5) / uWorld.zw).b, e10 = texture2D(tMacro, (i0 + vec2(1.5, 0.5)) / uWorld.zw).b;
           float e01 = texture2D(tMacro, (i0 + vec2(0.5, 1.5)) / uWorld.zw).b, e11 = texture2D(tMacro, (i0 + 1.5) / uWorld.zw).b;
           float elev = -80.0 + mix(mix(e00, e10, f.x), mix(e01, e11, f.x), f.y) * 800.0;
+          // Only where the map has sea: inland hollows and river beds stay dry.
+          if (elev > ${(SEA_LEVEL + 1.4).toFixed(2)}) discard;
           float depth = max(0.0, ${SEA_LEVEL.toFixed(2)} - elev);
           vec3 shallow = vec3(0.05, 0.62, 0.64), mid = vec3(0.02, 0.36, 0.52), deep = vec3(0.01, 0.12, 0.3);
           vec3 water = mix(shallow, mid, smoothstep(1.0, 9.0, depth));

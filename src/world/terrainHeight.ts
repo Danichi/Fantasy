@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { fbm, smoothstep, clamp } from '../core/math';
-import { macroHeight, reliefAt, RELIEF } from './worldMap';
+import { macroHeight, macroElevAt, reliefAt, RELIEF, SEA_LEVEL } from './worldMap';
 
 // ---------------------------------------------------------------------------
 // Terrain heights for the whole world (pure: no rendering, no physics, so the
@@ -31,8 +31,8 @@ export const RIVER_LEVEL = -0.6;
 export const CRYPT = new THREE.Vector2(0, -318); // entrance in the hillside
 export const BRIDGE = new THREE.Vector2(0, 6); // x filled in from the river below
 /** Port Aurelle (formerly Tremison): the great port city on the eastern coast. */
-export const PORT_AURELLE = new THREE.Vector2(2900, 150);
-export const PORT_HARBOR = new THREE.Vector2(3300, 150);
+export const PORT_AURELLE = new THREE.Vector2(2760, 150);
+export const PORT_HARBOR = new THREE.Vector2(2940, 150);
 /** Authored Elder Glen terrain blends into the macro world between these radii. */
 export const LOCAL_R0 = 780, LOCAL_R1 = 1400;
 
@@ -48,7 +48,7 @@ const ROADS: P[][] = [
   // north gate up the valley to the crypt
   [[0, -TOWN_R + 6], [6, -150], [-8, -225], [0, -300]],
   // east gate over the bridge: the King's Road to Port Aurelle (phase 4 replaces this with the road network)
-  [[TOWN_R - 6, 0], [120, 4], [BRIDGE.x, BRIDGE.y], [230, 22], [300, 56], [360, 70], [520, 88], [760, 110], [1050, 124], [1380, 118], [1700, 130], [1960, 150], [2230, 152], [2560, 150]],
+  [[TOWN_R - 6, 0], [120, 4], [BRIDGE.x, BRIDGE.y], [230, 22], [300, 56], [360, 70], [520, 88], [760, 110], [1050, 124], [1380, 118], [1700, 130], [1960, 150], [2230, 152], [2690, 150]],
   // west gate into the forest logging road
   [[-TOWN_R + 6, 0], [-145, 8], [-230, 80], [-320, 118]],
 ];
@@ -146,6 +146,10 @@ export function worldHeightFn(x: number, z: number) {
   else {
     const t = smoothstep(LOCAL_R0, LOCAL_R1, r);
     h = localHeight(x, z) * (1 - t) + macroHeight(x, z) * t;
+  }
+  // Land (per the map) never sinks below the sea; the river keeps its channel.
+  if (h < SEA_LEVEL + 0.6 && macroElevAt(x, z) > SEA_LEVEL + 0.3 && Math.abs(x - riverX(z)) > 16) {
+    h = SEA_LEVEL + 0.6 - (SEA_LEVEL + 0.6 - h) * 0.12;
   }
   // Roads keep a gentle grade outside town too.
   if (r > LOCAL_R0 * 0.8) {

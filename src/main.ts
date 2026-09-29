@@ -93,8 +93,9 @@ async function boot() {
   mark('grass');
   const river = new River(r.scene);
   mark('river');
-  const stylizedNature = new StylizedNature(r.scene, world.village);
+  const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
   await stylizedNature.ready;
+  stylizedNature.warm(spawn, spawn);
   const foliage = stylizedNature.loaded ? null : new Foliage(r.scene, r.renderer);
   mark('foliage');
   mark('stylizedNature');
@@ -157,6 +158,12 @@ async function boot() {
     () => town.guild.open('board'),
   );
   realm.overworldInteractables.push(...town.interactables(), ...frontier.interactables);
+  player.onTeleport = (p) => {
+    if (realm.mode === 'dungeon') return;
+    terrain.warm(p);
+    ground.prime(p);
+    stylizedNature.warm(p, p);
+  };
   dialogue.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open;
     if (open) input.exitLock();
@@ -373,7 +380,7 @@ async function boot() {
     flowers.update(dt, r.camera.position);
     if (realm.mode === 'overworld') terrain.update(r.camera.position, player.pos);
     foliage?.update(dt, r.camera.position);
-    stylizedNature.update(dt, r.camera.position);
+    if (realm.mode === 'overworld') stylizedNature.update(dt, r.camera.position, player.pos);
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
     mapUI.update();
