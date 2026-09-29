@@ -431,8 +431,8 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon') =>
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</span><span><kbd>Mouse</kbd> Look</span>
       <span><kbd>Shift</kbd> Sprint · attack while sprinting to lunge</span><span><kbd>Space</kbd> Dodge roll</span>
       <span><kbd>LMB</kbd> Attack · hold for heavy</span><span><kbd>RMB</kbd> Block / off-hand attack</span>
-      <span><kbd>F</kbd> Parry</span><span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on</span>
-      <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span><span><kbd>B</kbd> Boundary stance when Boundary is primary</span><span><kbd>V</kbd> Origin ability</span>
+      <span><kbd>F</kbd> Parry · hold while standing still for Boundary stance</span><span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on</span>
+      <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span><span><kbd>V</kbd> Origin ability</span>
       <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory</span>
       <span><kbd>E</kbd> Interact (doors, chests, gates)</span><span><kbd>M</kbd> Draw the dungeon map</span>
     </div>`;
