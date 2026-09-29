@@ -66,6 +66,8 @@ html, body {
 .xprow .lv { font: 700 11px/1 var(--serif); letter-spacing: 0.12em; color: var(--gold-bright); text-shadow: 0 1px 2px #000; }
 .xpbar { position: relative; width: 170px; height: 5px; background: rgba(8, 7, 6, 0.75); border: 1px solid rgba(201, 165, 90, 0.4); }
 .xpbar i { position: absolute; inset: 0; background: linear-gradient(90deg, #7fb8ff, #bfe6ff); transform-origin: left center; transform: scaleX(0); transition: transform 0.25s; }
+.xpbar.ready { border-color: #bfe6ff; box-shadow: 0 0 8px rgba(127, 184, 255, 0.7); }
+.xprow .xpv { font: 600 10px/1 var(--sans); color: #bfe6ff; text-shadow: 0 1px 2px #000; white-space: nowrap; }
 .xprow .gold { min-width: 46px; font: 700 11px/1 var(--sans); color: #f2c14e; text-shadow: 0 1px 2px #000; }
 .xprow .gold::before { content: '◆ '; font-size: 9px; }
 .prompt {

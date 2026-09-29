@@ -6,7 +6,7 @@ export type Action =
   | 'forward' | 'back' | 'left' | 'right'
   | 'sprint' | 'dodge' | 'jump'
   | 'attack' | 'offhand' | 'parry' | 'lockOn' | 'cast'
-  | 'inventory' | 'help' | 'toggleBar' | 'interact' | 'map'
+  | 'inventory' | 'skills' | 'help' | 'toggleBar' | 'interact' | 'map'
   | 'slot1' | 'slot2' | 'slot3' | 'slot4' | 'slot5' | 'slot6' | 'slot7' | 'slot8';
 
 export const DEFAULT_BINDINGS: Record<Action, string[]> = {
@@ -26,6 +26,7 @@ export const DEFAULT_BINDINGS: Record<Action, string[]> = {
   map: ['KeyM'],
   cast: ['KeyR'],
   inventory: ['KeyI'],
+  skills: ['KeyK'],
   help: ['KeyH'],
   slot1: ['Digit1'], slot2: ['Digit2'], slot3: ['Digit3'], slot4: ['Digit4'],
   slot5: ['Digit5'], slot6: ['Digit6'], slot7: ['Digit7'], slot8: ['Digit8'],

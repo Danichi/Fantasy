@@ -36,6 +36,7 @@ URL options:
 | C | Jump |
 | 1–8 | Hotbar: equip a weapon, attune a spell, drink a potion. Shift+number puts a sword in the off hand. |
 | I | Inventory and equipment. Click to equip, shift-click for off hand, drag items onto the hotbar. |
+| K | Skills: spend XP on combat classes, magic classes and callings, open their skill trees, and spend attribute points. |
 | Tab | Switch the bar between quick items (1–4) and moves (1–6) |
 | Q / middle mouse | Lock on |
 | E | Interact: enter the crypt, open chests, unlock gates, take stairs |
@@ -61,7 +62,7 @@ The crypt entrance is at the end of the north road, in the hills. Inside:
 - **Upper Crypt:** a labyrinth with a locked portcullis. The key is in a chest somewhere on your side of the gate. Beyond the gate are the stairs down.
 - **Lower Crypt:** Grukk, the Orc Warlord, waits in his hall. He wields a giant odachi (cleave, spinning sweep, three-hit combo, leaping slam, kick) and a war bow, and he's faster below half health.
 
-You map the dungeon yourself: the minimap only shows where you are and which way you face. Press **M** to draw. Enemies drop XP and gold; levelling raises health, stamina and mana. Progress, gear and your maps save to the browser automatically.
+You map the dungeon yourself: the minimap only shows where you are and which way you face. Press **M** to draw. Enemies drop XP and gold. XP is a currency: press **K** to invest it in your classes and callings, open each one's skill tree, and spend attribute points. Mentors in town teach new classes, switch your active combat class, and reset a class for 75% of its XP. Progress, gear and your maps save to the browser automatically.
 
 ## Layout
 
@@ -77,8 +78,9 @@ src/
   items/               item data, equipment/inventory, procedural sword/shield/armour models
   enemies/             slimes (jelly shader + AI) and spawner
   magic/spells.ts      Fireball, Healing Light, potion effects
+  paths/               classes and callings: data, XP investing, attributes, tree points, mentors
   fx/particles.ts      pooled particles and jelly droplets
-  ui/                  HUD, inventory, icons, overlays
+  ui/                  HUD, inventory, skills screen and skill trees, icons, overlays
 tools/
   mixamo-checklist.md  what to download from Mixamo and how
   import-mixamo.mjs    FBX -> GLB, root-motion extraction, manifest

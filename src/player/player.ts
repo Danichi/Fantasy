@@ -14,6 +14,7 @@ import { targets, hurtSegment, type Target, type IncomingAttack, type DefenceRes
 import { surfaceAt } from '../world/terrain';
 import { waterDepthAt } from '../world/water';
 import { Progression } from '../progression/progression';
+import { Paths } from '../paths/paths';
 
 const CAPSULE_HALF = 0.55;
 const CAPSULE_R = 0.32;
@@ -68,14 +69,16 @@ export class Player {
   stamina = 100;
   mana = 80;
   readonly prog = new Progression();
+  /** disciplines, attributes and the active combat class */
+  readonly paths = new Paths(this.prog);
   get maxHp() {
-    return 120 + this.prog.bonusHp + (this.equip?.bonus('maxHp') ?? 0);
+    return 120 + this.paths.bonusHp + (this.equip?.bonus('maxHp') ?? 0);
   }
   get maxStamina() {
-    return 100 + this.prog.bonusStamina + (this.equip?.bonus('maxStamina') ?? 0);
+    return 100 + this.paths.bonusStamina + (this.equip?.bonus('maxStamina') ?? 0);
   }
   get maxMana() {
-    return 80 + this.prog.bonusMana + (this.equip?.bonus('maxMana') ?? 0);
+    return 80 + this.paths.bonusMana + (this.equip?.bonus('maxMana') ?? 0);
   }
   private staminaDelay = 0;
   private hot = { rate: 0, left: 0 };
@@ -354,7 +357,7 @@ export class Player {
     } else {
       const sp = this.equip.get(this.equip.activeSpell);
       const heal = sp?.def.stats.heal ?? 50;
-      this.hot = { rate: heal / 3, left: 3 };
+      this.hot = { rate: (heal * this.paths.healPower) / 3, left: 3 };
       this.onSpell?.('healingLight', this.center, this.forward, null);
     }
   }
@@ -746,11 +749,11 @@ export class Player {
           a.hitSet.add(tg.id);
           const crit = tg.stunned;
           const charge = 1 + a.charge * 0.6;
-          const bonus = 1 + this.equip.bonus('damagePct');
+          const bonus = (1 + this.equip.bonus('damagePct')) * this.paths.meleePower(weapon?.def.stats.speed ?? 1);
           const dmg = Math.round(base * h.dmg * charge * bonus * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
           const dir = tg.position.clone().sub(this.pos).setY(0).normalize();
           const at2 = tg.center.clone().addScaledVector(dir, -tg.radius * 0.8);
-          tg.takeHit({ damage: dmg, poise: h.poise * charge, dir, at: at2, crit, source: 'melee' });
+          tg.takeHit({ damage: dmg, poise: h.poise * charge * this.paths.poisePower, dir, at: at2, crit, source: 'melee' });
           events.emit('enemyHit', { at: at2, amount: dmg, crit, enemyId: tg.id });
           const heavy = a.def.id === 'heavy' || a.def.id === 'airAttack';
           this.onHitStop?.(crit ? 0.16 : heavy ? 0.12 : 0.07);
@@ -839,8 +842,8 @@ export class Player {
 
   private updateStats(dt: number) {
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
-    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen')) * dt);
-    this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen')) * dt);
+    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen) * dt);
+    this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen) * dt);
     this.hp = Math.min(this.hp, this.maxHp);
     if (this.hot.left > 0 && !this.dead) {
       this.hot.left -= dt;
@@ -857,7 +860,7 @@ export class Player {
     const it = this.equip.get(uid);
     if (!it || it.def.kind !== 'consumable' || this.dead) return;
     const st = it.def.stats;
-    if (st.heal) this.hot = { rate: st.heal / 1.2, left: 1.2 };
+    if (st.heal) this.hot = { rate: (st.heal * this.paths.healPower) / 1.2, left: 1.2 };
     if (st.restoreMana) this.mana = Math.min(this.maxMana, this.mana + st.restoreMana);
     this.equip.consume(uid);
     this.onSpell?.(st.heal ? 'potionHeal' : 'potionMana', this.center, this.forward, null);

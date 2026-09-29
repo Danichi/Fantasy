@@ -19,6 +19,9 @@ import { Spells } from './magic/spells';
 import { buildIcons } from './ui/icons';
 import { HUD } from './ui/hud';
 import { InventoryUI, buildOverlays } from './ui/inventory';
+import { SkillsUI } from './ui/skills';
+import { DISC } from './paths/data';
+import { mentorOptions } from './paths/mentors';
 import { CharPreview } from './ui/charPreview';
 import { events } from './core/events';
 import { buildWorld } from './world/props';
@@ -107,6 +110,7 @@ async function boot() {
   const hud = new HUD(player, r.camera);
   const preview = new CharPreview(r.renderer, r.scene, player, [r.sun, r.hemi]);
   const inv = new InventoryUI(player, preview);
+  const skills = new SkillsUI(player);
   const mapUI = new DungeonMapUI();
   const realm = new Realm(r, player, cam, fx, hud, mapUI, {
     hide: (h) => {
@@ -123,8 +127,9 @@ async function boot() {
   const dialogue = new DialogueUI();
   const town = new Town(r.scene, r.camera, dialogue);
   realm.overworldInteractables.push(...town.interactables());
+  town.mentorOptions = (spec, say) => mentorOptions(player.paths, spec, say, (m) => hud.toast(m));
   dialogue.onToggle = (open) => {
-    input.uiMode = open || inv.open || mapUI.open;
+    input.uiMode = open || inv.open || skills.open || mapUI.open;
     if (open) input.exitLock();
     else input.requestLock();
   };
@@ -141,7 +146,7 @@ async function boot() {
   window.addEventListener('beforeunload', save);
   setInterval(save, 30000);
   mapUI.onToggle = (open) => {
-    input.uiMode = open || inv.open;
+    input.uiMode = open || inv.open || skills.open;
     if (open) input.exitLock();
     else input.requestLock();
   };
@@ -174,13 +179,22 @@ async function boot() {
     hud.markHotbarDirty();
   };
   inv.onToggle = (open) => {
+    if (open) skills.toggle(false);
     document.body.classList.toggle('inv-open', open);
-    input.uiMode = open;
+    input.uiMode = open || skills.open;
     if (open) input.exitLock();
-    else input.requestLock();
+    else if (!skills.open) input.requestLock();
+  };
+  skills.onToggle = (open) => {
+    if (open) inv.toggle(false);
+    document.body.classList.toggle('inv-open', open);
+    input.uiMode = open || inv.open;
+    if (open) input.exitLock();
+    else if (!inv.open) input.requestLock();
+    if (!open) save();
   };
   const pause = () => {
-    if (!started || TEST_MODE || inv.open) return;
+    if (!started || TEST_MODE || inv.open || skills.open) return;
     pausedByUser = true;
     overlays.showPaused(true);
   };
@@ -208,7 +222,7 @@ async function boot() {
     }
   });
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Escape' && !input.locked && !inv.open && !pausedByUser) pause();
+    if (e.code === 'Escape' && !input.locked && !inv.open && !skills.open && !pausedByUser) pause();
   });
 
   const useHotbar = (i: number) => {
@@ -235,6 +249,14 @@ async function boot() {
       player.respawn(at);
       cam.snapTo(at);
     }, 4200);
+  });
+
+  // Nudge the player when they can afford their active class's next level.
+  let couldLevel = player.paths.canInvest(player.paths.active);
+  events.on('progressChanged', () => {
+    const P = player.paths, can = P.canInvest(P.active);
+    if (can && !couldLevel && !skills.open) hud.toast(`Enough XP to raise ${DISC[P.active].name} · press K`);
+    couldLevel = can;
   });
 
   // ---- loop -----------------------------------------------------------------
@@ -271,6 +293,7 @@ async function boot() {
       steps++;
       simSteps++;
       if (input.wasPressed('inventory')) inv.toggle();
+      if (input.wasPressed('skills')) skills.toggle();
       if (input.wasPressed('help')) overlays.toggleHelp();
       if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
       if (input.wasPressed('map')) {
@@ -363,7 +386,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

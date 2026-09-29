@@ -4,7 +4,7 @@ import { heightAt } from '../world/terrain';
 import { physics } from '../physics/physics';
 import { mats, paintedWood } from '../items/materials';
 import { buildSword } from '../items/weaponModels';
-import type { DialogueUI } from '../ui/dialogue';
+import type { DialogueOption, DialogueUI } from '../ui/dialogue';
 import type { Interactable } from '../dungeon/instance';
 
 // The townsfolk: who they are, where they stand, and what they'll tell you.
@@ -149,8 +149,12 @@ export class Town {
     }));
   }
 
+  /** Extra replies from the discipline system (teach, switch class, respec). */
+  mentorOptions?: (s: NpcSpec, say: (text: string) => void) => DialogueOption[];
+
   talk(s: NpcSpec, text = s.greeting) {
-    const opts = s.lines.map((l) => ({ label: l.q, run: () => this.talk(s, l.a) }));
+    const opts: DialogueOption[] = s.lines.map((l) => ({ label: l.q, run: () => this.talk(s, l.a) }));
+    opts.push(...(this.mentorOptions?.(s, (t) => this.talk(s, t)) ?? []));
     opts.push({ label: 'Farewell.', run: () => this.dialogue.close() });
     this.dialogue.show(s.name, s.title, text, opts);
   }

@@ -31,6 +31,17 @@ Visual mockups: https://claude.ai/artifact/2e8Focia4DPWqk66fh9zj6
 - **Moves bar:** the active style owns the mouse buttons. Keys 1-6 mix techniques,
   spells and brews from any discipline, plus an ultimate slot for capstones and reactions.
 
+### Draft 4: names and first implementation
+- Families are **Combat Classes**, **Magic Classes** and **Callings**.
+- Combat classes: Gale Style, Cross Style, Boundary Style, Dawnblade (holy sword), Warbreaker
+  (greatswords); secret: Oathbreaker.
+- Magic classes: Pyromancer, Windcaller, Lightbinder, Cryomancer, Shadowcaller; secret: Voidwalker.
+- Callings: Herbalism, Dungeoneering, Smithing, Cooking, Runecraft; secret: Beastbinding.
+- Implemented in `src/paths/` (data, state, mentors) and `src/ui/skills.ts` + `skillTree.ts` (K).
+  New characters start with Gale Style, Pyromancer and Lightbinder at level 1.
+- Respec returns a class to **level 1** (not 0), so it stays learned.
+- Still to do: mastery tracking from play, and making tree nodes change gameplay.
+
 ### Draft 3 decisions (locked in)
 - **Skills screen:** the Discipline Atlas lists disciplines by family. Clicking one opens its tree.
 - **Tree look per family:** Combat Styles use the Sigil Wheel, Magic Schools use a

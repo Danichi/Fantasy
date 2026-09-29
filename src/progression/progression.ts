@@ -2,53 +2,39 @@ import * as THREE from 'three';
 import { events } from '../core/events';
 import { heightAt } from '../world/terrain';
 
-// Levels, XP, gold and skill points, plus the glowing orbs and coins that
+// XP and gold, plus the glowing orbs and coins that
 // burst out of defeated enemies and fly to the player.
 
 export const XP_FOR_KIND: Record<string, [xp: number, gold: number]> = {
   green: [12, 3], blue: [26, 6], magma: [30, 8], cave: [22, 5], armour: [48, 14], orc: [420, 0], dummy: [0, 0],
 };
 
-/** XP needed to go from `level` to `level + 1`. */
+/** XP a level cost under the old auto-levelling system (used to refund old saves). */
 export function xpToNext(level: number) {
   return Math.round(80 * Math.pow(level, 1.45));
 }
 
+/**
+ * XP is a currency: pickups add to the unspent pool and the player invests it
+ * in disciplines (see paths/paths.ts). `level` is the character level, which
+ * Paths derives from discipline levels and writes back here.
+ */
 export class Progression {
   level = 1;
   xp = 0;
+  /** every XP point ever picked up */
+  totalXp = 0;
   gold = 0;
-  skillPoints = 0;
-
-  get next() {
-    return xpToNext(this.level);
-  }
 
   addXp(n: number) {
     this.xp += n;
-    while (this.xp >= this.next) {
-      this.xp -= this.next;
-      this.level++;
-      this.skillPoints++;
-      events.emit('levelUp', { level: this.level });
-    }
+    this.totalXp += n;
     events.emit('progressChanged', {});
   }
 
   addGold(n: number) {
     this.gold += n;
     events.emit('progressChanged', {});
-  }
-
-  /** Stat growth per level. */
-  get bonusHp() {
-    return (this.level - 1) * 10;
-  }
-  get bonusStamina() {
-    return (this.level - 1) * 4;
-  }
-  get bonusMana() {
-    return (this.level - 1) * 5;
   }
 }
 

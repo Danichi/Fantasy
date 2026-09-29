@@ -47,6 +47,8 @@ export class HUD {
   private xpFill!: HTMLElement;
   private lvEl!: HTMLElement;
   private goldEl!: HTMLElement;
+  private xpVal!: HTMLElement;
+  private xpBar!: HTMLElement;
   private promptEl: HTMLDivElement;
   private bossEl: HTMLDivElement;
   private fadeEl: HTMLDivElement;
@@ -70,10 +72,12 @@ export class HUD {
     };
     this.bars = { hp: mk('hp', 'HEALTH'), st: mk('st', 'STAMINA'), mp: mk('mp', 'MANA') };
     const xpRow = el('div', 'xprow', vit);
-    xpRow.innerHTML = '<span class="lv">LV 1</span><div class="xpbar"><i></i></div><span class="gold">0</span>';
+    xpRow.innerHTML = '<span class="lv">LV 1</span><div class="xpbar" title="Unspent XP towards your active class\'s next level"><i></i></div><span class="xpv">0</span><span class="gold">0</span>';
     this.xpFill = xpRow.querySelector('.xpbar i')!;
     this.lvEl = xpRow.querySelector('.lv')!;
     this.goldEl = xpRow.querySelector('.gold')!;
+    this.xpVal = xpRow.querySelector('.xpv')!;
+    this.xpBar = xpRow.querySelector('.xpbar')!;
 
     const wrap = el('div', 'loadout-wrap', this.root);
     const handRow = el('div', 'hands', wrap);
@@ -112,12 +116,12 @@ export class HUD {
     this.fadeEl = el('div', 'fade', this.root);
     this.levelEl = el('div', 'levelup', this.root);
     events.on('levelUp', ({ level }) => {
-      this.levelEl.innerHTML = `LEVEL UP<small>You are now level ${level}. Health, stamina and mana increased.</small>`;
+      this.levelEl.innerHTML = `LEVEL UP<small>You are now level ${level}. You have a new attribute point to spend (K).</small>`;
       this.levelEl.classList.remove('show');
       void this.levelEl.offsetWidth;
       this.levelEl.classList.add('show');
     });
-    el('div', 'hint', this.root, '<b>I</b> inventory &nbsp;·&nbsp; <b>H</b> controls');
+    el('div', 'hint', this.root, '<b>I</b> inventory &nbsp;·&nbsp; <b>K</b> skills &nbsp;·&nbsp; <b>H</b> controls');
 
     events.on('equipmentChanged', () => (this.hotbarDirty = true));
     events.on('notEnough', ({ stat }) => {
@@ -263,7 +267,12 @@ export class HUD {
       this.renderHotbar();
     }
     const pr = p.prog;
-    this.xpFill.style.transform = `scaleX(${Math.min(1, pr.xp / pr.next)})`;
+    // XP is spent, not auto-levelled: the bar fills towards the active class's next level.
+    const need = p.paths.nextCost(p.paths.active);
+    const ready = pr.xp >= need;
+    this.xpFill.style.transform = `scaleX(${Math.min(1, pr.xp / need)})`;
+    this.xpBar.classList.toggle('ready', ready);
+    this.xpVal.textContent = `${pr.xp.toLocaleString()} XP`;
     this.lvEl.textContent = `LV ${pr.level}`;
     this.goldEl.textContent = `${pr.gold}`;
     if (this.boss) {

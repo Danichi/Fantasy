@@ -8,7 +8,8 @@ import type { CharPreview } from './charPreview';
 // Inventory & equipment screen (I).
 //   left:   armour slots          centre: live 3D character + weapons + summary
 //   right:  accessories, quick items
-//   far:    tabs (Items / Skills / Stats) with the item grid and details
+//   far:    tabs (Items / Stats) with the item grid and details.
+// Skills, classes and attributes live on their own screen (K, ui/skills.ts).
 // Click an item to equip it (Shift-click a sword for the off hand), click an
 // equipped slot to take it off, or drag items onto slots and the HUD bar.
 
@@ -17,7 +18,7 @@ const SLOT_LABEL: Record<Slot, string> = {
   hands: 'Hands', legs: 'Legs', feet: 'Feet', amulet: 'Amulet', ring1: 'Ring', ring2: 'Ring', belt: 'Belt', trinket: 'Trinket',
 };
 
-type Tab = 'items' | 'skills' | 'stats';
+type Tab = 'items' | 'stats';
 type Filter = 'all' | 'weapons' | 'armour' | 'accessories' | 'magic' | 'consumables';
 const FILTERS: [Filter, string, ItemKind[]][] = [
   ['all', 'All', []],
@@ -26,12 +27,6 @@ const FILTERS: [Filter, string, ItemKind[]][] = [
   ['accessories', 'Accessories', ['accessory']],
   ['magic', 'Magic', ['spell']],
   ['consumables', 'Usables', ['consumable']],
-];
-
-const CLASSES = [
-  { id: 'swordsman', name: 'Swordsman', where: 'the arms master at the barracks', blurb: 'Blade techniques: dashing strikes, whirlwinds and deadly ripostes.' },
-  { id: 'mage', name: 'Mage', where: 'the magus in the tower', blurb: 'Fire, frost and lightning, barriers and blinks.' },
-  { id: 'tank', name: 'Tank', where: 'the knight captain', blurb: 'Shield mastery: bulwark parries, bashes and war cries.' },
 ];
 
 function fmtStat(k: keyof ItemStats, v: number) {
@@ -70,7 +65,7 @@ export class InventoryUI {
       </section>
       <section class="inv-col acc"><h2>ACCESSORIES</h2><div class="slots"></div></section>
       <section class="inv-main"><div class="tabs"></div><div class="body"></div></section>
-      <div class="inv-help">Click to equip · <b>Shift-click</b> a sword for the off hand · Click an equipped slot to remove it · Drag items onto slots or the HUD bar · <b>I</b> / <b>Esc</b> to close</div>`;
+      <div class="inv-help">Click to equip · <b>Shift-click</b> a sword for the off hand · Click an equipped slot to remove it · Drag items onto slots or the HUD bar · <b>K</b> skills · <b>I</b> / <b>Esc</b> to close</div>`;
     root.appendChild(this.el);
     this.armorCol = this.el.querySelector('.armor .slots')!;
     this.accCol = this.el.querySelector('.acc .slots')!;
@@ -165,7 +160,7 @@ export class InventoryUI {
       <span><b>${Math.ceil(p.hp)}/${p.maxHp}</b>Health</span>`;
 
     this.tabs.innerHTML = '';
-    for (const [id, label] of [['items', 'ITEMS'], ['skills', 'SKILLS'], ['stats', 'STATS']] as [Tab, string][]) {
+    for (const [id, label] of [['items', 'ITEMS'], ['stats', 'STATS']] as [Tab, string][]) {
       const b = document.createElement('button');
       b.className = 'tab' + (this.tab === id ? ' on' : '');
       b.textContent = label;
@@ -176,7 +171,6 @@ export class InventoryUI {
       this.tabs.appendChild(b);
     }
     if (this.tab === 'items') this.renderItems();
-    else if (this.tab === 'skills') this.renderSkills();
     else this.renderStats();
   }
 
@@ -226,21 +220,13 @@ export class InventoryUI {
     this.showDetail(this.hovered);
   }
 
-  private renderSkills() {
-    this.body.innerHTML = `
-      <p class="lead">Each class has its own skill tree. Learn a class from its trainer in town, then spend skill points as you level. Any learned skill can go on your moveset bar (<b>Tab</b>).</p>
-      <div class="classes">${CLASSES.map(
-        (c) => `<div class="class locked"><h3>${c.name}</h3><p>${c.blurb}</p><span class="how">Learn from ${c.where}</span></div>`,
-      ).join('')}</div>`;
-  }
-
   private renderStats() {
     const p = this.player, eq = p.equip;
     const rows: [string, string][] = [
-      ['Level', `${p.prog.level}`],
-      ['Experience', `${p.prog.xp} / ${p.prog.next}`],
+      ['Character level', `${p.prog.level}`],
+      ['Unspent XP', `${p.prog.xp.toLocaleString()}`],
+      ['Attribute points', `${p.paths.attrFree}`],
       ['Gold', `${p.prog.gold}`],
-      ['Skill points', `${p.prog.skillPoints}`],
       ['Health', `${Math.ceil(p.hp)} / ${p.maxHp}`],
       ['Stamina', `${Math.ceil(p.stamina)} / ${p.maxStamina}`],
       ['Mana', `${Math.ceil(p.mana)} / ${p.maxMana}`],
@@ -251,7 +237,8 @@ export class InventoryUI {
       ['Mana regen', `+${Math.round(eq.bonus('manaRegen') * 100)}%`],
       ['Damage bonus', `+${Math.round(eq.bonus('damagePct') * 100)}%`],
     ];
-    this.body.innerHTML = `<div class="statgrid">${rows.map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>`;
+    this.body.innerHTML = `<div class="statgrid">${rows.map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
+      <p class="lead">Spend XP on classes and callings, and attribute points on Vigor, Might and the rest, in the Skills screen (<b>K</b>).</p>`;
   }
 
   private showDetail(it: ItemInstance | undefined) {
@@ -293,7 +280,7 @@ export function buildOverlays(onStart: () => void) {
       <span><kbd>LMB</kbd> Attack · hold for heavy</span><span><kbd>RMB</kbd> Block / off-hand attack</span>
       <span><kbd>F</kbd> Parry</span><span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on</span>
       <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span>
-      <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory</span>
+      <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory · <kbd>K</kbd> Skills</span>
       <span><kbd>E</kbd> Interact (doors, chests, gates)</span><span><kbd>M</kbd> Draw the dungeon map</span>
     </div>`;
   const start = document.createElement('div');

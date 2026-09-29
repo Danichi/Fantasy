@@ -16,6 +16,9 @@ export interface GameEvents {
   notEnough: { stat: 'stamina' | 'mana' };
   needTarget: {};
   levelUp: { level: number };
+  disciplineLevel: { id: string; level: number };
+  disciplineLearned: { id: string };
+  pathsChanged: {};
   progressChanged: {};
   pickup: { kind: 'xp' | 'gold' };
   bossSlam: { at: Vector3 };

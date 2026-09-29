@@ -3,6 +3,8 @@ import type { Slot } from './items/itemDefs';
 import { ITEMS } from './items/itemDefs';
 import type { MapData } from './ui/dungeonMap';
 import type { DungeonProgress } from './dungeon/instance';
+import { xpToNext } from './progression/progression';
+import type { PathsSave } from './paths/paths';
 
 // Browser save (localStorage). Hand-drawn maps have to survive a reload, so
 // the whole game state lives here: progression, inventory, loadout, dungeon
@@ -13,7 +15,10 @@ const KEY = 'fantasy-rpg-save-v1';
 export interface SaveData {
   v: 1;
   seed: number;
-  prog: { level: number; xp: number; gold: number; sp: number };
+  /** xp is the unspent pool; level is informational (derived from disciplines) */
+  prog: { level: number; xp: number; gold: number; sp?: number; total?: number };
+  /** disciplines and attributes; missing in saves from before XP was a currency */
+  paths?: PathsSave;
   items: { id: string; qty: number }[];
   equipped: Partial<Record<Slot, number>>; // slot -> index into items
   quick: (number | null)[];
@@ -63,7 +68,8 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
   const data: SaveData = {
     v: 1,
     seed,
-    prog: { level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints },
+    prog: { level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, total: player.prog.totalXp },
+    paths: player.paths.serialize(),
     items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty })),
     equipped,
     quick: clean(eq.quick),
@@ -81,10 +87,20 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
 export function applySave(player: Player, d: SaveData) {
   const eq = player.equip;
   const p = player.prog;
-  p.level = d.prog.level;
-  p.xp = d.prog.xp;
   p.gold = d.prog.gold;
-  p.skillPoints = d.prog.sp;
+  if (d.paths) {
+    p.xp = d.prog.xp;
+    p.totalXp = d.prog.total ?? d.prog.xp;
+    player.paths.load(d.paths);
+  } else {
+    // Old save: levels were bought automatically. Refund every XP point earned
+    // so it can be invested in disciplines instead.
+    let refund = d.prog.xp;
+    for (let l = 1; l < d.prog.level; l++) refund += xpToNext(l);
+    p.xp = refund;
+    p.totalXp = refund;
+    player.paths.reset();
+  }
   eq.items = [];
   const uids: number[] = [];
   for (const it of d.items) {
