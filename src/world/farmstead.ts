@@ -295,7 +295,7 @@ export function buildFarmstead(scene: THREE.Scene, m: WorldMats): Farmstead {
       mill: millSpots,
       barn: [barnDoor, barnDoor.clone().add(new THREE.Vector3(1.5, 0, 1))],
       granary: [new THREE.Vector3(-38, ground(-38, 115), 115), new THREE.Vector3(46, ground(46, 115), 115)],
-      pasture: [new THREE.Vector3(-40, ground(-40, -158), -158), new THREE.Vector3(-122, ground(-122, 62), 62)],
+      pasture: [[-62, -145], [-50, -162], [-76, -170], [-114, 60], [-122, 48]].map(([x, z]) => new THREE.Vector3(x, ground(x, z), z)),
       stable: [new THREE.Vector3(50, ground(50, -140), -140)],
     },
     update(dt: number, wind: number) {

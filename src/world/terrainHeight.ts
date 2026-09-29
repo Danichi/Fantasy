@@ -134,6 +134,10 @@ function localHeight(x: number, z: number) {
   const dr = Math.abs(x - riverX(z));
   // The river rises from springs in the northern and southern foothills.
   const riverFade = 1 - smoothstep(360, 420, Math.abs(z));
+  // Where the river runs through hills it cuts a valley with sloping sides
+  // (about 25 degrees) rather than a sheer trench.
+  const valleyH = RIVER_LEVEL + 1.2 + Math.max(0, dr - 11) * 0.47 + (fbm(x / 26, z / 26, 2) - 0.5) * 1.2;
+  h = h + (Math.min(h, valleyH) - h) * riverFade;
   const nearRiver = smoothstep(40, 14, dr) * riverFade;
   h = Math.max(h, RIVER_LEVEL + 1.2) * nearRiver + h * (1 - nearRiver);
   const channel = smoothstep(13, 5, dr) * riverFade;

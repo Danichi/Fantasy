@@ -29,6 +29,8 @@ interface SpeciesDef {
   runClip: string;
   /** bolt distance for wild animals */
   shy?: number;
+  /** material name -> colour, to bring toy-bright palettes into the art direction */
+  colors?: Record<string, number>;
 }
 
 const QUAD = { idle: ['Idle', 'Idle_2', 'Idle_Headlow'], eat: 'Eating', walkClip: 'Walk', runClip: 'Gallop' };
@@ -51,7 +53,7 @@ const SPECIES: Record<Species, SpeciesDef> = {
   deer: { height: 1.35, walk: 1.2, run: 8, wild: true, shy: 16, ...QUAD },
   stag: { height: 1.7, walk: 1.2, run: 8, wild: true, shy: 14, ...QUAD },
   fox: { height: 0.55, walk: 1.2, run: 6.5, wild: true, shy: 12, idle: ['Idle', 'Idle_2'], eat: 'Eating', walkClip: 'Walk', runClip: 'Gallop' },
-  pigeon: { height: 0.35, walk: 0.6, run: 2.2, wild: true, shy: 4, idle: ['Idle'], walkClip: 'Walk', runClip: 'Walk' },
+  pigeon: { height: 0.26, walk: 0.6, run: 2.2, wild: true, shy: 4, idle: ['Idle'], walkClip: 'Walk', runClip: 'Walk', colors: { Pigeon_Main: 0x9c9da2, Pigeon_Secondary: 0xd29a3a } },
 };
 
 /** A fenced pen or open range an animal belongs to. */
@@ -184,9 +186,15 @@ export class Fauna {
       this.scaleOf.set(a.species, scale);
     }
     root.scale.setScalar(scale);
+    const colors = SPECIES[a.species].colors;
     root.traverse((o) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
+      if (colors) {
+        const mat = m.material as THREE.MeshStandardMaterial;
+        const c = colors[mat.name];
+        if (c !== undefined) m.material = this.recolored(a.species, mat, c);
+      }
       m.castShadow = true;
       m.receiveShadow = true;
       m.frustumCulled = false;
@@ -196,6 +204,19 @@ export class Fauna {
     for (const clip of gltf.animations) actions.set(clip.name, mixer.clipAction(clip));
     this.scene.add(root);
     return { root, mixer, actions, clip: '' };
+  }
+
+  private recolors = new Map<string, THREE.Material>();
+  /** One shared recoloured copy per species and material. */
+  private recolored(species: string, mat: THREE.MeshStandardMaterial, color: number) {
+    const key = species + ':' + mat.name;
+    let m = this.recolors.get(key);
+    if (!m) {
+      const c = mat.clone();
+      c.color.set(color);
+      this.recolors.set(key, (m = c));
+    }
+    return m;
   }
 
   private building = 0;

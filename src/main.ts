@@ -27,6 +27,8 @@ import { Ambient } from './world/ambient';
 import { WorldTime } from './world/worldTime';
 import { Fauna } from './world/fauna';
 import { buildFarmstead } from './world/farmstead';
+import { buildCrops } from './world/crops';
+import { buildGlenDressing, MARKET_SPOTS, NOTICEBOARD, WELL } from './world/glenDressing';
 import { Weather } from './world/weather';
 import { Precipitation } from './world/precipitation';
 import { Ambience } from './audio/ambience';
@@ -108,8 +110,10 @@ async function boot() {
   const river = new River(r.scene);
   mark('river');
   const farm = buildFarmstead(r.scene, world.mats);
+  const crops = buildCrops(r.scene);
+  buildGlenDressing(r.scene, world.mats);
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = farm.clearings;
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings];
   await stylizedNature.ready;
   stylizedNature.warm(spawn, spawn);
   const foliage = stylizedNature.loaded ? null : new Foliage(r.scene, r.renderer);
@@ -137,6 +141,11 @@ async function boot() {
   const npcs = new NpcManager(r.scene, time, r.renderer);
   {
     const folk = elderGlenFolk(world.village.houses);
+    // Work spots from the farmstead and market square.
+    const pl = folk.settlement.places;
+    pl.set('market', { id: 'market', spots: MARKET_SPOTS, yaw: 0 });
+    pl.set('mill', { id: 'mill', spots: farm.spots.mill });
+    pl.set('pasture', { id: 'pasture', spots: farm.spots.pasture });
     npcs.addSettlement(folk.settlement);
     for (const rec of folk.records) npcs.add(rec);
   }
@@ -215,6 +224,17 @@ async function boot() {
     () => town.guild.open('board'),
   );
   realm.overworldInteractables.push(...town.interactables(), ...frontier.interactables);
+  realm.overworldInteractables.push(
+    { pos: NOTICEBOARD, radius: 2.2, label: () => 'Read the noticeboard', enabled: () => true, action: () => town.guild.open('board') },
+    {
+      pos: WELL, radius: 2.2, label: () => 'Drink from the well', enabled: () => true,
+      action: () => {
+        player.stamina = player.maxStamina;
+        player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.1);
+        hud.toast('Cold, clear well water');
+      },
+    },
+  );
   // Townsfolk: one interactable that follows whoever is nearest.
   const folkTalk = {
     pos: new THREE.Vector3(0, -999, 0),
@@ -515,6 +535,8 @@ async function boot() {
       if (worldRunning) npcs.update(dt, player.pos, r.camera.position, ts.night);
       if (worldRunning) fauna.update(dt, player.pos, ts.night);
       farm.update(dt, wp.wind);
+      crops.setWind(wp.wind);
+      crops.update(dt);
       folkTalk.npc = npcs.nearest(player.pos);
       if (folkTalk.npc) folkTalk.pos.copy(folkTalk.npc.pos);
       else folkTalk.pos.set(0, -999, 0);

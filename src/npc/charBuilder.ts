@@ -321,6 +321,9 @@ export async function buildCharacter(look: Look, clips: string[] = ['idle', 'tal
     const mats = (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshStandardMaterial[];
     const next = mats.map((mat) => {
       const c = mat.clone();
+      // Outfits exported with vertex colours enabled but no colour attribute
+      // read black in WebGL (the default attribute value is 0).
+      if (!m.geometry.attributes.color) c.vertexColors = false;
       const isSkin = /regular|superhero|skin/i.test(mat.name) || c === skinMat;
       if (isSkin) c.color.copy(skin);
       else if (/hair/i.test(mat.name)) c.color.set(look.hairColor ?? 0x4a3322); // brows match the hair
