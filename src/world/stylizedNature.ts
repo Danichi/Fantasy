@@ -103,7 +103,8 @@ export class StylizedNature {
 
   readonly ready: Promise<void>;
 
-  constructor(private readonly scene: THREE.Scene) {
+  /** `town`: extra tree and flower spots chosen by the village layout. */
+  constructor(private readonly scene: THREE.Scene, private readonly town?: { treeSpots: THREE.Vector3[]; flowerSpots: THREE.Vector3[] }) {
     this.ready = this.load();
   }
 
@@ -139,6 +140,7 @@ export class StylizedNature {
 
     this.placeTrees();
     this.placeUnderstory();
+    this.placeTown();
 
     const instanceCounts = new Map<number, number>();
     for (const inst of this.instances) {
@@ -272,6 +274,24 @@ export class StylizedNature {
         });
         placed++;
       }
+    }
+  }
+
+  /** Yard and green trees (a little smaller than wild ones) and flowers by walls and fences. */
+  private placeTown() {
+    if (!this.town) return;
+    const rnd = mulberry32(3301);
+    const trees = this.prototypeIndices('tree');
+    for (const p of this.town.treeSpots) {
+      const pi = this.choose(trees, rnd);
+      if (pi < 0) break;
+      this.instances.push({ prototype: pi, pos: p.clone().setY(p.y - 0.05), rot: rnd() * Math.PI * 2, scale: 0.55 + rnd() * 0.25, hidden: false });
+    }
+    const small = [...this.prototypeIndices('flower'), ...this.prototypeIndices('flower'), ...this.prototypeIndices('fern')];
+    for (const p of this.town.flowerSpots) {
+      const pi = this.choose(small, rnd);
+      if (pi < 0) break;
+      this.instances.push({ prototype: pi, pos: p.clone().setY(p.y - 0.02), rot: rnd() * Math.PI * 2, scale: 0.7 + rnd() * 0.5, hidden: false });
     }
   }
 

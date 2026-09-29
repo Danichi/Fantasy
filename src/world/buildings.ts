@@ -155,10 +155,12 @@ export function buildHouse(spec: HouseSpec, m: WorldMats) {
   // Ridge beam.
   parts.timber.push(worldUV(box(rw + over * 2 + 0.1, 0.18, 0.2, 0, eaveY + rise + thick + 0.02, 0), 1.5));
 
-  // Chimney.
+  // Chimney (its top is returned so the village can give it smoke).
+  let chimney: THREE.Vector3 | null = null;
   if (rnd() < 0.7) {
     const cx = (rnd() < 0.5 ? -1 : 1) * rw * 0.3;
     parts.stone.push(worldUV(box(0.7, rise + 1.6, 0.7, cx, eaveY + (rise + 1.6) / 2 + 0.3, -rd * 0.15)));
+    chimney = new THREE.Vector3(cx, eaveY + rise + 1.9 + 0.3, -rd * 0.15);
   }
 
   // Door on the facade.
@@ -203,5 +205,5 @@ export function buildHouse(spec: HouseSpec, m: WorldMats) {
     group.add(mesh);
   }
   const half = new THREE.Vector3(rw / 2 + 0.15, (eaveY + rise) / 2, rd / 2 + 0.15);
-  return { group, half, height: eaveY + rise };
+  return { group, half, height: eaveY + rise, chimney };
 }

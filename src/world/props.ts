@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { paintedMaterials } from '../render/painted';
+import { buildVillage, type PlacedHouse, type Village } from './village';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { heightAt, PALISADE_R, PLAZA_CENTER, PLAZA_R, GATES } from './terrain';
@@ -161,15 +162,18 @@ function addMeshCollider(obj: THREE.Object3D) {
 
 export interface World {
   crypt: ReturnType<typeof buildCrypt>;
+  village: Village;
   update(dt: number): void;
 }
 
-export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRenderer, fx: FX): Promise<World> {
+/** keepClear: points the village must leave open (NPCs, guild, interactables). */
+export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRenderer, fx: FX, keepClear: THREE.Vector2[] = []): Promise<World> {
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   // Painted surfaces (docs/ART-DIRECTION.md): no photographic textures in town.
   const m: WorldMats = {
     ...paintedMaterials(aniso),
-    glass: new THREE.MeshStandardMaterial({ color: 0x3a2a10, emissive: 0xffa040, emissiveIntensity: 1.6, roughness: 0.3 }),
+    // Windows read dark by day with only a faint warm glow.
+    glass: new THREE.MeshStandardMaterial({ color: 0x2c3440, emissive: 0xffa040, emissiveIntensity: 0.28, roughness: 0.25, metalness: 0.2 }),
   };
 
   // ---- houses along the northern street -----------------------------------
@@ -207,10 +211,12 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     { x: 48, z: 30, rot: 0.07, spec: { w: 10, d: 8, floors: 1, roof: 'thatch', seed: 97 } },
     { x: 48, z: -35, rot: -0.1, spec: { w: 9, d: 7, floors: 1, roof: 'slate', seed: 98 } },
   ];
+  const placed: PlacedHouse[] = [];
   for (const h of houses) {
     // Roofs: mostly terracotta, some slate-blue, thatch where specified.
     if (h.spec.roof === 'slate' && h.spec.seed % 3 !== 0) h.spec.roof = 'tile';
-    const { group, half } = buildHouse(h.spec, m);
+    const { group, half, chimney } = buildHouse(h.spec, m);
+    placed.push({ x: h.x, z: h.z, rot: h.rot, half, chimney });
     // Sit on the lowest corner so the plinth never floats.
     let gy = Infinity;
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) gy = Math.min(gy, heightAt(h.x + sx * half.x, h.z + sz * half.z));
@@ -223,6 +229,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
 
   buildBridge(scene, m);
   const crypt = buildCrypt(scene, m, fx);
+  const village = buildVillage(scene, m, fx, placed, keepClear);
 
   // Large civic square and shopfront signs. These buildings make the starting
   // area read as a proper frontier town rather than a training camp.
@@ -435,8 +442,10 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
 
   return {
     crypt,
+    village,
     update(dt: number) {
       crypt.update(dt);
+      village.update(dt);
       for (const d of dummies) d.update(dt);
       fireT += dt;
       if (fireT > 0.03) {

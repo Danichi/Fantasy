@@ -102,7 +102,8 @@ class GrassLayer {
           vec4 patchN = texture2D(uNoise, world * 0.004);
           float keep = step(aOff.w, dens) * outer * inner;
           // Height: knee-high, taller in patches, shorter where it's thin.
-          float height = mix(0.34, 0.74, patchN.g) * mix(0.75, 1.15, fract(aOff.w * 13.7)) * (0.55 + dens * 0.45) * keep;
+          // Blades shorten toward path and plaza edges instead of stopping as a wall.
+          float height = mix(0.34, 0.74, patchN.g) * mix(0.75, 1.15, fract(aOff.w * 13.7)) * mix(0.25, 1.0, smoothstep(0.1, 0.75, dens)) * keep;
           float width = uWidth * mix(0.8, 1.25, fract(aOff.w * 5.3)) * keep;
           // Gusts: a scrolling low-frequency field along the wind.
           vec2 gp = world * 0.018 - uWindDir * uTime * 0.09;

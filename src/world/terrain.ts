@@ -206,13 +206,14 @@ export function splatAt(x: number, z: number): [number, number, number] {
   const n = fbm(x * 0.11, z * 0.11, 3);
   const inTown = Math.hypot(x, z) < TOWN_R - 2;
   let stone = smoothstep(PLAZA_R + 0.6, PLAZA_R - 0.6, r + (n - 0.5) * 2.2);
-  if (inTown) stone = Math.max(stone, smoothstep(2.8, 1.6, streetDist(x, z) + (n - 0.5) * 1.4));
   // Stone apron in front of the crypt.
   stone = Math.max(stone, smoothstep(9, 6, Math.hypot(x - CRYPT.x, z - (CRYPT.y + 10)) + (n - 0.5) * 2));
-  const fieldEdge = 22 + (fbm(x * 0.05 + 9, z * 0.05, 3) - 0.5) * 12;
+  const fieldEdge = 15.5 + (fbm(x * 0.05 + 9, z * 0.05, 3) - 0.5) * 5;
   let dirt = Math.max(
     smoothstep(fieldEdge + 3, fieldEdge - 3, r),
     smoothstep(3.6, 1.8, roadDist(x, z) + (n - 0.5) * 2.5),
+    // Village lanes: worn dirt with ragged grassy edges.
+    inTown ? smoothstep(2.6, 1.1, streetDist(x, z) + (n - 0.5) * 1.8) : 0,
   );
   // River banks: mud and gravel.
   const dr = Math.abs(x - riverX(z));

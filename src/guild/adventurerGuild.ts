@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { events } from '../core/events';
 import type { Progression } from '../progression/progression';
 import type { DialogueUI } from '../ui/dialogue';
-import { heightAt } from '../world/terrain';
 
 export type GuildRank = 'D' | 'C' | 'B' | 'A' | 'S' | 'SS' | 'SSS';
 
@@ -140,8 +139,9 @@ export class AdventurerGuild {
   onSave?: () => void;
   openState = false;
 
-  constructor(private scene: THREE.Scene, private progression: Progression, private dialogue: DialogueUI) {
-    this.buildHallCrowd();
+  constructor(scene: THREE.Scene, private progression: Progression, private dialogue: DialogueUI) {
+    // The capsule placeholder crowd is gone (docs/ART-DIRECTION.md §7); real villagers replace it.
+    void scene;
     const root = document.getElementById('ui')!;
     this.ui = document.createElement('div');
     this.ui.className = 'guild-ui hidden';
@@ -188,61 +188,6 @@ export class AdventurerGuild {
         this.render();
       }
     });
-  }
-
-  private buildHallCrowd() {
-    const matBody = new THREE.MeshStandardMaterial({ color: 0x40566b, roughness: 0.88 });
-    const matCloth: THREE.Material[] = [
-      new THREE.MeshStandardMaterial({ color: 0x7d352e, roughness: 0.92 }),
-      new THREE.MeshStandardMaterial({ color: 0x3c6d55, roughness: 0.92 }),
-      new THREE.MeshStandardMaterial({ color: 0x5c4a83, roughness: 0.92 }),
-      new THREE.MeshStandardMaterial({ color: 0x956a2b, roughness: 0.92 }),
-      new THREE.MeshStandardMaterial({ color: 0x365f87, roughness: 0.92 }),
-    ];
-    const skin = new THREE.MeshStandardMaterial({ color: 0xd7a786, roughness: 0.95 });
-    const metal = new THREE.MeshStandardMaterial({ color: 0x98a4ab, metalness: 0.6, roughness: 0.42 });
-    const weapon = new THREE.MeshStandardMaterial({ color: 0xb9c5c8, metalness: 0.85, roughness: 0.28 });
-    const names = ['Ari', 'Bren', 'Celia', 'Dax', 'Elin', 'Farris', 'Galen', 'Hana', 'Iris', 'Jory', 'Kellan', 'Lysa', 'Mira', 'Nolan', 'Orin', 'Pella', 'Quinn', 'Rhea', 'Soren', 'Talia', 'Ulric', 'Vera', 'Wren', 'Yara', 'Zane', 'Alden', 'Bria', 'Corin', 'Della', 'Eamon', 'Freya', 'Garrick', 'Helia', 'Ivan', 'Jessa', 'Kael', 'Lina', 'Marek', 'Nessa', 'Oren', 'Petra', 'Rowan', 'Syl', 'Theo', 'Uma', 'Viktor', 'Willa', 'Yves'];
-    const center = this.guildPos.clone();
-    for (let i = 0; i < names.length; i++) {
-      const a = (i / names.length) * Math.PI * 2 + 0.18;
-      const radius = 8 + (i % 4) * 1.6;
-      const x = center.x + Math.sin(a) * radius;
-      const z = center.z + Math.cos(a) * radius * 0.7;
-      const g = new THREE.Group();
-      g.position.set(x, heightAt(x, z), z);
-      g.rotation.y = a + Math.PI;
-      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.72, 5, 8), i % 6 === 0 ? matBody : matCloth[i % matCloth.length]);
-      body.position.y = 0.8;
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), skin);
-      head.position.y = 1.48;
-      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.23, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), i % 3 === 0 ? metal : matBody);
-      hair.position.y = 1.56;
-      g.add(body, head, hair);
-      if (i % 3 !== 0) {
-        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.85, 0.035), weapon);
-        blade.position.set(0.48, 0.72, 0.05);
-        blade.rotation.z = i % 2 ? 0.12 : -0.12;
-        g.add(blade);
-      } else {
-        const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 1.5, 7), woodMaterial(i));
-        staff.position.set(-0.45, 0.75, 0);
-        g.add(staff);
-      }
-      if (i % 5 === 0) {
-        const shield = new THREE.Mesh(new THREE.CircleGeometry(0.28, 16), metal);
-        shield.position.set(-0.38, 0.85, 0.04);
-        shield.rotation.y = Math.PI / 2;
-        g.add(shield);
-      }
-      g.traverse((o) => { (o as THREE.Mesh).castShadow = true; (o as THREE.Mesh).receiveShadow = true; });
-      this.group.add(g);
-    }
-    this.group.visible = true;
-    this.scene.add(this.group);
-    function woodMaterial(i: number) {
-      return new THREE.MeshStandardMaterial({ color: [0x4f3829, 0x6e5135, 0x3d4b2d][i % 3], roughness: 0.95 });
-    }
   }
 
   private ensureBoard() {

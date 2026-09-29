@@ -34,7 +34,7 @@ import { Flowers } from './world/flowers';
 import { Rewards, XP_FOR_KIND } from './progression/progression';
 import { DungeonMapUI } from './ui/dungeonMap';
 import { Realm } from './dungeon/realm';
-import { Town } from './npc/town';
+import { Town, NPCS } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
 import { loadArmourKit } from './enemies/armourKit';
 import { loadSave, writeSave, applySave, hasSave, clearSave } from './save';
@@ -76,14 +76,16 @@ async function boot() {
   const slimes = new BeastSpawner(r.scene, fx);
   if (TEST_MODE) slimes.enabled = false;
   const spells = new Spells(r.scene, fx, player);
-  const world = await buildWorld(r.scene, r.renderer, fx);
+  // The village leaves NPC spots, the guild and the stables open.
+  const keepClear = [...NPCS.map((n) => new THREE.Vector2(n.pos[0], n.pos[1])), new THREE.Vector2(22, -12), new THREE.Vector2(48, -39)];
+  const world = await buildWorld(r.scene, r.renderer, fx, keepClear);
   mark('world');
   const grass = new Grass(r.scene, terrain.splat);
   grass.setSunDir(SUN_DIR);
   mark('grass');
   const river = new River(r.scene);
   mark('river');
-  const stylizedNature = new StylizedNature(r.scene);
+  const stylizedNature = new StylizedNature(r.scene, world.village);
   await stylizedNature.ready;
   const foliage = stylizedNature.loaded ? null : new Foliage(r.scene, r.renderer);
   mark('foliage');
