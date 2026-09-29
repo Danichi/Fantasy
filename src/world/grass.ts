@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { heightTexture, TERRAIN_SIZE } from './terrain';
+import type { GroundWindow } from './groundWindow';
 import { Q } from '../core/settings';
 import { mulberry32 } from '../core/math';
 import { worldNoise } from '../render/noise';
@@ -49,9 +49,9 @@ const shared = {
   uPlayer: { value: new THREE.Vector3() },
   uWindDir: { value: new THREE.Vector2(0.86, 0.5).normalize() },
   uNoise: { value: null as THREE.Texture | null },
-  uHeight: { value: null as THREE.Texture | null },
-  uMask: { value: null as THREE.Texture | null },
-  uSize: { value: TERRAIN_SIZE },
+  uGround: { value: null as THREE.Texture | null },
+  uGroundOrigin: { value: new THREE.Vector2() },
+  uGroundSize: { value: 256 },
   uSunDir: { value: new THREE.Vector3(0, 1, 0) },
 };
 /** Shared with anything else that should sway in the same wind (flowers, trees). */
@@ -84,17 +84,19 @@ class GrassLayer {
           '#include <common>',
           `#include <common>
           attribute vec4 aOff; attribute float aT;
-          uniform vec2 uCenter, uWindDir; uniform float uTime, uSize, uTile, uWidth, uFadeIn; uniform vec3 uPlayer;
-          uniform sampler2D uHeight, uMask, uNoise;
+          uniform vec2 uCenter, uWindDir, uGroundOrigin; uniform float uTime, uGroundSize, uTile, uWidth, uFadeIn; uniform vec3 uPlayer;
+          uniform sampler2D uGround, uNoise;
           varying float vT; varying vec3 vCol; varying float vGust;`,
         )
         .replace(
           '#include <begin_vertex>',
           `vec2 world = uCenter + mod(aOff.xy - uCenter + uTile * 0.5, uTile) - uTile * 0.5;
-          vec2 uvT = world / uSize + 0.5;
-          float h = texture2D(uHeight, uvT).r;
-          vec4 spl = texture2D(uMask, uvT);
-          float dens = clamp(spl.b * 1.25 - spl.g * 0.6 - spl.r * 0.8, 0.0, 1.0);
+          vec2 guv = (world - uGroundOrigin) / uGroundSize;
+          vec4 gd = texture2D(uGround, guv);
+          float inWin = step(0.002, guv.x) * step(guv.x, 0.998) * step(0.002, guv.y) * step(guv.y, 0.998);
+          float h = gd.r;
+          float dens = gd.g * inWin;
+          float tintK = gd.a;
           float dist = length(world - uCenter);
           // Fade blades in/out at the layer's inner and outer radius.
           float outer = 1.0 - smoothstep(uTile * 0.38, uTile * 0.5, dist);
@@ -103,7 +105,7 @@ class GrassLayer {
           float keep = step(aOff.w, dens) * outer * inner;
           // Height: knee-high, taller in patches, shorter where it's thin.
           // Blades shorten toward path and plaza edges instead of stopping as a wall.
-          float height = mix(0.34, 0.74, patchN.g) * mix(0.75, 1.15, fract(aOff.w * 13.7)) * mix(0.25, 1.0, smoothstep(0.1, 0.75, dens)) * keep;
+          float height = mix(1.0, 0.6, smoothstep(0.2, 0.4, tintK) * (1.0 - smoothstep(0.5, 0.6, tintK))) * mix(1.0, 1.35, smoothstep(0.55, 0.7, tintK) * (1.0 - smoothstep(0.8, 0.95, tintK))) * mix(0.34, 0.74, patchN.g) * mix(0.75, 1.15, fract(aOff.w * 13.7)) * mix(0.25, 1.0, smoothstep(0.1, 0.75, dens)) * keep;
           float width = uWidth * mix(0.8, 1.25, fract(aOff.w * 5.3)) * keep;
           // Gusts: a scrolling low-frequency field along the wind.
           vec2 gp = world * 0.018 - uWindDir * uTime * 0.09;
@@ -129,6 +131,13 @@ class GrassLayer {
           vec3 root = vec3(0.105, 0.2, 0.075);
           vec3 body = mix(vec3(0.19, 0.35, 0.1), vec3(0.28, 0.41, 0.12), patchN.r);
           vec3 tipC = mix(vec3(0.5, 0.6, 0.2), vec3(0.66, 0.6, 0.28), smoothstep(0.55, 0.85, patchN.g));
+          // Biome tint: alpine blue-green, jungle deep green, dry straw.
+          float alp = smoothstep(0.2, 0.4, tintK) * (1.0 - smoothstep(0.5, 0.6, tintK));
+          float jung = smoothstep(0.55, 0.7, tintK) * (1.0 - smoothstep(0.8, 0.95, tintK));
+          float dry = smoothstep(0.85, 1.0, tintK);
+          body = mix(body, vec3(0.16, 0.3, 0.16), alp); tipC = mix(tipC, vec3(0.42, 0.56, 0.36), alp);
+          body = mix(body, vec3(0.06, 0.24, 0.08), jung); tipC = mix(tipC, vec3(0.2, 0.46, 0.12), jung);
+          body = mix(body, vec3(0.42, 0.36, 0.14), dry); tipC = mix(tipC, vec3(0.78, 0.66, 0.34), dry);
           vCol = t < 0.5 ? mix(root, body, t * 2.0) : mix(body, tipC, (t - 0.5) * 2.0);
           vCol *= mix(0.9, 1.08, fract(aOff.w * 3.1));
           vec3 transformed = vec3(world.x + p.x, h + p.y - 0.02, world.y + p.z);`,
@@ -175,11 +184,12 @@ export class Grass {
   private near: GrassLayer;
   private far: GrassLayer;
 
-  /** `splat` is the terrain's splat map (b = grass weight). */
-  constructor(scene: THREE.Scene, splat: THREE.Texture) {
+  /** `ground` supplies height, density and tint around the camera. */
+  constructor(scene: THREE.Scene, ground: GroundWindow) {
     shared.uNoise.value = worldNoise();
-    shared.uHeight.value = heightTexture();
-    shared.uMask.value = splat;
+    shared.uGround.value = ground.texture;
+    shared.uGroundOrigin = ground.origin;
+    shared.uGroundSize = ground.size;
     scene.add(this.mesh);
     this.near = new GrassLayer(this.mesh as unknown as THREE.Scene, Q.grassBlades, NEAR_TILE, 0.055, 0, 1234);
     this.far = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.3), FAR_TILE, 0.16, NEAR_TILE * 0.36, 987);

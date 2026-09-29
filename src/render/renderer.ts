@@ -71,7 +71,7 @@ export class Renderer {
     if (this.post) {
       const u = this.post.finalMat.uniforms;
       (u.uHazeColor.value as THREE.Color).copy(SKY.horizon);
-      u.uHaze.value = 0.0012; // hills 300 m out read as layers
+      u.uHaze.value = 0.0008; // hills a few hundred metres out read as layers; the sea stays crisp
     }
   }
 

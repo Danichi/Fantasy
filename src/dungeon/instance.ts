@@ -17,7 +17,8 @@ import type { FX } from '../fx/particles';
 // floor creates is tracked and removed again by dispose().
 // ---------------------------------------------------------------------------
 
-export const DUNGEON_ORIGIN = new THREE.Vector3(3000, 0, 0);
+// Far off the continent (the map spans about -9 to +14 km) so the overworld never overlaps it.
+export const DUNGEON_ORIGIN = new THREE.Vector3(40000, 0, 0);
 export const CELL = 4;
 const WALL_H = 4.4;
 const WALL_T = 0.8;

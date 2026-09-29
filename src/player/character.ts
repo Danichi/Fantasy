@@ -142,7 +142,7 @@ export class Character {
         m.frustumCulled = false; // skinned bounds are unreliable once animated
         if (m.isSkinnedMesh) this.meshes.push(m);
         // Own materials: the parsed file is shared, and bodies get tinted or flashed.
-        m.material = Array.isArray(m.material) ? m.material.map((x) => x.clone()) : m.material.clone();
+        if (!this.built) m.material = Array.isArray(m.material) ? m.material.map((x) => x.clone()) : m.material.clone();
         const mats = Array.isArray(m.material) ? m.material : [m.material];
         for (const mat of mats as THREE.MeshStandardMaterial[]) {
           if (mat && 'envMapIntensity' in mat) mat.envMapIntensity = 0.9;

@@ -7,8 +7,8 @@ import { worldNoise } from './noise';
 // scene (image-based ambient), so the sky and the world always agree.
 
 export const SKY = {
-  zenith: new THREE.Color('#5fa6e3'),
-  horizon: new THREE.Color('#dcecf0'),
+  zenith: new THREE.Color('#2f7fd6'),
+  horizon: new THREE.Color('#a9d3ec'),
   sunGlow: new THREE.Color('#fff0d0'),
   cloudLit: new THREE.Color('#ffffff'),
   cloudShade: new THREE.Color('#a9b9d2'),

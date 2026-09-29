@@ -116,6 +116,13 @@ Object.defineProperty(THREE.MeshStandardMaterial.prototype, 'onBeforeCompile', {
     };
   },
 });
+// clone()/copy() keep a custom shader hook (three's Material.copy drops it).
+const baseCopy = THREE.MeshStandardMaterial.prototype.copy;
+THREE.MeshStandardMaterial.prototype.copy = function (this: THREE.MeshStandardMaterial & Styled, source: THREE.MeshStandardMaterial & Styled) {
+  baseCopy.call(this, source);
+  if (source._styleInner) this.onBeforeCompile = source._styleInner;
+  return this;
+} as typeof baseCopy;
 THREE.MeshStandardMaterial.prototype.customProgramCacheKey = function (this: Styled) {
   return this._styleInner ? this._styleInner.toString() : 'style';
 };
