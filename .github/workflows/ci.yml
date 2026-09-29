@@ -20,7 +20,7 @@ jobs:
       matrix:
         workers: [2, 8]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60 # the suite covers the whole world now (40+ browser tests)
     env:
       PLAYWRIGHT_WORKERS: ${{ matrix.workers }}
 

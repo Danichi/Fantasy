@@ -31,6 +31,8 @@ export interface WorldSave {
   forage?: Record<string, number>;
   /** owned horses and where the active one stands */
   horses?: import('./world/horses').HorseSave;
+  /** trophies and unsold catch */
+  fishing?: { trophies?: Record<string, number>; held?: Record<string, number> };
 }
 
 export interface SaveData {

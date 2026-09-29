@@ -36,6 +36,11 @@ import { Horses } from './world/horses';
 import { Encounters } from './world/encounters';
 import { Caravans } from './world/caravans';
 import { setupRoadQuests } from './quests/roadQuests';
+import { buildPortAurelle, PORT_SPOTS } from './world/portAurelle';
+import { Fishing, type FishingSpot } from './world/fishing';
+import { Duel } from './combat/duel';
+import { PORT_QUESTS } from './quests/portQuests';
+import { RIVER_LEVEL } from './world/terrainHeight';
 import { road, distanceAlong } from './world/roadNetwork';
 import { buildGlenLandmarks, LANDMARK_CLEARINGS } from './world/glenLandmarks';
 import { QuestLog } from './quests/questLog';
@@ -128,8 +133,9 @@ async function boot() {
   const crops = buildCrops(r.scene);
   buildGlenDressing(r.scene, world.mats);
   const kingsRoad = buildKingsRoad(r.scene, world.mats, fx);
+  const port = buildPortAurelle(r.scene, world.mats, fx);
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings];
   await stylizedNature.ready;
   stylizedNature.warm(spawn, spawn);
   const foliage = stylizedNature.loaded ? null : new Foliage(r.scene, r.renderer);
@@ -169,6 +175,8 @@ async function boot() {
     for (const rec of folk.records) npcs.add(rec);
     for (const rec of named.records) npcs.add(rec);
     // The King's Road: the Wayfarer's Rest, Millbrook, the chapel and the Lantern Camp.
+    npcs.addSettlement(port.settlement);
+    for (const rec of port.records) npcs.add(rec);
     for (const k of kingsRoad.settlements) {
       npcs.addSettlement(k.settlement);
       for (const rec of k.records) npcs.add(rec);
@@ -381,6 +389,109 @@ async function boot() {
     { label: 'Safe travels.', run: () => dialogue.close() },
   ]);
   const caravans = new Caravans(r.scene, world.mats, time);
+  // ---- Port Aurelle: fishing, the Academy's duels, the expedition, services (phase 5) ----
+  const fishing = new Fishing(r.scene, player, () => time.hour, () => weather.p);
+  fishing.fromJSON(saveData?.world?.fishing);
+  fishing.onMessage = (m) => hud.toast(m);
+  fishing.onCatch = (c) => {
+    player.equip.add(c.id, 1);
+    events.emit('equipmentChanged', {});
+    quests.signal('fish-caught');
+    save();
+  };
+  fishing.onToggle = (on) => { if (on && player.mounted) horses.dismount(); };
+  const sellFish = () => {
+    const gold = fishing.sellAll(countItem, takeItem);
+    if (gold) player.prog.addGold(gold);
+    return gold;
+  };
+  const riverSpots: FishingSpot[] = [-150, -60, 60, 200, 300].map((z) => {
+    const rx = riverX(z);
+    return { pos: new THREE.Vector3(rx - 9, heightAt(rx - 9, z), z), water: new THREE.Vector3(rx - 2, RIVER_LEVEL, z), kind: 'river' as const, name: 'The Elder Glen river' };
+  });
+  const fishingSpots = [...port.fishingSpots, ...riverSpots];
+  realm.overworldInteractables.push(...fishingSpots.map((spot) => ({
+    pos: spot.pos, radius: 2.2,
+    label: () => (fishing.active ? '' : countItem('fishingRod') ? `Fish here (${spot.name})` : 'A good fishing spot — you need a rod (Dockmaster Mira)'),
+    enabled: () => !fishing.active && countItem('fishingRod') > 0,
+    action: () => fishing.start(spot),
+  })));
+  const duel = new Duel(r.scene, encounters.bolts, player);
+  let duelFor: 'trial-won' | 'rival-won' = 'trial-won';
+  const ringAt = PORT_SPOTS.academyRing.clone().setY(heightAt(PORT_SPOTS.academyRing.x, PORT_SPOTS.academyRing.z));
+  const startDuel = (who: 'hadrik' | 'dorian') => {
+    duelFor = who === 'hadrik' ? 'trial-won' : 'rival-won';
+    const rec = npcs.find(who)?.rec;
+    duel.start({ name: rec?.name ?? (who === 'hadrik' ? 'Ser Hadrik Vane' : 'Cadet Dorian Vale'), look: rec!.look, hp: who === 'hadrik' ? 260 : 220, ring: ringAt, radius: 9 });
+    hud.toast(`${rec?.name}: "Blades up. Begin!"`);
+  };
+  duel.onEnd = (won, reason) => {
+    hud.toast(reason);
+    if (won) quests.signal(duelFor);
+  };
+  quests.add(...PORT_QUESTS);
+  quests.hooks.set('duel:hadrik', () => startDuel('hadrik'));
+  quests.hooks.set('duel:dorian', () => startDuel('dorian'));
+  quests.hooks.set('fishing:rod', () => {
+    if (!countItem('fishingRod')) giveItem('fishingRod', 1);
+  });
+  quests.hooks.set('dwarves:sailing', () => {
+    const d = Number(worldFlags.expeditionDay ?? 0);
+    if (d < time.day + 1) worldFlags.expeditionDay = time.day + 3;
+    hud.toast(`The Iron Kettle sails on day ${worldFlags.expeditionDay} at 8:00.`);
+  });
+  realm.overworldInteractables.push(
+    {
+      pos: ringAt, radius: 10,
+      label: () => (duel.active ? '' : quests.wants('trial-won') ? 'Step into the ring (Ser Hadrik)' : quests.wants('rival-won') ? 'Step into the ring (Dorian Vale)' : ''),
+      enabled: () => !duel.active && (quests.wants('trial-won') || quests.wants('rival-won')),
+      action: () => startDuel(quests.wants('trial-won') ? 'hadrik' : 'dorian'),
+    },
+    {
+      pos: PORT_SPOTS.berth.clone().setY(1), radius: 5,
+      label: () => {
+        if (!quests.wants('expedition-sails')) return '';
+        const d = Number(worldFlags.expeditionDay);
+        return time.day === d && time.hour >= 7.5 && time.hour < 10.5 ? 'Board the Iron Kettle' : `The Iron Kettle sails on day ${d} at 8:00 (today is day ${time.day})`;
+      },
+      enabled: () => quests.wants('expedition-sails') && time.day === Number(worldFlags.expeditionDay) && time.hour >= 7.5 && time.hour < 10.5,
+      action: () => {
+        quests.signal('expedition-sails');
+        dialogue.show('Bruni Stonevein', 'Dwarven Expedition Leader', 'There you are! Stow your pack below and grab a rope. North to the White Mountains — and may the stone be kind to us.', [{ label: 'Cast off.', run: () => dialogue.close() }]);
+      },
+    },
+  );
+  // Port services.
+  const shop = (id: string, intro: string, stock: [string, number][]) => {
+    const rec = npcs.find(id)?.rec;
+    town.showShop(rec?.name ?? id, rec?.title ?? '', intro, stock);
+  };
+  folkServices.set('nell', () => [{
+    label: 'Sell my fish (by weight)',
+    run: () => {
+      const g = sellFish();
+      dialogue.show('Old Nell Crabbe', 'Fish Market', g ? `Lovely fat fish. ${g} gold, and not a copper less.` : 'You\'ve nothing I can sell, dearie. Catch something first!', [{ label: 'Farewell.', run: () => dialogue.close() }]);
+    },
+  }]);
+  folkServices.set('guildmaster', () => [{ label: 'See the guild board', run: () => { dialogue.close(); town.guild.open('board'); } }]);
+  folkServices.set('mira', () => [{ label: 'Buy a fishing rod — 20g', run: () => { if (player.prog.gold >= 20) { player.prog.addGold(-20); giveItem('fishingRod', 1); } dialogue.close(); } }]);
+  folkServices.set('ragna', () => [{ label: 'Browse Port steel', run: () => shop('ragna', 'Aurelle-folded steel. Heavier purse, lighter grave.', [['knightSword', 110], ['kiteShield', 90], ['armingSword', 55], ['roundShield', 50]]) }]);
+  folkServices.set('quill', () => [{ label: 'Browse fine draughts', run: () => shop('quill', 'Twice the strength of a village draught. Half the taste.', [['healthPotion', 18], ['manaPotion', 22], ['greaterHealthPotion', 55], ['greaterManaPotion', 60]]) }]);
+  folkServices.set('sabeth', () => [{ label: 'Browse rings and charms', run: () => shop('sabeth', 'Every ring is a promise. Choose yours.', [['ringSage', 200]]) }]);
+  folkServices.set('bruni', () => [{ label: "Buy a miner's lantern — 35g", run: () => { if (player.prog.gold >= 35) { player.prog.addGold(-35); giveItem('minersLantern', 1); } dialogue.close(); } }]);
+  folkServices.set('bess', (show, back) => [{
+    label: 'A room for the night — 15g',
+    run: () => {
+      if (player.prog.gold < 15) return show('Fifteen, sailor. The rats are free, the bed is not.', [{ label: 'Back.', run: back }]);
+      player.prog.addGold(-15);
+      time.skipTo(7);
+      player.hp = player.maxHp;
+      player.mana = player.maxMana;
+      player.stamina = player.maxStamina;
+      save();
+      show('You sleep to the creak of ropes and the cry of gulls. It is seven in the morning.', [{ label: 'Good morning.', run: () => dialogue.close() }]);
+    },
+  }]);
   const roadQuests = setupRoadQuests({
     quests, scene: r.scene, player, mats: world.mats, encounters, beasts: slimes, toast: (m) => hud.toast(m),
     talk: (who, title, text, opts) => dialogue.show(who, title, text, opts), close: () => dialogue.close(),
@@ -394,7 +505,7 @@ async function boot() {
   const stops = [
     { id: 'elderGlen', name: 'Elder Glen', pos: glenYard, along: 0 },
     { id: 'waystation', name: "The Wayfarer's Rest", pos: kingsRoad.stableYard, along: distanceAlong(kr, kingsRoad.stableYard.x, kingsRoad.stableYard.z) },
-    { id: 'portAurelle', name: 'Port Aurelle (West Gate)', pos: new THREE.Vector3(2600, 0, 160), along: distanceAlong(kr, 2600, 160) },
+    { id: 'portAurelle', name: 'Port Aurelle (West Gate)', pos: PORT_SPOTS.stable, along: distanceAlong(kr, 2690, 150) },
   ];
   const coachOptions = (here: string, show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) => {
     const from = stops.find((s) => s.id === here)!;
@@ -430,6 +541,7 @@ async function boot() {
     [...horses.stableOptions(yard, show, back, () => player.prog.gold, (n) => player.prog.addGold(-n)), ...coachOptions(stop, show, back)];
   town.serviceOptions = (id, show, back) => (id === 'stablemaster' ? stableFor(id, glenYard, 'elderGlen')(show, back) : []);
   folkServices.set('dunmore', stableFor('dunmore', kingsRoad.stableYard, 'waystation'));
+  folkServices.set('hobbs', stableFor('hobbs', PORT_SPOTS.stable, 'portAurelle'));
   realm.overworldInteractables.push(encounters.interactable, ...roadQuests.interactables, horses.interactable, ...roads.interactables, foraging.interactable, ...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables);
   const questNpcIds = [...town.npcs.map((n) => n.spec.id), ...npcs.npcs.filter((n) => n.rec.named).map((n) => n.rec.id)];
   const questUI = new QuestUI(quests, hud, r.camera, (id) => {
@@ -445,7 +557,6 @@ async function boot() {
   };
   events.on('questChanged', () => save());
   events.on('equipmentChanged', () => questUI.refresh());
-  quests.fromJSON(saveData?.world?.quests);
   farmLife.fromJSON(saveData?.world?.farm);
   landmarks.fromJSON(saveData?.world?.landmarks);
   ground.prime(player.pos); // pick up the new grass masks (plot, coop, quarry)
@@ -473,6 +584,9 @@ async function boot() {
   const worldMap = new WorldMapUI(discovery);
   worldMap.questMarkers = () => quests.markers().map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label }));
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
+  // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
+  // and the world their stage hooks touch (flags, NPCs, spawners) exists.
+  quests.fromJSON(saveData?.world?.quests);
   events.on('mapRevealed', () => worldMap.markFogDirty());
   events.on('regionEntered', ({ name, subtitle, first }) => {
     regionName = name;
@@ -504,7 +618,7 @@ async function boot() {
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
     const pos = realm.mode === 'overworld' ? ([+player.pos.x.toFixed(2), +player.pos.y.toFixed(2), +player.pos.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON() });
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON() });
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   realm.onSave = save;
@@ -678,6 +792,7 @@ async function boot() {
         slimes.update(STEP, player);
         frontier.update(STEP);
         encounters.update(STEP, time.hour, weather.p.rain);
+        duel.update(STEP);
       }
       realm.update(STEP);
       rewards.update(STEP, player.center);
@@ -745,6 +860,13 @@ async function boot() {
       kingsRoad.update(dt, ts.night);
       horses.update(dt);
       caravans.update(dt, player.pos);
+      port.update(dt, ts.night);
+      fishing.update(dt);
+      // The expedition waits a week if you miss the tide.
+      if (quests.wants('expedition-sails') && (time.day > Number(worldFlags.expeditionDay) || (time.day === Number(worldFlags.expeditionDay) && time.hour >= 10.5))) {
+        worldFlags.expeditionDay = time.day + 7;
+        hud.toast('You missed the Iron Kettle. Bruni will sail again in a week.');
+      }
       if (worldRunning) roadQuests.update(dt);
       if (worldRunning) {
         quests.update(dt, player.pos);
@@ -811,7 +933,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, sellFish, worldFlags,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

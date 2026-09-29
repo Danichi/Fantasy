@@ -8,7 +8,7 @@ import type { Player } from '../player/player';
 import type { FX } from '../fx/particles';
 import type { DialogueUI } from '../ui/dialogue';
 import type { Interactable } from '../dungeon/instance';
-import { buildHouse, worldUV, type WorldMats } from './buildings';
+import { buildHouse, type WorldMats } from './buildings';
 import { mulberry32 } from '../core/math';
 
 // Painted materials shared with Elderglen (docs/ART-DIRECTION.md); set by FrontierRegion.
@@ -82,20 +82,6 @@ function addBuilding(scene: THREE.Scene, x: number, z: number, w: number, d: num
   physics.addBox(new THREE.Vector3(x, gy + half.y, z), half, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot));
 }
 
-function addTower(scene: THREE.Scene, x: number, z: number, r: number, h: number) {
-  const y = heightAt(x, z);
-  const body = new THREE.CylinderGeometry(r, r * 1.06, h, 16);
-  body.translate(x, y + h / 2, z);
-  const tower = new THREE.Mesh(worldUV(body.toNonIndexed(), 2.5), M.stone);
-  tower.castShadow = tower.receiveShadow = true;
-  scene.add(tower);
-  const cone = new THREE.ConeGeometry(r * 1.3, h * 0.45, 16);
-  cone.translate(x, y + h + h * 0.22, z);
-  const roof = new THREE.Mesh(worldUV(cone.toNonIndexed(), 2.2), M.slate);
-  roof.castShadow = true;
-  scene.add(roof);
-  physics.addCylinder(new THREE.Vector3(x, y + h / 2, z), h / 2, r);
-}
 
 /** Furrowed soil: dark and light rows. */
 function furrowTexture() {
@@ -230,68 +216,6 @@ function buildFarmingVillage(scene: THREE.Scene) {
   }
 }
 
-function buildPortAurelle(scene: THREE.Scene) {
-  const cx = PORT.x, cz = PORT.y;
-  const wallMat = M.stone;
-  const wall = (x: number, z: number, w: number, d: number, h: number) => {
-    const y = heightAt(x, z);
-    const geo = new THREE.BoxGeometry(w, h, d);
-    geo.translate(x, y + h / 2, z);
-    const m = new THREE.Mesh(worldUV(geo, 3), wallMat);
-    m.castShadow = m.receiveShadow = true;
-    scene.add(m);
-    physics.addBox(new THREE.Vector3(x, y + h / 2, z), new THREE.Vector3(w / 2, h / 2, d / 2));
-  };
-  // Main King's Road enters from the west; leave a generous city gate there.
-  wall(cx - 72, cz - 50, 2, 46, 7);
-  wall(cx - 72, cz + 50, 2, 46, 7);
-  wall(cx + 72, cz - 10, 2, 130, 7);
-  wall(cx + 4, cz + 73, 137, 2, 7);
-  wall(cx - 63, cz + 73, 17, 2, 7);
-  const gate = new THREE.Mesh(worldUV(new THREE.BoxGeometry(18, 10, 2.2), 3), wallMat);
-  gate.position.set(cx - 72, heightAt(cx - 72, cz) + 5, cz);
-  gate.rotation.y = Math.PI / 2;
-  scene.add(gate);
-
-  const buildings: [number, number, number, number, number][] = [
-    [-38, 40, 20, 16, 9], [-8, 34, 14, 12, 7], [20, 42, 24, 15, 10], [52, 35, 16, 13, 8],
-    [-52, 10, 18, 14, 8], [-24, 5, 15, 12, 7], [7, 7, 22, 16, 10], [39, 4, 16, 13, 8],
-    [62, 7, 18, 14, 8], [-45, -24, 20, 15, 9], [-14, -26, 16, 12, 8], [15, -24, 18, 14, 9],
-    [44, -22, 22, 16, 10], [-57, 53, 12, 10, 6], [65, 51, 13, 10, 7],
-  ];
-  for (const [dx, dz, w, d, h] of buildings) {
-    const x = cx + dx, z = cz + dz;
-    addBuilding(scene, x, z, w, d, h, true);
-  }
-  for (const [x, z] of [[cx - 63, cz + 59], [cx + 63, cz + 58], [cx - 63, cz - 59], [cx + 63, cz - 54]]) addTower(scene, x, z, 5, 11);
-  // Deep water begins at the eastern edge of the coastal plain. The city sits
-  // just above sea level while the harbor opens directly into this water.
-  // (The Grand Ocean now surrounds the harbour: src/world/sea/ocean.ts.)
-
-  // (The capsule placeholder crowd is gone; real villagers will populate the port.)
-
-  // Port district.
-  const dockY = heightAt(HARBOR.x - 24, HARBOR.y);
-  const dockMat = M.planks;
-  for (let i = 0; i < 4; i++) {
-    const x = HARBOR.x - 32 + i * 20;
-    const z = HARBOR.y + 14 + (i % 2) * 7;
-    const pier = new THREE.Mesh(new THREE.BoxGeometry(15, 0.35, 3.2), dockMat);
-    pier.position.set(x, dockY + 0.2, z);
-    pier.castShadow = pier.receiveShadow = true;
-    scene.add(pier);
-    for (const p of [-6, 6]) {
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 2.8, 8), dockMat);
-      post.position.set(x + p, dockY - 1.1, z);
-      scene.add(post);
-    }
-  }
-  addSign(scene, "PORT AURELLE ADVENTURERS' GUILD", cx - 8, cz + 10, 7.7, 3.5);
-  addSign(scene, "KNIGHT'S ACADEMY", cx + 16, cz + 45, 6.3, 3.7);
-  addSign(scene, 'FISHERMEN\'S WHARF', HARBOR.x - 28, HARBOR.y + 12, 5.5, 2.8);
-  addSign(scene, 'WHITE MOUNTAIN MINING OFFICE', cx - 37, cz - 28, 8.2, 3.2);
-  addSign(scene, 'GRAND MARKET', cx + 38, cz - 30, 5.4, 3.1);
-}
 
 class RoadBeast implements Target {
   readonly id = newTargetId();
@@ -404,16 +328,15 @@ export class FrontierRegion {
     private scene: THREE.Scene,
     private player: Player,
     private fx: FX,
-    private dialogue: DialogueUI,
+    _dialogue: DialogueUI,
     mats: WorldMats,
     private toast: (msg: string) => void,
-    private openGuild: () => void,
+    _openGuild: () => void,
   ) {
     M = mats;
     buildFarmingVillage(scene);
-    buildPortAurelle(scene);
+    // (Port Aurelle is built by world/portAurelle.ts.)
     // (Roadside herbs moved to the foraging system, world/foraging.ts.)
-    this.interactables.push(...this.buildTownHooks());
     for (const h of this.herbs) {
       this.interactables.push({
         pos: h.pos,
@@ -424,55 +347,6 @@ export class FrontierRegion {
       });
     }
     // (Horses are bought and ridden through world/horses.ts now.)
-  }
-
-  private buildTownHooks(): Interactable[] {
-    const academy = new THREE.Vector3(PORT.x + 16, heightAt(PORT.x + 16, PORT.y + 45), PORT.y + 45);
-    const dwarves = new THREE.Vector3(PORT.x - 37, heightAt(PORT.x - 37, PORT.y - 28), PORT.y - 28);
-    const fish = new THREE.Vector3(HARBOR.x - 28, heightAt(HARBOR.x - 28, HARBOR.y + 12), HARBOR.y + 12);
-    return [
-      {
-        pos: academy, radius: 4.5, label: () => "Speak to the Knight's Academy registrar", enabled: () => true,
-        action: () => this.dialogue.show(
-          'Ser Elian Marrow', 'Knight-Captain & Academy Registrar',
-          'You survived the frontier. Good. The Knight\'s Academy in Port Aurelle can turn raw strength into discipline. The road home begins with becoming strong enough to survive it.',
-          [
-            { label: 'Enroll in the Academy', run: () => { this.toast('MAIN QUEST: Enter the Knight\'s Academy and begin your combat training.'); this.dialogue.close(); } },
-            { label: 'Tell me about Port Aurelle.', run: () => this.dialogue.show('Ser Elian Marrow', 'Knight-Captain & Academy Registrar', 'This city is Cresha\'s great western port. Ships leave daily for distant shores, and fighters from every corner of the nation pass through these gates.', [{ label: 'Understood.', run: () => this.dialogue.close() }]) },
-            { label: 'Leave.', run: () => this.dialogue.close() },
-          ],
-        ),
-      },
-      {
-        pos: new THREE.Vector3(PORT.x - 8, heightAt(PORT.x - 8, PORT.y + 10), PORT.y + 10),
-        radius: 4.2, label: () => "Enter Port Aurelle's Adventurer's Guild", enabled: () => true,
-        action: () => this.openGuild(),
-      },
-      {
-        pos: fish, radius: 3.5, label: () => 'Talk to the dockmaster', enabled: () => true,
-        action: () => this.dialogue.show(
-          'Mira Vane', 'Dockmaster',
-          'Fishing licenses are cheap. The open sea is not. Start with the sheltered reefs, learn the tides, then take a proper boat beyond the harbor.',
-          [
-            { label: 'I want to learn fishing.', run: () => { this.toast('FISHING UNLOCKED: Reefs, rivers and offshore catches will become available.'); this.dialogue.close(); } },
-            { label: 'What else sails from here?', run: () => this.dialogue.show('Mira Vane', 'Dockmaster', 'Freighters head north, island traders head south, and every few days a deep-water crew gathers for a longer voyage.', [{ label: 'Thanks.', run: () => this.dialogue.close() }]) },
-            { label: 'Leave.', run: () => this.dialogue.close() },
-          ],
-        ),
-      },
-      {
-        pos: dwarves, radius: 4.0, label: () => 'Speak with the dwarves', enabled: () => true,
-        action: () => this.dialogue.show(
-          'Bruni Stonevein', 'Dwarven Expedition Leader',
-          'We leave Port Aurelle harbor in three days for the White Mountains. There is ore there that never reaches Cresha\'s markets. Come back before departure if you want a place on the mining crew.',
-          [
-            { label: 'I want a place on the expedition.', run: () => { this.toast('DWARVEN EXPEDITION: Return before the White Mountain voyage departs.'); this.dialogue.close(); } },
-            { label: 'Why the White Mountains?', run: () => this.dialogue.show('Bruni Stonevein', 'Dwarven Expedition Leader', 'The old mines are deeper than any pit on the mainland. We need blades, scouts and someone who can handle monsters underground.', [{ label: 'I understand.', run: () => this.dialogue.close() }]) },
-            { label: 'Leave.', run: () => this.dialogue.close() },
-          ],
-        ),
-      },
-    ];
   }
 
   private gather(h: HerbSpot) {

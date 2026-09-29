@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { fbm, smoothstep, clamp } from '../core/math';
 import { macroHeight, macroElevAt, reliefAt, RELIEF, SEA_LEVEL } from './worldMap';
 import { ROAD_POLYS } from './roadData';
+import { cityHeight } from './portCity';
 
 // ---------------------------------------------------------------------------
 // Terrain heights for the whole world (pure: no rendering, no physics, so the
@@ -162,6 +163,9 @@ export function worldHeightFn(x: number, z: number) {
   if (h < SEA_LEVEL + 0.6 && macroElevAt(x, z) > SEA_LEVEL + 0.3 && Math.abs(x - riverX(z)) > 16) {
     h = SEA_LEVEL + 0.6 - (SEA_LEVEL + 0.6 - h) * 0.12;
   }
+  // Port Aurelle stands on a levelled pad of terraces, quays and a causeway.
+  const city = cityHeight(x, z);
+  if (city) return h * (1 - city[1]) + city[0] * city[1];
   // Roads keep a gentle grade outside town too.
   if (r > LOCAL_R0 * 0.8) {
     const rd = roadDist(x, z);

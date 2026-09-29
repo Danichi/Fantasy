@@ -19,6 +19,7 @@ import { FLOWER_GLSL } from './flowerNoise';
 // ---------------------------------------------------------------------------
 export * from './terrainHeight';
 import { buildRoadTexture, ROAD_RECT } from './roadNetwork';
+import { CITY_BOUNDS } from './portCity';
 import { normalAt, splatAt, WORLD_SIZE, TILE, TILE_SEG, TILE_N, tileData, tileKey, hasTile, putTile, worldHeightFn, LOCAL_R1 } from './terrainHeight';
 import { macroTexture, paintedMapTexture, macroCells, macroHeight, WORLD_X0, WORLD_Z0, WORLD_W, WORLD_H, GW, GH, SEA_LEVEL } from './worldMap';
 // ---- rendering ----------------------------------------------------------------
@@ -75,6 +76,7 @@ function terrainMaterial(renderer: THREE.WebGLRenderer, splat: THREE.DataTexture
     uWet: WET,
     tRoads: { value: roadTexture() },
     uRoadRect: { value: new THREE.Vector4(ROAD_RECT.x0, ROAD_RECT.z0, ROAD_RECT.w, ROAD_RECT.h) },
+    uCityRect: { value: new THREE.Vector4(CITY_BOUNDS.x0 - 16, CITY_BOUNDS.z0 - 40, CITY_BOUNDS.x1 + 6, CITY_BOUNDS.z1 + 12) },
   };
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms);
@@ -92,7 +94,7 @@ vWN = normal;`);
         varying vec3 vWPos;
         varying vec3 vWN;
         uniform sampler2D tSplat, tNoise, tCobble, tDirt, tMacro, tMap, tRoads;
-        uniform vec4 uRoadRect;
+        uniform vec4 uRoadRect, uCityRect;
         uniform float uSize;
         uniform vec4 uWorld;
         uniform vec2 uGrid;
@@ -164,6 +166,11 @@ vWN = normal;`);
         vec3 tinted = mapCol / mapL * bioL;
         // (Not on beaches: the map paints surf white along the coast.)
         biome = mix(biome, tinted, mix(0.25, 0.55, smoothstep(80.0, 900.0, dist)) * (1.0 - beachW));
+
+        // Port Aurelle's levelled ground (and its causeway) is town grass, whatever the map says.
+        float inCity = step(uCityRect.x, vWPos.x) * step(vWPos.x, uCityRect.z) * step(uCityRect.y, vWPos.z) * step(vWPos.z, uCityRect.w);
+        inCity = max(inCity, step(2540.0, vWPos.x) * step(vWPos.x, 2700.0) * step(abs(vWPos.z - 150.0), 12.0));
+        biome = mix(biome, mix(gNear, gFar, smoothstep(10.0, 70.0, dist)), inCity * step(-0.6, vWPos.y));
 
         // Elder Glen's authored splat near the origin.
         vec2 luv = vWPos.xz / uSize + 0.5;

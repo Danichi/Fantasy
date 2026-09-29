@@ -12,8 +12,9 @@ import { events } from '../core/events';
 import { Equipment } from '../items/equipment';
 import { ACTIONS, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, resolveAction, type ActionDef } from '../combat/actions';
 import { targets, hurtSegment, type Target, type IncomingAttack, type DefenceResult } from '../combat/targets';
-import { surfaceAt } from '../world/terrain';
+import { surfaceAt, heightAt as heightAtGround } from '../world/terrain';
 import { waterDepthAt } from '../world/water';
+import { waterSurfaceAt } from '../world/waterLevel';
 import { Progression } from '../progression/progression';
 import { COMBAT_STYLES, type CombatStyleId } from '../progression/styles';
 
@@ -225,6 +226,15 @@ export class Player {
     if (this.dead || this.act) return;
     this.mounted = !this.mounted;
     this.stamina = Math.min(this.maxStamina, this.stamina + 15);
+  }
+
+  /** in deep water (river pools, the canal, the sea) */
+  swimming = false;
+  private drownT = 0;
+  /** hp never drops below this (sparring duels) */
+  damageFloor = 0;
+  private groundBelow() {
+    return heightAtGround(this.pos.x, this.pos.z);
   }
 
   /** Riding (world/horses.ts): speeds come from the horse's breed; null dismounts. */
@@ -638,11 +648,27 @@ export class Player {
       const ms = this.mountStats ?? { canter: 11.5, gallop: 15, accel: 8 };
       targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2);
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
-      // Wading slows you down.
+      // Wading slows you down; deep water means swimming.
       const wade = waterDepthAt(this.pos.x, this.pos.z);
       if (wade > 0.25) targetSpeed *= 0.5;
+      if (this.swimming) targetSpeed = this.sprinting ? 3.6 : 2.3;
     }
-    if (this.sprinting && !this.mounted) {
+    // Swimming: float with the chest at the waterline, tire, and drown if spent.
+    const surface = waterSurfaceAt(this.pos.x, this.pos.z);
+    const depth = surface === null ? 0 : surface - this.groundBelow();
+    this.swimming = !this.dead && depth > 1.35;
+    if (this.swimming) {
+      this.stamina = Math.max(0, this.stamina - (this.sprinting ? 7 : 2.2) * dt);
+      this.staminaDelay = 0.6;
+      if (this.stamina <= 0) {
+        this.drownT += dt;
+        if (this.drownT > 1) {
+          this.drownT = 0;
+          this.applyDamage(this.maxHp * 0.08);
+        }
+      }
+    } else this.drownT = 0;
+    if (this.sprinting && !this.mounted && !this.swimming) {
       this.stamina = Math.max(0, this.stamina - 13 * dt);
       this.staminaDelay = 0.5;
     }
@@ -685,8 +711,13 @@ export class Player {
     } else this.yawVel *= Math.exp(-16 * dt);
 
     // Vertical.
-    this.vel.y -= GRAVITY * dt;
-    if (this.grounded && this.vel.y < 0) this.vel.y = -1.5;
+    if (this.swimming && surface !== null) {
+      // Buoyancy: ease toward treading water at the surface.
+      this.vel.y = (surface - 1.25 - this.pos.y) * 5;
+    } else {
+      this.vel.y -= GRAVITY * dt;
+      if (this.grounded && this.vel.y < 0) this.vel.y = -1.5;
+    }
     this.vel.x = hv.x;
     this.vel.z = hv.z;
 
@@ -1078,7 +1109,7 @@ export class Player {
 
   private applyDamage(d: number) {
     if (d <= 0 || this.invulnerable) return;
-    this.hp = Math.max(0, this.hp - d);
+    this.hp = Math.max(this.damageFloor, this.hp - d);
     events.emit('playerDamaged', { amount: d, blocked: false });
     if (this.hp <= 0 && !this.dead) {
       this.dead = true;

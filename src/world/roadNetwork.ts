@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ROAD_SPECS, ROAD_HALF, COBBLE_ZONES, type P2, type RoadSpec } from './roadData';
+import { CITY_STREETS, MARKET } from './portCity';
 import { heightAt } from './terrainHeight';
 import { physics } from '../physics/physics';
 import type { Interactable } from '../dungeon/instance';
@@ -12,7 +13,7 @@ import type { WorldMats } from './buildings';
 
 /** World rectangle covered by the road texture (Elder Glen to Port Aurelle and
  *  the closed branch gates; later phases add their own), and its resolution. */
-export const ROAD_RECT = { x0: -1100, z0: -800, w: 4000, h: 1650 };
+export const ROAD_RECT = { x0: -1100, z0: -800, w: 4100, h: 1650 };
 const RES = 2; // metres per texel
 const TW = Math.ceil(ROAD_RECT.w / RES), TH = Math.ceil(ROAD_RECT.h / RES);
 
@@ -49,6 +50,29 @@ export function buildRoadTexture() {
         }
       }
     }
+  }
+  // Port Aurelle: every street and square is cobbled.
+  const cobble = (x: number, z: number, amount: number) => {
+    const k = Math.floor((x - ROAD_RECT.x0) / RES), j = Math.floor((z - ROAD_RECT.z0) / RES);
+    if (k < 0 || j < 0 || k >= TW || j >= TH) return;
+    const i = (j * TW + k) * 2;
+    data[i + 1] = Math.max(data[i + 1], Math.round(255 * amount));
+    data[i] = Math.min(data[i], 255 - data[i + 1]);
+  };
+  for (const line of CITY_STREETS) for (let i = 0; i < line.length - 1; i++) {
+    const [ax, az] = line[i], [bx, bz] = line[i + 1];
+    const len = Math.hypot(bx - ax, bz - az);
+    for (let s = 0; s <= len; s += RES * 0.5) {
+      const cx = ax + ((bx - ax) * s) / len, cz = az + ((bz - az) * s) / len;
+      for (let oz = -5; oz <= 5; oz += RES * 0.5) for (let ox = -5; ox <= 5; ox += RES * 0.5) {
+        const d = Math.hypot(ox, oz);
+        if (d < 5) cobble(cx + ox, cz + oz, Math.min(1, (5 - d) / 1.6));
+      }
+    }
+  }
+  for (let oz = -24; oz <= 24; oz += RES * 0.5) for (let ox = -24; ox <= 24; ox += RES * 0.5) {
+    const d = Math.hypot(ox, oz);
+    if (d < 24) cobble(MARKET[0] + ox, MARKET[1] + oz, Math.min(1, (24 - d) / 2));
   }
   coverage = data;
   const tex = new THREE.DataTexture(data, TW, TH, THREE.RGFormat, THREE.UnsignedByteType);

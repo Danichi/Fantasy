@@ -94,7 +94,7 @@ export const REGIONS: Record<string, RegionDef> = {
     id: 'portAurelle', name: 'Port Aurelle', subtitle: 'Great Port City of Cresha', levels: [5, 20],
     weather: { clear: 4, cloudy: 3, rain: 2, fog: 2, storm: 0.8 }, ambience: 'harbor', music: 'city', encounters: 'portAurelle', faction: 'cresha',
     resources: ['fish', 'salt', 'pearls'], exports: ['fish', 'imported goods', 'ships'], imports: ['grain', 'ore', 'spices', 'timber'],
-    landmarks: [at('portAurelle', 'Port Aurelle', 'city', 2760, 150), at('lighthouse', 'The Aurelle Light', 'landmark', 2990, 60), at('academy', 'The Knight’s Academy', 'landmark', 2800, 80)],
+    landmarks: [at('portAurelle', 'Port Aurelle', 'city', 2760, 150), at('lighthouse', 'The Aurelle Light', 'landmark', 2930, -18), at('academy', 'The Knight’s Academy', 'landmark', 2806, 70), at('portMarket', 'The Grand Market', 'landmark', 2792, 172), at('wharf', 'Fisherman’s Wharf', 'landmark', 2926, 300)],
     surface: ['Grand Market', 'Adventurer’s Quarter', 'Knight’s District', 'the Harbour and Fisherman’s Wharf', 'the Dwarven Quarter', 'the Noble District'],
     hidden: ['the Lower City’s black market', 'smugglers’ sea caves', 'the thieves’ den'],
     deep: ['the drowned catacombs under the old harbour'],

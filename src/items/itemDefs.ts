@@ -3,6 +3,7 @@ import { buildSword, buildRoundShield, buildKiteShield, buildOdachi } from './we
 import { buildArmorPiece, type ArmorPieceId } from './armorModels';
 import { PRODUCE_ITEMS } from './produce';
 import { HERB_ITEMS } from './herbs';
+import { FISH_ITEMS } from '../world/fishing';
 
 export type Slot =
   | 'main' | 'off'
@@ -179,8 +180,32 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'ironleaf', name: 'Ironleaf', kind: 'consumable', rarity: 'fine', stack: true,
     desc: 'A tough mineral-rich leaf. Restores a modest amount of health and stamina.', stats: { heal: 12, restoreStamina: 20 },
   },
+  greaterHealthPotion: {
+    id: 'greaterHealthPotion', name: 'Greater Health Draught', kind: 'consumable', rarity: 'fine', stack: true,
+    desc: 'A Port Aurelle distillation. Restores 130 health.', stats: { heal: 130 },
+  },
+  greaterManaPotion: {
+    id: 'greaterManaPotion', name: 'Greater Mana Draught', kind: 'consumable', rarity: 'fine', stack: true,
+    desc: 'Blue as the harbour at noon. Restores 110 mana.', stats: { restoreMana: 110 },
+  },
+  minersLantern: {
+    id: 'minersLantern', name: "Miner's Lantern", kind: 'key', rarity: 'common',
+    desc: 'A dwarven brass lantern with a shuttered flame. Required for the White Mountain expedition.', stats: {},
+    build: () => {
+      const g = new THREE.Group();
+      const brass = new THREE.MeshStandardMaterial({ color: 0xc9a25a, metalness: 0.8, roughness: 0.35 });
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.18, 8), new THREE.MeshStandardMaterial({ color: 0xffd080, emissive: 0xffa040, emissiveIntensity: 0.8 }));
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.08, 8), brass);
+      cap.position.y = 0.13;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.008, 5, 12), brass);
+      ring.position.y = 0.2;
+      g.add(body, cap, ring);
+      return g;
+    },
+  },
   ...PRODUCE_ITEMS,
   ...HERB_ITEMS,
+  ...FISH_ITEMS,
 };
 
 export function buildItemModel(def: ItemDef): THREE.Object3D | null {

@@ -122,6 +122,8 @@ export class Bandit implements Target {
   private col: RAPIER.Collider;
   private kcc: RAPIER.KinematicCharacterController;
   private patrolTarget: THREE.Vector3;
+  /** sparring: never drops below 1 hp */
+  nonLethal = false;
   /** set when the bandit notices the player (for ambush groups) */
   alerted = false;
 
@@ -177,6 +179,8 @@ export class Bandit implements Target {
   takeHit(h: HitInfo) {
     if (!this.alive) return;
     this.hp -= h.damage;
+    // Sparring partners yield instead of dying.
+    if (this.nonLethal) this.hp = Math.max(1, this.hp);
     this.alerted = true;
     events.emit('enemyHit', { at: this.center.clone(), amount: h.damage, crit: h.crit, enemyId: this.id });
     if (this.hp <= 0) {
