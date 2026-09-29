@@ -113,6 +113,8 @@ export class NpcManager {
   private building = new Set<string>();
   private active = 0;
   private tick = 0;
+  /** settlements currently simulated (level 1/2); entering snaps everyone to their schedule */
+  private live = new Set<string>();
   // Far LOD: one sprite per look, baked from the real character in an idle pose.
   private atlas: THREE.WebGLRenderTarget;
   private cells = new Map<string, number>();
@@ -368,9 +370,17 @@ export class NpcManager {
     const m = new THREE.Matrix4();
     if (camera) this.spriteUniforms.uCam.value.copy(camera);
     this.spriteUniforms.uNight.value = night * 0.6;
+    for (const s of this.settlements.values()) {
+      const inRange = s.center.distanceTo(player) < s.radius + ACTIVE_R;
+      if (inRange && !this.live.has(s.id)) {
+        // Level 3 -> 2: nobody was simulated, so put everyone where the clock says.
+        this.live.add(s.id);
+        for (const st of this.npcs) if (st.rec.settlement === s.id) this.placeBySchedule(st, true);
+      } else if (!inRange) this.live.delete(s.id);
+    }
     for (const st of this.npcs) {
       const s = this.settlements.get(st.rec.settlement)!;
-      const inRange = s.center.distanceTo(player) < s.radius + ACTIVE_R;
+      const inRange = this.live.has(s.id);
       if (!inRange) {
         // Level 3: nothing to do; release any actor.
         if (st.actor) this.release(st);

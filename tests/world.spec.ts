@@ -147,3 +147,71 @@ test('a v5 save migrates to v6 and exploration persists across a reload', async 
   const reloaded = await page.evaluate(() => (window as any).__game.discovery.places.get('portAurelle'));
   expect(reloaded).toBe('visited');
 });
+
+test('the clock moves the sun, night lights the town, and weather changes the sky', async ({ page }) => {
+  const errors = await boot(page, '?test&hour=12');
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game;
+    const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const noon = { y: g.time.state.sunDir.y, sun: g.r.sun.intensity, night: g.time.state.night };
+    g.time.skipTo(23);
+    await settle(400);
+    const night = { y: g.time.state.sunDir.y, sun: g.r.sun.intensity, night: g.time.state.night, glass: g.world.mats.glass.emissiveIntensity };
+    g.time.skipTo(10);
+    g.weather.forced = 'storm';
+    await settle(8000);
+    const storm = { cloud: g.weather.p.cloud, rain: g.weather.p.rain, wet: g.weather.p.wet };
+    return { noon, night, storm, label: g.time.label };
+  });
+  expect(res.noon.y).toBeGreaterThan(0.5);
+  expect(res.noon.night).toBe(0);
+  expect(res.night.y).toBeLessThan(0);
+  expect(res.night.night).toBeGreaterThan(0.9);
+  expect(res.night.sun).toBeLessThan(res.noon.sun);
+  expect(res.night.glass).toBeGreaterThan(1.5);
+  expect(res.storm.cloud).toBeGreaterThan(0.6);
+  expect(res.storm.rain).toBeGreaterThan(0.4);
+  expect(res.label).toMatch(/^Day \d+, \d\d:\d\d$/);
+  expect(errors).toEqual([]);
+});
+
+test('townsfolk follow their schedules, appear near the player and can be talked to', async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors = await boot(page, '?test&hour=12.4');
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game;
+    const T = g.THREE;
+    const { heightAt } = await import('/src/world/terrainHeight.ts' as string);
+    const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    g.player.teleport(new T.Vector3(0, heightAt(0, 4) + 0.3, 4));
+    await settle(12000); // actors build in the background
+    const nearPlaza = g.npcs.npcs.filter((n: any) => n.pos.distanceTo(new T.Vector3(0, n.pos.y, -4)) < 20).length;
+    const active = g.npcs.activeCount;
+    // Walk up to one and talk.
+    const someone = g.npcs.npcs.find((n: any) => n.actor);
+    let spoke = '';
+    if (someone) {
+      g.player.teleport(someone.pos.clone().add(new T.Vector3(1.2, 0.3, 0)));
+      await settle(600);
+      const near = g.npcs.nearest(g.player.pos);
+      spoke = near ? g.npcs.lineFor(near) : '';
+    }
+    // Far away, actors are released back to the pool (level 3).
+    g.player.teleport(new T.Vector3(1800, heightAt(1800, 150) + 0.4, 150));
+    await settle(2500);
+    const activeFar = g.npcs.activeCount;
+    // At night most people are home in bed (hidden); coming back to town finds them there.
+    g.time.skipTo(2);
+    g.player.teleport(new T.Vector3(0, heightAt(0, 4) + 0.3, 4));
+    await settle(1500);
+    const hiddenAtNight = g.npcs.npcs.filter((n: any) => n.hidden).length / g.npcs.npcs.length;
+    return { nearPlaza, active, spoke, activeFar, hiddenAtNight, total: g.npcs.npcs.length };
+  });
+  expect(res.total).toBeGreaterThan(50);
+  expect(res.nearPlaza).toBeGreaterThan(5);
+  expect(res.active).toBeGreaterThan(3);
+  expect(res.spoke.length).toBeGreaterThan(5);
+  expect(res.activeFar).toBe(0);
+  expect(res.hiddenAtNight).toBeGreaterThan(0.6);
+  expect(errors).toEqual([]);
+});

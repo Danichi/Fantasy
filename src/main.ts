@@ -34,7 +34,7 @@ import { REGIONS } from './world/regionDefinitions';
 import { Discovery } from './world/discovery';
 import { WorldMapUI } from './ui/worldMap';
 import { PerfOverlay } from './ui/perfOverlay';
-import { regionAt } from './world/worldMap';
+import { regionAt, reliefAt, RELIEF } from './world/worldMap';
 import { targets } from './combat/targets';
 import { Ocean } from './world/sea/ocean';
 import { GroundWindow } from './world/groundWindow';
@@ -121,6 +121,11 @@ async function boot() {
   weather.fromJSON(saveData?.world?.weather);
   const precip = new Precipitation(r.scene);
   const ambience = new Ambience();
+  events.on('footstep', ({ at, surface }) => {
+    if (realm?.mode === 'dungeon') return ambience.footstep('stone', false);
+    const rel = reliefAt(at.x, at.z);
+    ambience.footstep(surface, rel === RELIEF.snow || weather.p.snow > 0.5);
+  });
   weather.onLightning = (s) => {
     r.lightning(s);
     ambience.thunderClap(s);

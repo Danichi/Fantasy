@@ -61,6 +61,25 @@ export class Ambience {
     this.thunder.preload = 'auto';
   }
 
+  // Footsteps: a small round-robin pool so quick steps overlap cleanly.
+  private steps: Record<'grass' | 'snow', HTMLAudioElement[]> = { grass: [], snow: [] };
+  private stepIdx = 0;
+  /** A footstep on a surface (grass/dirt/stone use the grass step, pitched). */
+  footstep(surface: string, snowy: boolean) {
+    if (!this.started || this.muted) return;
+    const kind = snowy ? 'snow' : 'grass';
+    if (!this.steps[kind].length) for (let i = 0; i < 4; i++) {
+      const a = new Audio(DIR + (kind === 'snow' ? 'step-snow.mp3' : 'step-grass.mp3'));
+      a.preload = 'auto';
+      this.steps[kind].push(a);
+    }
+    const a = this.steps[kind][this.stepIdx++ % 4];
+    a.currentTime = 0;
+    a.volume = (surface === 'stone' ? 0.14 : 0.2) * this.master;
+    a.playbackRate = (surface === 'stone' ? 1.35 : surface === 'dirt' ? 1.1 : 0.95) + Math.random() * 0.1;
+    void a.play().catch(() => {});
+  }
+
   /** Browsers only allow audio after a gesture (the title screen click). */
   start() {
     this.started = true;
