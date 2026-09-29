@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
 import { clamp, dampAngle, segmentPointDistance } from '../core/math';
 import { events } from '../core/events';
@@ -85,7 +85,6 @@ export class Goblin implements Target {
   private rb: RAPIER.RigidBody;
   private col: RAPIER.Collider;
   private kcc: RAPIER.KinematicCharacterController;
-  private model: THREE.Group | null = null;
   private mixer: THREE.AnimationMixer | null = null;
   private actions: Record<string, THREE.AnimationAction> = {};
   private currentAction = '';
@@ -125,7 +124,6 @@ export class Goblin implements Target {
 
       this.group.clear();
       this.group.add(model);
-      this.model = model;
       this.mixer = new THREE.AnimationMixer(model);
       for (const clip of source.animations) this.actions[clip.name] = this.mixer.clipAction(clip);
       this.setAnimation('idle');

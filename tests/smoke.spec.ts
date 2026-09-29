@@ -26,12 +26,16 @@ test('player moves with WASD', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('sword swing damages a slime', async ({ page }) => {
+test('sword swing damages a beast', async ({ page }) => {
   await boot(page);
   const hp = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
     const s = g.slimes.spawn('blue', p.pos.x, p.pos.z - 1.5);
+    // A stag charges and attacks first; pin it in place (its hurt capsule is
+    // normally placed by update) so the test only measures the swing.
+    s.update = () => {};
+    s.center.set(s.position.x, s.position.y + 0.9, s.position.z);
     p.yaw = Math.PI;
     await new Promise((r) => setTimeout(r, 300));
     const before = s.hp;
@@ -44,24 +48,29 @@ test('sword swing damages a slime', async ({ page }) => {
   expect(hp.after).toBeLessThan(hp.before);
 });
 
-test('parry staggers a leaping slime', async ({ page }) => {
+test('parry staggers an attacking beast', async ({ page }) => {
   await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
+    // Load the wolf model first so its first-use hitch can't land mid-bite.
+    const warm = g.slimes.spawn('green', p.pos.x + 40, p.pos.z + 40);
+    await new Promise((r) => setTimeout(r, 1500));
+    g.slimes.clear();
+    void warm;
     const s = g.slimes.spawn('green', p.pos.x, p.pos.z - 2.5);
     p.yaw = Math.PI;
-    // Wait for the slime to start its leap, then parry.
-    for (let i = 0; i < 300 && s.state !== 'leap'; i++) await new Promise((r) => setTimeout(r, 10));
-    // React as the slime closes in, like a player timing the impact.
-    for (let i = 0; i < 100 && s.center.distanceTo(p.center) > 1.9; i++) await new Promise((r) => setTimeout(r, 5));
+    // Wait for the wolf to start its bite (it lands 0.33 s in), then parry.
+    for (let i = 0; i < 300 && s.state !== 'attack'; i++) await new Promise((r) => setTimeout(r, 10));
+    // Its bite lands 0.33 s into the attack; parry just before, on the beast's own clock.
+    for (let i = 0; i < 100 && s.t < 0.2; i++) await new Promise((r) => requestAnimationFrame(r));
     g.input.press('KeyF');
     await new Promise((r) => setTimeout(r, 30));
     g.input.release('KeyF');
-    for (let i = 0; i < 60 && s.state === 'leap'; i++) await new Promise((r) => setTimeout(r, 20));
+    for (let i = 0; i < 60 && s.state === 'attack'; i++) await new Promise((r) => setTimeout(r, 10));
     return { state: s.state, stunned: s.stunned, hp: p.hp, max: p.maxHp };
   });
-  expect(res.state).toBe('stunned');
+  expect(res.state).toBe('hurt');
   expect(res.stunned).toBe(true);
   expect(res.hp).toBe(res.max);
 });
@@ -89,7 +98,10 @@ test('fireball spends mana and hits', async ({ page }) => {
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
+    // Magic is learned from Magus Orren now; hand the fireball over directly.
+    p.equip.equip(p.equip.add('fireball').uid);
     const s = g.slimes.spawn('green', p.pos.x, p.pos.z - 7);
+    s.update = () => {};
     p.yaw = Math.PI;
     g.cam.yaw = Math.PI;
     await new Promise((r) => setTimeout(r, 200));
@@ -173,7 +185,8 @@ test('offensive spells refuse to cast without a lock-on', async ({ page }) => {
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
-    g.slimes.spawn('green', p.pos.x, p.pos.z - 7);
+    p.equip.equip(p.equip.add('fireball').uid);
+    g.slimes.spawn('green', p.pos.x, p.pos.z - 7).update = () => {};
     const m0 = p.mana;
     g.input.press('KeyR');
     await new Promise((r) => setTimeout(r, 40));

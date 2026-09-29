@@ -45,13 +45,13 @@ const RANKS: { name: GuildRank; rep: number }[] = [
 ];
 
 const RANK_COLORS: Record<GuildRank, string> = {
-  D: '#6f7e87',
-  C: '#6a7f8c',
-  B: '#5b6f7b',
-  A: '#a57b34',
-  S: '#b78722',
-  SS: '#557db0',
-  SSS: '#8749bb',
+  D: '#a9b3ba',
+  C: '#9fb6c4',
+  B: '#8fb0c6',
+  A: '#d9a650',
+  S: '#f0c24a',
+  SS: '#7fb0ee',
+  SSS: '#c08af0',
 };
 
 interface QuestTemplate {

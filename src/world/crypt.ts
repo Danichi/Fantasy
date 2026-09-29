@@ -156,8 +156,8 @@ export function buildCrypt(scene: THREE.Scene, m: WorldMats, fx: FX) {
   group.updateMatrixWorld(true);
 
   // Orc house: this is now the visible entrance landmark for the first dungeon.
-  // The GLB is supplied separately at /assets/npc/orc_house.glb.
-  void houseLoader.loadAsync('/assets/npc/orc_house.glb').then((g) => {
+  // The GLB is supplied separately at /assets/models/orcHouse.glb.
+  void houseLoader.loadAsync('/assets/models/orcHouse.glb').then((g) => {
     if (!group.parent) return;
     const house = g.scene;
     house.updateMatrixWorld(true);

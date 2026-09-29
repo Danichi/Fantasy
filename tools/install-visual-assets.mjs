@@ -32,7 +32,8 @@ function installAsset(slug) {
   const result = spawnSync(
     npx,
     ['--yes', '@drawcall/market@0.8.10', 'install', slug],
-    { cwd: root, stdio: 'inherit', env: { ...process.env, CI: '1' } },
+    // Windows needs a shell to run npx.cmd (Node refuses to spawn .cmd files directly).
+    { cwd: root, stdio: 'inherit', env: { ...process.env, CI: '1' }, shell: process.platform === 'win32' },
   );
   if (result.status !== 0) {
     console.warn('[visual-assets] Could not install ' + slug + '; keeping any existing/fallback visuals.');

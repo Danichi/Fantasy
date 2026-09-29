@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { compressedGltf } from '../core/gltf';
 import { heightAt, riverX, roadDist, TOWN_R, WORLD_SIZE, CRYPT } from './terrain';
 import { fbm, mulberry32, smoothstep } from '../core/math';
 
@@ -92,7 +92,7 @@ function modelHeight(root: THREE.Object3D) {
 }
 
 export class StylizedNature {
-  private readonly loader = new GLTFLoader();
+  private readonly loader = compressedGltf;
   private readonly prototypes: Prototype[] = [];
   private readonly instances: Instance[] = [];
   private readonly groups: DrawGroup[] = [];

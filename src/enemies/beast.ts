@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { compressedGltf } from '../core/gltf';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
 import { damp, dampAngle, clamp } from '../core/math';
 import { events } from '../core/events';
@@ -29,7 +30,7 @@ export const BEAST_VARIANTS: Record<BeastKind, BeastVariant> = {
   cave: { file: 'goblin.glb', height: 1.45, hp: 85, damage: 18, radius: 0.36, speed: 3.0, aggro: 15, attackRange: 1.7, attackCooldown: 1.35 },
 };
 
-const LOADER = new GLTFLoader();
+const LOADER = compressedGltf;
 const CACHE = new Map<string, Promise<GLTF>>();
 
 type State = 'idle' | 'chase' | 'attack' | 'hurt' | 'dying';

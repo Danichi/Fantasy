@@ -1,4 +1,5 @@
 // Fonts are bundled so the game works offline (desktop build).
+import { initCompressedGltf } from './core/gltf';
 import '@fontsource/cinzel/500.css';
 import '@fontsource/cinzel/700.css';
 import '@fontsource/inter/400.css';
@@ -50,6 +51,7 @@ const mark = (k: string) => {
 async function boot() {
   const container = document.getElementById('game')!;
   const r = new Renderer(container);
+  initCompressedGltf(r.renderer);
   const input = new Input(r.renderer.domElement);
   await physics.init();
   await r.loadSky('/assets/hdri/sky_1k.hdr');

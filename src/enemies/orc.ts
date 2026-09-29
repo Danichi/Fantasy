@@ -150,7 +150,7 @@ export class OrcWarlord implements Target {
     // static (no embedded animation clips), so the existing combat rig remains
     // active underneath it for hit timing, movement, and boss behavior.
     try {
-      const gltf = await new GLTFLoader().loadAsync('/assets/npc/orc_warchief.glb');
+      const gltf = await new GLTFLoader().loadAsync('/assets/npc/orcWarchief.glb');
       const model = gltf.scene;
       model.updateMatrixWorld(true);
       const bb = new THREE.Box3().setFromObject(model);

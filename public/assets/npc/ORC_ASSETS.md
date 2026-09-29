@@ -2,9 +2,9 @@
 
 Place these three binary GLB files in exactly these paths:
 
-- `public/assets/npc/orc_warrior.glb` — regular Orc mobs in the first dungeon.
-- `public/assets/npc/orc_warchief.glb` — final boss / Orc Warchief model.
-- `public/assets/npc/orc_house.glb` — overworld dungeon entrance.
+- `public/assets/npc/orcWarrior.glb` — regular Orc mobs in the first dungeon.
+- `public/assets/npc/orcWarchief.glb` — final boss / Orc Warchief model.
+- `public/assets/models/orcHouse.glb` — overworld dungeon entrance.
 
 The game code already references these paths, so adding the files to GitHub at those exact locations is enough for Vite to serve them automatically. No import statement or additional asset registration is required.
 

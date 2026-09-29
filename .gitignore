@@ -7,3 +7,6 @@ assets-src/
 .tmp/
 *.log
 release/
+
+# drawcall market install staging (copied into public/assets/vendor)
+public/model/
