@@ -101,7 +101,9 @@ test('fireball spends mana and hits', async ({ page }) => {
     // Magic is learned from Magus Orren now; hand the fireball over directly.
     p.equip.equip(p.equip.add('fireball').uid);
     const s = g.slimes.spawn('green', p.pos.x, p.pos.z - 7);
+    // Hold the wolf still; its hurt capsule is normally placed by update.
     s.update = () => {};
+    s.center.set(s.position.x, s.position.y + 0.6, s.position.z);
     p.yaw = Math.PI;
     g.cam.yaw = Math.PI;
     await new Promise((r) => setTimeout(r, 200));
