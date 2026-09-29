@@ -254,7 +254,9 @@ export class Horses {
     // Step off to the left of the horse.
     const side = new THREE.Vector3(Math.cos(a.yaw), 0, -Math.sin(a.yaw)).multiplyScalar(1.4);
     const p = a.pos.clone().add(side);
+    const saddle = this.player.pos.clone();
     this.player.teleport(p.setY(heightAt(p.x, p.z) + 0.1));
+    this.player.animateDismount(saddle);
     this.bar.classList.add('hidden');
   }
 

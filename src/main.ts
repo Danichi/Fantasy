@@ -31,7 +31,7 @@ import { buildCrops } from './world/crops';
 import { FarmLife } from './world/farmLife';
 import { buildRoadFurniture } from './world/roadNetwork';
 import { Foraging } from './world/foraging';
-import { buildKingsRoad } from './world/kingsRoad';
+import { buildKingsRoad, WAYSTONES } from './world/kingsRoad';
 import { buildTiles, prefetchTiles } from './world/tilePool';
 import { Horses } from './world/horses';
 import { Encounters } from './world/encounters';
@@ -40,6 +40,11 @@ import { setupRoadQuests } from './quests/roadQuests';
 import { buildPortAurelle, PORT_SPOTS } from './world/portAurelle';
 import { Fishing, type FishingSpot } from './world/fishing';
 import { Duel } from './combat/duel';
+import type { Look } from './npc/charBuilder';
+import { setupAcademy } from './quests/academy';
+import { setupLowerCity } from './quests/lowerCity';
+import { Boats } from './world/boats';
+import { RiverLife } from './world/riverLife';
 import { PORT_QUESTS } from './quests/portQuests';
 import { RIVER_LEVEL } from './world/terrainHeight';
 import { road, distanceAlong } from './world/roadNetwork';
@@ -256,6 +261,7 @@ async function boot() {
       questUI?.setVisible(!h);
       foraging?.setVisible(!h);
       horses?.setVisible(!h);
+      riverLife?.setVisible(!h);
       caravans?.setVisible(!h);
       encounters?.setVisible(!h);
       flowers.mesh.visible = !h;
@@ -427,17 +433,24 @@ async function boot() {
     action: () => fishing.start(spot),
   })));
   const duel = new Duel(r.scene, encounters.bolts, player);
-  let duelFor: 'trial-won' | 'rival-won' = 'trial-won';
+  let duelWin: (() => void) | null = null;
   const ringAt = PORT_SPOTS.academyRing.clone().setY(heightAt(PORT_SPOTS.academyRing.x, PORT_SPOTS.academyRing.z));
+  /** A sparring bout in the Academy ring; `onWin` runs if the player wins. */
+  const bout = (spec: { name: string; look: Look; hp: number; damage?: number; pace?: number }, onWin: () => void) => {
+    if (player.mounted) horses.dismount();
+    duelWin = onWin;
+    duel.start({ ...spec, ring: ringAt, radius: 9 });
+    hud.toast(`${spec.name}: "Blades up. Begin!"`);
+  };
   const startDuel = (who: 'hadrik' | 'dorian') => {
-    duelFor = who === 'hadrik' ? 'trial-won' : 'rival-won';
     const rec = npcs.find(who)?.rec;
-    duel.start({ name: rec?.name ?? (who === 'hadrik' ? 'Ser Hadrik Vane' : 'Cadet Dorian Vale'), look: rec!.look, hp: who === 'hadrik' ? 260 : 220, ring: ringAt, radius: 9 });
-    hud.toast(`${rec?.name}: "Blades up. Begin!"`);
+    bout({ name: rec?.name ?? (who === 'hadrik' ? 'Ser Hadrik Vane' : 'Cadet Dorian Vale'), look: rec!.look, hp: who === 'hadrik' ? 260 : 220 }, () => quests.signal(who === 'hadrik' ? 'trial-won' : 'rival-won'));
   };
   duel.onEnd = (won, reason) => {
     hud.toast(reason);
-    if (won) quests.signal(duelFor);
+    const f = duelWin;
+    duelWin = null;
+    if (won) f?.();
   };
   quests.add(...PORT_QUESTS);
   quests.hooks.set('duel:hadrik', () => startDuel('hadrik'));
@@ -453,9 +466,15 @@ async function boot() {
   realm.overworldInteractables.push(
     {
       pos: ringAt, radius: 10,
-      label: () => (duel.active ? '' : quests.wants('trial-won') ? 'Step into the ring (Ser Hadrik)' : quests.wants('rival-won') ? 'Step into the ring (Dorian Vale)' : ''),
-      enabled: () => !duel.active && (quests.wants('trial-won') || quests.wants('rival-won')),
-      action: () => startDuel(quests.wants('trial-won') ? 'hadrik' : 'dorian'),
+      label: () => {
+        if (duel.active) return '';
+        if (quests.wants('trial-won')) return 'Step into the ring (Ser Hadrik)';
+        if (quests.wants('rival-won')) return 'Step into the ring (Dorian Vale)';
+        const b = academy.nextBout();
+        return b.ok ? `Ladder bout: ${b.rung!.name}` : '';
+      },
+      enabled: () => !duel.active && (quests.wants('trial-won') || quests.wants('rival-won') || academy.nextBout().ok),
+      action: () => (quests.wants('trial-won') ? startDuel('hadrik') : quests.wants('rival-won') ? startDuel('dorian') : academy.fight()),
     },
     {
       pos: PORT_SPOTS.berth.clone().setY(1), radius: 5,
@@ -484,7 +503,24 @@ async function boot() {
     },
   }]);
   folkServices.set('guildmaster', () => [{ label: 'See the guild board', run: () => { dialogue.close(); town.guild.open('board'); } }]);
-  folkServices.set('mira', () => [{ label: 'Buy a fishing rod — 20g', run: () => { if (player.prog.gold >= 20) { player.prog.addGold(-20); giveItem('fishingRod', 1); } dialogue.close(); } }]);
+  const riverLife = new RiverLife(r.scene, fx);
+  const boats = new Boats(r.scene, player);
+  boats.onFish = (spot) => fishing.start(spot);
+  realm.overworldInteractables.push(...boats.interactables);
+  folkServices.set('mira', () => [
+    { label: 'Buy a fishing rod — 20g', run: () => { if (player.prog.gold >= 20) { player.prog.addGold(-20); giveItem('fishingRod', 1); } dialogue.close(); } },
+    {
+      label: 'Hire a rowing boat — 5g',
+      run: () => {
+        if (player.prog.gold < 5) return dialogue.close();
+        player.prog.addGold(-5);
+        dialogue.close();
+        if (player.mounted) horses.dismount();
+        boats.launch(new THREE.Vector3(2998, 0, 292), Math.PI / 2);
+        hud.toast('WASD to row, Shift to pull hard. E near land to step ashore; E in deep water to fish.');
+      },
+    },
+  ]);
   folkServices.set('ragna', () => [{ label: 'Browse Port steel', run: () => shop('ragna', 'Aurelle-folded steel. Heavier purse, lighter grave.', [['knightSword', 110], ['kiteShield', 90], ['armingSword', 55], ['roundShield', 50]]) }]);
   folkServices.set('quill', () => [{ label: 'Browse fine draughts', run: () => shop('quill', 'Twice the strength of a village draught. Half the taste.', [['healthPotion', 18], ['manaPotion', 22], ['greaterHealthPotion', 55], ['greaterManaPotion', 60]]) }]);
   folkServices.set('sabeth', () => [{ label: 'Browse rings and charms', run: () => shop('sabeth', 'Every ring is a promise. Choose yours.', [['ringSage', 200]]) }]);
@@ -594,6 +630,57 @@ async function boot() {
   const worldMap = new WorldMapUI(discovery);
   worldMap.questMarkers = () => quests.markers().map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label }));
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
+  // Waystones: touching one attunes it; once Magus Orren has explained the Sunwheel
+  // (The Sunwheel quest), attuned stones carry you between each other.
+  realm.overworldInteractables.push(...WAYSTONES.map((w) => ({
+    pos: w.pos, radius: 2.4,
+    label: () => (quests.isDone('the-sunwheel') ? 'Travel by waystone' : worldFlags['way:' + w.id] ? 'The waystone hums under your hand' : 'Touch the waystone'),
+    enabled: () => true,
+    action: () => {
+      const first = !worldFlags['way:' + w.id];
+      worldFlags['way:' + w.id] = true;
+      if (!quests.isDone('the-sunwheel')) {
+        dialogue.show('A Waystone', w.name, first
+          ? 'A grey stone older than the road, carved on both faces with the Sunwheel. As your palm touches it the carving warms and glows faintly blue, as if it has remembered you. Magus Orren in Elder Glen might know what these are.'
+          : 'The Sunwheel glows at your touch, but nothing more happens. Something is still missing.', [{ label: 'Step back.', run: () => dialogue.close() }]);
+        save();
+        return;
+      }
+      const others = WAYSTONES.filter((o) => o.id !== w.id && worldFlags['way:' + o.id]);
+      dialogue.show('A Waystone', w.name, others.length ? 'The Sunwheel blazes blue. Other stones you have touched answer from far away.' : 'The Sunwheel blazes blue, but no other stone you have touched answers yet.', [
+        ...others.map((o) => ({
+          label: `Travel to ${o.name}`,
+          run: () => {
+            dialogue.close();
+            if (player.mounted) horses.dismount();
+            fx.add.spawn({ pos: player.center, spread: 1.2, count: 60, life: [0.4, 0.9], size: [0.1, 0.02], color: 0xbfe8ff, color2: 0x5a9cff, upBias: 1.4 });
+            const to = o.pos.clone().add(new THREE.Vector3(2.2, 0.5, 0));
+            player.teleport(to.setY(heightAt(to.x, to.z) + 0.5));
+            time.skipTo((time.hour + 0.25) % 24);
+            hud.toast(`The waystone at ${o.name} lets you go.`);
+            save();
+          },
+        })),
+        { label: 'Not now.', run: () => dialogue.close() },
+      ]);
+    },
+  })));
+  // ---- The Academy's ranks, ladder, examination and dormitory; the Quiet Hands' den ----
+  const academy = setupAcademy({
+    quests, player, time, flags: worldFlags, lookOf: (id) => npcs.find(id)?.rec.look,
+    close: () => dialogue.close(), toast: (m) => hud.toast(m), save: () => save(), bout,
+    dormitory: PORT_SPOTS.dormitory.clone().setY(heightAt(PORT_SPOTS.dormitory.x, PORT_SPOTS.dormitory.z)),
+  });
+  for (const [id, opts] of academy.services) folkServices.set(id, opts);
+  const lowerCity = setupLowerCity({
+    quests, player, flags: worldFlags,
+    door: PORT_SPOTS.thievesDoor.clone().setY(heightAt(PORT_SPOTS.thievesDoor.x, PORT_SPOTS.thievesDoor.z)),
+    talk: (who, title, text, opts) => dialogue.show(who, title, text, opts), close: () => dialogue.close(),
+    shop: (who, title, intro, stock) => town.showShop(who, title, intro, stock),
+    sell: (back) => town.sellOptions('nix', 'Nix the Fence', 'Black Market of the Quiet Hands', back),
+    save: () => save(),
+  });
+  realm.overworldInteractables.push(...academy.interactables, ...lowerCity.interactables);
   // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
   quests.fromJSON(saveData?.world?.quests);
@@ -871,6 +958,8 @@ async function boot() {
       horses.update(dt);
       caravans.update(dt, player.pos);
       port.update(dt, ts.night);
+      boats.update(dt);
+      if (worldRunning) riverLife.update(dt, player.pos, player.sprinting, ts.night);
       fishing.update(dt);
       // The expedition waits a week if you miss the tide.
       if (quests.wants('expedition-sails') && (time.day > Number(worldFlags.expeditionDay) || (time.day === Number(worldFlags.expeditionDay) && time.hour >= 10.5))) {
@@ -944,7 +1033,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, sellFish, worldFlags, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

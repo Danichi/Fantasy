@@ -12,6 +12,9 @@ export interface DuelSpec {
   name: string;
   look: Look;
   hp: number;
+  /** swing damage and a cooldown multiplier (lower is faster) */
+  damage?: number;
+  pace?: number;
   /** ring centre and radius: stepping out forfeits */
   ring: THREE.Vector3;
   radius: number;
@@ -36,6 +39,8 @@ export class Duel {
     b.maxHp = b.hp = spec.hp;
     b.alerted = true;
     b.nonLethal = true;
+    b.hitDamage = spec.damage ?? 16;
+    b.pace = spec.pace ?? 1;
     this.opponent = b;
     this.active = true;
     this.floorHp = this.player.maxHp * 0.15;

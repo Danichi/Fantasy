@@ -83,3 +83,7 @@ export const COBBLE_ZONES: [number, number, number][] = [
   [1380, 130, 70], // the Wayfarer's Rest
   [2690, 150, 150], // Port Aurelle's West Gate
 ];
+
+/** Millbrook Brook: a creek from the northern hills, under the King's Road's wooden bridge, into Millbrook Mere. */
+export const CREEK: P2[] = [[1650, -430], [1630, -300], [1595, -160], [1572, -40], [1560, 60], [1556, 124], [1536, 150], [1512, 168]];
+export const CREEK_BRIDGE: P2 = [1556, 124];

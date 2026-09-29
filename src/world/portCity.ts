@@ -43,6 +43,8 @@ export const CITY_RESERVED: [number, number, number][] = [
   [2912, 130, 16], [2912, 236, 16], // warehouses
   [2740, 70, 16], [2760, 56, 14], // noble gardens
   [2700, 150, 16], // West Gate
+  [2880, 300, 9], // the Drowned Lantern and its alley
+  [2930, 48, 16], // the shipyard slipway
 ];
 
 /** Target ground height inside the city (null outside), with its weight 0..1. */

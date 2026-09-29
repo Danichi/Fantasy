@@ -7,6 +7,17 @@ import { GRASS_MASKS } from './groundWindow';
 import type { FX } from '../fx/particles';
 import type { NpcRecord, Place, Settlement, ScheduleEntry } from '../npc/npcManager';
 import type { Look } from '../npc/charBuilder';
+import { CREEK, CREEK_BRIDGE } from './roadData';
+import { sunwheelTexture } from './glenLandmarks';
+
+/** Ancient waystones along the road (the Sunwheel on each); attune by touch. */
+export const WAYSTONES: { id: string; name: string; pos: THREE.Vector3 }[] = [
+  { id: 'glen', name: 'Elder Glen (East Gate)', pos: new THREE.Vector3(128, 0, -10) },
+  { id: 'millbrook', name: 'Millbrook', pos: new THREE.Vector3(600, 0, 104) },
+  { id: 'rest', name: "The Wayfarer's Rest", pos: new THREE.Vector3(1404, 0, 70) },
+  { id: 'gull', name: 'Gull Ridge', pos: new THREE.Vector3(2226, 0, 96) },
+  { id: 'aurelle', name: 'Port Aurelle (Causeway)', pos: new THREE.Vector3(2548, 0, 168) },
+];
 
 // The King's Road between Elder Glen and Port Aurelle (World Expansion
 // phase 4, prompt §18): the hamlet of Millbrook with its roadside chapel,
@@ -376,6 +387,92 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
     top.rotation.z = Math.PI / 2 - 0.2;
   }
 
+  // ---- Millbrook Brook and its wooden bridge ------------------------------------------------
+  const creekWater: THREE.MeshStandardMaterial = (() => {
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 256;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#3f9ab8'; g.fillRect(0, 0, 64, 256);
+    for (let k = 0; k < 40; k++) {
+      g.fillStyle = `rgba(220, 245, 255, ${0.15 + rnd() * 0.25})`;
+      g.fillRect(rnd() * 64, rnd() * 256, 2 + rnd() * 6, 10 + rnd() * 30);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return new THREE.MeshStandardMaterial({ map: t, transparent: true, opacity: 0.88, roughness: 0.15, metalness: 0.1 });
+  })();
+  {
+    // A ribbon of water down the carved channel, following the bed.
+    const pos: number[] = [], uv: number[] = [], idx: number[] = [];
+    let along = 0, n = 0;
+    for (let i = 0; i < CREEK.length - 1; i++) {
+      const [ax, az] = CREEK[i], [bx, bz] = CREEK[i + 1];
+      const len = Math.hypot(bx - ax, bz - az);
+      const dx = (bx - ax) / len, dz = (bz - az) / len;
+      for (let t = 0; t < len; t += 3) {
+        const x = ax + dx * t, z = az + dz * t;
+        const y = heightAt(x, z) + 1.15;
+        for (const side of [-1, 1]) {
+          pos.push(x - dz * 4.4 * side, y, z + dx * 4.4 * side);
+          uv.push(side < 0 ? 0 : 1, along / 12);
+        }
+        if (n > 0) {
+          const a = (n - 1) * 2;
+          idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); // wound to face up
+        }
+        n++;
+        along += 3;
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    const water = new THREE.Mesh(g, creekWater);
+    water.receiveShadow = true;
+    scene.add(water);
+    for (const [x, z] of CREEK) clearings.push([x, z, 12]);
+  }
+  {
+    const [bx, bz] = CREEK_BRIDGE;
+    // The deck sits at the road's height on the banks either side of the channel.
+    const deckY = (heightAt(bx - 9, bz) + heightAt(bx + 9, bz)) / 2 + 0.2;
+    for (let x = -7; x <= 7; x += 0.7) box(m.planks, 0.62, 0.12, 6.2, bx + x, deckY, bz, 0, 1);
+    for (const s of [-1, 1]) {
+      box(m.timber, 15, 0.3, 0.3, bx, deckY - 0.25, bz + s * 2.8);
+      box(m.timber, 15, 0.12, 0.12, bx, deckY + 1.0, bz + s * 3.05);
+      for (let x = -7; x <= 7; x += 3.5) {
+        box(m.timber, 0.2, 1.2, 0.2, bx + x, deckY + 0.5, bz + s * 3.05);
+        box(m.timber, 0.28, 3.4, 0.28, bx + x, deckY - 1.9, bz + s * 2.6);
+      }
+    }
+    physics.addBox(new THREE.Vector3(bx, deckY - 0.1, bz), new THREE.Vector3(7.5, 0.2, 3.2));
+    for (const s of [-1, 1]) physics.addBox(new THREE.Vector3(bx, deckY + 0.6, bz + s * 3.1), new THREE.Vector3(7.5, 0.6, 0.1));
+  }
+
+  // ---- The waystones -------------------------------------------------------------------------
+  const runeMats: THREE.MeshStandardMaterial[] = [];
+  for (const w of WAYSTONES) {
+    const y = heightAt(w.pos.x, w.pos.z);
+    w.pos.y = y;
+    const stone = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, 2.6, 6), new THREE.MeshStandardMaterial({ color: 0x7f8a96, roughness: 0.9, flatShading: true }));
+    stone.position.set(w.pos.x, y + 1.2, w.pos.z);
+    stone.castShadow = true;
+    scene.add(stone);
+    const rune = new THREE.MeshStandardMaterial({ map: sunwheelTexture('rgba(70,80,100,1)', false), emissiveMap: sunwheelTexture(), emissive: 0x9fd8ff, emissiveIntensity: 0.4, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+    runeMats.push(rune);
+    for (const a of [0, Math.PI]) {
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), rune);
+      p.position.set(w.pos.x + Math.sin(a) * 0.64, y + 1.5, w.pos.z + Math.cos(a) * 0.64);
+      p.rotation.y = a;
+      scene.add(p);
+    }
+    physics.addCylinder(new THREE.Vector3(w.pos.x, y + 1.2, w.pos.z), 1.3, 0.7);
+    clearings.push([w.pos.x, w.pos.z, 5]);
+  }
+
   // ---- Residents --------------------------------------------------------------------------
   const settlements: KingsRoad['settlements'] = [];
   const mk = (id: string, center: THREE.Vector3, radius: number, people: { id: string; name: string; title: string; look: Look; post: THREE.Vector3; yaw?: number; activity: ScheduleEntry['activity']; hours: [number, number]; lines: NpcRecord['lines']; evening?: THREE.Vector3 }[]) => {
@@ -432,6 +529,8 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
         if (f.light) f.light.intensity = (0.8 + night * 5) * (0.85 + Math.sin(t * 13 + f.pos.x) * 0.1 + Math.sin(t * 7.3) * 0.05);
       }
       for (const lm of lanternMats) lm.emissiveIntensity = 0.3 + night * 2.4;
+      creekWater.map!.offset.y -= dt * 0.35;
+      for (const r of runeMats) r.emissiveIntensity = 0.35 + Math.sin(t * 1.4) * 0.15 + night * 1.2;
     },
   };
 }

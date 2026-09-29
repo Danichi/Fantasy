@@ -124,6 +124,9 @@ export class Bandit implements Target {
   private patrolTarget: THREE.Vector3;
   /** sparring: never drops below 1 hp */
   nonLethal = false;
+  /** melee damage per landed swing, and a cooldown multiplier (sparring ladder tuning) */
+  hitDamage = 16;
+  pace = 1;
   /** set when the bandit notices the player (for ambush groups) */
   alerted = false;
 
@@ -301,7 +304,7 @@ export class Bandit implements Target {
         } else {
           if (!this.hitDone && this.st > 0.12) this.checkHit(player);
           if (this.st > 0.55) {
-            this.cooldown = 1.1 + Math.random() * 0.8;
+            this.cooldown = (1.1 + Math.random() * 0.8) * this.pace;
             this.state = 'chase';
             this.st = 0;
           }
@@ -344,7 +347,7 @@ export class Bandit implements Target {
     this.hitDone = true;
     const dir = this.position.clone().sub(player.pos).setY(0).normalize();
     player.receiveAttack({
-      damage: 16,
+      damage: this.hitDamage,
       from: this.position.clone(),
       parryable: true,
       poise: 26,

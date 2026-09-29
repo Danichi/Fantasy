@@ -27,6 +27,8 @@ export const PORT_SPOTS = {
   forge: new THREE.Vector3(2736, 0, 306),
   berth: new THREE.Vector3(2930, 0, 150),
   stable: new THREE.Vector3(2716, 0, 164),
+  thievesDoor: new THREE.Vector3(2873.4, 0, 300),
+  dormitory: new THREE.Vector3(2790, 0, 64.4),
 };
 
 const v = (x: number, z: number, dy = 0) => new THREE.Vector3(x, heightAt(x, z) + dy, z);
@@ -166,6 +168,34 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
           house(x, z, rot, { w, d, floors: lower && rnd() < 0.5 ? 1 : 2, roof, seed: seed++ });
         }
       }
+    }
+  }
+
+  // Infill: the blocks between streets fill with houses facing their nearest street.
+  const nearestStreet = (x: number, z: number) => {
+    let best = Infinity, bx = x, bz = z;
+    for (const line of CITY_STREETS.slice(0, 9)) for (let i = 0; i < line.length - 1; i++) {
+      const [ax, az] = line[i], [cx, cz] = line[i + 1];
+      const vx = cx - ax, vz = cz - az, l2 = vx * vx + vz * vz;
+      const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / l2));
+      const px = ax + vx * t, pz = az + vz * t, d = Math.hypot(x - px, z - pz);
+      if (d < best) (best = d), (bx = px), (bz = pz);
+    }
+    return { d: best, x: bx, z: bz };
+  };
+  for (let x = CITY_BOUNDS.x0 + 12; x < QUAY_X - 16; x += 11) {
+    for (let z = CITY_BOUNDS.z0 + 12; z < CITY_BOUNDS.z1 - 10; z += 11) {
+      const px = x + (rnd() - 0.5) * 3, pz = z + (rnd() - 0.5) * 3;
+      const w = 6.5 + rnd() * 2.5, d = 6 + rnd() * 2;
+      const r = Math.max(w, d) / 2 + 0.6;
+      if (!inCity(px, pz) || reserved(px, pz, r) || onStreet(px, pz, r - 1)) continue;
+      if (Math.abs(pz - CANAL.z) < CANAL.half + r + 1 && px > CANAL.x0 - r) continue;
+      if (Math.abs(pz - NORTH_TERRACE_Z) < r + 2) continue;
+      if (placed.some(([qx, qz, qr]) => Math.hypot(qx - px, qz - pz) < qr + r + 0.8)) continue;
+      const ns = nearestStreet(px, pz);
+      if (ns.d > 30) continue; // leave the odd garden and yard open
+      placed.push([px, pz, r]);
+      house(px, pz, Math.atan2(ns.x - px, ns.z - pz), { w, d, floors: rnd() < 0.3 ? 1 : 2, roof: rnd() < 0.62 ? 'slate' : 'tile', seed: seed++ });
     }
   }
 
@@ -314,6 +344,10 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
     rope.position.set(rx, ry + 1.05, rz);
     scene.add(rope);
     for (let k = 0; k < 4; k++) addMesh(new THREE.CylinderGeometry(0.2, 0.25, 1.9, 8), m.planks, cx + 18 + (k % 2) * 3, heightAt(cx + 18, cz - 8) + 0.95, cz - 8 - Math.floor(k / 2) * 4);
+    // The cadets' dormitory door in the main hall's south face.
+    addMesh(new THREE.BoxGeometry(1.8, 2.8, 0.14), m.planks, 2790, y0 + 1.4, cz - 6.95);
+    addMesh(new THREE.BoxGeometry(2.3, 0.3, 0.3), white, 2790, y0 + 2.95, cz - 6.9);
+    sign('DORMITORY', 'Cadets and Squires', 2790, cz - 6.6, 0, 2.4, y0 + 3.9);
     sign("KNIGHT'S ACADEMY", 'Strength · Discipline · Honour', 2800, cz + D / 2 + 0.9, 0, 5, y0 + 7.4);
     clearings.push([cx, cz, 40]);
   }
@@ -389,7 +423,10 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
       for (const s of [-1, 1]) addMesh(new THREE.CylinderGeometry(0.2, 0.24, 0.8, 8), m.timber, QUAY_X + len - 2, 1.5, pz + s * 1.7);
     }
     // Ships at the piers.
-    const fleet: [number, number, Parameters<typeof buildShip>[0], number][] = [[98, 1, 'merchant', 0x5a3a24], [130, -1, 'galleon', 0x3a2a24], [236, 1, 'merchant', 0x6a4a2a], [262, -1, 'sloop', 0x2f4a6a], [180, 0, 'merchant', 0x4a3a2a]];
+    // All six ship types of the Grand Ocean (sailing opens in a later chapter):
+    // merchantmen, the great ocean vessel, a sloop, a Crown naval ship, and
+    // the dwarves' expedition ship, the Iron Kettle, at the berth.
+    const fleet: [number, number, Parameters<typeof buildShip>[0], number][] = [[98, 1, 'merchant', 0x5a3a24], [130, -1, 'galleon', 0x3a2a24], [236, 1, 'naval', 0x2a3a5a], [262, -1, 'sloop', 0x2f4a6a], [150, 0, 'expedition', 0x6a4a2a]];
     for (const [pz, side, kind, col] of fleet) {
       const { group, beam, length } = buildShip(kind, col);
       const x = side === 0 ? QUAY_X + 30 : QUAY_X + 6 + length / 2 + 4;
@@ -418,6 +455,38 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
       boom.traverse((o) => (o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true));
       scene.add(boom);
       craneBooms.push(boom);
+    }
+    // The Iron Kettle's name board at the berth.
+    sign('IRON KETTLE', 'White Mountain Expedition', QUAY_X - 1.5, 150, Math.PI / 2, 3.6, 2.8);
+    // The shipyard: a hull taking shape on the slipway at the north quay.
+    {
+      const sx = QUAY_X - 16, sz = 48, sy = heightAt(sx, sz);
+      addMesh(new THREE.BoxGeometry(6, 0.6, 30), m.planks, sx, sy + 0.3, sz, Math.PI / 2 - 0.05);
+      addMesh(new THREE.BoxGeometry(0.5, 0.6, 22), m.timber, sx, sy + 1.1, sz, Math.PI / 2);
+      for (let k = -9; k <= 9; k += 1.5) {
+        const rib = new THREE.Mesh(new THREE.TorusGeometry(2.6 - Math.abs(k) * 0.12, 0.14, 5, 12, Math.PI), m.timber);
+        rib.rotation.set(Math.PI, Math.PI / 2, 0);
+        rib.position.set(sx + k, sy + 3.6, sz);
+        batch.addObject(rib);
+      }
+      // The lower strakes are planked; the upper ribs still stand bare.
+      for (const sd of [-1, 1]) for (const th of [0.3, 0.62, 0.94]) {
+        const r = 2.5;
+        const strake = new THREE.Mesh(new THREE.BoxGeometry(17 - th * 5, 0.08, 0.62), m.planks);
+        strake.rotation.x = sd * th;
+        strake.position.set(sx, sy + 3.6 - r * Math.cos(th), sz + sd * r * Math.sin(th));
+        batch.addObject(strake);
+      }
+      const stem = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4.2, 0.4), m.timber);
+      stem.rotation.z = -0.35;
+      stem.position.set(sx + 11, sy + 3.2, sz);
+      batch.addObject(stem);
+      addMesh(new THREE.BoxGeometry(0.4, 3.2, 0.4), m.timber, sx - 10.2, sy + 2.7, sz);
+      for (const sd of [-1, 1]) for (let k = -8; k <= 8; k += 4) addMesh(new THREE.BoxGeometry(0.25, 5, 0.25), m.timber, sx + k, sy + 2.5, sz + sd * 3.4);
+      addMesh(new THREE.BoxGeometry(20, 0.2, 0.3), m.timber, sx, sy + 5, sz + 3.4);
+      addMesh(new THREE.BoxGeometry(20, 0.2, 0.3), m.timber, sx, sy + 5, sz - 3.4);
+      sign('AURELLE SHIPWRIGHTS', 'Hulls laid to order', sx, sz + 8, 0, 4);
+      solid(22, 4, 6, sx, sy + 2, sz);
     }
     // Warehouses and the customs house.
     house(2912, 130, Math.PI / 2, { w: 22, d: 12, floors: 2, roof: 'tile', seed: 9301 });
@@ -464,6 +533,26 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
     for (const s of [-1, 1]) for (const t of [-1, 1]) addMesh(new THREE.BoxGeometry(0.12, 2.8, 0.12), m.timber, PORT_SPOTS.fishMarket.x + s * 4.3, fy + 1.4, PORT_SPOTS.fishMarket.z + 1.4 + t * 1.3);
     solid(8, 1, 1.2, PORT_SPOTS.fishMarket.x, fy + 0.5, PORT_SPOTS.fishMarket.z + 1.4);
     sign("FISHERMAN'S WHARF", 'Fish Market · Boat Hire', wx - 12, wz - 9, 0, 5);
+  }
+
+  // ---- The Lower City: the Drowned Lantern and a door that is not quite hidden ------------------------
+  {
+    const [tx, tz] = [2880, 300];
+    house(tx, tz, Math.PI, { w: 9, d: 8, floors: 2, roof: 'tile', seed: 9401 });
+    sign('THE DROWNED LANTERN', '', tx, tz - 4.8, Math.PI, 3.4);
+    const lm = new THREE.MeshStandardMaterial({ color: 0x3a6a5a, emissive: 0x3aff9a, emissiveIntensity: 0.25 });
+    lights.push({ mat: lm, base: 0.25 });
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 8), lm);
+    lamp.position.set(tx + 3, heightAt(tx + 3, tz - 4.6) + 2.8, tz - 4.6);
+    scene.add(lamp);
+    // A cellar trapdoor in the alley, painted with a small open hand.
+    const [dx, dz] = [2873.4, 300];
+    const dy = heightAt(dx, dz);
+    addMesh(new THREE.BoxGeometry(1.6, 0.12, 1.2), m.planks, dx, dy + 0.06, dz);
+    const hand = new THREE.Mesh(new THREE.CircleGeometry(0.22, 12).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x8a2a2a, roughness: 1 }));
+    hand.position.set(dx, dy + 0.13, dz);
+    scene.add(hand);
+    PORT_SPOTS.thievesDoor.set(dx, dy, dz);
   }
 
   // ---- The canal ---------------------------------------------------------------------------------------------
@@ -614,7 +703,7 @@ const NAMED: Named[] = [
 ];
 
 const JOBS: [string, number, ScheduleEntry['activity'], string][] = [
-  ['dockworker', 10, 'work', 'harbour'], ['sailor', 8, 'talk', 'harbour'], ['merchant', 8, 'shop', 'market'], ['citizen', 14, 'shop', 'market'],
+  ['dockworker', 12, 'work', 'harbour'], ['sailor', 10, 'talk', 'harbour'], ['merchant', 12, 'shop', 'market'], ['citizen', 30, 'shop', 'market'],
   ['guard', 8, 'patrol', 'gate'], ['cadet', 6, 'patrol', 'academy'], ['fisher', 6, 'work', 'wharf'], ['smith', 3, 'work', 'forge'], ['child', 5, 'play', 'market'], ['noble', 4, 'talk', 'gardens'],
 ];
 

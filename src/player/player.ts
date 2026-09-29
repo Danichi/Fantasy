@@ -49,6 +49,7 @@ interface ActiveAction {
  */
 /** How far the rider's root sits above the ground (horse back height minus leg length). */
 const RIDE_HEIGHT = 0.5;
+const MOUNT_TIME = 0.5;
 
 export class Player {
   readonly char = new Character();
@@ -119,7 +120,8 @@ export class Player {
   private poseFrom: ProcPose | null = null;
   private poseFade = 1;
   private lastPose: ProcPose = {};
-  private moveIntent = new THREE.Vector3();
+  /** camera-relative movement wish this step (boats steer from it) */
+  readonly moveIntent = new THREE.Vector3();
   private push = new THREE.Vector3();
   private bladePrev: Record<'main' | 'off', [THREE.Vector3, THREE.Vector3] | null> = { main: null, off: null };
   private lastPresentT = -1;
@@ -228,6 +230,8 @@ export class Player {
     this.stamina = Math.min(this.maxStamina, this.stamina + 15);
   }
 
+  /** a boat carrying the player (world/boats.ts) */
+  vehicle: { pos: THREE.Vector3; yaw: number; speed: number } | null = null;
   /** in deep water (river pools, the canal, the sea) */
   swimming = false;
   private drownT = 0;
@@ -242,9 +246,20 @@ export class Player {
   /** the horse has breath left to gallop */
   mountCanGallop = true;
   setMount(stats: { canter: number; gallop: number; accel: number } | null) {
+    if (stats && !this.mountStats) this.mountT = 0;
     this.mountStats = stats;
     this.mounted = !!stats;
     this.act = null;
+  }
+  /** mounting: 0 -> 1 over MOUNT_TIME (hop up from the horse's left side, swing the leg over) */
+  private mountT = 1;
+  /** dismounting: the saddle's offset from where the player landed, easing to zero */
+  private dismountFrom: THREE.Vector3 | null = null;
+  private dismountT = 1;
+  /** Play the step-down from the saddle after the player has been placed on the ground. */
+  animateDismount(saddle: THREE.Vector3) {
+    this.dismountFrom = saddle.clone().sub(this.pos);
+    this.dismountT = 0;
   }
 
   get forward() {
@@ -358,6 +373,21 @@ export class Player {
     }
     if (!input.uiMode) this.readInput(input, cam);
     else this.moveIntent.set(0, 0, 0);
+    // In a boat: the boat moves you (world/boats.ts); no walking or fighting.
+    if (this.vehicle) {
+      const v = this.vehicle;
+      this.pos.copy(v.pos);
+      this.yaw = v.yaw;
+      this.vel.set(Math.sin(v.yaw) * v.speed, 0, Math.cos(v.yaw) * v.speed);
+      const c = { x: v.pos.x, y: v.pos.y + CENTER_Y + 0.05, z: v.pos.z };
+      this.body.setTranslation(c, true);
+      this.collider.setTranslation(c);
+      this.grounded = true;
+      this.swimming = false;
+      this.act = null;
+      this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0;
+      return;
+    }
     if (this.prog.combat.origin === 'dragon' && !this.grounded && input.held('jump')) {
       // Early draconic flight is deliberately weak; it becomes more useful as Heroic Legacy grows.
       this.vel.y = Math.max(this.vel.y, -1.25 - this.prog.combat.heroic.level * 0.06);
@@ -805,7 +835,26 @@ export class Player {
     const root = this.char.root;
     root.position.lerpVectors(this.prevPos, this.pos, alpha);
     // In the saddle: the rider sits on the horse's back.
-    root.position.y += this.mounted && this.mountStats ? RIDE_HEIGHT : this.mounted ? -0.72 : 0;
+    root.position.y += this.vehicle ? -0.32 : this.mounted && this.mountStats ? RIDE_HEIGHT : this.mounted ? -0.72 : 0;
+    // Getting on: start beside the horse's left flank and hop up into the saddle.
+    let rideW = 1;
+    if (this.mounted && this.mountStats && this.mountT < 1) {
+      this.mountT = Math.min(1, this.mountT + dt / MOUNT_TIME);
+      const e = smoothstep(0, 1, this.mountT);
+      const left = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+      root.position.addScaledVector(left, 0.85 * (1 - e));
+      root.position.y += -RIDE_HEIGHT * (1 - e) + Math.sin(Math.PI * e) * 0.35;
+      rideW = smoothstep(0.25, 0.85, this.mountT);
+    }
+    // Getting off: slide down from the saddle to where the player now stands.
+    if (this.dismountFrom && this.dismountT < 1) {
+      this.dismountT = Math.min(1, this.dismountT + dt / MOUNT_TIME);
+      const e = smoothstep(0, 1, this.dismountT);
+      root.position.addScaledVector(this.dismountFrom, 1 - e);
+      root.position.y += Math.sin(Math.PI * e) * 0.2;
+      rideW = 1 - smoothstep(0.1, 0.7, this.dismountT);
+      if (this.dismountT >= 1) this.dismountFrom = null;
+    }
     this.mountVisual.visible = this.mounted && !this.mountStats;
     root.rotation.y = this.prevYaw + wrapAngle(this.yaw - this.prevYaw) * alpha;
     const yawR = root.rotation.y;
@@ -818,7 +867,7 @@ export class Player {
     // Local velocity for directional locomotion.
     const c = Math.cos(-yawR), s = Math.sin(-yawR);
     const local = { x: this.vel.x * c + this.vel.z * s, z: -this.vel.x * s + this.vel.z * c };
-    if (a || this.mounted) local.x = local.z = 0;
+    if (a || this.mounted || this.vehicle) local.x = local.z = 0;
 
     // ---- clip layers ------------------------------------------------------
     const anim = this.anim;
@@ -908,7 +957,7 @@ export class Player {
       vis.position.z = -k * 0.2;
     }
     this.rig.apply(pose);
-    if (this.mounted && this.mountStats) this.ridePose();
+    if ((this.mounted && this.mountStats) || this.vehicle || this.dismountFrom) this.ridePose(this.vehicle ? 1 : rideW);
 
     if (this.boundaryRing && this.boundaryOuterRing) {
       const visible = this.boundaryActive && this.activeCombatStyle === 'boundary' && !this.dead;
@@ -929,7 +978,8 @@ export class Player {
   }
 
   /** Sit astride: thighs forward and apart, knees bent, feet in the stirrups. */
-  private ridePose() {
+  private ridePose(w = 1) {
+    if (w <= 0.001) return;
     const up = this.char.root.quaternion;
     // Rotating about +x lifts a hanging leg toward +z (forward) for a +z-facing rider.
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(up);
@@ -946,9 +996,25 @@ export class Player {
       const thigh = this.char.bone(side + 'UpLeg');
       const shin = this.char.bone(side + 'Leg');
       // Left is +x for a +z-facing rider: spread each thigh out over the barrel.
-      turn(thigh, fwd, s * 0.55);
-      turn(thigh, right, -0.7);
-      turn(shin, right, 1.05);
+      turn(thigh, fwd, s * 0.55 * w);
+      turn(thigh, right, -0.7 * w);
+      turn(shin, right, 1.05 * w);
+      // The right leg swings high over the horse's back while mounting.
+      if (s < 0 && w < 1) turn(thigh, fwd, -Math.sin(Math.PI * w) * 0.9);
+    }
+    // Square the shoulders to the horse: the combat idle stance turns the torso
+    // sideways, which reads as riding side-saddle.
+    const ls = this.char.bone('LeftArm'), rs = this.char.bone('RightArm');
+    const spine = this.char.bone('Spine1') ?? this.char.bone('Spine');
+    if (ls && rs && spine) {
+      const a = ls.getWorldPosition(new THREE.Vector3()), b = rs.getWorldPosition(new THREE.Vector3());
+      const across = b.sub(a).setY(0);
+      if (across.lengthSq() > 1e-6) {
+        // Facing +z, the left shoulder sits at +x, so left->right points along -x.
+        const want = new THREE.Vector3(-1, 0, 0).applyQuaternion(up);
+        const ang = Math.atan2(across.x * want.z - across.z * want.x, across.x * want.x + across.z * want.z);
+        turn(spine, new THREE.Vector3(0, 1, 0), -ang * w);
+      }
     }
   }
 

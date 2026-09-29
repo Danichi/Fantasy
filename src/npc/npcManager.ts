@@ -392,6 +392,7 @@ export class NpcManager {
     if (slow) this.tick = 0;
     let nSprites = 0;
     const wanting: NpcState[] = [];
+    let farLook: Look | null = null;
     const m = new THREE.Matrix4();
     if (camera) this.spriteUniforms.uCam.value.copy(camera);
     this.spriteUniforms.uNight.value = night * 0.6;
@@ -467,7 +468,7 @@ export class NpcManager {
             this.sprites.setMatrixAt(nSprites, m);
             this.spriteData.setXY(nSprites, cell, st.rec.look.height ?? 1.75);
             nSprites++;
-          } else if (slow && this.building.size === 0 && !this.pool.has(key) && dist > ACTIVE_R) void this.buildActor(key, st.rec.look);
+          } else if (slow && !farLook && !this.pool.has(key) && dist > ACTIVE_R) farLook = st.rec.look;
         }
         continue;
       }
@@ -506,6 +507,8 @@ export class NpcManager {
         a.built.root.visible = true;
       }
     }
+    // Only when nobody nearby is waiting does a distant look get built (for its sprite).
+    if (farLook && !wanting.some((w) => !w.actor) && this.building.size === 0) void this.buildActor(lookKey(farLook), farLook);
   }
 
   private finishSprites(n: number) {

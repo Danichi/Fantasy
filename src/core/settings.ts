@@ -38,5 +38,33 @@ function readQuality(): Quality {
   return 'high';
 }
 
-export const quality: Quality = readQuality();
-export const Q: QualitySettings = PRESETS[quality];
+/**
+ * A software rasteriser (SwiftShader: headless CI, or a machine without GPU
+ * acceleration) draws every pixel on the CPU. Seconds per frame at the
+ * default preset, so it gets a lean one unless a quality is chosen explicitly.
+ */
+function detectSoftwareGL() {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) return false;
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return /swiftshader|llvmpipe|software/i.test(name);
+  } catch {
+    return false;
+  }
+}
+
+const explicitQuality = params.has('quality') || (() => {
+  try {
+    return !!localStorage.getItem('quality');
+  } catch {
+    return false;
+  }
+})();
+export const SOFTWARE_GL = !explicitQuality && detectSoftwareGL();
+export const quality: Quality = SOFTWARE_GL ? 'low' : readQuality();
+export const Q: QualitySettings = SOFTWARE_GL
+  ? { ...PRESETS.low, pixelRatio: 0.5, shadowMapSize: 1024, grassCount: 3000, grassBlades: 12000, particleScale: 0.4 }
+  : PRESETS[quality];

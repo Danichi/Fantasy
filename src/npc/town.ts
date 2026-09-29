@@ -180,6 +180,8 @@ const BUYS: Record<string, [string, number][]> = {
   froest: [['ironOre', 9]],
   apothecary: [['sungrass', 3], ['moongrass', 6], ['wildmint', 3], ['ironleaf', 6], ['redcap', 5], ['silverthistle', 8], ['duskbloom', 18], ['emberroot', 9]],
   zarek: [['duskbloom', 22], ['emberroot', 11], ['silverthistle', 9], ['honeycomb', 8], ['wool', 8], ['ironOre', 10], ['riverReed', 3], ['wildGarlic', 3]],
+  // Nix the Fence, in the Quiet Hands' den: over the odds, no questions.
+  nix: [['ironOre', 12], ['duskbloom', 25], ['moongrass', 8], ['honeycomb', 10], ['wool', 9], ['silverthistle', 10], ['emberroot', 12]],
   hester: [['wheat', 4], ['milk', 5], ['egg', 3], ['apple', 3], ['pumpkin', 9], ['wildGarlic', 4], ['brambleBerries', 3], ['cabbage', 5], ['carrot', 3]],
 };
 

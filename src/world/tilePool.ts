@@ -41,6 +41,17 @@ export function prefetchTiles(list: [number, number][]): Promise<void> {
   let pending = list.length;
   return new Promise((resolve) => {
     const workers: Worker[] = [];
+    let settled = false;
+    // Whatever happens (a worker fails to load or dies), boot goes on: tiles
+    // that never arrived are computed on demand by heightAt().
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(guard);
+      for (const x of workers) x.terminate();
+      resolve();
+    };
+    const guard = setTimeout(finish, 45_000);
     const next = (w: Worker) => {
       const t = queue.shift();
       if (t) w.postMessage({ type: 'tile', i: t[0], j: t[1] });
@@ -56,15 +67,18 @@ export function prefetchTiles(list: [number, number][]): Promise<void> {
       w.onmessage = (e: MessageEvent) => {
         const { i, j, data } = e.data as { i: number; j: number; data: Float32Array };
         putTile(i, j, data);
-        if (--pending <= 0) {
-          for (const x of workers) x.terminate();
-          resolve();
-        } else next(w);
+        if (--pending <= 0) finish();
+        else next(w);
+      };
+      w.onerror = () => {
+        w.terminate();
+        workers.splice(workers.indexOf(w), 1);
+        if (!workers.length) finish();
       };
       workers.push(w);
       next(w);
     }
     // No workers at all: the builders fall back to computing on demand.
-    if (!workers.length) resolve();
+    if (!workers.length) finish();
   });
 }

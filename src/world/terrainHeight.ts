@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { fbm, smoothstep, clamp } from '../core/math';
 import { macroHeight, macroElevAt, reliefAt, RELIEF, SEA_LEVEL } from './worldMap';
-import { ROAD_POLYS } from './roadData';
+import { ROAD_POLYS, CREEK } from './roadData';
 import { cityHeight } from './portCity';
 
 // ---------------------------------------------------------------------------
@@ -48,6 +48,7 @@ BRIDGE.x = riverX(BRIDGE.y);
 type P = [number, number];
 // Roads come from the network data (roadData.ts); the King's Road crosses the
 // river exactly at the bridge.
+const CREEK_LINES: P[][] = [CREEK as P[]];
 const ROADS: P[][] = ROAD_POLYS.map((l) => l.map((p) => (p[0] === 157.7 && p[1] === 22 ? [BRIDGE.x, BRIDGE.y] as P : p)));
 /** Road polylines in world metres (maps draw these). */
 export const ROAD_LINES: readonly (readonly [number, number])[][] = ROADS;
@@ -174,6 +175,11 @@ export function worldHeightFn(x: number, z: number) {
       const smooth = macroSmooth(x, z, r);
       h = h * (1 - w * 0.7) + smooth * w * 0.7;
     }
+  }
+  // Millbrook Brook cuts a small channel (the road crosses it on a bridge).
+  if (x > 1500 && x < 1700 && z > -450 && z < 450) {
+    const d = polyDist(x, z, CREEK_LINES);
+    if (d < 13) h -= 1.5 * smoothstep(6.5, 2.5, d) + 0.8 * smoothstep(13, 6.5, d);
   }
   return h;
 }

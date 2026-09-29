@@ -65,9 +65,9 @@ export class StaticBatch {
 }
 
 /** A docked ship: hull, deck, masts with furled sails, a few lines of rigging. */
-export function buildShip(kind: 'fishing' | 'sloop' | 'merchant' | 'galleon', hullColor = 0x5a3a24, trim = 0xc9a25a) {
+export function buildShip(kind: 'fishing' | 'sloop' | 'merchant' | 'galleon' | 'naval' | 'expedition', hullColor = 0x5a3a24, trim = 0xc9a25a) {
   const g = new THREE.Group();
-  const L = { fishing: 7, sloop: 12, merchant: 18, galleon: 26 }[kind];
+  const L = { fishing: 7, sloop: 12, merchant: 18, galleon: 26, naval: 22, expedition: 16 }[kind];
   const B = L * 0.3, D = L * 0.16;
   // Hulls are painted: lift the wood so it reads warm, not black, on the water.
   const wood = new THREE.MeshStandardMaterial({ color: new THREE.Color(hullColor).multiplyScalar(1.9), roughness: 0.75 });
@@ -105,7 +105,7 @@ export function buildShip(kind: 'fishing' | 'sloop' | 'merchant' | 'galleon', hu
     g.add(r);
   }
   // Masts and furled sails.
-  const masts = kind === 'fishing' ? [0.1] : kind === 'sloop' ? [0.05] : kind === 'merchant' ? [-0.18, 0.18] : [-0.28, 0.02, 0.3];
+  const masts = kind === 'fishing' ? [0.1] : kind === 'sloop' ? [0.05] : kind === 'merchant' || kind === 'expedition' ? [-0.18, 0.18] : [-0.28, 0.02, 0.3];
   const H = L * (kind === 'fishing' ? 0.8 : 0.95);
   for (const mz of masts) {
     const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08 + L * 0.004, 0.12 + L * 0.006, H, 8), wood);
@@ -126,7 +126,19 @@ export function buildShip(kind: 'fishing' | 'sloop' | 'merchant' | 'galleon', hu
   sprit.rotation.x = Math.PI / 2 - 0.3;
   sprit.position.set(0, D * 1.5, L * 0.55);
   g.add(sprit);
-  if (kind === 'merchant' || kind === 'galleon') {
+  if (kind === 'naval') {
+    // A gun deck: a row of ports with cannon muzzles each side.
+    const iron = new THREE.MeshStandardMaterial({ color: 0x2a2a2e, metalness: 0.7, roughness: 0.4 });
+    for (const sd of [-1, 1]) for (let k = -3; k <= 3; k++) {
+      const port = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 0.5), new THREE.MeshStandardMaterial({ color: 0x1a1410 }));
+      port.position.set(sd * B * 0.47, D * 0.55, k * L * 0.1);
+      const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.6, 8), iron);
+      gun.rotation.z = Math.PI / 2;
+      gun.position.set(sd * B * 0.52, D * 0.55, k * L * 0.1);
+      g.add(port, gun);
+    }
+  }
+  if (kind === 'merchant' || kind === 'galleon' || kind === 'naval' || kind === 'expedition') {
     const cabin = new THREE.Mesh(new THREE.BoxGeometry(B * 0.85, D * 1.2, L * 0.18), wood);
     cabin.position.set(0, D * 1.6, -L * 0.36);
     const band = new THREE.Mesh(new THREE.BoxGeometry(B * 0.88, 0.14, L * 0.19), trimM);
