@@ -22,11 +22,15 @@ const wind = { uTime: { value: 0 }, uWind: { value: 1 } };
 
 /** Sway the tops of instanced plants (height-weighted, phase by world position). */
 function swaying(mat: THREE.MeshStandardMaterial, amount: number, height: number) {
+  // Amount and height are uniforms, so every swaying crop shares one shader
+  // program (baked constants made them all share the first crop's values).
+  const own = { uSwayAmount: { value: amount }, uSwayHeight: { value: height } };
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = wind.uTime;
     sh.uniforms.uWind = wind.uWind;
+    Object.assign(sh.uniforms, own);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime, uWind;')
+      .replace('#include <common>', '#include <common>\nuniform float uTime, uWind, uSwayAmount, uSwayHeight;')
       .replace(
         '#include <project_vertex>',
         `vec4 mvPosition = vec4(transformed, 1.0);
@@ -34,11 +38,11 @@ function swaying(mat: THREE.MeshStandardMaterial, amount: number, height: number
           mvPosition = instanceMatrix * mvPosition;
         #endif
         vec4 wpos = modelMatrix * mvPosition;
-        float bend = clamp(transformed.y / ${height.toFixed(2)}, 0.0, 1.5);
+        float bend = clamp(transformed.y / uSwayHeight, 0.0, 1.5);
         bend *= bend;
         float ph = dot(wpos.xz, vec2(0.13, 0.09));
         float gust = sin(uTime * 0.7 + wpos.x * 0.03) * 0.5 + 0.5;
-        wpos.xz += vec2(0.8, 0.45) * bend * ${amount.toFixed(3)} * uWind * (sin(uTime * 1.9 + ph) * 0.6 + 0.5 + gust * 0.6);
+        wpos.xz += vec2(0.8, 0.45) * bend * uSwayAmount * uWind * (sin(uTime * 1.9 + ph) * 0.6 + 0.5 + gust * 0.6);
         mvPosition = viewMatrix * wpos;
         gl_Position = projectionMatrix * mvPosition;`,
       )

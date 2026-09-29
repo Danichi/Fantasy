@@ -28,8 +28,11 @@ export class Renderer {
     const r = new THREE.WebGLRenderer({ antialias: !Q.post && Q.msaa, powerPreference: 'high-performance', stencil: false });
     r.setPixelRatio(this.basePixelRatio);
     r.setSize(window.innerWidth, window.innerHeight);
+    // Checking every shader compile blocks on the GPU driver (seconds at boot and
+    // a hitch whenever a new material appears); only do it when debugging.
+    r.debug.checkShaderErrors = new URLSearchParams(location.search).has('debug');
     r.shadowMap.enabled = true;
-    r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.shadowMap.type = THREE.PCFShadowMap;
     // Shadows refresh every other frame (see render()); at 60fps that's invisible.
     r.shadowMap.autoUpdate = false;
     r.toneMapping = THREE.ACESFilmicToneMapping;

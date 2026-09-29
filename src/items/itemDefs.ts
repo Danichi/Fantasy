@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { buildSword, buildRoundShield, buildKiteShield, buildOdachi } from './weaponModels';
 import { buildArmorPiece, type ArmorPieceId } from './armorModels';
 import { PRODUCE_ITEMS } from './produce';
-import { HERB_ITEMS } from './herbs';
+import { HERB_ITEMS, HERB_MODELS } from './herbs';
 import { FISH_ITEMS } from '../world/fishing';
 
 export type Slot =
@@ -207,6 +207,9 @@ export const ITEMS: Record<string, ItemDef> = {
   ...HERB_ITEMS,
   ...FISH_ITEMS,
 };
+
+// The four original herbs use the foraging models for their icons too.
+for (const id of ['sungrass', 'moongrass', 'wildmint', 'ironleaf']) ITEMS[id].build = HERB_MODELS[id];
 
 export function buildItemModel(def: ItemDef): THREE.Object3D | null {
   if (def.build) return def.build();

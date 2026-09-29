@@ -19,7 +19,7 @@ import { setupLoadout } from './items/loadout';
 import { FX } from './fx/particles';
 import { BeastSpawner } from './enemies/beastSpawner';
 import { Spells } from './magic/spells';
-import { buildIcons } from './ui/icons';
+import { buildIcons, pumpIcons, setOnIconsReady, loadBakedIcons, exportAllIcons } from './ui/icons';
 import { HUD } from './ui/hud';
 import { InventoryUI, buildOverlays } from './ui/inventory';
 import { Music } from './audio/music';
@@ -32,6 +32,7 @@ import { FarmLife } from './world/farmLife';
 import { buildRoadFurniture } from './world/roadNetwork';
 import { Foraging } from './world/foraging';
 import { buildKingsRoad } from './world/kingsRoad';
+import { buildTiles, prefetchTiles } from './world/tilePool';
 import { Horses } from './world/horses';
 import { Encounters } from './world/encounters';
 import { Caravans } from './world/caravans';
@@ -129,14 +130,23 @@ async function boot() {
   mark('grass');
   const river = new River(r.scene);
   mark('river');
+  // Heights along the roads and across the port, computed in parallel first.
+  await prefetchTiles(buildTiles());
+  mark('tilePrefetch');
   const farm = buildFarmstead(r.scene, world.mats);
+  mark('farmstead');
   const crops = buildCrops(r.scene);
+  mark('crops');
   buildGlenDressing(r.scene, world.mats);
+  mark('dressing');
   const kingsRoad = buildKingsRoad(r.scene, world.mats, fx);
+  mark('kingsRoad');
   const port = buildPortAurelle(r.scene, world.mats, fx);
+  mark('port');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
   stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings];
   await stylizedNature.ready;
+  mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
   const foliage = stylizedNature.loaded ? null : new Foliage(r.scene, r.renderer);
   mark('foliage');
@@ -895,6 +905,7 @@ async function boot() {
     physDebug?.update();
     r.followShadow(renderPos);
     r.render(dt);
+    pumpIcons(inv.open ? 12 : 3);
     perfOverlay?.update(dtMs);
     if (inv.open) preview.render();
     const t2 = performance.now();
@@ -924,16 +935,16 @@ async function boot() {
   requestAnimationFrame(frame);
   // Item icons render off-screen; do it once the world is up (it's behind
   // the title screen in normal play) so boot isn't held up by it.
-  setTimeout(() => {
-    buildIcons(r.renderer, r.scene.environment);
-    mark('icons');
+  setOnIconsReady(() => {
     hud.markHotbarDirty();
     if (inv.open) inv.render();
-  }, 50);
+  });
+  await loadBakedIcons();
+  buildIcons(r.renderer, r.scene.environment, player.equip.items.map((i) => i.def.id));
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, sellFish, worldFlags,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, sellFish, worldFlags, exportIcons: exportAllIcons,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

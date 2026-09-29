@@ -168,7 +168,82 @@ function paintAccessory(def: ItemDef) {
   return c.toDataURL();
 }
 
-export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | null) {
+/**
+ * Item icons are rendered lazily and a little at a time: whatever the UI asks
+ * for first (your bag, your hotbar), then everything else in the background,
+ * within a few milliseconds per frame, so the game never stalls on them.
+ */
+let builder: ((def: ItemDef) => void) | null = null;
+let flushIcons: (() => void) | null = null;
+/** baking (tools/bake-icons.mjs) wants data URLs, synchronously */
+let dataUrlMode = false;
+/** icons baked into public/assets/icons (see tools/bake-icons.mjs) */
+const baked = { square: new Set<string>(), wide: new Set<string>() };
+const BAKED_DIR = '/assets/icons/';
+
+/** Load the baked icon manifest: those icons are plain images, no rendering at all. */
+export async function loadBakedIcons() {
+  try {
+    const m = (await (await fetch(BAKED_DIR + 'manifest.json')).json()) as { square: string[]; wide: string[]; v: string };
+    for (const id of m.square) {
+      baked.square.add(id);
+      cache.set(id, `${BAKED_DIR}${id}.png?v=${m.v}`);
+    }
+    for (const id of m.wide) {
+      baked.wide.add(id);
+      wideCache.set(id, `${BAKED_DIR}wide/${id}.png?v=${m.v}`);
+    }
+  } catch {
+    /* not baked yet: icons render at runtime */
+  }
+}
+
+/** Render every item's icon now and return them as data URLs (for baking). */
+export function exportAllIcons() {
+  dataUrlMode = true;
+  cache.clear();
+  wideCache.clear();
+  for (const id of Object.keys(ITEMS)) {
+    queued.delete(id);
+    enqueue(id);
+  }
+  while (queue.length) pumpIcons(1e9);
+  for (let k = 0; k < 8; k++) flushIcons?.(); // leftovers (wide icons)
+  dataUrlMode = false;
+  return { square: Object.fromEntries(cache), wide: Object.fromEntries(wideCache) };
+}
+const queue: string[] = [];
+const queued = new Set<string>();
+/** called when new icons are ready (the HUD and bag redraw) */
+export let onIconsReady: (() => void) | null = null;
+export function setOnIconsReady(fn: () => void) {
+  onIconsReady = fn;
+}
+
+function enqueue(id: string, front = false) {
+  if (cache.has(id) || queued.has(id) || !ITEMS[id]) return;
+  queued.add(id);
+  if (front) queue.unshift(id);
+  else queue.push(id);
+}
+
+/** Render queued icons for up to `budgetMs`; call once per frame. */
+export function pumpIcons(budgetMs = 4) {
+  if (!builder || !queue.length) return;
+  const t0 = performance.now();
+  let made = 0;
+  // Build models (cheap) up to the budget, then render the lot in one pass.
+  while (queue.length && made < (dataUrlMode ? 12 : 10) && performance.now() - t0 < budgetMs) {
+    const id = queue.shift()!;
+    queued.delete(id);
+    if (!cache.has(id)) builder(ITEMS[id]);
+    made++;
+  }
+  flushIcons?.();
+  if (made) onIconsReady?.();
+}
+
+export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | null, first: string[] = []) {
   const scene = new THREE.Scene();
   scene.environment = env;
   scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
@@ -177,66 +252,97 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
   scene.add(key);
   const cam = new THREE.PerspectiveCamera(30, 1, 0.01, 20);
   const toSrgb = (c: number) => 255 * (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
-  const prevTone = renderer.toneMapping;
-  const prevClear = renderer.getClearAlpha();
-  renderer.toneMapping = THREE.NoToneMapping;
 
-  /** Render `holder` into a w x h image, framed to fit, and return a data URL. */
-  const targets = new Map<string, THREE.WebGLRenderTarget>();
-  const snap = (holder: THREE.Object3D, w: number, h: number, fill = 1.75) => {
-    // Render targets receive linear colour; convert to sRGB when copying out.
-    let rt = targets.get(`${w}x${h}`);
-    if (!rt) targets.set(`${w}x${h}`, (rt = new THREE.WebGLRenderTarget(w, h, { samples: 4, type: THREE.FloatType })));
-    const pixels = new Float32Array(w * h * 4);
-    scene.add(holder);
-    holder.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(holder);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    cam.aspect = w / h;
-    // Distance at which the box's height and width both fit the frame.
-    const t = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
-    const dist = Math.max(size.y / (2 * t), size.x / (2 * t * cam.aspect)) * fill + size.z / 2;
-    cam.position.copy(center).add(new THREE.Vector3(0, 0, dist));
-    cam.lookAt(center);
-    cam.updateProjectionMatrix();
-    renderer.setRenderTarget(rt);
+  // Icons are rendered in batches into one atlas and read back once per batch:
+  // each GPU readback stalls the pipeline, so one per icon froze the game.
+  type Job = { holder: THREE.Object3D; w: number; h: number; fill: number; done: (url: string) => void };
+  const jobs: Job[] = [];
+  const AW = 1024, CW = 256, CH = 128, COLS = AW / CW, MAX_JOBS = 12;
+  const atlas = new THREE.WebGLRenderTarget(AW, AW, { samples: 4, type: THREE.FloatType });
+  atlas.scissorTest = true;
+  const snap = (holder: THREE.Object3D, w: number, h: number, fill: number, done: (url: string) => void) => jobs.push({ holder, w, h, fill, done });
+  flushIcons = () => {
+    if (!jobs.length) return;
+    const batch = jobs.splice(0, MAX_JOBS);
+    const prevTone = renderer.toneMapping;
+    const prevClear = renderer.getClearAlpha();
+    const prevTarget = renderer.getRenderTarget();
+    renderer.toneMapping = THREE.NoToneMapping;
+    atlas.viewport.set(0, 0, AW, AW);
+    atlas.scissor.set(0, 0, AW, AW);
+    renderer.setRenderTarget(atlas);
     renderer.setClearColor(0x000000, 0);
     renderer.clear();
-    renderer.render(scene, cam);
-    renderer.readRenderTargetPixels(rt, 0, 0, w, h, pixels);
-    scene.remove(holder);
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d')!;
-    const img = ctx.createImageData(w, h);
-    // Flip vertically (GL origin is bottom-left) and un-premultiply edges.
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const src = ((h - 1 - y) * w + x) * 4, dst = (y * w + x) * 4;
-        const a = Math.min(1, pixels[src + 3]);
-        for (let k = 0; k < 3; k++) img.data[dst + k] = toSrgb(Math.min(1, a > 0 ? pixels[src + k] / Math.max(a, 1e-3) : 0));
-        img.data[dst + 3] = a * 255;
+    batch.forEach((j, i) => {
+      const cx = (i % COLS) * CW, cy = Math.floor(i / COLS) * CH;
+      scene.add(j.holder);
+      j.holder.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(j.holder);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      cam.aspect = j.w / j.h;
+      // Distance at which the box's height and width both fit the frame.
+      const t = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+      const dist = Math.max(size.y / (2 * t), size.x / (2 * t * cam.aspect)) * j.fill + size.z / 2;
+      cam.position.copy(center).add(new THREE.Vector3(0, 0, dist));
+      cam.lookAt(center);
+      cam.updateProjectionMatrix();
+      atlas.viewport.set(cx, cy, j.w, j.h);
+      atlas.scissor.set(cx, cy, j.w, j.h);
+      renderer.setRenderTarget(atlas);
+      renderer.render(scene, cam);
+      scene.remove(j.holder);
+    });
+    const rows = Math.ceil(batch.length / COLS) * CH;
+    const pixels = new Float32Array(AW * rows * 4);
+    renderer.readRenderTargetPixels(atlas, 0, 0, AW, rows, pixels);
+    renderer.setRenderTarget(prevTarget);
+    renderer.toneMapping = prevTone;
+    renderer.setClearColor(0x000000, prevClear);
+    // Render targets receive linear colour; convert to sRGB when copying out.
+    batch.forEach((j, i) => {
+      const cx = (i % COLS) * CW, cy = Math.floor(i / COLS) * CH;
+      const canvas = document.createElement('canvas');
+      canvas.width = j.w;
+      canvas.height = j.h;
+      const ctx = canvas.getContext('2d')!;
+      const img = ctx.createImageData(j.w, j.h);
+      // Flip vertically (GL origin is bottom-left) and un-premultiply edges.
+      for (let y = 0; y < j.h; y++) {
+        for (let x = 0; x < j.w; x++) {
+          const src = ((cy + j.h - 1 - y) * AW + cx + x) * 4, dst = (y * j.w + x) * 4;
+          const a = Math.min(1, pixels[src + 3]);
+          for (let k = 0; k < 3; k++) img.data[dst + k] = toSrgb(Math.min(1, a > 0 ? pixels[src + k] / Math.max(a, 1e-3) : 0));
+          img.data[dst + 3] = a * 255;
+        }
       }
-    }
-    ctx.putImageData(img, 0, 0);
-    return canvas.toDataURL();
+      ctx.putImageData(img, 0, 0);
+      if (dataUrlMode) {
+        j.done(canvas.toDataURL());
+        return;
+      }
+      // Encode off the main thread; the icon appears when the blob is ready.
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        j.done(URL.createObjectURL(blob));
+        onIconsReady?.();
+      });
+    });
   };
 
-  for (const def of Object.values(ITEMS)) {
+  const one = (def: ItemDef) => {
     if (def.kind === 'spell') {
       cache.set(def.id, paintSpell(def));
-      continue;
+      return;
     }
     if (def.kind === 'consumable' && !def.build) {
       cache.set(def.id, paintPotion(def));
-      continue;
+      return;
     }
     const model = buildItemModel(def);
     if (!model) {
       if (def.kind === 'accessory' || def.kind === 'key') cache.set(def.id, paintAccessory(def));
-      continue;
+      return;
     }
     const holder = new THREE.Group();
     holder.add(model);
@@ -245,28 +351,32 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
     if (def.kind === 'shield') holder.rotation.set(0.15, -0.35, 0);
     if (def.kind === 'armor' || def.kind === 'accessory') holder.rotation.set(0.25, -0.5, 0);
     if (def.kind === 'material' || def.kind === 'consumable' || def.kind === 'key') holder.rotation.set(0.45, -0.5, 0);
-    cache.set(def.id, snap(holder, SIZE, SIZE, 1.15));
+    snap(holder, SIZE, SIZE, 1.15, (url) => cache.set(def.id, url));
     // Wide versions for the hand frames: blades horizontal, shields upright.
     if (def.kind === 'sword' || def.kind === 'shield') {
       const wide = new THREE.Group();
-      wide.add(model); // reuse the same model (building shields paints textures)
+      wide.add(model.clone()); // a copy: the square icon's holder still needs the original
       if (def.kind === 'sword') wide.rotation.set(0.25, 0, -Math.PI / 2 + 0.12);
       else wide.rotation.set(0.1, -0.3, 0);
-      wideCache.set(def.id, snap(wide, 256, 112, 1.08));
+      snap(wide, 256, 112, 1.08, (url) => wideCache.set(def.id, url));
     }
-  }
-  renderer.setRenderTarget(null);
-  for (const t of targets.values()) t.dispose();
-  renderer.toneMapping = prevTone;
-  renderer.setClearColor(0x000000, prevClear);
+  };
+  builder = one;
+  // Baked icons are already in the cache; only unbaked items get rendered here.
+  for (const id of first) enqueue(id, true);
+  for (const id of Object.keys(ITEMS)) enqueue(id);
 }
 
 const wideCache = new Map<string, string>();
 /** 256x112 horizontal render for the big hand frames (falls back to the square icon). */
 export function wideIconFor(id: string) {
-  return wideCache.get(id) ?? cache.get(id) ?? '';
+  const got = wideCache.get(id) ?? cache.get(id);
+  if (!got) enqueue(id, true);
+  return got ?? '';
 }
 
 export function iconFor(id: string) {
-  return cache.get(id) ?? '';
+  const got = cache.get(id);
+  if (!got) enqueue(id, true);
+  return got ?? '';
 }
