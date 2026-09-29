@@ -17,7 +17,8 @@ const LEGACY_KEYS = ['fantasy-rpg-save-v5', 'fantasy-rpg-save-v4', 'fantasy-rpg-
 export interface WorldSave {
   discovery?: DiscoverySave;
   flags: Record<string, boolean | number | string>;
-  time?: number;
+  time?: { hour: number; day: number } | number;
+  weather?: { kind?: import('./world/regionDefinitions').WeatherKind; timer?: number };
   /** where the player stood (overworld), so a reload keeps them there */
   pos?: [number, number, number];
 }

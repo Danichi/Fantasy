@@ -9,7 +9,7 @@ import '@fontsource/inter/600.css';
 import * as THREE from 'three';
 import { Renderer, SUN_DIR } from './render/renderer';
 import { physics, PhysicsDebug } from './physics/physics';
-import { Terrain, initTerrainData, heightAt } from './world/terrain';
+import { Terrain, initTerrainData, heightAt, riverX } from './world/terrain';
 import { loadWorldMap } from './world/worldMap';
 import { Input } from './core/input';
 import { Player } from './player/player';
@@ -24,6 +24,13 @@ import { HUD } from './ui/hud';
 import { InventoryUI, buildOverlays } from './ui/inventory';
 import { Music } from './audio/music';
 import { Ambient } from './world/ambient';
+import { WorldTime } from './world/worldTime';
+import { Weather } from './world/weather';
+import { Precipitation } from './world/precipitation';
+import { Ambience } from './audio/ambience';
+import { NpcManager } from './npc/npcManager';
+import { elderGlenFolk } from './npc/elderGlenFolk';
+import { REGIONS } from './world/regionDefinitions';
 import { Discovery } from './world/discovery';
 import { WorldMapUI } from './ui/worldMap';
 import { PerfOverlay } from './ui/perfOverlay';
@@ -107,6 +114,23 @@ async function boot() {
   const flowers = new Flowers(r.scene, ground);
   const ambient = new Ambient(r.scene, world.village.flowerSpots);
   const ocean = new Ocean(r.scene, SUN_DIR);
+  // Living world: clock, weather, rain and snow, ambience, townsfolk.
+  const time = new WorldTime();
+  time.fromJSON(saveData?.world?.time);
+  const weather = new Weather(20260929);
+  weather.fromJSON(saveData?.world?.weather);
+  const precip = new Precipitation(r.scene);
+  const ambience = new Ambience();
+  weather.onLightning = (s) => {
+    r.lightning(s);
+    ambience.thunderClap(s);
+  };
+  const npcs = new NpcManager(r.scene, time, r.renderer);
+  {
+    const folk = elderGlenFolk(world.village.houses);
+    npcs.addSettlement(folk.settlement);
+    for (const rec of folk.records) npcs.add(rec);
+  }
   void ocean;
   mark('flowers');
   const rewards = new Rewards(r.scene, player.prog);
@@ -146,6 +170,8 @@ async function boot() {
       grass.mesh.visible = !h;
       ambient.setVisible(!h);
       ocean.setVisible(!h);
+      precip.setVisible(!h);
+      npcs.setVisible(!h);
       flowers.mesh.visible = !h;
       river.mesh.visible = !h;
       foliage?.setVisible(!h);
@@ -163,6 +189,24 @@ async function boot() {
     () => town.guild.open('board'),
   );
   realm.overworldInteractables.push(...town.interactables(), ...frontier.interactables);
+  // Townsfolk: one interactable that follows whoever is nearest.
+  const folkTalk = {
+    pos: new THREE.Vector3(0, -999, 0),
+    radius: 2.4,
+    npc: null as ReturnType<typeof npcs.nearest>,
+    label() {
+      return this.npc ? `Talk to ${this.npc.rec.name}` : '';
+    },
+    enabled() {
+      return !!this.npc;
+    },
+    action() {
+      const n = this.npc;
+      if (!n) return;
+      dialogue.show(n.rec.name, n.rec.job.charAt(0).toUpperCase() + n.rec.job.slice(1) + ' of Elder Glen', npcs.lineFor(n), [{ label: 'Farewell.', run: () => dialogue.close() }]);
+    },
+  };
+  realm.overworldInteractables.push(folkTalk);
   player.onTeleport = (p) => {
     if (realm.mode === 'dungeon') return;
     terrain.warm(p);
@@ -188,7 +232,7 @@ async function boot() {
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
   events.on('mapRevealed', () => worldMap.markFogDirty());
   events.on('regionEntered', ({ name, subtitle, first }) => {
-    worldMap.setRegionLabel(name);
+    regionName = name;
     if (started) hud.regionCard(name, subtitle, first);
     if (first) save();
   });
@@ -197,6 +241,7 @@ async function boot() {
     player.prog.addXp(25);
     save();
   });
+  let regionName = 'Elder Glen';
   const perfOverlay = new URLSearchParams(location.search).has('perf')
     ? new PerfOverlay({
       renderer: r.renderer,
@@ -216,7 +261,7 @@ async function boot() {
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
     const pos = realm.mode === 'overworld' ? ([+player.pos.x.toFixed(2), +player.pos.y.toFixed(2), +player.pos.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos });
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON() });
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   realm.onSave = save;
@@ -246,6 +291,7 @@ async function boot() {
     player.prog.combat.origin = origin;
     started = true;
     music.start();
+    ambience.start();
     pausedByUser = false;
     input.fallbackLook = true;
     input.requestLock();
@@ -424,6 +470,31 @@ async function boot() {
     grass.update(dt, r.camera.position, renderPos);
     ambient.update(dt, r.camera.position, now / 1000);
     ocean.update(dt, r.camera.position);
+    // Time of day and weather drive the sky, light, water, grass and sound.
+    const worldRunning = !(paused || overlayUp || mapUI.open || worldMap.open);
+    if (worldRunning) time.update(dt);
+    const here = realm.mode === 'dungeon' ? 'cresha' : regionAt(player.pos.x, player.pos.z);
+    weather.update(worldRunning ? dt : 0, here === 'ocean' ? 'portAurelle' : here);
+    const ts = time.state, wp = weather.p;
+    if (realm.mode === 'overworld') {
+      r.applyTime(dt, ts, wp);
+      precip.update(dt, r.camera.position, wp);
+      ocean.setConditions(wp.wind, ts.zenith, ts.horizon, wp.cloud, ts.night);
+      grass.setWind(0.45 + wp.wind * 1.35);
+      terrain.setWet(wp.wet);
+      ambient.setNight(ts.night);
+      world.mats.glass instanceof THREE.MeshStandardMaterial && (world.mats.glass.emissiveIntensity = 0.28 + ts.night * 2.4);
+      world.village.lanternMat.emissiveIntensity = 0.6 + ts.night * 2.6;
+      npcs.raining = wp.rain > 0.45;
+      if (worldRunning) npcs.update(dt, player.pos, r.camera.position, ts.night);
+      folkTalk.npc = npcs.nearest(player.pos);
+      if (folkTalk.npc) folkTalk.pos.copy(folkTalk.npc.pos);
+      else folkTalk.pos.set(0, -999, 0);
+    }
+    const riverNear = Math.max(0, 1 - Math.abs(player.pos.x - riverX(player.pos.z)) / 40) * (Math.abs(player.pos.z) < 420 ? 1 : 0);
+    const def = REGIONS[here];
+    ambience.update(dt, def?.ambience ?? 'meadow', ts.night, wp, { river: riverNear * 0.7 }, realm.mode === 'dungeon');
+    worldMap.setRegionLabel(`${regionName} · ${time.label.split(', ')[1]}`);
     flowers.update(dt, r.camera.position);
     if (realm.mode === 'overworld') terrain.update(r.camera.position, player.pos);
     foliage?.update(dt, r.camera.position);
@@ -476,7 +547,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

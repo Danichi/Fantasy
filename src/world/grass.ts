@@ -53,6 +53,8 @@ const shared = {
   uGroundOrigin: { value: new THREE.Vector2() },
   uGroundSize: { value: 256 },
   uSunDir: { value: new THREE.Vector3(0, 1, 0) },
+  /** 0.3 calm .. 1.8 gale (weather) */
+  uWindStrength: { value: 1 },
 };
 /** Shared with anything else that should sway in the same wind (flowers, trees). */
 export const WIND = shared;
@@ -84,7 +86,7 @@ class GrassLayer {
           '#include <common>',
           `#include <common>
           attribute vec4 aOff; attribute float aT;
-          uniform vec2 uCenter, uWindDir, uGroundOrigin; uniform float uTime, uGroundSize, uTile, uWidth, uFadeIn; uniform vec3 uPlayer;
+          uniform vec2 uCenter, uWindDir, uGroundOrigin; uniform float uTime, uGroundSize, uTile, uWidth, uFadeIn, uWindStrength; uniform vec3 uPlayer;
           uniform sampler2D uGround, uNoise;
           varying float vT; varying vec3 vCol; varying float vGust;`,
         )
@@ -119,7 +121,7 @@ class GrassLayer {
           p.y *= height;
           float c = cos(aOff.z), s = sin(aOff.z);
           p.xz = mat2(c, -s, s, c) * p.xz;
-          vec2 bend = uWindDir * (0.12 + gust * 0.55 + flutter * 0.06);
+          vec2 bend = uWindDir * (0.12 + gust * 0.55 + flutter * 0.06) * uWindStrength;
           // Push aside around the player.
           vec2 away = world - uPlayer.xz;
           float pd = length(away);
@@ -195,8 +197,13 @@ export class Grass {
     this.far = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.3), FAR_TILE, 0.16, NEAR_TILE * 0.36, 987);
   }
 
+  /** Follow a (mutable) sun direction by reference. */
   setSunDir(dir: THREE.Vector3) {
-    shared.uSunDir.value.copy(dir);
+    shared.uSunDir.value = dir;
+  }
+
+  setWind(strength: number) {
+    shared.uWindStrength.value = strength;
   }
 
   update(dt: number, center: THREE.Vector3, player: THREE.Vector3) {

@@ -57,18 +57,20 @@ export class Ocean {
     uSunDir: { value: new THREE.Vector3(0, 1, 0) },
     uSky: { value: SKY.zenith.clone() },
     uHorizon: { value: SKY.horizon.clone() },
+    uWave: { value: 1 },
+    uDim: { value: 0 },
   };
 
   constructor(scene: THREE.Scene, sunDir: THREE.Vector3) {
     this.uniforms.tMacro.value = macroTexture();
-    this.uniforms.uSunDir.value.copy(sunDir);
+    this.uniforms.uSunDir.value = sunDir; // follows the world clock
     const waveGlsl = WAVES.map(
       ([dx, dz, len, amp], i) => `{
         vec2 d${i} = normalize(vec2(${dx.toFixed(3)}, ${dz.toFixed(3)}));
         float k${i} = ${((2 * Math.PI) / len).toFixed(5)};
         float c${i} = sqrt(9.8 / k${i});
         float f${i} = k${i} * (dot(d${i}, wp.xz) - c${i} * uTime);
-        float a${i} = ${amp.toFixed(3)} * calm;
+        float a${i} = ${amp.toFixed(3)} * calm * uWave;
         disp.x += d${i}.x * a${i} * 0.6 * cos(f${i});
         disp.z += d${i}.y * a${i} * 0.6 * cos(f${i});
         disp.y += a${i} * sin(f${i});
@@ -84,7 +86,7 @@ export class Ocean {
       depthWrite: false,
       fog: false,
       vertexShader: /* glsl */ `
-        uniform float uTime; uniform vec2 uCenter;
+        uniform float uTime, uWave; uniform vec2 uCenter;
         varying vec3 vW; varying vec3 vN; varying float vCalm;
         void main() {
           vec3 wp = vec3(position.x + uCenter.x, ${SEA_LEVEL.toFixed(2)}, position.z + uCenter.y);
@@ -99,7 +101,7 @@ export class Ocean {
           gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
         }`,
       fragmentShader: /* glsl */ `
-        uniform sampler2D tMacro; uniform vec4 uWorld; uniform vec3 uSunDir, uSky, uHorizon; uniform float uTime;
+        uniform sampler2D tMacro; uniform vec4 uWorld; uniform vec3 uSunDir, uSky, uHorizon; uniform float uTime, uDim;
         varying vec3 vW; varying vec3 vN; varying float vCalm;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -124,7 +126,8 @@ export class Ocean {
           vec3 col = mix(water, sky, fres * 0.45);
           // Sun glitter.
           vec3 H = normalize(uSunDir + V);
-          col += vec3(1.0, 0.95, 0.85) * pow(max(dot(N, H), 0.0), 220.0) * 3.0;
+          col += vec3(1.0, 0.95, 0.85) * pow(max(dot(N, H), 0.0), 220.0) * 3.0 * smoothstep(-0.05, 0.1, uSunDir.y) * (1.0 - uDim);
+          col *= 1.0 - uDim * 0.35;
           // Foam: shallow water and wave crests, broken up by noise.
           float fn = vnoise(vW.xz * 0.6 + uTime * 0.25) * vnoise(vW.xz * 1.7 - uTime * 0.4);
           float shore = smoothstep(0.8, 0.1, depth) * smoothstep(0.18, 0.4, fn + 0.1);
@@ -142,6 +145,14 @@ export class Ocean {
     this.mesh.renderOrder = 1;
     this.mesh.name = 'ocean';
     scene.add(this.mesh);
+  }
+
+  /** Weather and time: wave height from wind, sky reflection colours, overcast dimming. */
+  setConditions(wind: number, zenith: THREE.Color, horizon: THREE.Color, overcast: number, night: number) {
+    this.uniforms.uWave.value = 0.55 + wind * 1.6;
+    this.uniforms.uSky.value.copy(zenith);
+    this.uniforms.uHorizon.value.copy(horizon);
+    this.uniforms.uDim.value = Math.min(1, overcast * 0.7 + night * 0.6);
   }
 
   update(dt: number, camera: THREE.Vector3) {

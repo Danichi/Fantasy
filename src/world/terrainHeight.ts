@@ -67,6 +67,9 @@ const STREETS: P[][] = [
   [[-55, 55], [55, 55]],
 ];
 
+/** Elder Glen's streets in world metres (NPC walking graphs). */
+export const STREET_LINES: readonly (readonly [number, number])[][] = STREETS;
+
 function segDist(px: number, pz: number, a: P, b: P) {
   const vx = b[0] - a[0], vz = b[1] - a[1];
   const t = clamp(((px - a[0]) * vx + (pz - a[1]) * vz) / (vx * vx + vz * vz), 0, 1);

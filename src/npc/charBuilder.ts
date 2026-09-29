@@ -212,6 +212,15 @@ const CLIP_FILES: Record<string, string> = {
   talk: '/assets/anims/talk.glb',
   walk: '/assets/anims/walk.glb',
   sit: '/assets/anims/sit.glb',
+  farm: '/assets/anims/farm.glb',
+  water: '/assets/anims/water.glb',
+  chop: '/assets/anims/chop.glb',
+  cheer: '/assets/anims/cheer.glb',
+  drink: '/assets/anims/drink.glb',
+  arms: '/assets/anims/arms.glb',
+  fix: '/assets/anims/fix.glb',
+  dance: '/assets/anims/dance.glb',
+  crouch: '/assets/anims/crouch.glb',
 };
 const clipCache = new Map<string, Promise<{ clip: THREE.AnimationClip; rest: ReturnType<typeof captureRest> } | null>>();
 function loadClip(key: string) {

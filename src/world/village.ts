@@ -22,6 +22,10 @@ export interface PlacedHouse {
 }
 
 export interface Village {
+  /** lantern glass (brightens at dusk) */
+  lanternMat: THREE.MeshStandardMaterial;
+  /** every house in town (authored and generated), for homes and NPC routes */
+  houses: PlacedHouse[];
   /** Open spots for town trees (yards, greens). */
   treeSpots: THREE.Vector3[];
   /** Spots for flowers and bushes along walls and fences. */
@@ -314,6 +318,7 @@ export function buildVillage(scene: THREE.Scene, m: WorldMats, fx: FX, houses: P
   }
 
   // ---- materials and meshes -----------------------------------------------------
+  const lanternMat = new THREE.MeshStandardMaterial({ color: 0xffe6b0, emissive: 0xffb050, emissiveIntensity: 1.1, roughness: 0.4 });
   const vc = (base: THREE.Material) => {
     const mm = (base as THREE.MeshStandardMaterial).clone();
     mm.vertexColors = true;
@@ -339,12 +344,14 @@ export function buildVillage(scene: THREE.Scene, m: WorldMats, fx: FX, houses: P
   kit.build(scene, {
     timber: vc(m.timber), planks: vc(m.planks), stone: vc(m.stone), bark: vc(m.bark),
     soil, leafy, cloth, metal,
-    glass: new THREE.MeshStandardMaterial({ color: 0xffe6b0, emissive: 0xffb050, emissiveIntensity: 1.1, roughness: 0.4 }),
+    glass: lanternMat,
   });
 
   // ---- chimney smoke ------------------------------------------------------------
   let t = 0;
   return {
+    houses: all,
+    lanternMat,
     treeSpots,
     flowerSpots,
     update(dt: number) {

@@ -16,6 +16,7 @@ const BIRDS = 26;
 export class Ambient {
   readonly group = new THREE.Group();
   private pollenCenter = { value: new THREE.Vector3() };
+  private night = { value: 0 };
   private butterflies: { pos: THREE.Vector3; target: THREE.Vector3; vel: THREE.Vector3; timer: number }[] = [];
   private butterflyMesh: THREE.InstancedMesh;
   private birdMesh: THREE.InstancedMesh;
@@ -49,11 +50,11 @@ export class Ambient {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uTime: WIND.uTime, uCenter: this.pollenCenter, uWind: WIND.uWindDir, uBox: { value: POLLEN_BOX } },
+      uniforms: { uTime: WIND.uTime, uCenter: this.pollenCenter, uWind: WIND.uWindDir, uBox: { value: POLLEN_BOX }, uNight: this.night },
       vertexShader: /* glsl */ `
         attribute float aSeed;
-        uniform float uTime, uBox; uniform vec3 uCenter; uniform vec2 uWind;
-        varying float vA;
+        uniform float uTime, uBox, uNight; uniform vec3 uCenter; uniform vec2 uWind;
+        varying float vA; varying float vFly;
         void main() {
           vec3 p = position;
           p.xz += uWind * uTime * (0.6 + aSeed * 0.8);
@@ -64,12 +65,17 @@ export class Ambient {
           gl_Position = projectionMatrix * mv;
           float d = length(w - uCenter);
           vA = (1.0 - smoothstep(uBox * 0.3, uBox * 0.5, d)) * (0.35 + 0.65 * (0.5 + 0.5 * sin(uTime * 2.0 + aSeed * 50.0)));
-          gl_PointSize = (1.2 + aSeed * 1.6) * (28.0 / max(-mv.z, 1.0));
+          // After dusk the motes become fireflies: low, slow, pulsing.
+          vFly = uNight;
+          float pulse = smoothstep(0.3, 1.0, sin(uTime * (1.5 + aSeed * 2.0) + aSeed * 40.0));
+          vA = mix(vA, vA * pulse * 1.6, uNight);
+          gl_PointSize = (1.2 + aSeed * 1.6) * (28.0 / max(-mv.z, 1.0)) * mix(1.0, 2.2, uNight);
         }`,
       fragmentShader: /* glsl */ `
-        varying float vA;
+        varying float vA; varying float vFly;
         void main() {
           float r = length(gl_PointCoord - 0.5);
+          if (vFly > 0.5) { gl_FragColor = vec4(vec3(0.85, 1.0, 0.45) * 1.6, smoothstep(0.5, 0.0, r) * vA); return; }
           gl_FragColor = vec4(vec3(1.0, 0.96, 0.8), smoothstep(0.5, 0.0, r) * vA * 0.4);
         }`,
     });
@@ -204,5 +210,10 @@ export class Ambient {
 
   setVisible(v: boolean) {
     this.group.visible = v;
+  }
+
+  /** 0 day .. 1 night: pollen turns into fireflies. */
+  setNight(n: number) {
+    this.night.value = n;
   }
 }

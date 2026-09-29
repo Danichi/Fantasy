@@ -44,6 +44,9 @@ function buildSplatTexture() {
   return tex;
 }
 
+/** Shared wetness uniform for every terrain material (weather). */
+const WET = { value: 0 };
+
 function terrainMaterial(renderer: THREE.WebGLRenderer, splat: THREE.DataTexture) {
   // Painted ground (docs/ART-DIRECTION.md §3): each macro relief class has its
   // own painted palette (meadow, forest floor, rock strata, snow, dunes, mesa,
@@ -65,6 +68,7 @@ function terrainMaterial(renderer: THREE.WebGLRenderer, splat: THREE.DataTexture
     uWorld: { value: new THREE.Vector4(WORLD_X0, WORLD_Z0, WORLD_W, WORLD_H) },
     uGrid: { value: new THREE.Vector2(GW, GH) },
     uHole: { value: new THREE.Vector3(0, 0, 0) },
+    uWet: WET,
   };
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms);
@@ -86,6 +90,7 @@ vWN = normal;`);
         uniform vec4 uWorld;
         uniform vec2 uGrid;
         uniform vec3 uHole;
+        uniform float uWet;
         vec3 terrainGlow = vec3(0.0);
         ${FLOWER_GLSL}
         // Rock strata shared by mountains, cliffs and mesas.
@@ -202,6 +207,8 @@ vWN = normal;`);
         float under = smoothstep(${(SEA_LEVEL + 0.6).toFixed(2)}, ${(SEA_LEVEL - 0.4).toFixed(2)}, vWPos.y) * seaHere;
         vec3 seabed = mix(vec3(0.86, 0.78, 0.56), vec3(0.36, 0.42, 0.36), smoothstep(${(SEA_LEVEL - 0.5).toFixed(2)}, ${(SEA_LEVEL - 12.0).toFixed(2)}, vWPos.y));
         col = mix(col, seabed * mix(0.94, 1.06, fineN.b), under);
+        // Rain darkens the ground (rock and paths most, grass a little).
+        col *= 1.0 - uWet * mix(0.14, 0.32, max(tRock, 1.0 - smoothstep(0.1, 0.4, dot(col, vec3(0.3, 0.55, 0.15)) - 0.2)));
         diffuseColor.rgb *= col;`,
       )
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += terrainGlow;');
@@ -378,6 +385,10 @@ export class Terrain {
 
   get tileCount() {
     return this.tiles.size;
+  }
+
+  setWet(w: number) {
+    WET.value = w;
   }
 
   private addTile(i: number, j: number) {

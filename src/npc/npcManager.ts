@@ -1,0 +1,509 @@
+import * as THREE from 'three';
+import { buildCharacter, type Look, type BuiltCharacter } from './charBuilder';
+import { heightAt } from '../world/terrainHeight';
+import type { WorldTime } from '../world/worldTime';
+import { damp, dampAngle } from '../core/math';
+
+// Living-world NPCs (prompt §§30, 36, 37, 73, 74).
+//
+//   Level 3 (settlement far away)  nothing runs. Where anyone is follows from
+//                                  their schedule and the clock.
+//   Level 2 (in range, off-camera) an NPC's position is derived from its
+//                                  schedule each tick; no actor exists.
+//   Level 1 (near the player)      a pooled, animated character walks the
+//                                  settlement's waypoint graph, works, sits
+//                                  and talks, and can be spoken to.
+// Characters are built once per look and reused (a small pool per look).
+
+export type Activity = 'sleep' | 'idle' | 'work' | 'sit' | 'talk' | 'patrol' | 'play' | 'shop' | 'drink' | 'farm';
+
+export interface ScheduleEntry {
+  /** start hour (0..24); the entry lasts until the next entry's start */
+  from: number;
+  activity: Activity;
+  /** a place id in the NPC's settlement */
+  place: string;
+}
+
+export interface NpcRecord {
+  id: string;
+  name: string;
+  job: string;
+  settlement: string;
+  look: Look;
+  schedule: ScheduleEntry[];
+  /** a line or two they say, chosen by time of day */
+  lines?: { any?: string[]; morning?: string[]; evening?: string[]; night?: string[] };
+}
+
+export interface Place {
+  id: string;
+  /** spots NPCs spread across (benches, stalls, field rows...) */
+  spots: THREE.Vector3[];
+  /** facing yaw at the spots (optional) */
+  yaw?: number;
+  /** a building interior: NPCs here are hidden (inside) */
+  indoors?: boolean;
+}
+
+export interface Settlement {
+  id: string;
+  center: THREE.Vector3;
+  /** simulation radius: records beyond this from the player stay at level 3 */
+  radius: number;
+  places: Map<string, Place>;
+  /** waypoint graph: nodes and undirected edges */
+  nodes: THREE.Vector3[];
+  edges: number[][];
+}
+
+interface NpcState {
+  rec: NpcRecord;
+  seed: number;
+  /** current world position (level 1 and 2) */
+  pos: THREE.Vector3;
+  yaw: number;
+  entry: number;
+  /** effective place (schedule, or shelter when it rains) */
+  placeKey: string;
+  spot: THREE.Vector3;
+  path: THREE.Vector3[];
+  moving: boolean;
+  actor: Actor | null;
+  talkT: number;
+  hidden: boolean;
+}
+
+interface Actor {
+  key: string;
+  built: BuiltCharacter;
+  actions: Record<string, THREE.AnimationAction | undefined>;
+  current: string;
+  headBone?: THREE.Bone;
+  headYaw: number;
+}
+
+const ACTIVE_R = 80; // metres: actors spawn inside this radius
+const FAR_R = 170; // sprite impostors between ACTIVE_R and this
+const SPRITE_CAP = 240;
+const CELL_W = 64, CELL_H = 128, ATLAS_COLS = 16, ATLAS_ROWS = 8;
+const DESPAWN_R = 95;
+const MAX_ACTORS = 36;
+const WALK_SPEED = 1.35;
+
+const lookKey = (l: Look) => JSON.stringify(l);
+const hash = (s: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+};
+
+/** Animation clip for each activity (the talk clip doubles for shopkeeping). */
+const ACTIVITY_CLIP: Record<Activity, string> = {
+  sleep: 'idle', idle: 'idle', work: 'fix', sit: 'sit', talk: 'talk', patrol: 'arms', play: 'dance', shop: 'talk', drink: 'drink', farm: 'farm',
+};
+/** Per-job clip for 'work' (the smith hammers, the miller hauls, weavers fix). */
+const WORK_CLIP: Record<string, string> = { smith: 'chop', miller: 'fix', shepherd: 'arms', weaver: 'fix', innfolk: 'talk', farmer: 'farm' };
+const CLIPS = ['idle', 'idle_tired', 'talk', 'walk', 'sit', 'farm', 'water', 'chop', 'cheer', 'drink', 'arms', 'fix', 'dance'];
+
+export class NpcManager {
+  readonly settlements = new Map<string, Settlement>();
+  readonly npcs: NpcState[] = [];
+  private pool = new Map<string, Actor[]>();
+  private building = new Set<string>();
+  private active = 0;
+  private tick = 0;
+  // Far LOD: one sprite per look, baked from the real character in an idle pose.
+  private atlas: THREE.WebGLRenderTarget;
+  private cells = new Map<string, number>();
+  private sprites: THREE.InstancedMesh;
+  private spriteData: THREE.InstancedBufferAttribute;
+  private bakeScene = new THREE.Scene();
+  private bakeCam = new THREE.OrthographicCamera(-0.55, 0.55, 2.1, -0.1, 0.1, 20);
+  private spriteUniforms = { tAtlas: { value: null as THREE.Texture | null }, uCam: { value: new THREE.Vector3() }, uGrid: { value: new THREE.Vector2(ATLAS_COLS, ATLAS_ROWS) }, uNight: { value: 0 } };
+
+  constructor(private scene: THREE.Scene, private time: WorldTime, private renderer?: THREE.WebGLRenderer) {
+    this.atlas = new THREE.WebGLRenderTarget(CELL_W * ATLAS_COLS, CELL_H * ATLAS_ROWS);
+    this.atlas.texture.colorSpace = THREE.SRGBColorSpace;
+    this.spriteUniforms.tAtlas.value = this.atlas.texture;
+    this.bakeScene.add(new THREE.HemisphereLight(0xc8dcff, 0x6a6048, 1.6));
+    const sun = new THREE.DirectionalLight(0xfff1d6, 2.2);
+    sun.position.set(-2, 4, 5);
+    this.bakeScene.add(sun);
+    this.bakeCam.position.set(0, 1, 6);
+    this.bakeCam.lookAt(0, 1, 0);
+    const quad = new THREE.PlaneGeometry(1, 1);
+    quad.translate(0, 0.5, 0);
+    this.spriteData = new THREE.InstancedBufferAttribute(new Float32Array(SPRITE_CAP * 2), 2); // cell, height
+    quad.setAttribute('aSprite', this.spriteData);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: this.spriteUniforms,
+      vertexShader: /* glsl */ `
+        attribute vec2 aSprite;
+        uniform vec3 uCam;
+        varying vec2 vUv; varying float vCell;
+        void main() {
+          vec3 base = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+          vec3 toCam = uCam - base; toCam.y = 0.0;
+          vec3 right = normalize(vec3(toCam.z, 0.0, -toCam.x) + vec3(1e-5, 0.0, 0.0));
+          float h = aSprite.y * 1.1;
+          vec3 wp = base + right * position.x * h * 0.5 + vec3(0.0, position.y * h, 0.0);
+          vUv = uv; vCell = aSprite.x;
+          gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D tAtlas; uniform vec2 uGrid; uniform float uNight;
+        varying vec2 vUv; varying float vCell;
+        void main() {
+          float col = mod(vCell, uGrid.x), row = floor(vCell / uGrid.x);
+          vec4 c = texture2D(tAtlas, vec2((col + vUv.x) / uGrid.x, (uGrid.y - row - 1.0 + vUv.y) / uGrid.y));
+          if (c.a < 0.5) discard;
+          gl_FragColor = vec4(c.rgb * mix(1.0, 0.35, uNight), 1.0);
+        }`,
+    });
+    this.sprites = new THREE.InstancedMesh(quad, mat, SPRITE_CAP);
+    this.sprites.count = 0;
+    this.sprites.frustumCulled = false;
+    scene.add(this.sprites);
+  }
+
+  /** Render a freshly built character into its atlas cell (standing idle, facing the camera). */
+  private bakeSprite(key: string, built: BuiltCharacter) {
+    if (!this.renderer || this.cells.has(key) || this.cells.size >= ATLAS_COLS * ATLAS_ROWS) return;
+    const cell = this.cells.size;
+    const r = this.renderer;
+    const parent = built.root.parent;
+    const vis = built.root.visible;
+    const pos = built.root.position.clone(), rot = built.root.rotation.y;
+    built.root.position.set(0, 0, 0);
+    built.root.rotation.y = 0;
+    built.root.visible = true;
+    this.bakeScene.add(built.root);
+    const idle = (built.mixer as unknown as { _actions: THREE.AnimationAction[] })._actions.find((a) => a.getClip().name === 'idle');
+    idle?.reset().play();
+    built.mixer.update(0.5);
+    const prevTarget = r.getRenderTarget();
+    const prevAlpha = r.getClearAlpha();
+    const prevColor = r.getClearColor(new THREE.Color());
+    r.setRenderTarget(this.atlas);
+    const col = cell % ATLAS_COLS, row = Math.floor(cell / ATLAS_COLS);
+    const vx = col * CELL_W, vy = (ATLAS_ROWS - 1 - row) * CELL_H;
+    r.setViewport(vx, vy, CELL_W, CELL_H);
+    r.setScissor(vx, vy, CELL_W, CELL_H);
+    r.setScissorTest(true);
+    r.setClearColor(0x000000, 0);
+    r.clear();
+    r.render(this.bakeScene, this.bakeCam);
+    r.setScissorTest(false);
+    r.setRenderTarget(prevTarget);
+    r.setClearColor(prevColor, prevAlpha);
+    r.setViewport(0, 0, r.domElement.width / r.getPixelRatio(), r.domElement.height / r.getPixelRatio());
+    idle?.stop();
+    this.bakeScene.remove(built.root);
+    if (parent) parent.add(built.root);
+    built.root.position.copy(pos);
+    built.root.rotation.y = rot;
+    built.root.visible = vis;
+    this.cells.set(key, cell);
+  }
+
+  addSettlement(s: Settlement) {
+    this.settlements.set(s.id, s);
+  }
+
+  add(rec: NpcRecord) {
+    const s = this.settlements.get(rec.settlement);
+    if (!s) throw new Error('unknown settlement ' + rec.settlement);
+    const seed = hash(rec.id);
+    const st: NpcState = { rec, seed, pos: s.center.clone(), yaw: 0, entry: -1, placeKey: '', spot: s.center.clone(), path: [], moving: false, actor: null, talkT: 0, hidden: false };
+    this.npcs.push(st);
+    this.placeBySchedule(st, true);
+  }
+
+  // ---- schedules ---------------------------------------------------------------
+
+  private entryIndex(rec: NpcRecord) {
+    const h = this.time.hour;
+    let idx = rec.schedule.length - 1; // before the first entry: still on the last one (overnight)
+    for (let i = 0; i < rec.schedule.length; i++) if (rec.schedule[i].from <= h) idx = i;
+    return idx;
+  }
+
+  /** Heavy rain sends people at leisure under a roof: adults to the inn, children home. */
+  raining = false;
+  private effective(st: NpcState) {
+    const e = st.rec.schedule[this.entryIndex(st.rec)];
+    const leisure = e.activity === 'sit' || e.activity === 'play' || e.activity === 'idle' || e.activity === 'talk';
+    const outdoors = !(this.settlements.get(st.rec.settlement)!.places.get(e.place)?.indoors);
+    if (this.raining && leisure && outdoors) {
+      if (st.rec.job === 'child') {
+        const home = st.rec.schedule.find((x) => x.activity === 'sleep')?.place ?? e.place;
+        return { activity: 'idle' as Activity, place: home };
+      }
+      return { activity: 'drink' as Activity, place: 'tavern' };
+    }
+    return e;
+  }
+
+  private spotFor(st: NpcState, placeId: string) {
+    const s = this.settlements.get(st.rec.settlement)!;
+    const p = s.places.get(placeId);
+    if (!p || !p.spots.length) return { spot: s.center.clone(), indoors: false, yaw: 0 };
+    const spot = p.spots[st.seed % p.spots.length].clone();
+    // Small personal offset so people sharing a place don't stack.
+    const a = ((st.seed >> 8) % 360) * (Math.PI / 180);
+    spot.x += Math.cos(a) * 0.8;
+    spot.z += Math.sin(a) * 0.8;
+    spot.y = heightAt(spot.x, spot.z);
+    return { spot, indoors: !!p.indoors, yaw: p.yaw ?? a };
+  }
+
+  /** Put an NPC where its schedule says it should be (spawn, teleports, level changes). */
+  private placeBySchedule(st: NpcState, snap: boolean) {
+    const idx = this.entryIndex(st.rec);
+    const e = this.effective(st);
+    const { spot, indoors, yaw } = this.spotFor(st, e.place);
+    st.entry = idx;
+    st.placeKey = e.place;
+    st.spot.copy(spot);
+    st.hidden = indoors || e.activity === 'sleep';
+    if (snap) {
+      st.pos.copy(spot);
+      st.yaw = yaw;
+      st.path = [];
+      st.moving = false;
+    }
+  }
+
+  /** Waypoint path from a position to a spot (Dijkstra on the settlement graph). */
+  private route(s: Settlement, from: THREE.Vector3, to: THREE.Vector3) {
+    if (!s.nodes.length || from.distanceTo(to) < 18) return [to.clone()];
+    const nearest = (p: THREE.Vector3) => {
+      let best = 0, bd = Infinity;
+      s.nodes.forEach((n, i) => {
+        const d = n.distanceToSquared(p);
+        if (d < bd) (bd = d), (best = i);
+      });
+      return best;
+    };
+    const a = nearest(from), b = nearest(to);
+    const dist = new Array(s.nodes.length).fill(Infinity);
+    const prev = new Array(s.nodes.length).fill(-1);
+    const done = new Array(s.nodes.length).fill(false);
+    dist[a] = 0;
+    for (let iter = 0; iter < s.nodes.length; iter++) {
+      let u = -1;
+      for (let i = 0; i < s.nodes.length; i++) if (!done[i] && (u < 0 || dist[i] < dist[u])) u = i;
+      if (u < 0 || dist[u] === Infinity || u === b) break;
+      done[u] = true;
+      for (const v of s.edges[u]) {
+        const d = dist[u] + s.nodes[u].distanceTo(s.nodes[v]);
+        if (d < dist[v]) (dist[v] = d), (prev[v] = u);
+      }
+    }
+    const path: THREE.Vector3[] = [];
+    for (let v = b; v >= 0; v = prev[v]) path.unshift(s.nodes[v].clone());
+    path.push(to.clone());
+    return path;
+  }
+
+  // ---- actors (level 1) ----------------------------------------------------------
+
+  private async buildActor(key: string, look: Look) {
+    if (this.building.has(key)) return;
+    this.building.add(key);
+    try {
+      const built = await buildCharacter(look, CLIPS);
+      const acts = (built.mixer as unknown as { _actions: THREE.AnimationAction[] })._actions;
+      const actions: Actor['actions'] = {};
+      for (const a of acts) actions[a.getClip().name] = a;
+      const actor: Actor = { key, built, actions, current: '', headBone: built.bones.get('Head'), headYaw: 0 };
+      this.scene.add(built.root);
+      this.bakeSprite(key, built);
+      built.root.visible = false;
+      const list = this.pool.get(key) ?? [];
+      list.push(actor);
+      this.pool.set(key, list);
+    } finally {
+      this.building.delete(key);
+    }
+  }
+
+  private take(st: NpcState): Actor | null {
+    const key = lookKey(st.rec.look);
+    const list = this.pool.get(key);
+    const free = list?.find((a) => !a.built.root.visible);
+    if (free) return free;
+    // Nothing free: build another in the background (one at a time), try next tick.
+    if (this.building.size === 0) void this.buildActor(key, st.rec.look);
+    return null;
+  }
+
+  private release(st: NpcState) {
+    if (!st.actor) return;
+    st.actor.built.root.visible = false;
+    st.actor.current = '';
+    for (const a of Object.values(st.actor.actions)) a?.stop();
+    st.actor = null;
+    this.active--;
+  }
+
+  private play(actor: Actor, name: string) {
+    if (actor.current === name) return;
+    const next = actor.actions[name] ?? actor.actions.idle;
+    const prev = actor.current ? actor.actions[actor.current] : undefined;
+    if (!next) return;
+    next.reset().play();
+    if (prev && prev !== next) prev.crossFadeTo(next, 0.35, false);
+    actor.current = name;
+  }
+
+  // ---- per frame ----------------------------------------------------------------
+
+  update(dt: number, player: THREE.Vector3, camera?: THREE.Vector3, night = 0) {
+    this.tick += dt;
+    const slow = this.tick >= 0.25;
+    if (slow) this.tick = 0;
+    let nSprites = 0;
+    const m = new THREE.Matrix4();
+    if (camera) this.spriteUniforms.uCam.value.copy(camera);
+    this.spriteUniforms.uNight.value = night * 0.6;
+    for (const st of this.npcs) {
+      const s = this.settlements.get(st.rec.settlement)!;
+      const inRange = s.center.distanceTo(player) < s.radius + ACTIVE_R;
+      if (!inRange) {
+        // Level 3: nothing to do; release any actor.
+        if (st.actor) this.release(st);
+        continue;
+      }
+      // Schedule changes: head to the new place along the waypoint graph.
+      const idx = this.entryIndex(st.rec);
+      if (idx !== st.entry || this.effective(st).place !== st.placeKey) {
+        this.placeBySchedule(st, false);
+        st.path = this.route(s, st.pos, st.spot);
+        st.moving = true;
+        st.hidden = false; // visible while walking there
+      }
+      // Walk along the path (level 1 and 2 alike, so positions stay consistent).
+      if (st.moving) {
+        const target = st.path[0];
+        if (!target) st.moving = false;
+        else {
+          const dx = target.x - st.pos.x, dz = target.z - st.pos.z;
+          const d = Math.hypot(dx, dz);
+          const step = WALK_SPEED * dt;
+          if (d <= step) {
+            st.pos.set(target.x, 0, target.z);
+            st.path.shift();
+            if (!st.path.length) {
+              st.moving = false;
+              const e = this.effective(st);
+              const place = this.settlements.get(st.rec.settlement)!.places.get(e.place);
+              st.hidden = !!place?.indoors || e.activity === 'sleep';
+              if (place?.yaw !== undefined) st.yaw = place.yaw;
+            }
+          } else {
+            st.pos.x += (dx / d) * step;
+            st.pos.z += (dz / d) * step;
+            st.yaw = dampAngle(st.yaw, Math.atan2(dx, dz), 8, dt);
+          }
+          st.pos.y = heightAt(st.pos.x, st.pos.z);
+        }
+      }
+      const dist = st.pos.distanceTo(player);
+      const wantActor = !st.hidden && dist < ACTIVE_R;
+      if (st.actor && (!wantActor || dist > DESPAWN_R)) this.release(st);
+      if (!st.actor && wantActor && slow && this.active < MAX_ACTORS) {
+        const a = this.take(st);
+        if (a) {
+          st.actor = a;
+          this.active++;
+          a.built.root.visible = true;
+        }
+      }
+      if (!st.actor) {
+        // Far LOD: a sprite, once this look has been baked (queue a build if not).
+        if (!st.hidden && dist >= ACTIVE_R - 4 && dist < FAR_R && nSprites < SPRITE_CAP) {
+          const key = lookKey(st.rec.look);
+          const cell = this.cells.get(key);
+          if (cell !== undefined) {
+            m.makeTranslation(st.pos.x, st.pos.y, st.pos.z);
+            this.sprites.setMatrixAt(nSprites, m);
+            this.spriteData.setXY(nSprites, cell, st.rec.look.height ?? 1.75);
+            nSprites++;
+          } else if (slow && this.building.size === 0 && !this.pool.has(key)) void this.buildActor(key, st.rec.look);
+        }
+        continue;
+      }
+      // Level 1: animate.
+      const a = st.actor;
+      a.built.root.position.copy(st.pos);
+      a.built.root.rotation.y = st.yaw;
+      st.talkT = Math.max(0, st.talkT - dt);
+      const e = this.effective(st);
+      // Some variety: farmers alternate harvesting and watering; kids play or cheer.
+      const alt = Math.floor(this.time.hour * 4 + (st.seed % 7)) % 2 === 0;
+      let clip = e.activity === 'work' ? WORK_CLIP[st.rec.job] ?? 'fix' : ACTIVITY_CLIP[e.activity];
+      if (e.activity === 'farm' && alt) clip = 'water';
+      if (e.activity === 'play' && alt) clip = 'cheer';
+      if (st.moving) clip = 'walk';
+      else if (st.talkT > 0) clip = 'talk';
+      this.play(a, clip);
+      // Far actors animate at a lower rate.
+      a.built.mixer.update(dist > 45 ? (slow ? 0.25 : 0) : dt);
+      // Turn the head toward the player when close and idle.
+      const toP = Math.atan2(player.x - st.pos.x, player.z - st.pos.z) - st.yaw;
+      const want = !st.moving && dist < 6 ? Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(toP), Math.cos(toP)))) : 0;
+      a.headYaw = damp(a.headYaw, want, 4, dt);
+      if (a.headBone && Math.abs(a.headYaw) > 0.01) a.headBone.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), a.headYaw * 0.7);
+    }
+    this.finishSprites(nSprites);
+  }
+
+  private finishSprites(n: number) {
+    this.sprites.count = n;
+    this.sprites.instanceMatrix.needsUpdate = true;
+    this.spriteData.needsUpdate = true;
+  }
+
+  /** The nearest visible NPC within reach (for talking), if any. */
+  nearest(p: THREE.Vector3, reach = 2.6) {
+    let best: NpcState | null = null, bd = reach;
+    for (const st of this.npcs) {
+      if (!st.actor) continue;
+      const d = st.pos.distanceTo(p);
+      if (d < bd) (bd = d), (best = st);
+    }
+    return best;
+  }
+
+  /** Something the NPC says right now (time-of-day aware). */
+  lineFor(st: NpcState) {
+    const L = st.rec.lines ?? {};
+    const phase = this.time.phase;
+    const pool = [
+      ...(phase === 'morning' || phase === 'dawn' ? L.morning ?? [] : []),
+      ...(phase === 'evening' || phase === 'dusk' ? L.evening ?? [] : []),
+      ...(phase === 'night' ? L.night ?? [] : []),
+      ...(L.any ?? []),
+    ];
+    st.talkT = 4;
+    return pool.length ? pool[(st.seed + Math.floor(this.time.hour * 3)) % pool.length] : 'Good day.';
+  }
+
+  setVisible(v: boolean) {
+    this.sprites.visible = v;
+    for (const list of this.pool.values()) for (const a of list) if (!v) a.built.root.visible = false;
+    if (!v) for (const st of this.npcs) if (st.actor) this.release(st);
+  }
+
+  get activeCount() {
+    return this.active;
+  }
+
+  dispose() {
+    for (const st of this.npcs) this.release(st);
+    for (const list of this.pool.values()) for (const a of list) this.scene.remove(a.built.root);
+    this.pool.clear();
+  }
+}

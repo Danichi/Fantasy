@@ -24,9 +24,10 @@ const VERT = /* glsl */ `
   }`;
 
 const FRAG = /* glsl */ `
-  uniform vec3 uZenith, uHorizon, uSunGlow, uCloudLit, uCloudShade, uSunDir;
+  uniform vec3 uZenith, uHorizon, uSunGlow, uCloudLit, uCloudShade, uSunDir, uMoonDir;
   uniform sampler2D tNoise;
-  uniform float uTime, uClouds;
+  uniform float uTime, uClouds, uNight, uOvercast, uFlash;
+  float starHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
   varying vec3 vDir;
 
   float fbm(vec2 p) {
@@ -43,16 +44,35 @@ const FRAG = /* glsl */ `
     vec3 col = mix(uHorizon, uZenith, pow(smoothstep(0.0, 0.62, h), 0.72));
     // Below the horizon the haze colour continues (the far terrain covers it).
     if (d.y < 0.0) col = uHorizon;
-    // Sun: a soft disc and a wide warm glow.
+    // Sun: a soft disc and a wide warm glow (hidden below the horizon and by overcast).
     float sd = max(dot(d, uSunDir), 0.0);
-    col += uSunGlow * (pow(sd, 8.0) * 0.28 + pow(sd, 64.0) * 0.45);
-    col = mix(col, vec3(1.0, 0.98, 0.9) * 1.6, smoothstep(0.9993, 0.9997, sd));
+    float sunUp = smoothstep(-0.08, 0.04, uSunDir.y) * (1.0 - uOvercast * 0.85);
+    col += uSunGlow * (pow(sd, 8.0) * 0.28 + pow(sd, 64.0) * 0.45) * sunUp;
+    col = mix(col, vec3(1.0, 0.98, 0.9) * 1.6, smoothstep(0.9993, 0.9997, sd) * sunUp);
+    // Night: stars (twinkling, thinning toward the horizon) and the moon.
+    if (uNight > 0.01) {
+      vec3 sp = floor(d * 420.0);
+      float st = starHash(sp);
+      float star = step(0.9965, st) * (0.55 + 0.45 * sin(uTime * (1.0 + st * 3.0) + st * 60.0));
+      star *= smoothstep(0.05, 0.35, d.y) * (1.0 - uOvercast);
+      col += vec3(0.85, 0.9, 1.0) * star * uNight * 1.4;
+      float md = max(dot(d, uMoonDir), 0.0);
+      float moonUp = smoothstep(-0.05, 0.05, uMoonDir.y) * (1.0 - uOvercast * 0.8);
+      col += vec3(0.55, 0.65, 0.9) * pow(md, 40.0) * 0.35 * moonUp * uNight;
+      col = mix(col, vec3(0.93, 0.95, 1.0), smoothstep(0.99955, 0.99975, md) * moonUp * uNight);
+    }
+    // Overcast: the sky flattens toward grey.
+    // Overcast: the sky flattens to grey, then to dark slate as a storm builds.
+    float storm = smoothstep(0.72, 1.0, uOvercast);
+    vec3 grey = mix(vec3(dot(col, vec3(0.3, 0.55, 0.15))) * vec3(0.92, 0.95, 1.0), vec3(0.26, 0.3, 0.38) * (1.0 - uNight * 0.7), storm);
+    col = mix(col, grey, uOvercast * 0.85);
+    col += vec3(0.75, 0.8, 1.0) * uFlash;
 
     // Clouds on a curved layer: project the ray onto a dome above the world.
     if (d.y > 0.02 && uClouds > 0.0) {
       vec2 uv = d.xz / (d.y + 0.22) * 0.075 + vec2(uTime * 0.0009, uTime * 0.0004);
       float n = fbm(uv);
-      float body = smoothstep(0.58, 0.72, n) * 0.35 * smoothstep(0.25, 0.6, d.y);
+      float body = smoothstep(mix(0.58, 0.38, uOvercast), mix(0.72, 0.6, uOvercast), n) * mix(0.35, 0.95, uOvercast) * smoothstep(mix(0.25, 0.05, uOvercast), 0.6, d.y);
       // Shade from a second sample offset toward the sun: thicker there = darker belly.
       float n2 = fbm(uv + uSunDir.xz * 0.02);
       float lit = clamp(0.5 + (n - n2) * 6.0, 0.0, 1.0);
@@ -126,6 +146,7 @@ export class Sky {
         uZenith: { value: SKY.zenith }, uHorizon: { value: SKY.horizon }, uSunGlow: { value: SKY.sunGlow },
         uCloudLit: { value: SKY.cloudLit }, uCloudShade: { value: SKY.cloudShade },
         uSunDir: { value: sunDir.clone() }, tNoise: { value: worldNoise() }, uTime: { value: 0 }, uClouds: { value: 1 },
+        uMoonDir: { value: new THREE.Vector3(0, -1, 0) }, uNight: { value: 0 }, uOvercast: { value: 0 }, uFlash: { value: 0 },
       },
       side: THREE.BackSide,
       depthWrite: false,
@@ -162,6 +183,27 @@ export class Sky {
     const env = pmrem.fromScene(scene, 0.06, 1, 2000).texture;
     pmrem.dispose();
     return env;
+  }
+
+  /** Time of day and weather (colours are copied; directions are unit vectors). */
+  setState(zenith: THREE.Color, horizon: THREE.Color, sunGlow: THREE.Color, sunDir: THREE.Vector3, moonDir: THREE.Vector3, night: number, overcast: number, flash: number) {
+    const u = this.mat.uniforms;
+    (u.uZenith.value as THREE.Color).copy(zenith);
+    (u.uHorizon.value as THREE.Color).copy(horizon);
+    (u.uSunGlow.value as THREE.Color).copy(sunGlow);
+    (u.uSunDir.value as THREE.Vector3).copy(sunDir);
+    (u.uMoonDir.value as THREE.Vector3).copy(moonDir);
+    u.uNight.value = night;
+    u.uOvercast.value = overcast;
+    u.uFlash.value = flash;
+    // Cumulus cards: greyer and denser when overcast, dim blue at night.
+    const lit = (u.uCloudLit.value as THREE.Color).setRGB(1, 1, 1).lerp(new THREE.Color(0.62, 0.66, 0.72), overcast).lerp(new THREE.Color(0.12, 0.15, 0.25), night * 0.9);
+    for (const c of this.cloudItems) {
+      const m = c.mesh.material as THREE.MeshBasicMaterial;
+      m.color.copy(lit).addScalar(flash * 0.6);
+      m.opacity = 0.96 * (1 - night * 0.55);
+    }
+    (u.uCloudShade.value as THREE.Color).setRGB(0.66, 0.73, 0.82).lerp(new THREE.Color(0.35, 0.38, 0.44), overcast).lerp(new THREE.Color(0.06, 0.08, 0.14), night * 0.9);
   }
 
   update(dt: number, camera: THREE.Camera) {
