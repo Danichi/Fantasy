@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { compressedGltf } from '../core/gltf';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
 import { damp, dampAngle, clamp } from '../core/math';
@@ -104,6 +105,7 @@ export class Beast implements Target {
     this.kcc = physics.createCharacterController(0.02);
     this.kcc.setMaxSlopeClimbAngle(Math.PI / 3);
 
+    this.group.position.copy(at);
     scene.add(this.group);
     targets.add(this);
     void this.loadModel();
@@ -114,7 +116,8 @@ export class Beast implements Target {
       const gltf = await loadFile(BEAST_VARIANTS[this.variantKind].file);
       if (!this.alive) return;
 
-      const model = gltf.scene;
+      // The loaded file is cached and shared, so each beast needs its own copy.
+      const model = SkeletonUtils.clone(gltf.scene) as THREE.Group;
       this.model = model;
       model.updateMatrixWorld(true);
 
@@ -321,6 +324,7 @@ export class Beast implements Target {
 
     this.center.set(this.position.x, this.position.y + 0.62 * this.modelHeight / Math.max(1, 1.05), this.position.z);
 
+    this.group.position.copy(this.position);
     if (this.model) {
       this.model.rotation.y = dampAngle(this.model.rotation.y, this.yaw + Math.PI, 12, dt);
       this.group.scale.setScalar(this.state === 'hurt' ? 0.97 : 1);
