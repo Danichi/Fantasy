@@ -892,3 +892,40 @@ html, body {
 /* ?perf overlay */
 .perf { position: absolute; right: 12px; bottom: 150px; z-index: 90; padding: 8px 10px; border-radius: 6px; background: rgba(6,12,24,0.78); border: 1px solid rgba(220,189,112,0.4); font: 500 11px/1.5 ui-monospace, Consolas, monospace; color: #dfe8f5; pointer-events: none; }
 .perf b { color: #f4d88c; }
+
+/* ---- Quests: tracker lines, NPC markers, journal (navy and gold) ---- */
+.quest-tracker .q-side { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(213,177,88,.22); }
+.quest-tracker small.q-done { color: rgba(170, 220, 150, .8); text-decoration: line-through; text-decoration-color: rgba(170,220,150,.35); }
+.quest-tracker small.q-more { margin-top: 4px; color: rgba(255,214,125,.55); font-style: italic; }
+.quest-mark { position: absolute; transform: translate(-50%, -100%); font: 900 28px/1 var(--serif); color: #ffd76a; text-shadow: 0 0 10px rgba(255, 190, 70, .85), 0 2px 3px #000; display: none; animation: questBob 1.6s ease-in-out infinite; pointer-events: none; }
+.quest-mark.turnin { color: #bfe8ff; text-shadow: 0 0 10px rgba(120, 200, 255, .9), 0 2px 3px #000; }
+@keyframes questBob { 0%, 100% { margin-top: 0; } 50% { margin-top: -6px; } }
+.journal { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(980px, calc(100vw - 32px)); height: min(640px, calc(100vh - 48px)); display: flex; flex-direction: column;
+  background: linear-gradient(160deg, rgba(14, 24, 44, .97), rgba(7, 12, 24, .98)); border: 1px solid rgba(213, 177, 88, .55); border-radius: 12px; box-shadow: 0 30px 80px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.05); z-index: 20; color: #eae3cf; }
+.journal.hidden { display: none; }
+.journal header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid rgba(213,177,88,.25); font: 700 18px/1 var(--serif); letter-spacing: .3em; color: #f4d88c; }
+.journal header button { background: none; border: 1px solid rgba(213,177,88,.4); color: #f4d88c; width: 30px; height: 30px; border-radius: 6px; cursor: pointer; }
+.journal .j-body { flex: 1; display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
+.journal nav { overflow-y: auto; padding: 12px; border-right: 1px solid rgba(213,177,88,.18); display: flex; flex-direction: column; gap: 6px; }
+.journal .j-group { font: 700 10px/1 var(--sans); letter-spacing: .24em; color: rgba(255,214,125,.7); margin: 10px 4px 4px; }
+.journal .j-item { text-align: left; padding: 9px 11px; border-radius: 8px; border: 1px solid rgba(213,177,88,.14); background: rgba(255,255,255,.03); color: inherit; cursor: pointer; display: grid; gap: 4px; }
+.journal .j-item b { font: 700 13px/1.2 var(--serif); letter-spacing: .04em; color: #f7efd9; }
+.journal .j-item small { font: 500 11px/1.35 var(--sans); color: rgba(233,227,207,.62); }
+.journal .j-item.sel { border-color: rgba(244,216,140,.75); background: rgba(244,216,140,.08); }
+.journal .j-item.tracked b::before { content: '◆ '; color: #ffd76a; }
+.journal .j-item.done b { color: rgba(247,239,217,.5); }
+.journal section { overflow-y: auto; padding: 22px 28px; }
+.journal h2 { margin: 0 0 6px; font: 700 26px/1.1 var(--serif); letter-spacing: .06em; color: #f4d88c; }
+.journal .j-region { font: 600 10px/1 var(--sans); letter-spacing: .22em; color: rgba(143, 211, 255, .75); margin-bottom: 16px; }
+.journal .j-summary { font: 400 15px/1.6 var(--sans); color: #eae3cf; margin: 0 0 18px; }
+.journal .j-objs { display: grid; gap: 7px; padding: 12px 14px; border: 1px solid rgba(213,177,88,.22); border-radius: 8px; background: rgba(255,255,255,.025); margin-bottom: 18px; }
+.journal .j-objs div { font: 500 13px/1.3 var(--sans); }
+.journal .j-objs i { font-style: normal; color: #ffd76a; margin-right: 8px; }
+.journal .j-objs div.ok { color: rgba(170, 220, 150, .85); }
+.journal .j-objs span { color: rgba(255,214,125,.8); margin-left: 6px; }
+.journal .j-log div { font: 400 13px/1.5 var(--sans); color: #eae3cf; padding-left: 14px; border-left: 2px solid rgba(213,177,88,.5); margin-bottom: 6px; }
+.journal .j-log div.past { color: rgba(234,227,207,.45); border-left-color: rgba(213,177,88,.18); }
+.journal .j-rewards { margin-top: 16px; font: 600 12px/1 var(--sans); letter-spacing: .08em; color: rgba(255,214,125,.85); }
+.journal .j-track { margin-top: 16px; padding: 9px 14px; border-radius: 8px; border: 1px solid rgba(244,216,140,.6); background: rgba(244,216,140,.1); color: #f4d88c; font: 600 12px/1 var(--sans); letter-spacing: .1em; cursor: pointer; }
+.journal .j-empty { color: rgba(233,227,207,.55); font: 400 13px/1.5 var(--sans); }
+.journal footer { padding: 8px 20px; border-top: 1px solid rgba(213,177,88,.18); font: 500 11px/1 var(--sans); letter-spacing: .1em; color: rgba(233,227,207,.45); }

@@ -19,6 +19,9 @@ export interface Farmstead {
   /** named NPC work spots */
   spots: { mill: THREE.Vector3[]; barn: THREE.Vector3[]; granary: THREE.Vector3[]; pasture: THREE.Vector3[]; stable: THREE.Vector3[] };
   update(dt: number, wind: number): void;
+  /** the waterwheel (quests: "Mill Wheel Jam") */
+  wheelPos: THREE.Vector3;
+  setWheelJammed(on: boolean): void;
 }
 
 type Part = 'stone' | 'plaster' | 'timber' | 'planks' | 'thatch' | 'tile' | 'barn' | 'cloth' | 'straw' | 'water';
@@ -232,6 +235,17 @@ export function buildFarmstead(scene: THREE.Scene, m: WorldMats): Farmstead {
     wheel.rotation.y = Math.PI / 2;
     scene.add(wheel);
     wheels.push(wheel);
+    wheelAt.copy(wheel.position);
+    // Driftwood caught in the paddles (shown while the wheel is jammed).
+    for (let k = 0; k < 4; k++) {
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.14 + k * 0.03, 0.18, 2.6 - k * 0.3, 7), m.timber);
+      log.rotation.set(0.3 * k, k * 0.8, Math.PI / 2 - 0.4 + k * 0.25);
+      log.position.set(wheel.position.x + 0.6 - k * 0.2, RIVER_Y + 0.1 + k * 0.25, z - 1.4 + k * 0.9);
+      log.castShadow = true;
+      debris.add(log);
+    }
+    debris.visible = false;
+    scene.add(debris);
     // Axle beam from the wall to the wheel.
     batch.add('timber', box(1.6, 0.35, 0.35), place(x + 4.6, RIVER_Y + 1.3, z));
     physics.addBox(new THREE.Vector3(x, y + 3, z), new THREE.Vector3(4.5, 3, 3.5));
@@ -239,6 +253,9 @@ export function buildFarmstead(scene: THREE.Scene, m: WorldMats): Farmstead {
     return [new THREE.Vector3(x + 1, ground(x + 1, z + 4.4), z + 4.4), new THREE.Vector3(x - 2, ground(x - 2, z + 4.4), z + 4.4)];
   };
   const RIVER_Y = -0.6;
+  const wheelAt = new THREE.Vector3();
+  const debris = new THREE.Group();
+  let jammed = false;
 
   // ---- small farm dressing -----------------------------------------------------------
   const hay = (x: number, z: number, n: number) => {
@@ -301,7 +318,12 @@ export function buildFarmstead(scene: THREE.Scene, m: WorldMats): Farmstead {
     update(dt: number, wind: number) {
       t += dt;
       for (const s of sails) s.group.rotation.z -= dt * s.speed * (0.4 + wind * 1.4);
-      for (const w of wheels) w.children[0].rotation.z += dt * 0.6;
+      if (!jammed) for (const w of wheels) w.children[0].rotation.z += dt * 0.6;
+    },
+    wheelPos: wheelAt,
+    setWheelJammed(on: boolean) {
+      jammed = on;
+      debris.visible = on;
     },
   };
 }

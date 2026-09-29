@@ -23,6 +23,9 @@ const RELIEF_GROUND: Record<number, [number, number, number]> = {
   [RELIEF.marsh]: [0.65, 0.3, 0.66], [RELIEF.lava]: [0, 0, 1], [RELIEF.volcanic]: [0.05, 0, 1],
 };
 
+/** Places grass is cut back: garden beds, yards, quarry floors (circle r or box hx/hz). */
+export const GRASS_MASKS: { x: number; z: number; r?: number; hx?: number; hz?: number; amount: number }[] = [];
+
 export class GroundWindow {
   readonly texture: THREE.DataTexture;
   /** World position of texel (0, 0) as used by the shaders. */
@@ -78,6 +81,13 @@ export class GroundWindow {
           tint = 0;
         } else {
           [grass, flower, tint] = blendedGround(x, z);
+        }
+        for (const m of GRASS_MASKS) {
+          const inside = m.r !== undefined ? Math.hypot(x - m.x, z - m.z) < m.r : Math.abs(x - m.x) < m.hx! && Math.abs(z - m.z) < m.hz!;
+          if (inside) {
+            grass *= 1 - m.amount;
+            flower *= 1 - m.amount;
+          }
         }
         const h = heightAt(x, z);
         if (h < SEA_LEVEL + 0.5) {

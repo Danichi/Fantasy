@@ -28,6 +28,13 @@ import { WorldTime } from './world/worldTime';
 import { Fauna } from './world/fauna';
 import { buildFarmstead } from './world/farmstead';
 import { buildCrops } from './world/crops';
+import { FarmLife } from './world/farmLife';
+import { buildGlenLandmarks, LANDMARK_CLEARINGS } from './world/glenLandmarks';
+import { QuestLog } from './quests/questLog';
+import { setupElderGlenQuests } from './quests/elderGlenQuests';
+import { QuestUI } from './ui/questUI';
+import { glenNamedFolk } from './npc/glenNamed';
+import { ITEMS } from './items/itemDefs';
 import { buildGlenDressing, MARKET_SPOTS, NOTICEBOARD, WELL } from './world/glenDressing';
 import { Weather } from './world/weather';
 import { Precipitation } from './world/precipitation';
@@ -113,7 +120,7 @@ async function boot() {
   const crops = buildCrops(r.scene);
   buildGlenDressing(r.scene, world.mats);
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS];
   await stylizedNature.ready;
   stylizedNature.warm(spawn, spawn);
   const foliage = stylizedNature.loaded ? null : new Foliage(r.scene, r.renderer);
@@ -146,8 +153,12 @@ async function boot() {
     pl.set('market', { id: 'market', spots: MARKET_SPOTS, yaw: 0 });
     pl.set('mill', { id: 'mill', spots: farm.spots.mill });
     pl.set('pasture', { id: 'pasture', spots: farm.spots.pasture });
+    // Quest givers and the guild's adventurers keep posts by day.
+    const named = glenNamedFolk(farm.spots.mill[0]);
+    for (const place of named.places) pl.set(place.id, place);
     npcs.addSettlement(folk.settlement);
     for (const rec of folk.records) npcs.add(rec);
+    for (const rec of named.records) npcs.add(rec);
   }
   // Livestock in their pens and pastures; wild deer and foxes stream per tile.
   const fauna = new Fauna(r.scene);
@@ -207,6 +218,7 @@ async function boot() {
       precip.setVisible(!h);
       npcs.setVisible(!h);
       fauna.setVisible(!h);
+      questUI?.setVisible(!h);
       flowers.mesh.visible = !h;
       river.mesh.visible = !h;
       foliage?.setVisible(!h);
@@ -249,10 +261,73 @@ async function boot() {
     action() {
       const n = this.npc;
       if (!n) return;
-      dialogue.show(n.rec.name, n.rec.job.charAt(0).toUpperCase() + n.rec.job.slice(1) + ' of Elder Glen', npcs.lineFor(n), [{ label: 'Farewell.', run: () => dialogue.close() }]);
+      const title = n.rec.title ?? n.rec.job.charAt(0).toUpperCase() + n.rec.job.slice(1) + ' of Elder Glen';
+      const back = () => folkTalk.action();
+      const show = (t: string, opts: { label: string; run: () => void }[]) => dialogue.show(n.rec.name, title, t, opts);
+      show(npcs.lineFor(n), [...quests.options(n.rec.id, show, back), { label: 'Farewell.', run: () => dialogue.close() }]);
     },
   };
   realm.overworldInteractables.push(folkTalk);
+  // ---- Farm life, landmarks and quests (World Expansion phase 3) ----------------------
+  const countItem = (id: string) => player.equip.items.filter((i) => i.def.id === id).reduce((n, i) => n + i.qty, 0);
+  const takeItem = (id: string, n: number) => {
+    for (const it of [...player.equip.items]) {
+      if (n <= 0) break;
+      if (it.def.id !== id) continue;
+      const k = Math.min(n, it.qty);
+      it.qty -= k;
+      n -= k;
+      if (it.qty <= 0) player.equip.items.splice(player.equip.items.indexOf(it), 1);
+    }
+    events.emit('equipmentChanged', {});
+  };
+  const giveItem = (id: string, n: number) => {
+    player.equip.add(id, n);
+    hud.toast(`+${n} ${ITEMS[id].name}`);
+    events.emit('equipmentChanged', {});
+  };
+  const gameHours = () => time.day * 24 + time.hour;
+  const farmLife = new FarmLife(r.scene, player, time, fauna, fx, (m) => hud.toast(m), world.mats, crops.orchards,
+    [[4, 150, 72, 38], [-48, 211, 72, 46], [145, 208, 76, 44]]);
+  const livestock = farmLife.livestockInteractable();
+  const landmarks = buildGlenLandmarks(r.scene, world.mats, giveItem, gameHours);
+  town.guild.inventory = { count: countItem, take: takeItem };
+  const serviceNpc = (id: string) => town.npcs.find((n) => n.spec.id === id) ?? null;
+  const quests = new QuestLog({
+    count: countItem,
+    take: takeItem,
+    give: giveItem,
+    gold: (n) => player.prog.addGold(n),
+    xp: (n) => player.prog.addXp(n),
+    guildRep: (n) => town.guild.addRep(n),
+    toast: (m) => hud.toast(m),
+    npcPos: (id) => serviceNpc(id)?.pos ?? npcs.find(id)?.pos ?? null,
+    hour: () => time.hour,
+  });
+  const glenQuests = setupElderGlenQuests({
+    quests, scene: r.scene, fx, player, time, fauna, cowRange: farm.ranges.cows, farm, npcs, beasts: slimes,
+    count: countItem, take: takeItem, give: giveItem, toast: (m) => hud.toast(m),
+  });
+  town.questOptions = (id, show, back) => quests.options(id, show, back);
+  realm.overworldInteractables.push(...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables);
+  const questNpcIds = [...town.npcs.map((n) => n.spec.id), ...npcs.npcs.filter((n) => n.rec.named).map((n) => n.rec.id)];
+  const questUI = new QuestUI(quests, hud, r.camera, (id) => {
+    const svc = serviceNpc(id);
+    if (svc) return svc.root.visible ? svc.head : null;
+    const f = npcs.find(id);
+    return f && !f.hidden ? f.pos.clone().setY(f.pos.y + (f.rec.look.height ?? 1.75)) : null;
+  }, () => questNpcIds);
+  questUI.onToggle = (open) => {
+    input.uiMode = open || inv.open || mapUI.open || dialogue.open;
+    if (open) input.exitLock();
+    else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
+  };
+  events.on('questChanged', () => save());
+  events.on('equipmentChanged', () => questUI.refresh());
+  quests.fromJSON(saveData?.world?.quests);
+  farmLife.fromJSON(saveData?.world?.farm);
+  landmarks.fromJSON(saveData?.world?.landmarks);
+  ground.prime(player.pos); // pick up the new grass masks (plot, coop, quarry)
   player.onTeleport = (p) => {
     if (realm.mode === 'dungeon') return;
     terrain.warm(p);
@@ -275,6 +350,7 @@ async function boot() {
   const discovery = new Discovery();
   if (saveData) discovery.fromJSON(saveData.world?.discovery);
   const worldMap = new WorldMapUI(discovery);
+  worldMap.questMarkers = () => quests.markers().map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label }));
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
   events.on('mapRevealed', () => worldMap.markFogDirty());
   events.on('regionEntered', ({ name, subtitle, first }) => {
@@ -307,7 +383,7 @@ async function boot() {
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
     const pos = realm.mode === 'overworld' ? ([+player.pos.x.toFixed(2), +player.pos.y.toFixed(2), +player.pos.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON() });
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON() });
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   realm.onSave = save;
@@ -517,7 +593,7 @@ async function boot() {
     ambient.update(dt, r.camera.position, now / 1000);
     ocean.update(dt, r.camera.position);
     // Time of day and weather drive the sky, light, water, grass and sound.
-    const worldRunning = !(paused || overlayUp || mapUI.open || worldMap.open);
+    const worldRunning = !(paused || overlayUp || mapUI.open || worldMap.open || questUI.open);
     if (worldRunning) time.update(dt);
     const here = realm.mode === 'dungeon' ? 'cresha' : regionAt(player.pos.x, player.pos.z);
     weather.update(worldRunning ? dt : 0, here === 'ocean' ? 'portAurelle' : here);
@@ -537,6 +613,14 @@ async function boot() {
       farm.update(dt, wp.wind);
       crops.setWind(wp.wind);
       crops.update(dt);
+      farmLife.update(worldRunning ? dt : 0);
+      livestock.update(player.pos);
+      landmarks.update(dt, ts.night, gameHours());
+      if (worldRunning) {
+        quests.update(dt, player.pos);
+        glenQuests.update(dt);
+      }
+      questUI.update();
       folkTalk.npc = npcs.nearest(player.pos);
       if (folkTalk.npc) folkTalk.pos.copy(folkTalk.npc.pos);
       else folkTalk.pos.set(0, -999, 0);
@@ -597,7 +681,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

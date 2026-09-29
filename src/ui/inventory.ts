@@ -21,7 +21,7 @@ const SLOT_LABEL: Record<Slot, string> = {
 };
 
 type Tab = 'items' | 'skills' | 'legacy' | 'stats';
-type Filter = 'all' | 'weapons' | 'armour' | 'accessories' | 'magic' | 'consumables';
+type Filter = 'all' | 'weapons' | 'armour' | 'accessories' | 'magic' | 'consumables' | 'materials';
 const FILTERS: [Filter, string, ItemKind[]][] = [
   ['all', 'All', []],
   ['weapons', 'Weapons', ['sword', 'shield']],
@@ -29,6 +29,7 @@ const FILTERS: [Filter, string, ItemKind[]][] = [
   ['accessories', 'Accessories', ['accessory']],
   ['magic', 'Magic', ['spell']],
   ['consumables', 'Usables', ['consumable']],
+  ['materials', 'Materials', ['material', 'key']],
 ];
 
 
@@ -183,7 +184,7 @@ export class InventoryUI {
   }
 
   private kindGlyph(kind: ItemKind) {
-    return kind === 'sword' ? '⚔' : kind === 'shield' ? '◈' : kind === 'armor' ? '⬟' : kind === 'accessory' ? '◇' : kind === 'spell' ? '✦' : kind === 'consumable' ? '●' : '⌘';
+    return kind === 'sword' ? '⚔' : kind === 'shield' ? '◈' : kind === 'armor' ? '⬟' : kind === 'accessory' ? '◇' : kind === 'spell' ? '✦' : kind === 'consumable' ? '●' : kind === 'material' ? '❖' : '⌘';
   }
 
   private renderItems() {
@@ -416,7 +417,9 @@ export class InventoryUI {
       d.kind === 'sword' ? 'Click: main hand · Shift-click: off hand (dual wield)' :
       d.kind === 'shield' ? 'Click: off hand · RMB block · F parry' :
       d.kind === 'spell' ? 'Drag onto the moveset bar (Tab) · offensive spells need a lock-on' :
-      d.kind === 'consumable' ? 'Drag onto a quick slot (keys 1-4)' : 'Click to wear';
+      d.kind === 'consumable' ? 'Drag onto a quick slot (keys 1-4)' :
+      d.kind === 'material' ? 'Crafting, cooking and trade material' :
+      d.kind === 'key' ? 'Quest item' : 'Click to wear';
     box.innerHTML = `
       <img class="big" src="${iconFor(d.id)}" alt="">
       <div class="dtext"><div class="name">${d.name}</div><div class="rar r-${d.rarity}">${d.rarity} ${d.kind === 'armor' ? 'armour' : d.kind}</div>

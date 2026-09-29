@@ -10,7 +10,9 @@ export interface GuildQuest {
   templateId: string;
   title: string;
   description: string;
-  objective: 'kill' | 'explore' | 'survey';
+  objective: 'kill' | 'explore' | 'survey' | 'gather';
+  /** gather contracts: the item handed in */
+  targetItem?: string;
   targetKind?: string;
   targetCount?: number;
   targetName?: string;
@@ -58,6 +60,7 @@ interface QuestTemplate {
   title: string;
   description: string;
   objective: GuildQuest['objective'];
+  targetItem?: string;
   targetKind?: string;
   targetCount?: number;
   targetName?: string;
@@ -70,18 +73,26 @@ interface QuestTemplate {
 }
 
 const TEMPLATES: QuestTemplate[] = [
-  { id: 'green-1', title: 'Clean the South Road', description: 'Thin the green slimes harassing caravans south of town.', objective: 'kill', targetKind: 'green', targetCount: 5, rewardGold: 45, rewardXp: 45, rewardRep: 35, minRank: 0 },
-  { id: 'green-2', title: 'Slime Patrol', description: 'Drive off another wave of slimes before merchants close the gate.', objective: 'kill', targetKind: 'green', targetCount: 8, rewardGold: 70, rewardXp: 65, rewardRep: 45, minRank: 0 },
-  { id: 'blue-1', title: 'Blue Menace', description: 'Deal with the tougher blue slimes seen near the meadows.', objective: 'kill', targetKind: 'blue', targetCount: 4, rewardGold: 85, rewardXp: 90, rewardRep: 55, minRank: 1 },
+  // Elder Glen (D rank): the farming town's everyday trouble.
+  { id: 'wolf-1', title: 'Wolves at the Pasture', description: 'Wolves have been circling Tom Hale\'s cattle. Put down the pack before it grows bold.', objective: 'kill', targetKind: 'green', targetCount: 3, rewardGold: 45, rewardXp: 50, rewardRep: 35, minRank: 0 },
+  { id: 'wolf-2', title: 'The Long Howl', description: 'The wolves in the western woods are still hunting the road. Thin the packs further.', objective: 'kill', targetKind: 'green', targetCount: 6, rewardGold: 75, rewardXp: 80, rewardRep: 50, minRank: 0 },
+  { id: 'goblin-1', title: 'Goblin Scouts', description: 'Goblin scouts have been seen around the fields at dusk. Deal with them before they bring the rest.', objective: 'kill', targetKind: 'cave', targetCount: 3, rewardGold: 70, rewardXp: 80, rewardRep: 50, minRank: 0 },
+  { id: 'herb-1', title: 'Apothecary Supply', description: 'Ilyra Moss needs Sungrass for her healing draughts. Gather it along the roadsides.', objective: 'gather', targetItem: 'sungrass', targetCount: 4, rewardGold: 40, rewardXp: 45, rewardRep: 30, minRank: 0 },
+  { id: 'wheat-1', title: 'Harvest Hands', description: 'The farmers are short-handed. Help bring in the wheat and hand over a dozen sheaves.', objective: 'gather', targetItem: 'wheat', targetCount: 12, rewardGold: 45, rewardXp: 45, rewardRep: 30, minRank: 0 },
+  { id: 'wool-1', title: 'Wool for the Weavers', description: 'The Glen\'s weavers are behind on a capital order. Shear the north-pasture sheep.', objective: 'gather', targetItem: 'wool', targetCount: 3, rewardGold: 50, rewardXp: 50, rewardRep: 30, minRank: 0 },
+  { id: 'quarry-1', title: 'Survey: The Old Quarry', description: 'Nobody has checked the old quarry in the northern hills in years. See what lives there now.', objective: 'explore', targetName: 'The Old Quarry', target: [-180, -262], radius: 26, rewardGold: 70, rewardXp: 90, rewardRep: 55, minRank: 0 },
+  { id: 'herb-2', title: 'Moonlit Harvest', description: 'Moongrass is easiest to find by night along the river. Bring three stems.', objective: 'gather', targetItem: 'moongrass', targetCount: 3, rewardGold: 70, rewardXp: 80, rewardRep: 50, minRank: 1 },
+  { id: 'ore-1', title: 'Quarry Samples', description: 'The guild smith wants iron samples from the old quarry. Four lumps of ore.', objective: 'gather', targetItem: 'ironOre', targetCount: 4, rewardGold: 95, rewardXp: 100, rewardRep: 60, minRank: 1 },
+  { id: 'stag-1', title: 'Rutting Stags', description: 'Maddened stags have been charging travellers on the roads. Bring two down.', objective: 'kill', targetKind: 'blue', targetCount: 2, rewardGold: 85, rewardXp: 90, rewardRep: 55, minRank: 1 },
   { id: 'mixed-1', title: 'Roadside Sweep', description: 'Remove any hostile creatures blocking the town approaches.', objective: 'kill', targetKind: 'any', targetCount: 10, rewardGold: 100, rewardXp: 105, rewardRep: 65, minRank: 1 },
-  { id: 'cave-1', title: 'Cave Vermin', description: 'Cull cave slimes before they spread toward the hills.', objective: 'kill', targetKind: 'cave', targetCount: 5, rewardGold: 110, rewardXp: 120, rewardRep: 70, minRank: 1 },
+  { id: 'cave-1', title: 'Goblin Warband', description: 'A goblin warband is massing in the hills. Break it before it raids the Glen.', objective: 'kill', targetKind: 'cave', targetCount: 6, rewardGold: 120, rewardXp: 130, rewardRep: 75, minRank: 1 },
   { id: 'armour-1', title: 'Restless Steel', description: 'Destroy the animated suits haunting the old roads.', objective: 'kill', targetKind: 'armour', targetCount: 3, rewardGold: 160, rewardXp: 170, rewardRep: 90, minRank: 2 },
   { id: 'orc-1', title: 'Orc Warband', description: 'Break the orcs pushing out from the crypt.', objective: 'kill', targetKind: 'orc', targetCount: 1, rewardGold: 350, rewardXp: 380, rewardRep: 220, minRank: 2 },
   { id: 'orc-2', title: 'Warlord Contract', description: 'A standing contract: end the threat of Grukk in the lower crypt.', objective: 'kill', targetKind: 'orc', targetCount: 1, rewardGold: 600, rewardXp: 700, rewardRep: 350, minRank: 4 },
   { id: 'south-1', title: 'Survey: Greenmeadow', description: 'Travel deep into the southern meadows and report what you find.', objective: 'explore', targetName: 'Greenmeadow', target: [0, 180], radius: 24, rewardGold: 90, rewardXp: 110, rewardRep: 75, minRank: 0 },
   { id: 'south-2', title: 'Survey: Far Fields', description: 'Reach the old fields beyond the first southern bend.', objective: 'explore', targetName: 'Far Fields', target: [-14, 285], radius: 28, rewardGold: 125, rewardXp: 145, rewardRep: 95, minRank: 1 },
   { id: 'east-1', title: 'Cross the East Bridge', description: 'Scout the road across the river and return safely.', objective: 'explore', targetName: 'East Bridge', target: [230, 22], radius: 26, rewardGold: 100, rewardXp: 125, rewardRep: 80, minRank: 0 },
-  { id: 'east-2', title: 'Survey: Merchant Road', description: 'Follow the eastern road far enough to confirm the route is safe.', objective: 'explore', targetName: 'Merchant Road', target: [335, 60], radius: 30, rewardGold: 180, rewardXp: 210, rewardRep: 130, minRank: 2 },
+  { id: 'east-2', title: 'Survey: Merchant Road', description: 'Follow the King\'s Road east far enough to confirm the route to Port Aurelle is safe.', objective: 'explore', targetName: 'Merchant Road', target: [700, 110], radius: 30, rewardGold: 180, rewardXp: 210, rewardRep: 130, minRank: 2 },
   { id: 'north-1', title: 'Scout the Northern Road', description: 'Reach the first rise toward the crypt and mark the safe route.', objective: 'explore', targetName: 'Northern Rise', target: [6, -150], radius: 28, rewardGold: 125, rewardXp: 155, rewardRep: 95, minRank: 1 },
   { id: 'north-2', title: 'Scout the Crypt Hills', description: 'Travel into the hills beneath the crypt and report the terrain.', objective: 'explore', targetName: 'Crypt Hills', target: [-8, -225], radius: 30, rewardGold: 210, rewardXp: 250, rewardRep: 150, minRank: 2 },
   { id: 'west-1', title: 'Into the Greenwood', description: 'Explore the western forest edge where the old logging road begins.', objective: 'explore', targetName: 'Greenwood Edge', target: [-155, 20], radius: 30, rewardGold: 120, rewardXp: 150, rewardRep: 90, minRank: 1 },
@@ -104,6 +115,7 @@ function rankIndex(rank: GuildRank) {
 function progressText(q: GuildQuest) {
   if (q.objective === 'explore') return q.targetName + ': ' + (q.progress ? 'reached' : 'not reached');
   if (q.objective === 'survey') return 'Mapped ' + q.progress + ' / ' + q.targetCount + ' sectors';
+  if (q.objective === 'gather') return 'Gathered ' + q.progress + ' / ' + q.targetCount;
   return q.progress + ' / ' + q.targetCount;
 }
 
@@ -207,6 +219,7 @@ export class AdventurerGuild {
       description: t.description,
       objective: t.objective,
       targetKind: t.targetKind,
+      targetItem: t.targetItem,
       targetCount: t.targetCount,
       targetName: t.targetName,
       target: t.target,
@@ -245,8 +258,21 @@ export class AdventurerGuild {
     this.render();
   }
 
+  /** Gather contracts read (and on completion take) from the player's bag. */
+  inventory?: { count(id: string): number; take(id: string, n: number): void };
+
+  /** Reputation from outside the board (side quests for the town). */
+  addRep(n: number) {
+    this._rep += n;
+    const old = this.rank;
+    this.rank = rankForRep(this._rep);
+    if (this.rank !== old) this.ensureBoard();
+    this.render();
+  }
+
   private complete(q: GuildQuest) {
     this.active = this.active.filter((x) => x.id !== q.id);
+    if (q.objective === 'gather' && q.targetItem) this.inventory?.take(q.targetItem, q.targetCount ?? 1);
     this._completed++;
     this._rep += q.rewardRep;
     this.progression.addGold(q.rewardGold);
@@ -271,6 +297,8 @@ export class AdventurerGuild {
       q.progress = q.progress || (Math.hypot(at.x - q.target[0], at.z - q.target[1]) <= (q.radius ?? 24) ? 1 : 0);
     } else if (q.objective === 'survey') {
       q.progress = Math.min(q.targetCount ?? 0, this.explored.size);
+    } else if (q.objective === 'gather' && q.targetItem && this.inventory) {
+      q.progress = Math.min(q.targetCount ?? 1, this.inventory.count(q.targetItem));
     }
   }
 

@@ -24,18 +24,20 @@ export class BeastSpawner {
       timer: Math.random() * 4,
     });
 
+    // The wild edges of Elder Glen: wolves in the western woods and across the
+    // river, stags on the far meadows, goblins in the hills. Never in the
+    // fields, pastures or on the town's doorstep.
     this.spots = [
-      S(-22, 112, 'green'),
-      S(18, 118, 'green'),
-      S(-35, 140, 'cave'),
-      S(30, 150, 'blue'),
-      S(-10, 175, 'green'),
-      S(40, 190, 'magma'),
-      S(-45, 205, 'blue'),
-      S(12, 230, 'cave'),
-      S(105, 40, 'green'),
-      S(115, -30, 'cave'),
-      S(100, 70, 'blue'),
+      S(-215, 60, 'green'),
+      S(-240, -30, 'green'),
+      S(-205, 150, 'green'),
+      S(235, -110, 'green'),
+      S(265, 175, 'green'),
+      S(-285, 115, 'blue'),
+      S(305, 60, 'blue'),
+      S(125, -255, 'cave'),
+      S(-255, 245, 'cave'),
+      S(-330, -205, 'magma'),
     ];
   }
 

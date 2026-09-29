@@ -5,7 +5,7 @@ import { heightAt } from '../world/terrain';
 import { physics } from '../physics/physics';
 import { mats, paintedWood } from '../items/materials';
 import { buildSword } from '../items/weaponModels';
-import type { DialogueUI } from '../ui/dialogue';
+import type { DialogueUI, DialogueOption } from '../ui/dialogue';
 import type { Interactable } from '../dungeon/instance';
 import type { Player } from '../player/player';
 import { events } from '../core/events';
@@ -172,9 +172,20 @@ function buildStall(scene: THREE.Scene, x: number, z: number, yaw: number) {
   physics.addBox(new THREE.Vector3(x, heightAt(x, z) + 0.5, z), new THREE.Vector3(1.3, 0.5, 0.55), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)));
 }
 
+/** What each merchant will buy back, per unit. */
+const BUYS: Record<string, [string, number][]> = {
+  baker: [['wheat', 3], ['carrot', 2], ['cabbage', 4], ['pumpkin', 8], ['egg', 2], ['milk', 4], ['apple', 2], ['pear', 3]],
+  innkeeper: [['apple', 3], ['pear', 3], ['milk', 4], ['egg', 3], ['pumpkin', 7]],
+  tailor: [['wool', 7]],
+  froest: [['ironOre', 9]],
+  apothecary: [['sungrass', 3], ['moongrass', 6], ['wildmint', 3], ['ironleaf', 6]],
+};
+
 export class Town {
   readonly npcs: NPC[];
   readonly guild: AdventurerGuild;
+  /** quests add options (offers, turn-ins) to a townsperson's menu */
+  questOptions?: (npcId: string, show: (text: string, opts: DialogueOption[]) => void, back: () => void) => DialogueOption[];
   private tags = new Map<string, HTMLDivElement>();
   private tmp = new THREE.Vector3();
 
@@ -267,7 +278,7 @@ export class Town {
         this.showShop(s.name, s.title, 'Carefully brewed field medicine.', [['healthPotion', 20], ['manaPotion', 25]]);
         return true;
       case 'baker':
-        this.showShop(s.name, s.title, 'Travel provisions for adventurers who do not want to turn around halfway through a contract.', [['healthPotion', 15], ['manaPotion', 20]]);
+        this.showShop(s.name, s.title, 'Travel provisions — and seed for anyone working a plot. Plant it, water it, and it is ready in half a day.', [['healthPotion', 15], ['manaPotion', 20], ['wheatSeed', 3], ['carrotSeed', 3], ['cabbageSeed', 4], ['pumpkinSeed', 6]]);
         return true;
       case 'tailor':
         this.showShop(s.name, s.title, 'Cloaks and belts made for long expeditions.', [['wayfarerCloak', 95], ['warriorBelt', 80]]);
@@ -285,9 +296,45 @@ export class Town {
     return false;
   }
 
-  talk(s: NpcSpec, text = s.greeting) {
+  private count(id: string) {
+    return this.player.equip.items.filter((i) => i.def.id === id).reduce((n, i) => n + i.qty, 0);
+  }
+
+  /** Sell everything of the kinds this merchant buys. */
+  private sellOptions(s: NpcSpec): DialogueOption[] {
+    const buys = BUYS[s.id];
+    if (!buys) return [];
+    const have = buys.filter(([id]) => this.count(id) > 0);
+    if (!have.length) return [];
+    const total = have.reduce((g, [id, price]) => g + this.count(id) * price, 0);
+    return [{
+      label: `Sell produce and materials — ${total}g (${have.map(([id]) => this.count(id) + ' ' + ITEMS[id].name).join(', ')})`,
+      run: () => {
+        for (const [id] of have) {
+          const it = this.player.equip.items.find((i) => i.def.id === id);
+          if (it) this.player.equip.items.splice(this.player.equip.items.indexOf(it), 1);
+        }
+        this.player.prog.addGold(total);
+        events.emit('equipmentChanged', {});
+        events.emit('progressChanged', {});
+        this.dialogue.show(s.name, s.title, `A fair trade. ${total} gold for the lot.`, [{ label: 'Back.', run: () => this.talk(s, s.greeting, true) }, { label: 'Farewell.', run: () => this.dialogue.close() }]);
+      },
+    }];
+  }
+
+  talk(s: NpcSpec, text = s.greeting, skipQuests = false) {
     const npc = this.npcs.find((n) => n.spec.id === s.id);
     if (npc) npc.talkT = 6 + text.length * 0.035;
+    // Quests and trade come first; "Something else" opens the usual menu.
+    if (!skipQuests) {
+      const show = (t: string, opts: DialogueOption[]) => this.dialogue.show(s.name, s.title, t, opts);
+      const quest = this.questOptions?.(s.id, show, () => this.talk(s)) ?? [];
+      const sell = this.sellOptions(s);
+      if (quest.length || sell.length) {
+        this.dialogue.show(s.name, s.title, text, [...quest, ...sell, { label: BUYS[s.id] || s.id === 'innkeeper' ? 'Let me see your wares.' : 'Something else…', run: () => this.talk(s, text, true) }, { label: 'Farewell.', run: () => this.dialogue.close() }]);
+        return;
+      }
+    }
     if (this.talkShop(s)) return;
     if (s.trainerStyle && text === s.greeting && !this.player.prog.styleIntroductions.includes(s.trainerStyle)) {
       this.player.prog.markStyleIntroduction(s.trainerStyle);

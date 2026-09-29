@@ -53,7 +53,7 @@ const SPECIES: Record<Species, SpeciesDef> = {
   deer: { height: 1.35, walk: 1.2, run: 8, wild: true, shy: 16, ...QUAD },
   stag: { height: 1.7, walk: 1.2, run: 8, wild: true, shy: 14, ...QUAD },
   fox: { height: 0.55, walk: 1.2, run: 6.5, wild: true, shy: 12, idle: ['Idle', 'Idle_2'], eat: 'Eating', walkClip: 'Walk', runClip: 'Gallop' },
-  pigeon: { height: 0.26, walk: 0.6, run: 2.2, wild: true, shy: 4, idle: ['Idle'], walkClip: 'Walk', runClip: 'Walk', colors: { Pigeon_Main: 0x9c9da2, Pigeon_Secondary: 0xd29a3a } },
+  pigeon: { height: 0.26, walk: 0.6, run: 2.2, wild: true, shy: 4, idle: ['Idle'], walkClip: 'Walk', runClip: 'Walk', colors: { Pigeon_Main: 0xaaa39a, Pigeon_Secondary: 0xd29a3a } },
 };
 
 /** A fenced pen or open range an animal belongs to. */
@@ -65,7 +65,7 @@ export interface Range {
   yaw?: number;
 }
 
-interface Animal {
+export interface Animal {
   species: Species;
   range: Range;
   pos: THREE.Vector3;
@@ -76,6 +76,10 @@ interface Animal {
   seed: number;
   actor: { root: THREE.Object3D; mixer: THREE.AnimationMixer; actions: Map<string, THREE.AnimationAction>; clip: string } | null;
   wildTile?: number;
+  /** quest animals: trail this point (the player) instead of grazing */
+  follow?: THREE.Vector3 | null;
+  /** size multiplier (calves, prize bulls) */
+  scale?: number;
 }
 
 const ACTOR_R = 110;
@@ -106,6 +110,24 @@ export class Fauna {
       const p = this.pointIn(range);
       this.animals.push({ species, range, pos: p, yaw: this.rng() * 6.28, target: null, state: 'idle', timer: this.rng() * 5, seed: (this.rng() * 1e9) | 0, actor: null });
     }
+  }
+
+  /** One authored animal (quest animals, named livestock). */
+  addOne(species: Species, at: THREE.Vector3, range: Range, scale = 1): Animal {
+    const a: Animal = { species, range, pos: at.clone(), yaw: this.rng() * 6.28, target: null, state: 'idle', timer: 2, seed: (this.rng() * 1e9) | 0, actor: null, scale };
+    this.animals.push(a);
+    return a;
+  }
+
+  remove(a: Animal) {
+    this.release(a);
+    const i = this.animals.indexOf(a);
+    if (i >= 0) this.animals.splice(i, 1);
+  }
+
+  /** Is a point inside a range (fenced pens use their rectangle)? */
+  contains(r: Range, p: THREE.Vector3) {
+    return this.inRange(r, p);
   }
 
   private pointIn(r: Range) {
@@ -185,7 +207,7 @@ export class Fauna {
       scale = SPECIES[a.species].height / Math.max(0.01, box.max.y - box.min.y);
       this.scaleOf.set(a.species, scale);
     }
-    root.scale.setScalar(scale);
+    root.scale.setScalar(scale * (a.scale ?? 1));
     const colors = SPECIES[a.species].colors;
     root.traverse((o) => {
       const m = o as THREE.Mesh;
@@ -269,13 +291,25 @@ export class Fauna {
       if (d > ACTOR_R + 40) continue; // nothing to simulate that nobody can see
       // Behaviour.
       a.timer -= dt;
+      if (a.follow) {
+        // Trail the player: walk when a few metres behind, trot when far.
+        const to = a.follow.clone().sub(a.pos).setY(0);
+        const len = to.length();
+        if (len > 3.2) {
+          a.state = len > 9 ? 'flee' : 'walk';
+          const step = Math.min(len - 3, (len > 20 ? def.run * 1.4 : len > 9 ? def.run * 0.8 : def.walk * 1.6) * dt);
+          a.pos.addScaledVector(to.normalize(), step);
+          a.yaw = dampAngle(a.yaw, Math.atan2(to.x, to.z), 6, dt);
+        } else if (a.state === 'walk' || a.state === 'flee') a.state = 'idle';
+        a.timer = 1;
+      }
       if (def.wild && def.shy && d < def.shy && a.state !== 'flee') {
         a.state = 'flee';
         const away = a.pos.clone().sub(player).setY(0).normalize().multiplyScalar(30 + this.rng() * 20);
         a.target = a.pos.clone().add(away);
         a.timer = 6;
       }
-      if (a.timer <= 0 && a.state !== 'flee') {
+      if (a.timer <= 0 && a.state !== 'flee' && !a.follow) {
         const roll = this.rng();
         if (this.night > 0.7 && !def.wild) {
           a.state = 'sleep';
@@ -292,7 +326,7 @@ export class Fauna {
           a.timer = 3 + this.rng() * 6;
         }
       }
-      if ((a.state === 'walk' || a.state === 'flee') && a.target) {
+      if ((a.state === 'walk' || a.state === 'flee') && a.target && !a.follow) {
         const to = a.target.clone().sub(a.pos).setY(0);
         const len = to.length();
         const speed = a.state === 'flee' ? def.run : def.walk;

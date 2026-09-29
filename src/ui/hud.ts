@@ -59,6 +59,8 @@ export class HUD {
   private boss: { hp: number; maxHp: number; alive: boolean } | null = null;
   private bossTrail = 1;
   private questEl: HTMLDivElement;
+  /** side quests shown under the main quest (set by the quest UI) */
+  sideQuestHtml = '';
   onSlotDrop?: (mode: 'items' | 'moves', slot: number, ref: number | string) => void;
 
   constructor(private player: Player, private camera: THREE.Camera) {
@@ -333,7 +335,8 @@ export class HUD {
     const pr = p.prog;
     this.questEl.innerHTML = pr.starterStyleChosen
       ? `<span class="q-kicker">MAIN QUEST</span><b>STARTER SCHOOL CHOSEN</b><small>Primary: ${pr.activeStyle ? pr.activeStyle.toUpperCase() : '—'} · Build your mastery.</small>`
-      : `<span class="q-kicker">MAIN QUEST</span><b>STUDY THE THREE SCHOOLS</b><small>${pr.starterQuestCount}/3 mentors met · Learn Gale, Boundary and Cross, then choose your starter.</small>`;
+      : `<span class="q-kicker">MAIN QUEST</span><b>STUDY THE THREE SCHOOLS</b><small>${pr.starterQuestCount}/3 mentors met · Learn Gale, Boundary and Cross, then choose your starter.</small>`
+      + this.sideQuestHtml;
     this.xpFill.style.transform = `scaleX(${Math.min(1, pr.xp / pr.next)})`;
     this.lvEl.textContent = `LV ${pr.level}`;
     this.goldEl.textContent = `${pr.gold}`;

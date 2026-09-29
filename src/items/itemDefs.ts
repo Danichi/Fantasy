@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { buildSword, buildRoundShield, buildKiteShield, buildOdachi } from './weaponModels';
 import { buildArmorPiece, type ArmorPieceId } from './armorModels';
+import { PRODUCE_ITEMS } from './produce';
 
 export type Slot =
   | 'main' | 'off'
@@ -8,7 +9,7 @@ export type Slot =
   | 'amulet' | 'ring1' | 'ring2' | 'belt' | 'trinket';
 export const ARMOR_SLOTS: Slot[] = ['head', 'shoulders', 'chest', 'cloak', 'hands', 'legs', 'feet'];
 export const ACCESSORY_SLOTS: Slot[] = ['amulet', 'ring1', 'ring2', 'belt', 'trinket'];
-export type ItemKind = 'sword' | 'shield' | 'armor' | 'accessory' | 'spell' | 'consumable' | 'key';
+export type ItemKind = 'sword' | 'shield' | 'armor' | 'accessory' | 'spell' | 'consumable' | 'key' | 'material';
 export type Rarity = 'common' | 'fine' | 'rare' | 'epic';
 
 export interface ItemStats {
@@ -177,6 +178,7 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'ironleaf', name: 'Ironleaf', kind: 'consumable', rarity: 'fine', stack: true,
     desc: 'A tough mineral-rich leaf. Restores a modest amount of health and stamina.', stats: { heal: 12, restoreStamina: 20 },
   },
+  ...PRODUCE_ITEMS,
 };
 
 export function buildItemModel(def: ItemDef): THREE.Object3D | null {

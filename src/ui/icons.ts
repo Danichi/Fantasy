@@ -229,7 +229,7 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
       cache.set(def.id, paintSpell(def));
       continue;
     }
-    if (def.kind === 'consumable') {
+    if (def.kind === 'consumable' && !def.build) {
       cache.set(def.id, paintPotion(def));
       continue;
     }
@@ -244,6 +244,7 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
     if (def.kind === 'sword') holder.rotation.set(0, 0, -Math.PI / 4);
     if (def.kind === 'shield') holder.rotation.set(0.15, -0.35, 0);
     if (def.kind === 'armor' || def.kind === 'accessory') holder.rotation.set(0.25, -0.5, 0);
+    if (def.kind === 'material' || def.kind === 'consumable' || def.kind === 'key') holder.rotation.set(0.45, -0.5, 0);
     cache.set(def.id, snap(holder, SIZE, SIZE, 1.15));
     // Wide versions for the hand frames: blades horizontal, shields upright.
     if (def.kind === 'sword' || def.kind === 'shield') {

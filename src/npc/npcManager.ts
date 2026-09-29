@@ -34,6 +34,10 @@ export interface NpcRecord {
   schedule: ScheduleEntry[];
   /** a line or two they say, chosen by time of day */
   lines?: { any?: string[]; morning?: string[]; evening?: string[]; night?: string[] };
+  /** shown under the name in dialogue (defaults to the job) */
+  title?: string;
+  /** authored residents (quest givers): never pooled out of town */
+  named?: boolean;
 }
 
 export interface Place {
@@ -58,6 +62,8 @@ export interface Settlement {
 }
 
 interface NpcState {
+  /** distance to the player at the last update */
+  dist?: number;
   rec: NpcRecord;
   seed: number;
   /** current world position (level 1 and 2) */
@@ -233,8 +239,20 @@ export class NpcManager {
 
   /** Heavy rain sends people at leisure under a roof: adults to the inn, children home. */
   raining = false;
+  /** The harvest festival: the town gathers on the plaza on this day's evening. */
+  festivalDay = -1;
+
+  /** A resident by id (quest markers, scripted scenes). */
+  find(id: string) {
+    return this.npcs.find((n) => n.rec.id === id) ?? null;
+  }
+
   private effective(st: NpcState) {
     const e = st.rec.schedule[this.entryIndex(st.rec)];
+    const h = this.time.hour;
+    if (this.festivalDay === this.time.day && h >= 19 && h < 23.5 && st.rec.job !== 'guard' && st.rec.job !== 'brannoc') {
+      return { activity: 'play' as Activity, place: 'plaza' };
+    }
     const leisure = e.activity === 'sit' || e.activity === 'play' || e.activity === 'idle' || e.activity === 'talk';
     const outdoors = !(this.settlements.get(st.rec.settlement)!.places.get(e.place)?.indoors);
     if (this.raining && leisure && outdoors) {
@@ -336,8 +354,8 @@ export class NpcManager {
     const list = this.pool.get(key);
     const free = list?.find((a) => !a.built.root.visible);
     if (free) return free;
-    // Nothing free: build another in the background (one at a time), try next tick.
-    if (this.building.size === 0) void this.buildActor(key, st.rec.look);
+    // Nothing free: build another in the background (two at a time), try next tick.
+    if (this.building.size < 2) void this.buildActor(key, st.rec.look);
     return null;
   }
 
@@ -367,6 +385,7 @@ export class NpcManager {
     const slow = this.tick >= 0.25;
     if (slow) this.tick = 0;
     let nSprites = 0;
+    const wanting: NpcState[] = [];
     const m = new THREE.Matrix4();
     if (camera) this.spriteUniforms.uCam.value.copy(camera);
     this.spriteUniforms.uNight.value = night * 0.6;
@@ -421,19 +440,20 @@ export class NpcManager {
         }
       }
       const dist = st.pos.distanceTo(player);
+      st.dist = dist;
       const wantActor = !st.hidden && dist < ACTIVE_R;
       if (st.actor && (!wantActor || dist > DESPAWN_R)) this.release(st);
-      if (!st.actor && wantActor && slow && this.active < MAX_ACTORS) {
-        const a = this.take(st);
-        if (a) {
-          st.actor = a;
-          this.active++;
-          a.built.root.visible = true;
-        }
+      // At the cap, the farthest actor gives way to someone clearly nearer.
+      if (!st.actor && wantActor && slow && this.active >= MAX_ACTORS) {
+        let far: NpcState | null = null;
+        for (const o of this.npcs) if (o.actor && (!far || (o.dist ?? 0) > (far.dist ?? 0))) far = o;
+        if (far && (far.dist ?? 0) > dist + 12) this.release(far);
       }
+      if (!st.actor && wantActor && slow) wanting.push(st);
       if (!st.actor) {
         // Far LOD: a sprite, once this look has been baked (queue a build if not).
-        if (!st.hidden && dist >= ACTIVE_R - 4 && dist < FAR_R && nSprites < SPRITE_CAP) {
+        // (Also near ones still waiting for an actor, so nobody blinks out.)
+        if (!st.hidden && dist < FAR_R && nSprites < SPRITE_CAP) {
           const key = lookKey(st.rec.look);
           const cell = this.cells.get(key);
           if (cell !== undefined) {
@@ -441,7 +461,7 @@ export class NpcManager {
             this.sprites.setMatrixAt(nSprites, m);
             this.spriteData.setXY(nSprites, cell, st.rec.look.height ?? 1.75);
             nSprites++;
-          } else if (slow && this.building.size === 0 && !this.pool.has(key)) void this.buildActor(key, st.rec.look);
+          } else if (slow && this.building.size === 0 && !this.pool.has(key) && dist > ACTIVE_R) void this.buildActor(key, st.rec.look);
         }
         continue;
       }
@@ -468,6 +488,18 @@ export class NpcManager {
       if (a.headBone && Math.abs(a.headYaw) > 0.01) a.headBone.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), a.headYaw * 0.7);
     }
     this.finishSprites(nSprites);
+    // Hand out actors nearest-first; the nearest without a built look gets built next.
+    if (wanting.length) {
+      wanting.sort((a, b) => (a.dist ?? 0) - (b.dist ?? 0));
+      for (const st of wanting) {
+        if (this.active >= MAX_ACTORS) break;
+        const a = this.take(st);
+        if (!a) continue;
+        st.actor = a;
+        this.active++;
+        a.built.root.visible = true;
+      }
+    }
   }
 
   private finishSprites(n: number) {

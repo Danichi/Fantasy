@@ -21,6 +21,12 @@ export interface WorldSave {
   weather?: { kind?: import('./world/regionDefinitions').WeatherKind; timer?: number };
   /** where the player stood (overworld), so a reload keeps them there */
   pos?: [number, number, number];
+  /** side and story quests */
+  quests?: import('./quests/questLog').QuestSave;
+  /** the player's plot, coop and orchard days */
+  farm?: import('./world/farmLife').FarmSave;
+  /** mined-out ore nodes and similar landmark state */
+  landmarks?: { ore?: number[] };
 }
 
 export interface SaveData {

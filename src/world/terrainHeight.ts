@@ -29,6 +29,8 @@ export const GATES = {
 };
 export const RIVER_LEVEL = -0.6;
 export const CRYPT = new THREE.Vector2(0, -318); // entrance in the hillside
+/** The old quarry: a pit cut into the northern hills (floor level in metres). */
+export const QUARRY_PIT = { x: -180, z: -262, floor: 11.5 };
 export const BRIDGE = new THREE.Vector2(0, 6); // x filled in from the river below
 /** Port Aurelle (formerly Tremison): the great port city on the eastern coast. */
 export const PORT_AURELLE = new THREE.Vector2(2760, 150);
@@ -130,6 +132,12 @@ function localHeight(x: number, z: number) {
   const cd = Math.hypot(x - CRYPT.x, (z - CRYPT.y) * 0.8);
   // Rises behind the facade (which sits at CRYPT.y + 3), level in front of it.
   h += smoothstep(CRYPT.y + 0.5, CRYPT.y - 5, z) * smoothstep(26, 7, cd) * 9;
+  // The old quarry: a flat-floored pit cut back into the hillside.
+  {
+    const qd = Math.hypot(x - QUARRY_PIT.x, (z - QUARRY_PIT.z) * 1.15);
+    const pit = smoothstep(19, 13, qd);
+    if (pit > 0) h = h + (Math.min(h, QUARRY_PIT.floor + (fbm(x / 6, z / 6, 2) - 0.5) * 0.5) - h) * pit;
+  }
   // River: banks above the water, channel carved below it.
   const dr = Math.abs(x - riverX(z));
   // The river rises from springs in the northern and southern foothills.
