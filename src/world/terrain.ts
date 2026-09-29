@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { worldNoise } from '../render/noise';
+import { paintedTexture } from '../render/painted';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { fbm, smoothstep, clamp } from '../core/math';
 import { physics } from '../physics/physics';
@@ -229,14 +231,6 @@ export function surfaceAt(x: number, z: number): Surface {
 }
 
 // ---- rendering ----------------------------------------------------------------
-function loadTex(loader: THREE.TextureLoader, url: string, srgb: boolean, aniso: number) {
-  const t = loader.load(url);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.anisotropy = aniso;
-  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
 function buildSplatTexture() {
   const N = 1024;
   const data = new Uint8Array(N * N * 4);
@@ -261,127 +255,85 @@ function buildSplatTexture() {
 }
 
 function terrainMaterial(renderer: THREE.WebGLRenderer) {
+  // Painted ground (docs/ART-DIRECTION.md §3): palette colours driven by the
+  // splat map and the shared world noise, so the ground under the grass
+  // matches the blades. Cobbles and dirt are painted textures; cliffs get
+  // layered rock bands. No normal maps: the stylised lighting does the rest.
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  const L = new THREE.TextureLoader();
-  const base = '/assets/textures/';
-  const set = (id: string) => ({
-    diff: loadTex(L, `${base}${id}_diff_1k.jpg`, true, aniso),
-    nor: loadTex(L, `${base}${id}_nor_gl_1k.jpg`, false, aniso),
-    arm: loadTex(L, `${base}${id}_arm_1k.jpg`, false, aniso),
-  });
-  const stone = set('cobblestone_floor_08');
-  const dirt = set('brown_mud_leaves_01');
-  const grass = set('aerial_grass_rock');
-  const rock = set('rock_face_03');
-
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
+  mat.userData.styleSoftness = 0;
   const uniforms = {
     tSplat: { value: buildSplatTexture() },
     uSize: { value: WORLD_SIZE },
-    dS: { value: stone.diff }, nS: { value: stone.nor }, aS: { value: stone.arm },
-    dD: { value: dirt.diff }, nD: { value: dirt.nor }, aD: { value: dirt.arm },
-    dG: { value: grass.diff }, nG: { value: grass.nor }, aG: { value: grass.arm },
-    dR: { value: rock.diff }, nR: { value: rock.nor },
+    tNoise: { value: worldNoise() },
+    tCobble: { value: paintedTexture('cobbles', aniso, 7) },
+    tDirt: { value: paintedTexture('dirt', aniso, 8) },
   };
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWN;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWN = normal;');
+      .replace('#include <common>', `#include <common>
+varying vec3 vWPos;
+varying vec3 vWN;`)
+      .replace('#include <project_vertex>', `#include <project_vertex>
+vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+vWN = normal;`);
     sh.fragmentShader = sh.fragmentShader
       .replace(
         '#include <common>',
         `#include <common>
         varying vec3 vWPos;
         varying vec3 vWN;
-        uniform sampler2D tSplat, dS, nS, aS, dD, nD, aD, dG, nG, aG, dR, nR;
+        uniform sampler2D tSplat, tNoise, tCobble, tDirt;
         uniform float uSize;
-        vec3 tW;
-        float tFar, tRock;
-        vec2 uvS, uvD, uvG, uvR;
-        ${FLOWER_GLSL}
-        vec3 heightBlend(vec3 w, vec3 h) {
-          vec3 x = w + h * 0.55;
-          float m = max(max(x.r, x.g), x.b) - 0.28;
-          vec3 b = max(x - m, 0.0);
-          return b / max(b.r + b.g + b.b, 1e-4);
-        }`,
+        ${FLOWER_GLSL}`,
       )
       .replace(
         '#include <map_fragment>',
         `vec4 sp = texture2D(tSplat, vWPos.xz / uSize + 0.5);
-        uvS = vWPos.xz / 2.6; uvD = vWPos.xz / 3.4; uvG = vWPos.xz / 4.2;
-        float far = smoothstep(18.0, 80.0, length(vWPos - cameraPosition));
-        tFar = far;
-        // Only layers that are present get sampled; big regions take one path.
-        vec3 cS = vec3(0.0), cD = vec3(0.0), cG = vec3(0.0);
-        vec2 uv2 = mat2(0.8, -0.6, 0.6, 0.8) * vWPos.xz;
-        float mv = smoothstep(0.3, 0.7, sp.a);
-        if (sp.r > 0.004) cS = texture2D(dS, uvS).rgb * 0.62;
-        if (sp.g > 0.004) cD = texture2D(dD, far > 0.5 ? uv2 / 3.4 * 0.1 : uvD).rgb * vec3(0.95, 0.9, 0.85);
-        if (sp.b > 0.004) cG = texture2D(dG, far > 0.5 ? uv2 / 4.2 * 0.09 : uvG).rgb * vec3(0.6, 0.92, 0.46);
-        vec3 hts = vec3(dot(cS, vec3(0.5)), dot(cD, vec3(0.4)), dot(cG, vec3(0.5)));
-        tW = heightBlend(sp.rgb, hts);
-        vec3 col = cS * tW.r + cD * tW.g + cG * tW.b;
-        col *= mix(vec3(0.9, 0.93, 0.86), vec3(1.07, 1.03, 0.98), mix(sp.a, mv, 0.5));
-        // Wildflowers beyond the 3D sprigs: dots in the middle distance,
-        // a soft colour wash far away.
-        float fDens = flowerDensity(vWPos.xz) * tW.b;
+        float dist = length(vWPos - cameraPosition);
+        vec4 patchN = texture2D(tNoise, vWPos.xz * 0.004);
+        vec4 fineN = texture2D(tNoise, vWPos.xz * 0.05);
+        // Grass ground: a touch darker than the blade bodies; far away it
+        // takes the colour of the field's tips, where only the tops are seen.
+        vec3 gNear = mix(vec3(0.14, 0.27, 0.07), vec3(0.2, 0.33, 0.08), patchN.r);
+        vec3 gFar = mix(vec3(0.25, 0.42, 0.11), vec3(0.4, 0.46, 0.15), smoothstep(0.55, 0.85, patchN.g));
+        vec3 cG = mix(gNear, gFar, smoothstep(10.0, 70.0, dist));
+        cG *= mix(0.92, 1.06, fineN.b);
+        vec3 cD = texture2D(tDirt, vWPos.xz / 3.2).rgb;
+        vec3 cS = texture2D(tCobble, vWPos.xz / 2.4).rgb;
+        // Soft, slightly noisy blend edges (painted, not stamped).
+        vec3 w = sp.rgb + (fineN.r - 0.5) * 0.35 * vec3(1.0, 1.0, 0.0);
+        w = max(w, 0.0);
+        w = pow(w, vec3(1.6));
+        w /= max(w.r + w.g + w.b, 1e-4);
+        vec3 col = cS * w.r + cD * w.g + cG * w.b;
+        // Wildflowers: dots in the middle distance, a soft wash far away.
+        float fDens = flowerDensity(vWPos.xz) * w.b;
         if (fDens > 0.02) {
-          float dist = length(vWPos - cameraPosition);
           float k = flowerKind(vWPos.xz);
-          vec3 fc = k < 0.5 ? vec3(0.95, 0.93, 0.86) : k < 1.5 ? vec3(0.95, 0.76, 0.14) : k < 2.5 ? vec3(0.32, 0.46, 0.92) : vec3(0.86, 0.13, 0.08);
+          vec3 fc = k < 0.5 ? vec3(0.95, 0.93, 0.86) : k < 1.5 ? vec3(0.95, 0.76, 0.14) : k < 2.5 ? vec3(0.45, 0.5, 0.95) : vec3(0.86, 0.3, 0.2);
           vec2 cellP = vWPos.xz * 3.0;
           float pick = fh(floor(cellP));
           float dotShape = smoothstep(0.24, 0.1, length(fract(cellP) - 0.5));
           float mid = smoothstep(12.0, 18.0, dist) * (1.0 - smoothstep(45.0, 70.0, dist));
           float flatGround = smoothstep(0.9, 0.97, normalize(vWN).y);
           col = mix(col, fc, step(pick, fDens * 0.22) * dotShape * 0.8 * mid * flatGround);
-          col = mix(col, mix(col, fc, 0.5), fDens * 0.12 * smoothstep(45.0, 70.0, dist));
+          col = mix(col, mix(col, fc, 0.45), fDens * 0.12 * smoothstep(45.0, 70.0, dist));
         }
-        // Steep ground turns to rock (triplanar-lite: project on the dominant side).
+        // Steep ground: layered rock bands, warm grey with moss on ledges.
         vec3 wn = normalize(vWN);
-        tRock = smoothstep(0.28, 0.45, 1.0 - wn.y);
+        float tRock = smoothstep(0.26, 0.42, 1.0 - wn.y);
         if (tRock > 0.01) {
-          // Triplanar on steep faces: blend the X- and Z-facing projections.
-          float bx = abs(wn.x) / (abs(wn.x) + abs(wn.z) + 1e-4);
-          uvR = bx > 0.5 ? vWPos.zy / 7.0 : vWPos.xy / 7.0;
-          float rs = mix(7.0, 30.0, far); // much larger scale far away hides tiling
-          vec3 cR = mix(texture2D(dR, vWPos.xy / rs).rgb, texture2D(dR, vWPos.zy / rs).rgb, bx);
-          cR = mix(vec3(dot(cR, vec3(0.33))), cR, 0.35) * vec3(0.86, 0.88, 0.9); // weathered grey stone
+          float band = fract(vWPos.y * 0.42 + fineN.g * 0.8 + patchN.r * 1.5);
+          vec3 r1 = vec3(0.42, 0.4, 0.36), r2 = vec3(0.55, 0.52, 0.46), r3 = vec3(0.34, 0.32, 0.3);
+          vec3 cR = band < 0.45 ? r1 : band < 0.85 ? r2 : r3;
+          cR *= mix(0.9, 1.08, fineN.b);
+          float moss = smoothstep(0.62, 0.75, wn.y + (fineN.r - 0.5) * 0.3);
+          cR = mix(cR, gNear * 1.1, moss);
           col = mix(col, cR, tRock);
         }
         diffuseColor.rgb *= col;`,
-      )
-      .replace(
-        '#include <roughnessmap_fragment>',
-        `float roughnessFactor = roughness;
-        if (far < 0.99) {
-          vec3 arm = vec3(0.0);
-          if (tW.r > 0.01) arm += texture2D(aS, uvS).rgb * tW.r;
-          if (tW.g > 0.01) arm += texture2D(aD, uvD).rgb * tW.g;
-          if (tW.b > 0.01) arm += texture2D(aG, uvG).rgb * tW.b;
-          arm = mix(arm, vec3(1.0, 0.9, 0.0), far);
-          roughnessFactor *= mix(0.75, 1.0, arm.g);
-          diffuseColor.rgb *= mix(1.0, arm.r, 0.8 * (1.0 - tRock));
-        }`,
-      )
-      .replace(
-        '#include <normal_fragment_maps>',
-        `if (tFar < 0.95) {
-          vec3 nm = vec3(0.0);
-          if (tW.r > 0.01) nm += (texture2D(nS, uvS).xyz * 2.0 - 1.0) * tW.r;
-          if (tW.g > 0.01) nm += (texture2D(nD, uvD).xyz * 2.0 - 1.0) * tW.g;
-          if (tW.b > 0.01) nm += (texture2D(nG, uvG).xyz * 2.0 - 1.0) * tW.b;
-          if (tRock > 0.01) nm = mix(nm, texture2D(nR, uvR).xyz * 2.0 - 1.0, tRock);
-          nm.xy *= 1.1 * (1.0 - tFar);
-          nm.z = max(nm.z, 0.2);
-          vec3 Nv = normal;
-          vec3 Tv = normalize((viewMatrix * vec4(1.0, 0.0, 0.0, 0.0)).xyz);
-          Tv = normalize(Tv - Nv * dot(Nv, Tv));
-          vec3 Bv = normalize(cross(Nv, Tv));
-          normal = normalize(Tv * nm.x - Bv * nm.y + Nv * nm.z);
-        }`,
       );
   };
   return { mat, splat: uniforms.tSplat.value };

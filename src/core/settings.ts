@@ -10,6 +10,8 @@ export interface QualitySettings {
   post: boolean;
   msaa: boolean;
   grassCount: number;
+  /** meadow grass blades near the camera (a sparse far layer adds 30%) */
+  grassBlades: number;
   maxDynamicLights: number;
   particleScale: number;
 }
@@ -17,9 +19,9 @@ export interface QualitySettings {
 export const PRESETS: Record<Quality, QualitySettings> = {
   // Medium skips the composer entirely: MSAA on the canvas and tone mapping in
   // the material shaders. Bloom + SMAA cost ~40ms/frame at 1080p on Iris Xe.
-  low: { pixelRatio: 0.8, shadowMapSize: 1536, bloom: false, smaa: false, post: false, msaa: false, grassCount: 10000, maxDynamicLights: 1, particleScale: 0.65 },
-  medium: { pixelRatio: 1, shadowMapSize: 3072, bloom: true, smaa: false, post: true, msaa: true, grassCount: 28000, maxDynamicLights: 2, particleScale: 1 },
-  high: { pixelRatio: Math.min(window.devicePixelRatio, 2), shadowMapSize: 4096, bloom: true, smaa: false, post: true, msaa: true, grassCount: 60000, maxDynamicLights: 4, particleScale: 1.5 },
+  low: { pixelRatio: 0.8, shadowMapSize: 1536, bloom: false, smaa: false, post: false, msaa: false, grassCount: 10000, grassBlades: 45000, maxDynamicLights: 1, particleScale: 0.65 },
+  medium: { pixelRatio: 1, shadowMapSize: 3072, bloom: true, smaa: false, post: true, msaa: true, grassCount: 28000, grassBlades: 110000, maxDynamicLights: 2, particleScale: 1 },
+  high: { pixelRatio: Math.min(window.devicePixelRatio, 2), shadowMapSize: 4096, bloom: true, smaa: false, post: true, msaa: true, grassCount: 60000, grassBlades: 200000, maxDynamicLights: 4, particleScale: 1.5 },
 };
 
 const params = new URLSearchParams(location.search);

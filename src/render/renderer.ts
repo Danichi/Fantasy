@@ -41,7 +41,7 @@ export class Renderer {
     if (!Q.post) this.scene.fog = new THREE.Fog(FOG_COLOR, 90, 720);
 
     // Sun: warm key light with a tight shadow box that follows the player.
-    this.sun = new THREE.DirectionalLight(0xfff0d2, 3.0);
+    this.sun = new THREE.DirectionalLight(0xfff1d6, 2.3);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(Q.shadowMapSize, Q.shadowMapSize);
     const s = this.sun.shadow.camera;
@@ -51,7 +51,8 @@ export class Renderer {
     this.sun.shadow.normalBias = 0.035;
     this.scene.add(this.sun, this.sun.target);
 
-    this.hemi = new THREE.HemisphereLight(0xbfe3ff, 0x48683d, 0.78);
+    // Cool sky fill so shadows read blue, never black (docs/ART-DIRECTION.md §2).
+    this.hemi = new THREE.HemisphereLight(0xa9c7ee, 0x6d6a4a, 1.05);
     this.scene.add(this.hemi);
 
     if (Q.post) this.post = new Post(r, Q.msaa ? 4 : 0);
@@ -66,7 +67,7 @@ export class Renderer {
     const env = pmrem.fromEquirectangular(tex).texture;
     pmrem.dispose();
     this.scene.environment = env;
-    this.scene.environmentIntensity = 0.9;
+    this.scene.environmentIntensity = 0.35; // the photo sky only adds a little ambient; the hemisphere fill leads
     this.scene.background = tex;
     this.scene.backgroundIntensity = 1.03;
     this.scene.backgroundBlurriness = 0.012;

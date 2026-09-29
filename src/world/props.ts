@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { paintedMaterials } from '../render/painted';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { heightAt, PALISADE_R, PLAZA_CENTER, PLAZA_R, GATES } from './terrain';
@@ -164,18 +165,11 @@ export interface World {
 }
 
 export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRenderer, fx: FX): Promise<World> {
-  const L = new THREE.TextureLoader();
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  // Painted surfaces (docs/ART-DIRECTION.md): no photographic textures in town.
   const m: WorldMats = {
-    stone: pbr(L, 'castle_brick_07', { color: 0xb0aaa0 }, aniso),
-    bridgeStone: pbr(L, 'rock_face_03', { color: 0xb4b2ac }, aniso, 0.85),
-    plaster: pbr(L, 'white_plaster_rough_01', { color: 0xe8dcc4 }, aniso),
-    timber: pbr(L, 'weathered_peeling_timber', { color: 0x8b6546 }, aniso),
-    slate: pbr(L, 'roof_slates_02', { color: 0x8a8a92 }, aniso),
-    thatch: pbr(L, 'thatch_roof_angled', { color: 0xc9b58a }, aniso),
-    planks: pbr(L, 'wood_planks_grey', { color: 0xa07b55 }, aniso),
+    ...paintedMaterials(aniso),
     glass: new THREE.MeshStandardMaterial({ color: 0x3a2a10, emissive: 0xffa040, emissiveIntensity: 1.6, roughness: 0.3 }),
-    bark: pbr(L, 'bark_brown_02', { color: 0xa88668 }, aniso),
   };
 
   // ---- houses along the northern street -----------------------------------
@@ -214,6 +208,8 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     { x: 48, z: -35, rot: -0.1, spec: { w: 9, d: 7, floors: 1, roof: 'slate', seed: 98 } },
   ];
   for (const h of houses) {
+    // Roofs: mostly terracotta, some slate-blue, thatch where specified.
+    if (h.spec.roof === 'slate' && h.spec.seed % 3 !== 0) h.spec.roof = 'tile';
     const { group, half } = buildHouse(h.spec, m);
     // Sit on the lowest corner so the plinth never floats.
     let gy = Infinity;

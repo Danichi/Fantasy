@@ -54,9 +54,6 @@ const ASSETS: AssetSpec[] = [
   { file: 'Fern_1.glb', kind: 'fern', targetHeight: 0.9, variants: 1 },
   { file: 'Flower_3_Group.glb', kind: 'flower', targetHeight: 0.8, variants: 1 },
   { file: 'Mushroom_Common.glb', kind: 'mushroom', targetHeight: 0.55, variants: 1 },
-  { file: 'Grass_Common_Short.glb', kind: 'grass', targetHeight: 0.55, variants: 1 },
-  { file: 'Grass_Common_Tall.glb', kind: 'grass', targetHeight: 0.9, variants: 1 },
-  { file: 'Grass_Wispy_Tall.glb', kind: 'grass', targetHeight: 1.1, variants: 1 },
 ];
 
 const TREE_COUNT = 340;
@@ -245,7 +242,6 @@ export class StylizedNature {
       ...this.prototypeIndices('fern'),
       ...this.prototypeIndices('flower'),
       ...this.prototypeIndices('mushroom'),
-      ...this.prototypeIndices('grass'),
     ];
     if (!types.length) return;
 

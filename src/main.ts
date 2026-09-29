@@ -1,4 +1,5 @@
 // Fonts are bundled so the game works offline (desktop build).
+import './render/stylize';
 import { initCompressedGltf } from './core/gltf';
 import '@fontsource/cinzel/500.css';
 import '@fontsource/cinzel/700.css';
@@ -6,7 +7,7 @@ import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
 import * as THREE from 'three';
-import { Renderer } from './render/renderer';
+import { Renderer, SUN_DIR } from './render/renderer';
 import { physics, PhysicsDebug } from './physics/physics';
 import { Terrain, initTerrainData, heightAt } from './world/terrain';
 import { Input } from './core/input';
@@ -78,6 +79,7 @@ async function boot() {
   const world = await buildWorld(r.scene, r.renderer, fx);
   mark('world');
   const grass = new Grass(r.scene, terrain.splat);
+  grass.setSunDir(SUN_DIR);
   mark('grass');
   const river = new River(r.scene);
   mark('river');
