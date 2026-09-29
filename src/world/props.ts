@@ -163,6 +163,8 @@ function addMeshCollider(obj: THREE.Object3D) {
 export interface World {
   crypt: ReturnType<typeof buildCrypt>;
   village: Village;
+  /** the painted material set, shared with other settlements */
+  mats: WorldMats;
   update(dt: number): void;
 }
 
@@ -443,6 +445,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
   return {
     crypt,
     village,
+    mats: m,
     update(dt: number) {
       crypt.update(dt);
       village.update(dt);

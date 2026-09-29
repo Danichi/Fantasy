@@ -139,7 +139,7 @@ async function boot() {
   const dialogue = new DialogueUI();
   const town = new Town(r.scene, r.camera, dialogue, player);
   frontier = new FrontierRegion(
-    r.scene, player, fx, dialogue,
+    r.scene, player, fx, dialogue, world.mats,
     (msg) => hud.toast(msg),
     () => town.guild.open('board'),
   );

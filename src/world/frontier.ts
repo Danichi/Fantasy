@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { events } from '../core/events';
 import { heightAt } from './terrain';
 import { physics } from '../physics/physics';
@@ -7,6 +8,11 @@ import type { Player } from '../player/player';
 import type { FX } from '../fx/particles';
 import type { DialogueUI } from '../ui/dialogue';
 import type { Interactable } from '../dungeon/instance';
+import { buildHouse, worldUV, type WorldMats } from './buildings';
+import { mulberry32 } from '../core/math';
+
+// Painted materials shared with Elderglen (docs/ART-DIRECTION.md); set by FrontierRegion.
+let M: WorldMats;
 
 export const TREMISON = new THREE.Vector2(360, 76);
 export const TREMISON_HARBOR = new THREE.Vector2(423, 74);
@@ -61,69 +67,128 @@ function addSign(scene: THREE.Scene, text: string, x: number, z: number, width =
   return m;
 }
 
-function addBuilding(scene: THREE.Scene, x: number, z: number, w: number, d: number, h: number, roof = true) {
-  const y = heightAt(x, z);
-  const g = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshStandardMaterial({ color: 0xd4c2a0, roughness: 0.95 }),
-  );
-  body.position.y = h / 2;
-  g.add(body);
-  if (roof) {
-    const r = new THREE.Mesh(
-      new THREE.ConeGeometry(Math.max(w, d) * 0.72, Math.min(w, d) * 0.48, 4),
-      new THREE.MeshStandardMaterial({ color: 0x6b6260, roughness: 1 }),
-    );
-    r.rotation.y = Math.PI / 4;
-    r.position.y = h + Math.min(w, d) * 0.2;
-    g.add(r);
-  }
-  g.position.set(x, y, z);
-  g.traverse((o) => ((o as THREE.Mesh).isMesh && ((o.castShadow = true), (o.receiveShadow = true))));
-  scene.add(g);
-  physics.addBox(new THREE.Vector3(x, y + h / 2, z), new THREE.Vector3(w / 2, h / 2, d / 2));
+function addBuilding(scene: THREE.Scene, x: number, z: number, w: number, d: number, h: number, _roof = true, rot = 0) {
+  // Painted timber-frame house, one or two floors by the requested height.
+  void _roof;
+  const seed = Math.abs(Math.round(x * 13 + z * 7));
+  const pick = mulberry32(seed)();
+  const { group, half } = buildHouse({ w, d, floors: h > 5 ? 2 : 1, roof: pick < 0.45 ? 'tile' : pick < 0.75 ? 'slate' : 'thatch', seed }, M);
+  let gy = Infinity;
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) gy = Math.min(gy, heightAt(x + sx * half.x, z + sz * half.z));
+  group.position.set(x, gy, z);
+  group.rotation.y = rot;
+  scene.add(group);
+  physics.addBox(new THREE.Vector3(x, gy + half.y, z), half, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot));
 }
 
 function addTower(scene: THREE.Scene, x: number, z: number, r: number, h: number) {
   const y = heightAt(x, z);
-  const tower = new THREE.Mesh(
-    new THREE.CylinderGeometry(r, r * 1.06, h, 12),
-    new THREE.MeshStandardMaterial({ color: 0x9b958e, roughness: 0.95 }),
-  );
-  tower.position.set(x, y + h / 2, z);
+  const body = new THREE.CylinderGeometry(r, r * 1.06, h, 16);
+  body.translate(x, y + h / 2, z);
+  const tower = new THREE.Mesh(worldUV(body.toNonIndexed(), 2.5), M.stone);
   tower.castShadow = tower.receiveShadow = true;
   scene.add(tower);
-  const roof = new THREE.Mesh(
-    new THREE.ConeGeometry(r * 1.25, h * 0.32, 8),
-    new THREE.MeshStandardMaterial({ color: 0x515866, roughness: 0.95 }),
-  );
-  roof.position.set(x, y + h + h * 0.16, z);
+  const cone = new THREE.ConeGeometry(r * 1.3, h * 0.45, 16);
+  cone.translate(x, y + h + h * 0.22, z);
+  const roof = new THREE.Mesh(worldUV(cone.toNonIndexed(), 2.2), M.slate);
   roof.castShadow = true;
   scene.add(roof);
   physics.addCylinder(new THREE.Vector3(x, y + h / 2, z), h / 2, r);
 }
 
+/** Furrowed soil: dark and light rows. */
+function furrowTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#6e5238';
+  g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 8; i++) {
+    const grd = g.createLinearGradient(0, i * 32, 0, i * 32 + 32);
+    grd.addColorStop(0, '#5a412c');
+    grd.addColorStop(0.5, '#7d5f42');
+    grd.addColorStop(1, '#5a412c');
+    g.fillStyle = grd;
+    g.fillRect(0, i * 32, 256, 32);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+type CropList = { pos: THREE.Matrix4[]; col: THREE.Color[] };
+let cropState: { soil: THREE.MeshStandardMaterial; leafy: CropList; wheat: CropList } | null = null;
+
 function addCropField(scene: THREE.Scene, x: number, z: number, w: number, d: number, seed: number) {
-  const y = heightAt(x, z) + 0.02;
-  const soil = new THREE.MeshStandardMaterial({ color: 0x705131, roughness: 1 });
-  const crop = new THREE.MeshStandardMaterial({ color: seed % 2 ? 0x9da64a : 0x81983d, roughness: 0.95 });
-  const bed = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), soil);
+  if (!cropState) {
+    const soil = new THREE.MeshStandardMaterial({ map: furrowTexture(), roughness: 1 });
+    soil.userData.styleSoftness = 0;
+    cropState = { soil, leafy: { pos: [], col: [] }, wheat: { pos: [], col: [] } };
+  }
+  const y = heightAt(x, z) + 0.03;
+  const bedGeo = new THREE.BoxGeometry(w, 0.08, d);
+  // One furrow per 1.6 m, running along x (the texture holds 8 furrows).
+  const uv = bedGeo.attributes.uv as THREE.BufferAttribute;
+  for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * (w / 8), (uv.getY(k) * d) / 1.6 / 8);
+  const bed = new THREE.Mesh(bedGeo, cropState.soil);
   bed.position.set(x, y, z);
   bed.receiveShadow = true;
   scene.add(bed);
-  const rows = Math.max(3, Math.floor(d / 1.6));
-  const cols = Math.max(5, Math.floor(w / 1.35));
+  const rnd = mulberry32(seed * 101);
+  const wheat = seed % 2 === 0;
+  const list = wheat ? cropState.wheat : cropState.leafy;
+  const rows = Math.floor(d / 1.6);
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
   for (let j = 0; j < rows; j++) {
-    for (let i = 0; i < cols; i++) {
-      const xx = x - w / 2 + 0.65 + i * (w - 1.3) / Math.max(1, cols - 1);
-      const zz = z - d / 2 + 0.55 + j * (d - 1.1) / Math.max(1, rows - 1);
-      const stem = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.45 + ((i * 17 + j * 11 + seed) % 4) * 0.05, 5), crop);
-      stem.position.set(xx, y + 0.24, zz);
-      stem.rotation.z = ((i + j) % 2 ? 1 : -1) * 0.08;
-      scene.add(stem);
+    const zz = z - d / 2 + (j + 0.5) * (d / rows);
+    for (let xx = x - w / 2 + 0.5; xx < x + w / 2 - 0.4; xx += wheat ? 0.55 : 0.8) {
+      const s = wheat ? 0.8 + rnd() * 0.35 : 0.28 + rnd() * 0.14;
+      q.setFromAxisAngle(up, rnd() * 6.28);
+      const px = xx + (rnd() - 0.5) * 0.2, pz = zz + (rnd() - 0.5) * 0.25;
+      list.pos.push(new THREE.Matrix4().compose(new THREE.Vector3(px, heightAt(px, pz) + 0.05, pz), q, new THREE.Vector3(s, s * (wheat ? 1 : 0.8), s)));
+      const base = wheat ? new THREE.Color(0xd8b65a) : new THREE.Color([0x5f8f3a, 0x78a843, 0x8fb54e][seed % 3]);
+      list.col.push(base.multiplyScalar(0.85 + rnd() * 0.3));
     }
   }
+}
+
+/** Build the instanced crops once every field has been laid out (one draw call per crop type). */
+function finishCrops(scene: THREE.Scene) {
+  if (!cropState) return;
+  const make = (geo: THREE.BufferGeometry, mat: THREE.Material, data: CropList) => {
+    if (!data.pos.length) return;
+    const mesh = new THREE.InstancedMesh(geo, mat, data.pos.length);
+    data.pos.forEach((m, i) => {
+      mesh.setMatrixAt(i, m);
+      mesh.setColorAt(i, data.col[i]);
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+  };
+  // Leafy crops: chunky low-poly heads.
+  const head = new THREE.IcosahedronGeometry(1, 0);
+  head.translate(0, 0.6, 0);
+  make(head, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }), cropState.leafy);
+  // Wheat: a tuft of thin stalks with heavier ears.
+  const parts: THREE.BufferGeometry[] = [];
+  for (let k = 0; k < 6; k++) {
+    const stalk = new THREE.CylinderGeometry(0.012, 0.02, 0.9, 3);
+    stalk.translate(0, 0.45, 0);
+    const ear = new THREE.CylinderGeometry(0.035, 0.02, 0.2, 4);
+    ear.translate(0, 0.98, 0);
+    const a = (k / 6) * Math.PI * 2;
+    for (const g of [stalk, ear]) {
+      g.rotateZ(0.12 * Math.sin(a * 3));
+      g.rotateX(0.1 * Math.cos(a * 2));
+      g.translate(Math.cos(a) * 0.08, 0, Math.sin(a) * 0.08);
+      parts.push(g.toNonIndexed());
+    }
+  }
+  make(mergeGeometries(parts)!, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 }), cropState.wheat);
+  cropState = null;
 }
 
 function buildFarmingVillage(scene: THREE.Scene) {
@@ -133,6 +198,7 @@ function buildFarmingVillage(scene: THREE.Scene) {
   addCropField(scene, -48, 211, 72, 46, 4);
   addCropField(scene, 46, 218, 88, 48, 5);
   addCropField(scene, 145, 208, 76, 44, 6);
+  finishCrops(scene);
 
   for (const [x, z, w, d] of [
     [-122, 150, 12, 9], [-22, 232, 14, 10], [118, 185, 14, 10],
@@ -145,7 +211,7 @@ function buildFarmingVillage(scene: THREE.Scene) {
   addBuilding(scene, granaryX, granaryZ, 16, 12, 6.2, true);
   addSign(scene, 'CRESHA GRAIN STORE', granaryX, granaryZ - 6.2, 6.3, 3.1);
 
-  const wagonMat = new THREE.MeshStandardMaterial({ color: 0x755337, roughness: 0.95 });
+  const wagonMat = M.planks;
   for (const [x, z] of [[-108, 179], [72, 263], [151, 170]]) {
     const wagon = new THREE.Group();
     const bed = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.35, 1.4), wagonMat);
@@ -165,11 +231,12 @@ function buildFarmingVillage(scene: THREE.Scene) {
 
 function buildTremison(scene: THREE.Scene) {
   const cx = TREMISON.x, cz = TREMISON.y;
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x8e9796, roughness: 0.9 });
+  const wallMat = M.stone;
   const wall = (x: number, z: number, w: number, d: number, h: number) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
     const y = heightAt(x, z);
-    m.position.set(x, y + h / 2, z);
+    const geo = new THREE.BoxGeometry(w, h, d);
+    geo.translate(x, y + h / 2, z);
+    const m = new THREE.Mesh(worldUV(geo, 3), wallMat);
     m.castShadow = m.receiveShadow = true;
     scene.add(m);
     physics.addBox(new THREE.Vector3(x, y + h / 2, z), new THREE.Vector3(w / 2, h / 2, d / 2));
@@ -180,7 +247,7 @@ function buildTremison(scene: THREE.Scene) {
   wall(cx + 72, cz - 10, 2, 130, 7);
   wall(cx + 4, cz + 73, 137, 2, 7);
   wall(cx - 63, cz + 73, 17, 2, 7);
-  const gate = new THREE.Mesh(new THREE.BoxGeometry(18, 10, 2.2), wallMat);
+  const gate = new THREE.Mesh(worldUV(new THREE.BoxGeometry(18, 10, 2.2), 3), wallMat);
   gate.position.set(cx - 72, heightAt(cx - 72, cz) + 5, cz);
   gate.rotation.y = Math.PI / 2;
   scene.add(gate);
@@ -213,28 +280,11 @@ function buildTremison(scene: THREE.Scene) {
   shore.position.set(431, -0.82, 76);
   scene.add(shore);
 
-  // A dense visual population keeps the port from feeling like an empty prop set.
-  const colors = [0xc66e54, 0x4c708a, 0x8d6e47, 0x5c826b, 0x8a527e, 0x9a844e];
-  for (let i = 0; i < 42; i++) {
-    const a = i * 2.39996;
-    const radius = 18 + (i % 8) * 7;
-    const x = cx + Math.sin(a) * radius;
-    const z = cz + Math.cos(a) * radius * 0.85;
-    if (Math.abs(x - cx) > 66 || Math.abs(z - cz) > 61) continue;
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.62, 4, 7), new THREE.MeshStandardMaterial({ color: colors[i % colors.length], roughness: 0.95 }));
-    body.position.y = 0.66;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 8, 6), new THREE.MeshStandardMaterial({ color: 0xd2a080, roughness: 1 }));
-    head.position.y = 1.34;
-    g.add(body, head);
-    g.position.set(x, heightAt(x, z), z);
-    g.rotation.y = a;
-    scene.add(g);
-  }
+  // (The capsule placeholder crowd is gone; real villagers will populate the port.)
 
   // Port district.
   const dockY = heightAt(TREMISON_HARBOR.x - 24, TREMISON_HARBOR.y);
-  const dockMat = new THREE.MeshStandardMaterial({ color: 0x755337, roughness: 0.95 });
+  const dockMat = M.planks;
   for (let i = 0; i < 4; i++) {
     const x = TREMISON_HARBOR.x - 32 + i * 20;
     const z = TREMISON_HARBOR.y + 14 + (i % 2) * 7;
@@ -378,9 +428,11 @@ export class FrontierRegion {
     private player: Player,
     private fx: FX,
     private dialogue: DialogueUI,
+    mats: WorldMats,
     private toast: (msg: string) => void,
     private openGuild: () => void,
   ) {
+    M = mats;
     buildFarmingVillage(scene);
     buildTremison(scene);
     this.buildHerbs();
