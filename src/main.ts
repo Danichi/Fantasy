@@ -26,6 +26,9 @@ import { Music } from './audio/music';
 import { Ambient } from './world/ambient';
 import { Discovery } from './world/discovery';
 import { WorldMapUI } from './ui/worldMap';
+import { PerfOverlay } from './ui/perfOverlay';
+import { regionAt } from './world/worldMap';
+import { targets } from './combat/targets';
 import { Ocean } from './world/sea/ocean';
 import { GroundWindow } from './world/groundWindow';
 import { CharPreview } from './ui/charPreview';
@@ -194,6 +197,17 @@ async function boot() {
     player.prog.addXp(25);
     save();
   });
+  const perfOverlay = new URLSearchParams(location.search).has('perf')
+    ? new PerfOverlay({
+      renderer: r.renderer,
+      terrainTiles: () => terrain.tileCount,
+      vegetationTiles: () => stylizedNature.tileCount,
+      physicsBodies: () => physics.world.bodies.len(),
+      actors: () => targets.size,
+      region: () => (realm.mode === 'dungeon' ? 'dungeon' : regionAt(player.pos.x, player.pos.z)),
+      position: () => player.pos,
+    })
+    : null;
   worldMap.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open || dialogue.open;
     if (open) input.exitLock();
@@ -424,6 +438,7 @@ async function boot() {
     physDebug?.update();
     r.followShadow(renderPos);
     r.render(dt);
+    perfOverlay?.update(dtMs);
     if (inv.open) preview.render();
     const t2 = performance.now();
     perf.sim = perf.sim * 0.9 + (t1 - t0) * 0.1;
@@ -461,7 +476,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

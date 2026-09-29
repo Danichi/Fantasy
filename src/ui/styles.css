@@ -888,3 +888,7 @@ html, body {
 .region-card .rc-rule { width: 280px; height: 1px; margin: 12px auto 0; background: linear-gradient(90deg, transparent, rgba(240,210,138,0.9), transparent); }
 .region-card.quiet .rc-name { font-size: 28px; }
 @keyframes regionCard { 0% { opacity: 0; transform: translate(-50%, 8px); } 12% { opacity: 1; transform: translate(-50%, 0); } 78% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ?perf overlay */
+.perf { position: absolute; right: 12px; bottom: 150px; z-index: 90; padding: 8px 10px; border-radius: 6px; background: rgba(6,12,24,0.78); border: 1px solid rgba(220,189,112,0.4); font: 500 11px/1.5 ui-monospace, Consolas, monospace; color: #dfe8f5; pointer-events: none; }
+.perf b { color: #f4d88c; }
