@@ -395,6 +395,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     mineDoor: mineEntrance.door,
     update(dt: number) {
       crypt.update(dt);
+      mineEntrance.update(dt);
       for (const d of dummies) d.update(dt);
       fireT += dt;
       if (fireT > 0.03) {
