@@ -150,7 +150,7 @@ async function boot() {
     },
     clearEnemies: () => slimes.clear(),
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
-  }, rewards, world.crypt.door);
+  }, rewards, world.crypt.door, world.mineDoor);
   const dialogue = new DialogueUI();
   const town = new Town(r.scene, r.camera, dialogue);
   realm.overworldInteractables.push(...town.interactables());
@@ -162,11 +162,12 @@ async function boot() {
   };
   if (saveData) {
     realm.progress = saveData.dungeon;
+    realm.mineProgress = saveData.mine ?? { gateOpen: false, guardianDead: false };
     realm.maps = saveData.maps;
   }
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
-    writeSave(player, realm.seed, realm.maps, realm.progress);
+    writeSave(player, realm.seed, realm.maps, realm.progress, realm.mineProgress);
   };
   realm.onSave = save;
   mapUI.onChange = save;
