@@ -547,7 +547,7 @@ export class SkillRuntime {
   windBlade(from: THREE.Vector3, dir: THREE.Vector3, dmg: number, size: number, pierce: boolean, range = 12, bleed = false) {
     const d = dir.clone().setY(0).normalize();
     this.vfx.projectile({
-      from: from.clone().setY(this.player.pos.y + 1.0), dir: d, speed: 22, range, style: 'gale', shape: 'blade', size: 1.1 * size, pierce, radius: 0.7 * size,
+      from: from.clone().setY(this.player.pos.y + 1.0), dir: d, speed: 22, range, style: 'gale', shape: 'blade', size: 1.7 * size, pierce, radius: 0.8 * size,
       onHit: (t, _at, dd) => {
         this.hit(t, dmg, { poise: 35, dir: dd, source: 'melee' });
         if (bleed) this.bleed(t, dmg * 0.12);
