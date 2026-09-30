@@ -154,7 +154,7 @@ export class MineInstance {
   private buildShell(m: ReturnType<typeof makeMaterials>) {
     this.room({ x: 0, z: 0, w: 9, d: 18 }, m, true, true);
     this.room({ x: 0, z: -24, w: 22, d: 18 }, m, true, true);
-    this.room({ x: 0, z: -45, w: 24, d: 20 }, m, false, true);
+    this.room({ x: 0, z: -45, w: 24, d: 20 }, m, true, true);
     this.room({ x: 0, z: -63, w: 18, d: 16 }, m, true, true);
     this.room({ x: 0, z: -81, w: 24, d: 18 }, m, true, true);
     this.room({ x: 0, z: -103, w: 28, d: 24 }, m, true, false);
