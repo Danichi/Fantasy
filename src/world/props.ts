@@ -6,6 +6,7 @@ import { physics } from '../physics/physics';
 import { buildHouse, worldUV, type WorldMats } from './buildings';
 import { buildBridge } from './water';
 import { buildCrypt } from './crypt';
+import { buildMineEntrance } from './mineEntrance';
 import { mulberry32, wrapAngle as wrap } from '../core/math';
 import { newTargetId, targets, type HitInfo, type Target } from '../combat/targets';
 import type { FX } from '../fx/particles';
@@ -160,6 +161,8 @@ function addMeshCollider(obj: THREE.Object3D) {
 
 export interface World {
   crypt: ReturnType<typeof buildCrypt>;
+  mineEntrance: ReturnType<typeof buildMineEntrance>;
+  mineDoor: THREE.Vector3;
   update(dt: number): void;
 }
 
@@ -202,6 +205,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
 
   buildBridge(scene, m);
   const crypt = buildCrypt(scene, m, fx);
+  const mineEntrance = buildMineEntrance(scene, m, fx);
 
   // ---- palisade with three open gates -------------------------------------------
   const logGeo = (() => {
@@ -387,6 +391,8 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
 
   return {
     crypt,
+    mineEntrance,
+    mineDoor: mineEntrance.door,
     update(dt: number) {
       crypt.update(dt);
       for (const d of dummies) d.update(dt);
