@@ -12,8 +12,12 @@ import { worldNoise } from '../render/noise';
 // Two layers share the shader: a dense near field of thin blades and a sparse
 // far field of wider blades that carries the texture out to the haze.
 
+// Three rings, each fading into the next: dense thin blades near the camera,
+// a medium field of wider blades out to ~66 m, and a sparse far field to ~115 m
+// (inside the ground window, which may sit 40 m off-centre).
 const NEAR_TILE = 44;
-const FAR_TILE = 150;
+const MID_TILE = 132;
+const FAR_TILE = 232;
 
 /** A single tapered, curved blade: 3 segments + tip, height 1, width 1. */
 function bladeGeometry() {
@@ -184,6 +188,7 @@ class GrassLayer {
 export class Grass {
   readonly mesh = new THREE.Group();
   private near: GrassLayer;
+  private mid: GrassLayer;
   private far: GrassLayer;
 
   /** `ground` supplies height, density and tint around the camera. */
@@ -194,7 +199,8 @@ export class Grass {
     shared.uGroundSize = ground.size;
     scene.add(this.mesh);
     this.near = new GrassLayer(this.mesh as unknown as THREE.Scene, Q.grassBlades, NEAR_TILE, 0.055, 0, 1234);
-    this.far = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.3), FAR_TILE, 0.16, NEAR_TILE * 0.36, 987);
+    this.mid = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.5), MID_TILE, 0.11, NEAR_TILE * 0.36, 555);
+    this.far = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.22), FAR_TILE, 0.2, MID_TILE * 0.36, 987);
   }
 
   /** Follow a (mutable) sun direction by reference. */
@@ -210,6 +216,7 @@ export class Grass {
     shared.uTime.value += dt;
     shared.uPlayer.value.copy(player);
     this.near.update(center);
+    this.mid.update(center);
     this.far.update(center);
   }
 }

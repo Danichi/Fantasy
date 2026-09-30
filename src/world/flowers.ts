@@ -10,7 +10,7 @@ import { FLOWER_GLSL } from './flowerNoise';
 // The terrain shader paints matching colour speckles further out, so meadows
 // read as flowering all the way to the horizon.
 
-const TILE = 36;
+const TILE = 60; // ~30 m around the camera (was 18 m: sprigs visibly popped in)
 
 /** Four flowers side by side: daisy, buttercup, cornflower, poppy. */
 function flowerAtlas() {
@@ -88,7 +88,7 @@ export class Flowers {
   private uniforms: Record<string, THREE.IUniform>;
 
   constructor(scene: THREE.Scene, ground: GroundWindow) {
-    const count = Math.round(Q.grassCount * 0.35);
+    const count = Math.round(Q.grassCount * 0.35 * 2.5); // same density over the wider tile
     const geo = sprigGeometry();
     const offs = new Float32Array(count * 4);
     const rnd = mulberry32(777);

@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import { heightAt, WORLD_SIZE } from './terrainHeight';
 import { reliefAt, RELIEF, WORLD_X0, WORLD_Z0, CELL, SEA_LEVEL } from './worldMap';
 
-// Ground data around the camera for GPU-placed grass and flowers: a 256 m
-// square at 1 m per texel, re-centred as the camera travels. Channels:
+// Ground data around the camera for GPU-placed grass and flowers: a 320 m
+// square (256 texels, 1.25 m each), re-centred as the camera travels. Channels:
 //   R  ground height (m)
 //   G  grass density 0..1 (meadows full, forest floor sparse, none on sand,
 //      snow, lava or water)
@@ -12,7 +12,9 @@ import { reliefAt, RELIEF, WORLD_X0, WORLD_Z0, CELL, SEA_LEVEL } from './worldMa
 //   A  grass tint: 0 temperate, 0.33 alpine, 0.66 jungle/wetland, 1 dry
 // Rebuilds are spread over several frames into a back buffer, then swapped.
 
-const SIZE = 256;
+const SIZE = 256; // texels per side
+const TEXEL = 1.25; // metres per texel
+const SPAN = SIZE * TEXEL; // metres per side
 const ROWS_PER_FRAME = 24;
 const RECENTER = 40; // metres the camera may drift before a rebuild starts
 
@@ -31,7 +33,8 @@ export class GroundWindow {
   readonly texture: THREE.DataTexture;
   /** World position of texel (0, 0) as used by the shaders. */
   readonly origin = { value: new THREE.Vector2(-1e6, -1e6) };
-  readonly size = { value: SIZE };
+  /** side length in metres */
+  readonly size = { value: SPAN };
   private front: Uint16Array;
   private back: Uint16Array;
   private building: { x0: number; z0: number; row: number } | null = null;
@@ -48,16 +51,16 @@ export class GroundWindow {
 
   /** Fill synchronously around a point (boot, teleports). */
   prime(center: THREE.Vector3) {
-    this.building = { x0: Math.round(center.x - SIZE / 2), z0: Math.round(center.z - SIZE / 2), row: 0 };
+    this.building = { x0: Math.round(center.x - SPAN / 2), z0: Math.round(center.z - SPAN / 2), row: 0 };
     while (this.building) this.step(SIZE);
   }
 
   update(camera: THREE.Vector3) {
     if (!this.building) {
-      const cx = this.origin.value.x + SIZE / 2, cz = this.origin.value.y + SIZE / 2;
+      const cx = this.origin.value.x + SPAN / 2, cz = this.origin.value.y + SPAN / 2;
       if (Math.abs(camera.x - cx) > RECENTER || Math.abs(camera.z - cz) > RECENTER) {
-        if (Math.abs(camera.x - cx) > SIZE || Math.abs(camera.z - cz) > SIZE) return this.prime(camera); // teleported
-        this.building = { x0: Math.round(camera.x - SIZE / 2), z0: Math.round(camera.z - SIZE / 2), row: 0 };
+        if (Math.abs(camera.x - cx) > SPAN || Math.abs(camera.z - cz) > SPAN) return this.prime(camera); // teleported
+        this.building = { x0: Math.round(camera.x - SPAN / 2), z0: Math.round(camera.z - SPAN / 2), row: 0 };
       }
     }
     if (this.building) this.step(ROWS_PER_FRAME);
@@ -67,10 +70,15 @@ export class GroundWindow {
     const b = this.building!;
     const H = WORLD_SIZE / 2;
     const toHalf = THREE.DataUtils.toHalfFloat;
+    // Only the masks that touch this window.
+    const masks = GRASS_MASKS.filter((m) => {
+      const e = m.r ?? Math.max(m.hx!, m.hz!);
+      return m.x + e > b.x0 && m.x - e < b.x0 + SPAN && m.z + e > b.z0 && m.z - e < b.z0 + SPAN;
+    });
     for (let r = 0; r < rows && b.row < SIZE; r++, b.row++) {
-      const z = b.z0 + b.row + 0.5;
+      const z = b.z0 + (b.row + 0.5) * TEXEL;
       for (let c = 0; c < SIZE; c++) {
-        const x = b.x0 + c + 0.5;
+        const x = b.x0 + (c + 0.5) * TEXEL;
         const k = (b.row * SIZE + c) * 4;
         let grass: number, flower: number, tint: number;
         if (this.localSplat && Math.abs(x) < H - 1 && Math.abs(z) < H - 1) {
@@ -88,7 +96,7 @@ export class GroundWindow {
           grass *= 1 - onRoad;
           flower *= 1 - onRoad;
         }
-        for (const m of GRASS_MASKS) {
+        for (const m of masks) {
           const inside = m.r !== undefined ? Math.hypot(x - m.x, z - m.z) < m.r : Math.abs(x - m.x) < m.hx! && Math.abs(z - m.z) < m.hz!;
           if (inside) {
             grass *= 1 - m.amount;

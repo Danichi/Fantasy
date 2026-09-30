@@ -88,14 +88,21 @@ interface Actor {
   current: string;
   headBone?: THREE.Bone;
   headYaw: number;
+  /** casting shadows (only close to the camera: the shadow pass re-skins every mesh) */
+  shadow?: boolean;
 }
 
-const ACTIVE_R = 80; // metres: actors spawn inside this radius
+const SHADOW_R = 20;
+
+// Full animated characters cost ~10 draw calls each (twice with shadows), so
+// they only live close to the camera; baked sprites carry the crowd beyond.
+const ACTIVE_R = 32; // metres: actors spawn inside this radius
+const LIVE_R = 80; // settlements are simulated (schedules snap) within this of their edge
 const FAR_R = 170; // sprite impostors between ACTIVE_R and this
 const SPRITE_CAP = 240;
 const CELL_W = 64, CELL_H = 128, ATLAS_COLS = 16, ATLAS_ROWS = 8;
-const DESPAWN_R = 95;
-const MAX_ACTORS = 36;
+const DESPAWN_R = 40; // released beyond this (hysteresis over ACTIVE_R)
+const MAX_ACTORS = 18;
 const WALK_SPEED = 1.35;
 
 const lookKey = (l: Look) => JSON.stringify(l);
@@ -398,7 +405,7 @@ export class NpcManager {
     if (camera) this.spriteUniforms.uCam.value.copy(camera);
     this.spriteUniforms.uNight.value = night * 0.6;
     for (const s of this.settlements.values()) {
-      const inRange = s.center.distanceTo(player) < s.radius + ACTIVE_R;
+      const inRange = s.center.distanceTo(player) < s.radius + LIVE_R;
       if (inRange && !this.live.has(s.id)) {
         // Level 3 -> 2: nobody was simulated, so put everyone where the clock says.
         this.live.add(s.id);
@@ -450,7 +457,14 @@ export class NpcManager {
       const dist = st.pos.distanceTo(player);
       st.dist = dist;
       const wantActor = !st.hidden && dist < ACTIVE_R;
-      if (st.actor && (!wantActor || dist > DESPAWN_R)) this.release(st);
+      if (st.actor && (st.hidden || dist > DESPAWN_R)) this.release(st);
+      if (st.actor) {
+        const cast = dist < SHADOW_R;
+        if (st.actor.shadow !== cast) {
+          st.actor.shadow = cast;
+          st.actor.built.root.traverse((o) => ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = cast)));
+        }
+      }
       // At the cap, the farthest actor gives way to someone clearly nearer.
       if (!st.actor && wantActor && slow && this.active >= MAX_ACTORS) {
         let far: NpcState | null = null;

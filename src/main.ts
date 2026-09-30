@@ -753,7 +753,7 @@ async function boot() {
   let hadLock = false;
   const music = new Music();
   const overlays = buildOverlays((origin) => {
-    player.prog.combat.origin = origin;
+    if (origin) player.prog.combat.origin = origin;
     started = true;
     music.start();
     ambience.start();
@@ -802,6 +802,7 @@ async function boot() {
     overlays.showPaused(true);
   };
   if (!TEST_MODE && hasSave()) {
+    overlays.lockOrigin();
     const cta = overlays.start.querySelector('.cta')!;
     cta.textContent = 'CLICK TO CONTINUE';
     const nw = document.createElement('button');
@@ -827,8 +828,9 @@ async function boot() {
   window.addEventListener('keydown', (e) => {
     if ((e.code === 'Escape' || e.code === 'KeyM') && worldMap.open) {
       worldMap.toggle(false);
-      // This press must not reach the (paused) simulation and reopen the map.
-      setTimeout(() => input.endStep(), 0);
+      // This press must not reach the simulation and reopen the map. (Input's
+      // own listener was registered first, so the press is already queued.)
+      input.consume(e.code);
       return;
     }
     if (e.code === 'Escape' && (dialogue.open || mapUI.open || inv.open || skills.open)) return;

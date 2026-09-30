@@ -59,17 +59,34 @@ class Kind {
     this.mats.push(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt, yaw, tilt * 0.6)), new THREE.Vector3(s, sy, s)));
     this.cols.push(col ?? new THREE.Color(1, 1, 1));
   }
+  /**
+   * One instanced mesh per 48 m cell rather than one for the whole farm belt,
+   * so the camera and the shadow pass can skip the fields that are out of view
+   * (a single mesh drew every stalk twice a frame wherever you stood).
+   */
   build(scene: THREE.Scene) {
     if (!this.mats.length) return;
-    const m = new THREE.InstancedMesh(this.geo, this.mat, this.mats.length);
+    const CELL = 48;
+    const cells = new Map<string, number[]>();
+    const p = new THREE.Vector3();
     this.mats.forEach((t, i) => {
-      m.setMatrixAt(i, t);
-      m.setColorAt(i, this.cols[i]);
+      p.setFromMatrixPosition(t);
+      const k = Math.floor(p.x / CELL) + ',' + Math.floor(p.z / CELL);
+      let list = cells.get(k);
+      if (!list) cells.set(k, (list = []));
+      list.push(i);
     });
-    m.castShadow = this.shadow;
-    m.receiveShadow = true;
-    m.computeBoundingSphere();
-    scene.add(m);
+    for (const list of cells.values()) {
+      const m = new THREE.InstancedMesh(this.geo, this.mat, list.length);
+      list.forEach((i, j) => {
+        m.setMatrixAt(j, this.mats[i]);
+        m.setColorAt(j, this.cols[i]);
+      });
+      m.castShadow = this.shadow;
+      m.receiveShadow = true;
+      m.computeBoundingSphere();
+      scene.add(m);
+    }
   }
 }
 

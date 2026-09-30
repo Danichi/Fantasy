@@ -82,8 +82,8 @@ export interface Animal {
   scale?: number;
 }
 
-const ACTOR_R = 110;
-const MAX_ACTORS = 48;
+const ACTOR_R = 70; // animated animals only this close (they are specks beyond, and each one costs draw calls)
+const MAX_ACTORS = 32;
 const loader = new GLTFLoader();
 const cache = new Map<Species, Promise<GLTF>>();
 const load = (s: Species) => {

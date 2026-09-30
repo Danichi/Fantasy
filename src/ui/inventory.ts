@@ -282,7 +282,7 @@ export class InventoryUI {
   }
 }
 
-export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon') => void, initialOrigin: 'human' | 'dragon' | 'demon' = 'human', music?: { muted: boolean; setMuted(m: boolean): void }) {
+export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon' | null) => void, initialOrigin: 'human' | 'dragon' | 'demon' = 'human', music?: { muted: boolean; setMuted(m: boolean): void }) {
   const root = document.getElementById('ui')!;
   const controls = `
     <div class="controls">
@@ -292,7 +292,7 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon') =>
       <span><kbd>F</kbd> Parry · hold while standing still for Boundary stance</span><span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on</span>
       <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span><span><kbd>V</kbd> Origin ability</span>
       <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory · <kbd>K</kbd> Skills</span>
-      <span><kbd>E</kbd> Interact (doors, chests, gates)</span><span><kbd>M</kbd> Draw the dungeon map</span>
+      <span><kbd>E</kbd> Interact (doors, chests, gates)</span><span><kbd>M</kbd> World map · draw the map in dungeons</span>
     </div>`;
   const start = document.createElement('div');
   start.className = 'overlay';
@@ -318,9 +318,18 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon') =>
   help.className = 'overlay hidden';
   help.innerHTML = `<div class="title-card"><h1>CONTROLS</h1><p class="sub">Parry a slime's leap with good timing to stagger it, then strike for a critical riposte.</p>${controls}<p class="sub" style="margin-top:22px">Press H or click to close</p></div>`;
   root.appendChild(help);
+  // The origin is chosen once, when a new game begins: never on the pause
+  // screen, and not when continuing a saved character.
+  const picker = start.querySelector('.origin-picker') as HTMLElement;
+  let originLocked = false;
+  const lockOrigin = () => {
+    originLocked = true;
+    picker.style.display = 'none';
+  };
   start.addEventListener('click', () => {
     start.classList.add('hidden');
-    onStart(selectedOrigin);
+    onStart(originLocked ? null : selectedOrigin);
+    lockOrigin();
   });
   // Title/pause screen buttons: music on/off everywhere, plus Quit and fullscreen in the desktop build.
   const desktop = (window as any).desktop as { quit(): void; toggleFullscreen(): void } | undefined;
@@ -354,7 +363,7 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon') =>
         title.textContent = 'PAUSED';
         sub.textContent = 'The world is frozen. Resume when you are ready.';
         cta.textContent = 'RESUME';
-        controlsEl?.classList.add('pause-hide');
+        controlsEl?.classList.remove('pause-hide');
       } else {
         title.textContent = 'THE TRAINING GROUNDS';
         sub.textContent = 'A living fantasy world. Learn from its people before you master its power.';
@@ -366,5 +375,6 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon') =>
     toggleHelp() {
       help.classList.toggle('hidden');
     },
+    lockOrigin,
   };
 }

@@ -37,7 +37,9 @@ function readQuality(): Quality {
     const s = localStorage.getItem('quality');
     if (s === 'low' || s === 'medium' || s === 'high') return s;
   } catch {}
-  return 'high';
+  // Medium is the preset tuned for integrated laptop GPUs (Iris Xe); high
+  // doubles the grass and renders at the display's full pixel ratio.
+  return 'medium';
 }
 
 /**

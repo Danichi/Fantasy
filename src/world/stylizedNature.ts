@@ -62,9 +62,9 @@ const ASSETS: AssetSpec[] = [
   { file: 'Mushroom_Common.glb', kind: 'mushroom', targetHeight: 0.55 },
 ];
 
-const NEAR_R = 95; // full meshes inside this radius
+const NEAR_R = 65; // full meshes inside this radius (impostors beyond)
 const FADE = 14; // impostor/mesh cross-fade band (m)
-const UNDER_R = 70; // understory radius
+const UNDER_R = 55; // understory radius
 const COLLIDE_R = 34; // tree colliders around the player
 const RING = 4; // tiles kept around the camera tile (matches the terrain)
 const NEAR_CAP = 900; // per-prototype capacity for near meshes

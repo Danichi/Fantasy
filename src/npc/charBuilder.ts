@@ -151,6 +151,27 @@ function rebind(src: THREE.SkinnedMesh, dst: THREE.SkinnedMesh, keep?: (a: THREE
   return mesh;
 }
 
+// Building a townsperson used to redo the same heavy work every time: re-binding
+// the head and hair onto the outfit rig, measuring the skinned model vertex by
+// vertex for its height, and retargeting every clip. All of it depends only on
+// the kit pieces, so it is done once per combination and shared.
+const reboundCache = new Map<string, THREE.SkinnedMesh>();
+function rebindShared(key: string, src: THREE.SkinnedMesh, dst: THREE.SkinnedMesh, keep?: (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => boolean) {
+  let proto = reboundCache.get(key);
+  if (!proto) {
+    proto = rebind(src, dst, keep);
+    reboundCache.set(key, proto);
+  }
+  // Shared geometry (never disposed), own material, bound to this character's skeleton.
+  const mesh = new THREE.SkinnedMesh(proto.geometry, (proto.material as THREE.Material).clone());
+  mesh.name = proto.name;
+  mesh.bind(dst.skeleton, dst.bindMatrix);
+  return mesh;
+}
+const heightCache = new Map<string, number>();
+const restCache = new Map<string, ReturnType<typeof captureRest>>();
+const retargetCache = new Map<string, THREE.AnimationClip>();
+
 // ---- recolouring --------------------------------------------------------------------
 
 function recolor(mat: THREE.MeshStandardMaterial, hue: THREE.Color | null, linen: THREE.Color | null) {
@@ -284,7 +305,7 @@ export async function buildCharacter(look: Look, clips: string[] = ['idle', 'tal
   if (ni >= 0) neckY = new THREE.Vector3().setFromMatrixPosition(anchor.skeleton.boneInverses[ni].clone().invert()).y - 0.03;
   for (const bm of baseMeshes) {
     const isBody = /superhero|sphere|retopology/i.test(bm.name) || bm.geometry.attributes.position.count > 5000;
-    const mesh = rebind(bm, anchor, isBody ? (a, b, c) => Math.min(a.y, b.y, c.y) > neckY && Math.max(Math.abs(a.x), Math.abs(b.x), Math.abs(c.x)) < 0.14 : undefined);
+    const mesh = rebindShared(`${sex}|${look.outfit}|${bm.name}`, bm, anchor, isBody ? (a, b, c) => Math.min(a.y, b.y, c.y) > neckY && Math.max(Math.abs(a.x), Math.abs(b.x), Math.abs(c.x)) < 0.14 : undefined);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
@@ -302,7 +323,7 @@ export async function buildCharacter(look: Look, clips: string[] = ['idle', 'tal
     hs.updateMatrixWorld(true);
     const hm = firstSkinned(hs);
     if (!hm) continue;
-    const mesh = rebind(hm, anchor);
+    const mesh = rebindShared(`${sex}|${look.outfit}|${file}`, hm, anchor);
     const mat = mesh.material as THREE.MeshStandardMaterial;
     mat.color.set(look.hairColor ?? 0x4a3322);
     mesh.castShadow = true;
@@ -341,21 +362,37 @@ export async function buildCharacter(look: Look, clips: string[] = ['idle', 'tal
   // Normalise height (the rig is in metres already; this only fine-tunes).
   const root = new THREE.Group();
   root.add(model);
+  const rig = `${sex}|${look.outfit}`;
+  // The rig's rest pose, before any height scaling (retargeting is scale-independent).
+  let rest = restCache.get(rig);
+  if (!rest) {
+    rest = captureRest(model);
+    restCache.set(rig, rest);
+  }
   if (look.height) {
-    model.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(model);
-    const h = box.max.y - box.min.y;
+    const hk = `${rig}|${!!look.hood}|${!!look.pauldron}|${look.hair ?? ''}|${!!look.beard}`;
+    let h = heightCache.get(hk);
+    if (h === undefined) {
+      model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(model);
+      h = box.max.y - box.min.y;
+      heightCache.set(hk, h);
+    }
     if (h > 0.5) model.scale.multiplyScalar(look.height / h);
   }
 
-  // Animations, retargeted onto this rig.
-  const rest = captureRest(model);
+  // Animations, retargeted onto this rig (once per rig and clip).
   const mixer = new THREE.AnimationMixer(model);
   for (const key of clips) {
-    const c = await loadClip(key);
-    if (!c) continue;
-    const clip = retargetClip(c.clip, c.rest, rest, HUMANOID_TO_UE);
-    clip.name = key;
+    const ck = `${rig}|${key}`;
+    let clip = retargetCache.get(ck);
+    if (!clip) {
+      const c = await loadClip(key);
+      if (!c) continue;
+      clip = retargetClip(c.clip, c.rest, rest, HUMANOID_TO_UE);
+      clip.name = key;
+      retargetCache.set(ck, clip);
+    }
     mixer.clipAction(clip);
   }
   const bones = new Map<string, THREE.Bone>();

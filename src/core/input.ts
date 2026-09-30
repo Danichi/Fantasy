@@ -139,6 +139,11 @@ export class Input {
     return best;
   }
 
+  /** Swallow a press that a UI already handled, so the next simulation step never sees it. */
+  consume(code: string) {
+    this.pressed.delete(code);
+  }
+
   /** Call after each fixed simulation step. */
   endStep() {
     this.pressed.clear();
