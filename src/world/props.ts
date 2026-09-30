@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { registerDoor, type Door } from './doors';
 import { paintedMaterials } from '../render/painted';
 import { buildVillage, type PlacedHouse, type Village } from './village';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -179,7 +180,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
   };
 
   // ---- houses along the northern street -----------------------------------
-  const houses: { x: number; z: number; spec: Parameters<typeof buildHouse>[0]; rot: number }[] = [
+  const houses: { x: number; z: number; spec: Parameters<typeof buildHouse>[0]; rot: number; door?: Partial<Door> }[] = [
     { x: -26, z: -38, rot: 0.08, spec: { w: 7, d: 6, floors: 2, roof: 'slate', seed: 1 } },
     { x: -15, z: -40, rot: -0.03, spec: { w: 6, d: 6.5, floors: 1, roof: 'thatch', seed: 2 } },
     { x: -5, z: -41, rot: 0.02, spec: { w: 8, d: 6, floors: 2, roof: 'slate', seed: 3 } },
@@ -203,21 +204,21 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     { x: 35, z: 62, rot: -0.12, spec: { w: 8, d: 6.5, floors: 1, roof: 'thatch', seed: 34 } },
     { x: 67, z: 52, rot: 0.22, spec: { w: 7, d: 6, floors: 2, roof: 'slate', seed: 35 } },
     // Commerce district / civic buildings.
-    { x: 22, z: -12, rot: 0, spec: { w: 16, d: 12, floors: 2, roof: 'slate', seed: 90 } },
-    { x: -24, z: 14, rot: 0.06, spec: { w: 12, d: 9, floors: 2, roof: 'slate', seed: 91 } },
-    { x: -5, z: 29, rot: -0.04, spec: { w: 11, d: 8, floors: 1, roof: 'thatch', seed: 92 } },
-    { x: 27, z: 25, rot: 0.05, spec: { w: 11, d: 8, floors: 1, roof: 'slate', seed: 93 } },
-    { x: 48, z: 4, rot: -0.06, spec: { w: 10, d: 8, floors: 1, roof: 'thatch', seed: 94 } },
-    { x: -48, z: 4, rot: 0.08, spec: { w: 10, d: 8, floors: 1, roof: 'thatch', seed: 95 } },
-    { x: -44, z: 25, rot: -0.04, spec: { w: 10, d: 8, floors: 2, roof: 'slate', seed: 96 } },
-    { x: 48, z: 30, rot: 0.07, spec: { w: 10, d: 8, floors: 1, roof: 'thatch', seed: 97 } },
-    { x: 48, z: -35, rot: -0.1, spec: { w: 9, d: 7, floors: 1, roof: 'slate', seed: 98 } },
+    { x: 22, z: -12, rot: 0, spec: { w: 16, d: 12, floors: 2, roof: 'slate', seed: 90 }, door: { kind: 'guild', name: 'the guild hall' } },
+    { x: -24, z: 14, rot: 0.06, spec: { w: 12, d: 9, floors: 2, roof: 'slate', seed: 91 }, door: { kind: 'tavern', name: 'the Wayfarer Inn', keeper: 'innkeeper' } },
+    { x: -5, z: 29, rot: -0.04, spec: { w: 11, d: 8, floors: 1, roof: 'thatch', seed: 92 }, door: { kind: 'shop', keeper: 'baker' } },
+    { x: 27, z: 25, rot: 0.05, spec: { w: 11, d: 8, floors: 1, roof: 'slate', seed: 93 }, door: { kind: 'smithy', name: 'Fröst Forge', keeper: 'froest' } },
+    { x: 48, z: 4, rot: -0.06, spec: { w: 10, d: 8, floors: 1, roof: 'thatch', seed: 94 }, door: { kind: 'shop', keeper: 'apothecary' } },
+    { x: -48, z: 4, rot: 0.08, spec: { w: 10, d: 8, floors: 1, roof: 'thatch', seed: 95 }, door: { kind: 'shop', keeper: 'tailor' } },
+    { x: -44, z: 25, rot: -0.04, spec: { w: 10, d: 8, floors: 2, roof: 'slate', seed: 96 }, door: { kind: 'shop', keeper: 'carpenter' } },
+    { x: 48, z: 30, rot: 0.07, spec: { w: 10, d: 8, floors: 1, roof: 'thatch', seed: 97 }, door: { kind: 'shop', keeper: 'arcanist' } },
+    { x: 48, z: -35, rot: -0.1, spec: { w: 9, d: 7, floors: 1, roof: 'slate', seed: 98 }, door: { name: 'the stable house' } },
   ];
   const placed: PlacedHouse[] = [];
   for (const h of houses) {
     // Roofs: mostly terracotta, some slate-blue, thatch where specified.
     if (h.spec.roof === 'slate' && h.spec.seed % 3 !== 0) h.spec.roof = 'tile';
-    const { group, half, chimney } = buildHouse(h.spec, m);
+    const { group, half, chimney, door } = buildHouse(h.spec, m);
     placed.push({ x: h.x, z: h.z, rot: h.rot, half, chimney });
     // Sit on the lowest corner so the plinth never floats.
     let gy = Infinity;
@@ -225,6 +226,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     group.position.set(h.x, gy, h.z);
     group.rotation.y = h.rot;
     scene.add(group);
+    registerDoor(group, door, h.spec, h.door);
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, h.rot, 0));
     physics.addBox(new THREE.Vector3(h.x, gy + half.y, h.z), half, q);
   }

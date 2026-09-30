@@ -10,6 +10,9 @@ import type { ThirdPersonCamera } from '../player/camera';
 import type { FX } from '../fx/particles';
 import type { HUD } from '../ui/hud';
 import type { Rewards } from '../progression/progression';
+import { Interior, type LightLender } from '../world/interior';
+import type { Door, InteriorKind } from '../world/doors';
+import type { WorldMats } from '../world/buildings';
 
 // ---------------------------------------------------------------------------
 // Switches between the overworld and the dungeon instance: the fade, the
@@ -26,6 +29,8 @@ export interface OverworldVisuals {
 interface Saved {
   background: THREE.Scene['background'];
   envIntensity: number;
+  exposure: number;
+  glExposure: number;
   sun: number;
   hemi: number;
   hemiSky: THREE.Color;
@@ -39,7 +44,13 @@ interface Saved {
 }
 
 export class Realm {
-  mode: 'overworld' | 'dungeon' = 'overworld';
+  mode: 'overworld' | 'dungeon' | 'interior' = 'overworld';
+  /** the building you're inside (mode 'interior') */
+  interior: Interior | null = null;
+  /** people and things the game adds inside a building (keepers, patrons) */
+  onInterior?: (it: Interior) => Interactable[];
+  onInteriorLeave?: (it: Interior) => void;
+  private interiorExtras: Interactable[] = [];
   floor: 1 | 2 = 1;
   instance: DungeonInstance | null = null;
   progress: DungeonProgress = { gateOpen: false, bossDead: false, chests: [] };
@@ -72,12 +83,14 @@ export class Realm {
   }
 
   get interactables() {
+    if (this.mode === 'interior' && this.interior) return [...this.interior.interactables, ...this.interiorExtras];
     return this.mode === 'dungeon' && this.instance ? this.instance.interactables : this.overworldInteractables;
   }
 
   /** Where to respawn after dying. */
   get respawnPoint() {
     if (this.instance) return this.instance.spawnPoint;
+    if (this.interior) return this.interior.spawn.clone();
     return new THREE.Vector3(0, heightAt(0, 10), 10);
   }
 
@@ -104,7 +117,7 @@ export class Realm {
     };
   }
 
-  private atmosphere(dungeon: boolean) {
+  private atmosphere(dungeon: boolean, indoors = false) {
     const r = this.r, s = r.scene;
     const u = r.post?.finalMat.uniforms;
     if (dungeon && !this.saved) {
@@ -113,6 +126,7 @@ export class Realm {
         hemiSky: r.hemi.color.clone(), hemiGround: r.hemi.groundColor.clone(), far: r.camera.far, fog: s.fog,
         haze: u?.uHaze.value ?? 0, hazeColor: (u?.uHazeColor.value as THREE.Color)?.clone() ?? new THREE.Color(),
         sunColor: (u?.uSunColor.value as THREE.Color)?.clone() ?? new THREE.Color(), clouds: u?.uClouds.value ?? 0,
+        exposure: u?.uExposure.value ?? 1, glExposure: r.renderer.toneMappingExposure,
       };
       s.background = new THREE.Color(0x000000);
       s.environmentIntensity = 0.12;
@@ -128,6 +142,22 @@ export class Realm {
         (u.uSunColor.value as THREE.Color).setRGB(0.015, 0.016, 0.022);
         u.uClouds.value = 0;
       }
+      if (indoors) {
+        // Warm and lamplit rather than crypt-dark.
+        s.background = new THREE.Color(0x140e09);
+        s.environmentIntensity = 0.28;
+        r.hemi.intensity = 0.55;
+        r.hemi.color.set(0xffe2bc);
+        r.hemi.groundColor.set(0x3a2818);
+        r.camera.far = 80;
+        // A fixed exposure: the night grade (brightened for moonlight) blew rooms out.
+        r.renderer.toneMappingExposure = 1.0;
+        if (u) {
+          u.uExposure.value = 0.92;
+          u.uHaze.value = 0.004;
+          (u.uHazeColor.value as THREE.Color).setRGB(0.08, 0.06, 0.04);
+        }
+      }
     } else if (!dungeon && this.saved) {
       const v = this.saved;
       s.background = v.background;
@@ -137,6 +167,8 @@ export class Realm {
       r.hemi.color.copy(v.hemiSky);
       r.hemi.groundColor.copy(v.hemiGround);
       r.camera.far = v.far;
+      r.renderer.toneMappingExposure = v.glExposure;
+      if (u) u.uExposure.value = v.exposure;
       s.fog = v.fog;
       if (u) {
         u.uHaze.value = v.haze;
@@ -209,11 +241,64 @@ export class Realm {
     this.busy = false;
   }
 
+  /** Step through a door into the building behind it. */
+  async enterInterior(door: Door, kind: InteriorKind, mats: WorldMats, lights?: LightLender) {
+    if (this.busy || this.mode !== 'overworld') return;
+    this.busy = true;
+    await this.hud.fade(true);
+    this.overworld.clearEnemies();
+    this.overworld.enemiesEnabled(false);
+    this.overworld.hide(true);
+    this.atmosphere(true, true);
+    this.mode = 'interior';
+    const it = new Interior(door, kind, this.r.scene, mats, () => void this.leaveInterior(), lights);
+    this.interior = it;
+    setGroundOverride(it.groundAt);
+    this.interiorExtras = this.onInterior?.(it) ?? [];
+    this.player.teleport(it.spawn.clone().setY(it.spawn.y + 0.3));
+    this.player.yaw = it.spawnYaw;
+    this.player.lock = null;
+    this.cam.yaw = it.spawnYaw;
+    this.cam.distance = 2.8; // close in under the beams
+    this.cam.snapTo(this.player.pos);
+    await new Promise((r) => setTimeout(r, 120));
+    await this.hud.fade(false);
+    this.busy = false;
+  }
+
+  /** Back out onto the doorstep. */
+  async leaveInterior() {
+    if (this.busy || this.mode !== 'interior' || !this.interior) return;
+    this.busy = true;
+    await this.hud.fade(true);
+    const it = this.interior;
+    this.onInteriorLeave?.(it);
+    this.interiorExtras = [];
+    it.dispose();
+    this.interior = null;
+    setGroundOverride(null);
+    this.mode = 'overworld';
+    this.overworld.hide(false);
+    this.overworld.enemiesEnabled(true);
+    this.atmosphere(false);
+    const d = it.door;
+    const p = d.pos.clone().add(new THREE.Vector3(Math.sin(d.yaw), 0, Math.cos(d.yaw)).multiplyScalar(0.6));
+    this.player.teleport(p.setY(heightAt(p.x, p.z) + 0.3));
+    this.player.yaw = d.yaw;
+    this.cam.yaw = d.yaw;
+    this.cam.distance = 3.9;
+    this.cam.snapTo(this.player.pos);
+    await new Promise((r) => setTimeout(r, 100));
+    await this.hud.fade(false);
+    this.busy = false;
+  }
+
   present(alpha: number, dt: number) {
     this.instance?.present(alpha, dt, this.player);
   }
 
   update(dt: number) {
+    this.interior?.update(dt);
     const inst = this.instance;
     if (!inst) return;
     inst.update(dt, this.player);

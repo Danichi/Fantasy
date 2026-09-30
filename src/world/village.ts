@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { registerDoor } from './doors';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildHouse, worldUV, type HouseSpec, type WorldMats } from './buildings';
 import { heightAt, streetDist, roadDist, TOWN_R, PLAZA_CENTER } from './terrain';
@@ -119,12 +120,13 @@ export function buildVillage(scene: THREE.Scene, m: WorldMats, fx: FX, houses: P
     const rot = Math.atan2(-gx, -gz) + (rnd() - 0.5) * 0.25;
     const roofPick = rnd();
     const spec: HouseSpec = { w, d, floors, roof: roofPick < 0.5 ? 'tile' : roofPick < 0.75 ? 'thatch' : 'slate', seed: 500 + extra.length };
-    const { group, half, chimney } = buildHouse(spec, m);
+    const { group, half, chimney, door } = buildHouse(spec, m);
     let gy = Infinity;
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) gy = Math.min(gy, heightAt(x + sx * half.x, z + sz * half.z));
     group.position.set(x, gy, z);
     group.rotation.y = rot;
     scene.add(group);
+    registerDoor(group, door, spec);
     physics.addBox(new THREE.Vector3(x, gy + half.y, z), half, new THREE.Quaternion().setFromAxisAngle(up, rot));
     const ph = { x, z, rot, half, chimney };
     extra.push(ph);

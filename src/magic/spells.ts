@@ -109,6 +109,15 @@ export class Spells {
   private circles: MagicCircles;
   private castSeen: object | null = null;
 
+  /** Lend a pooled light to something else (building interiors). */
+  borrowLight(owner: object) {
+    return this.lights.acquire(owner);
+  }
+
+  returnLight(l: THREE.PointLight) {
+    this.lights.release(l);
+  }
+
   constructor(private scene: THREE.Scene, private fx: FX, private player: Player) {
     this.circles = new MagicCircles(scene);
     this.lights = new LightPool(scene, Math.max(1, Q.maxDynamicLights));

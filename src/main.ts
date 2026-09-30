@@ -40,7 +40,10 @@ import { setupRoadQuests } from './quests/roadQuests';
 import { buildPortAurelle, PORT_SPOTS } from './world/portAurelle';
 import { Fishing, type FishingSpot } from './world/fishing';
 import { Duel } from './combat/duel';
-import type { Look } from './npc/charBuilder';
+import { buildCharacter, type Look } from './npc/charBuilder';
+import { DOORS, type Door, type InteriorKind } from './world/doors';
+import type { Interior } from './world/interior';
+import type { Interactable } from './dungeon/instance';
 import { setupAcademy } from './quests/academy';
 import { setupLowerCity } from './quests/lowerCity';
 import { Boats } from './world/boats';
@@ -621,6 +624,91 @@ async function boot() {
   folkServices.set('dunmore', stableFor('dunmore', kingsRoad.stableYard, 'waystation'));
   folkServices.set('hobbs', stableFor('hobbs', PORT_SPOTS.stable, 'portAurelle'));
   realm.overworldInteractables.push(encounters.interactable, ...roadQuests.interactables, horses.interactable, ...roads.interactables, foraging.interactable, ...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables);
+
+  // ---- Buildings you can walk into ----------------------------------------------------
+  // Every placed house registered its doorstep (world/doors.ts). Stepping through
+  // builds the room behind it (world/interior.ts); whoever works there meets you inside.
+  const resolveDoor = (d: Door) => {
+    const kind: InteriorKind = d.kind ?? 'home';
+    const keeperName = d.keeper ? (town.npcs.find((n) => n.spec.id === d.keeper)?.spec.name ?? npcs.find(d.keeper)?.rec.name) : undefined;
+    const name = d.name ?? (kind === 'shop' && keeperName ? `${keeperName.split(' ')[0]}’s shop` : 'the house');
+    return { kind, name, keeper: d.keeper };
+  };
+  for (const d of DOORS) {
+    const info = resolveDoor(d);
+    realm.overworldInteractables.push({
+      pos: d.pos, radius: 1.5,
+      label: () => `Enter ${info.name}`,
+      enabled: () => realm.mode === 'overworld' && !player.mounted,
+      action: () => void realm.enterInterior({ ...d, kind: info.kind, name: info.name, keeper: info.keeper }, info.kind, world.mats, spells),
+    });
+  }
+  // People inside: a borrowed town NPC (moved in, put back on the way out) or
+  // characters built for the visit from resident records.
+  const inside = { borrowed: null as null | { n: (typeof town.npcs)[number]; pos: THREE.Vector3; yaw: number; vis: boolean }, built: [] as { root: THREE.Object3D; mixer: THREE.AnimationMixer }[] };
+  const folkInside = (st: NonNullable<ReturnType<typeof npcs.find>>, spot: { pos: THREE.Vector3; yaw: number; seated: boolean }, it: Interior, extras: Interactable[], clip: string) => {
+    void buildCharacter(st.rec.look, ['idle', 'talk', 'sit']).then((b) => {
+      if (realm.interior !== it) return; // left before they arrived
+      b.root.position.copy(spot.pos);
+      b.root.rotation.y = spot.yaw;
+      r.scene.add(b.root);
+      const acts = (b.mixer as unknown as { _actions: THREE.AnimationAction[] })._actions;
+      (acts.find((a) => a.getClip().name === clip) ?? acts[0])?.play();
+      b.mixer.update(Math.random() * 3);
+      inside.built.push({ root: b.root, mixer: b.mixer });
+      extras.push({
+        pos: spot.pos, radius: 1.8,
+        label: () => `Talk to ${st.rec.name}`,
+        enabled: () => true,
+        action: () => { folkTalk.npc = st; folkTalk.action(); },
+      });
+    });
+  };
+  realm.onInterior = (it) => {
+    const extras: Interactable[] = [];
+    it.setDaylight(1 - time.state.night);
+    const keeper = it.door.keeper;
+    const spot = it.keeperSpot;
+    const svc = keeper ? town.npcs.find((n) => n.spec.id === keeper) : undefined;
+    if (svc && spot) {
+      inside.borrowed = { n: svc, pos: svc.pos.clone(), yaw: svc.root.rotation.y, vis: svc.root.visible };
+      svc.pos.copy(spot.pos);
+      svc.root.position.copy(spot.pos);
+      svc.root.rotation.y = spot.yaw;
+      svc.root.visible = true;
+      extras.push({ pos: spot.pos, radius: 2.4, label: () => `Talk to ${svc.spec.name}`, enabled: () => true, action: () => town.talk(svc.spec) });
+    } else if (keeper && spot) {
+      const st = npcs.find(keeper);
+      if (st) folkInside(st, spot, it, extras, 'idle');
+    }
+    if (it.kind === 'guild') extras.push({ pos: it.at(0, -it.D / 2 + 0.8), radius: 2, label: () => 'Read the quest board', enabled: () => true, action: () => town.guild.open('board') });
+    // Taverns and the guild have company: residents who live nearby.
+    const want = it.kind === 'tavern' ? (time.state.night > 0.3 ? 5 : 3) : it.kind === 'guild' ? 3 : 0;
+    if (want) {
+      const near = npcs.npcs
+        .filter((s) => !s.rec.named && s.rec.id !== keeper && s.pos.distanceTo(it.door.pos) < 260)
+        .sort((a, b) => a.seed - b.seed);
+      const seats = it.seats.filter((s) => s.seated);
+      for (let i = 0; i < Math.min(want, near.length, seats.length); i++) folkInside(near[i], seats[(i * 3 + it.door.spec.seed) % seats.length], it, extras, 'sit');
+    }
+    return extras;
+  };
+  realm.onInteriorLeave = () => {
+    const b = inside.borrowed;
+    if (b) {
+      b.n.pos.copy(b.pos);
+      b.n.root.position.copy(b.pos);
+      b.n.root.rotation.y = b.yaw;
+      b.n.root.visible = b.vis;
+      inside.borrowed = null;
+    }
+    for (const c of inside.built) {
+      c.mixer.stopAllAction();
+      r.scene.remove(c.root);
+    }
+    inside.built = [];
+    folkTalk.npc = null;
+  };
   const questNpcIds = [...town.npcs.map((n) => n.spec.id), ...npcs.npcs.filter((n) => n.rec.named).map((n) => n.rec.id)];
   const questUI = new QuestUI(quests, hud, r.camera, (id) => {
     const svc = serviceNpc(id);
@@ -636,7 +724,7 @@ async function boot() {
     {
       id: 'map', label: 'Map', key: 'M',
       isOpen: () => worldMap.open || mapUI.open,
-      open: () => (realm.mode === 'dungeon' ? mapUI.toggle(true) : worldMap.toggle(true)),
+      open: () => (realm.mode === 'dungeon' ? mapUI.toggle(true) : realm.mode === 'interior' ? hud.toast('Step outside to read the map.') : worldMap.toggle(true)),
       close: () => (worldMap.open ? worldMap.toggle(false) : mapUI.toggle(false)),
     },
   ]);
@@ -655,7 +743,7 @@ async function boot() {
   landmarks.fromJSON(saveData?.world?.landmarks);
   ground.prime(player.pos); // pick up the new grass masks (plot, coop, quarry)
   player.onTeleport = (p) => {
-    if (realm.mode === 'dungeon') return;
+    if (realm.mode !== 'overworld') return;
     terrain.warm(p);
     ground.prime(p);
     stylizedNature.warm(p, p);
@@ -763,7 +851,7 @@ async function boot() {
       vegetationTiles: () => stylizedNature.tileCount,
       physicsBodies: () => physics.world.bodies.len(),
       actors: () => targets.size,
-      region: () => (realm.mode === 'dungeon' ? 'dungeon' : regionAt(player.pos.x, player.pos.z)),
+      region: () => (realm.mode === 'dungeon' ? 'dungeon' : realm.interior ? regionAt(realm.interior.door.pos.x, realm.interior.door.pos.z) : regionAt(player.pos.x, player.pos.z)),
       position: () => player.pos,
     })
     : null;
@@ -774,7 +862,8 @@ async function boot() {
   };
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
-    const pos = realm.mode === 'overworld' ? ([+player.pos.x.toFixed(2), +player.pos.y.toFixed(2), +player.pos.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
+    const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
+    const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
     writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON() });
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
@@ -958,6 +1047,7 @@ async function boot() {
     if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
     if (input.wasPressed('map')) {
       if (realm.mode === 'dungeon') mapUI.toggle();
+      else if (realm.mode === 'interior') hud.toast('Step outside to read the map.');
       else worldMap.toggle();
     }
     slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
@@ -1042,7 +1132,7 @@ async function boot() {
     // Time of day and weather drive the sky, light, water, grass and sound.
     const worldRunning = !(paused || overlayUp || mapUI.open || worldMap.open || questUI.open);
     if (worldRunning) time.update(dt);
-    const here = realm.mode === 'dungeon' ? 'cresha' : regionAt(player.pos.x, player.pos.z);
+    const here = realm.mode === 'dungeon' ? 'cresha' : realm.interior ? regionAt(realm.interior.door.pos.x, realm.interior.door.pos.z) : regionAt(player.pos.x, player.pos.z);
     weather.update(worldRunning ? dt : 0, here === 'ocean' ? 'portAurelle' : here);
     const ts = time.state, wp = weather.p;
     if (realm.mode === 'overworld') {
@@ -1088,7 +1178,12 @@ async function boot() {
     }
     const riverNear = Math.max(0, 1 - Math.abs(player.pos.x - riverX(player.pos.z)) / 40) * (Math.abs(player.pos.z) < 420 ? 1 : 0);
     const def = REGIONS[here];
-    ambience.update(dt, def?.ambience ?? 'meadow', ts.night, wp, { river: riverNear * 0.7 }, realm.mode === 'dungeon');
+    ambience.update(dt, def?.ambience ?? 'meadow', ts.night, wp, { river: riverNear * 0.7 }, realm.mode !== 'overworld');
+    if (realm.interior) {
+      realm.interior.setDaylight(1 - ts.night);
+      inside.borrowed?.n.update(dt, player.pos);
+      for (const c of inside.built) c.mixer.update(dt);
+    }
     worldMap.setRegionLabel(`${regionName} · ${time.label.split(', ')[1]}`);
     flowers.update(dt, r.camera.position);
     if (realm.mode === 'overworld') terrain.update(r.camera.position, player.pos);
@@ -1162,6 +1257,7 @@ async function boot() {
       if (player.mounted) horses.dismount();
       player.vehicle = null;
       if (realm.mode === 'dungeon') await realm.leave();
+      if (realm.mode === 'interior') await realm.leaveInterior();
       slimes.clear();
       encounters.clear();
       quests.state = {};
@@ -1181,7 +1277,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, book, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

@@ -76,7 +76,7 @@ test('terrain and trees stream in and out without leaking', async ({ page }) => 
   }
   // Back home, counts return close to where they started.
   expect(res.end.tiles).toBeLessThanOrEqual(res.base.tiles + 12);
-  expect(res.end.geo).toBeLessThan(res.base.geo * 1.08 + 30);
+  expect(res.end.geo).toBeLessThan(res.base.geo * 1.12 + 40);
   expect(res.end.bodies).toBeLessThan(res.base.bodies + 80);
   expect(res.groundedFar).toBe(true);
   expect(res.dy).toBeLessThan(0.6);

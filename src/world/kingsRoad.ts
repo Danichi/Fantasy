@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { registerDoor, type Door } from './doors';
 import { buildHouse, worldUV, type WorldMats } from './buildings';
 import { heightAt } from './terrainHeight';
 import { physics } from '../physics/physics';
@@ -73,13 +74,14 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
   const lanternMats: THREE.MeshStandardMaterial[] = [];
   const rnd = mulberry32(1380);
 
-  const house = (x: number, z: number, rot: number, spec: Parameters<typeof buildHouse>[0]) => {
-    const { group, half } = buildHouse(spec, m);
+  const house = (x: number, z: number, rot: number, spec: Parameters<typeof buildHouse>[0], info: Partial<Door> = {}) => {
+    const { group, half, door } = buildHouse(spec, m);
     let gy = Infinity;
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) gy = Math.min(gy, heightAt(x + sx * half.x, z + sz * half.z));
     group.position.set(x, gy, z);
     group.rotation.y = rot;
     scene.add(group);
+    registerDoor(group, door, spec, info);
     physics.addBox(new THREE.Vector3(x, gy + half.y, z), half, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rot, 0)));
     clearings.push([x, z, Math.max(half.x, half.z) + 6]);
     return { gy, half };
@@ -230,7 +232,7 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
   // ---- The Wayfarer's Rest ----------------------------------------------------------------
   const W = WAYFARERS_REST;
   W.y = heightAt(W.x, W.z);
-  const inn = house(W.x, W.z - 6, 0.04, { w: 16, d: 11, floors: 2, roof: 'tile', seed: 1380 });
+  const inn = house(W.x, W.z - 6, 0.04, { w: 16, d: 11, floors: 2, roof: 'tile', seed: 1380 }, { kind: 'tavern', name: 'The Wayfarer’s Rest' });
   signBoard("THE WAYFARER'S REST", 'Beds · Stables · Hot Stew', W.x - 12, W.z + 12, 0.04, 4.4);
   // Stable: an open-fronted shed with stalls.
   {

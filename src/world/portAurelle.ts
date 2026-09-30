@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { registerDoor, type Door } from './doors';
 import { buildHouse, worldUV, type WorldMats } from './buildings';
 import { heightAt } from './terrainHeight';
 import { physics } from '../physics/physics';
@@ -99,12 +100,13 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
     physics.addCylinder(new THREE.Vector3(x, y + h / 2, z), h / 2, r);
     return y + h;
   };
-  const house = (x: number, z: number, rot: number, spec: Parameters<typeof buildHouse>[0]) => {
-    const { group, half } = buildHouse(spec, m);
+  const house = (x: number, z: number, rot: number, spec: Parameters<typeof buildHouse>[0], info: Partial<Door> = {}) => {
+    const { group, half, door } = buildHouse(spec, m);
     let gy = Infinity;
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) gy = Math.min(gy, heightAt(x + Math.cos(rot) * sx * half.x + Math.sin(rot) * sz * half.z, z - Math.sin(rot) * sx * half.x + Math.cos(rot) * sz * half.z));
     group.position.set(x, gy, z);
     group.rotation.y = rot;
+    registerDoor(group, door, spec, info);
     batch.addObject(group);
     physics.addBox(new THREE.Vector3(x, gy + half.y, z), half, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rot, 0)));
     return { gy, half };
@@ -394,17 +396,17 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
 
   // ---- Noble district: mansions with gardens -----------------------------------------------------------
   for (const [x, z, rot, s] of [[2736, 66, 0.1, 1], [2764, 52, -0.15, 2], [2724, 94, Math.PI, 3], [2850, 104, Math.PI, 4]] as [number, number, number, number][]) {
-    house(x, z, rot, { w: 12 + s % 2 * 2, d: 10, floors: 2, roof: 'slate', seed: 9100 + s });
+    house(x, z, rot, { w: 12 + s % 2 * 2, d: 10, floors: 2, roof: 'slate', seed: 9100 + s }, { kind: 'home', name: 'a noble house' });
     for (let k = 0; k < 6; k++) addMesh(new THREE.BoxGeometry(2.4, 1.1, 0.9), new THREE.MeshStandardMaterial({ color: 0x3f6f34, roughness: 1 }), x - 6 + k * 2.4, heightAt(x, z + 8) + 0.55, z + (rot > 1 ? -8 : 8));
   }
 
   // ---- The Adventurer's Quarter ----------------------------------------------------------------------
   {
     const [gx, gz] = [2746, 244];
-    house(gx, gz, 0, { w: 22, d: 15, floors: 2, roof: 'slate', seed: 9201 });
+    house(gx, gz, 0, { w: 22, d: 15, floors: 2, roof: 'slate', seed: 9201 }, { kind: 'guild', name: 'The Adventurer’s Guild', keeper: 'guildmaster' });
     sign("ADVENTURER'S GUILD", 'Port Aurelle Hall · Ranks D to SSS', gx, gz + 8.6, 0, 6, heightAt(gx, gz) + 4.4);
     for (const s of [-1, 1]) banner(gx + s * 8, heightAt(gx, gz) + 4.8, gz + 7.8, 0, 0x8a3a2a, 0xe0b040);
-    house(2784, 252, -0.05, { w: 11, d: 9, floors: 2, roof: 'tile', seed: 9202 });
+    house(2784, 252, -0.05, { w: 11, d: 9, floors: 2, roof: 'tile', seed: 9202 }, { kind: 'tavern', name: 'The Salty Anchor', keeper: 'bess' });
     sign('THE SALTY ANCHOR', 'Ale · Rooms · Sea shanties', 2784, 257, 0, 4);
     for (const [x, z] of [[2728, 226], [2766, 226], [2808, 238]]) lantern(x, z);
   }
@@ -515,9 +517,9 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
       solid(22, 4, 6, sx, sy + 2, sz);
     }
     // Warehouses and the customs house.
-    house(2912, 130, Math.PI / 2, { w: 22, d: 12, floors: 2, roof: 'tile', seed: 9301 });
-    house(2912, 236, Math.PI / 2, { w: 22, d: 12, floors: 2, roof: 'slate', seed: 9302 });
-    house(2918, 176 + 14, Math.PI / 2, { w: 10, d: 8, floors: 2, roof: 'slate', seed: 9303 });
+    house(2912, 130, Math.PI / 2, { w: 22, d: 12, floors: 2, roof: 'tile', seed: 9301 }, { kind: 'hall', name: 'the warehouse' });
+    house(2912, 236, Math.PI / 2, { w: 22, d: 12, floors: 2, roof: 'slate', seed: 9302 }, { kind: 'hall', name: 'the warehouse' });
+    house(2918, 176 + 14, Math.PI / 2, { w: 10, d: 8, floors: 2, roof: 'slate', seed: 9303 }, { kind: 'hall', name: 'The Customs House', keeper: 'tallow' });
     sign('CUSTOMS HOUSE', 'Harbourmaster', QUAY_X - 7.2, 190, Math.PI / 2, 4);
     for (let k = 0; k < 18; k++) {
       const x = QUAY_X - 4 - rnd() * 6, z = 60 + rnd() * 250;
@@ -564,7 +566,7 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
   // ---- The Lower City: the Drowned Lantern and a door that is not quite hidden ------------------------
   {
     const [tx, tz] = [2880, 300];
-    house(tx, tz, Math.PI, { w: 9, d: 8, floors: 2, roof: 'tile', seed: 9401 });
+    house(tx, tz, Math.PI, { w: 9, d: 8, floors: 2, roof: 'tile', seed: 9401 }, { kind: 'tavern', name: 'The Drowned Lantern' });
     sign('THE DROWNED LANTERN', '', tx, tz - 4.8, Math.PI, 3.4);
     const lm = new THREE.MeshStandardMaterial({ color: 0x3a6a5a, emissive: 0x3aff9a, emissiveIntensity: 0.25 });
     lights.push({ mat: lm, base: 0.25 });

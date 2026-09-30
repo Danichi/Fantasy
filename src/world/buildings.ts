@@ -205,5 +205,7 @@ export function buildHouse(spec: HouseSpec, m: WorldMats) {
     group.add(mesh);
   }
   const half = new THREE.Vector3(rw / 2 + 0.15, (eaveY + rise) / 2, rd / 2 + 0.15);
-  return { group, half, height: eaveY + rise, chimney };
+  // The doorstep (outside the door, at the plinth top) for world/doors.ts.
+  const door = new THREE.Vector3(dx, plinth - 0.1, d / 2 + 0.9);
+  return { group, half, height: eaveY + rise, chimney, door };
 }

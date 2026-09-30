@@ -695,6 +695,7 @@ html, body {
 /* The minimap takes the top-left corner; discipline and quest panels sit below it. */
 
 .quest-tracker { top: 318px !important; }
+.quest-tracker:empty { display: none; }
 
 /* Region title card: the name paints in like the map's labels. */
 .region-card { position: absolute; left: 50%; top: 20%; transform: translateX(-50%); text-align: center; pointer-events: none; opacity: 0; }
@@ -822,6 +823,8 @@ body.book-open .vitals, body.book-open .wmini, body.book-open .quest-tracker, bo
   display: grid; grid-template-columns: minmax(560px, 44%) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 12px;
 }
 .inventory.inv2::before { display: none; }
+/* the grid layout above outranks .inventory.hidden: hide it again when closed */
+.inventory.inv2.hidden, .inv2 .hidden { display: none; }
 .inv2 > section { display: flex; flex-direction: column; min-height: 0; background: linear-gradient(180deg, rgba(14, 22, 38, .96), rgba(8, 13, 24, .97)); border: 1px solid rgba(213, 177, 88, .42); border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.55); overflow: hidden; }
 .inv2 header { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid rgba(213, 177, 88, .2); }
 .inv2 header h2 { margin: 0; font: 700 14px/1 var(--serif); letter-spacing: .28em; color: var(--gold-bright); flex: 0 0 auto; }
