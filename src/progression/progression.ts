@@ -1,12 +1,16 @@
 import * as THREE from 'three';
 import { events } from '../core/events';
 import { heightAt } from '../world/terrain';
+/** The origin picked when a new game starts (it grants the V ability). */
+export type Origin = 'human' | 'dragon' | 'demon';
 
 // XP and gold, plus the glowing orbs and coins that
 // burst out of defeated enemies and fly to the player.
 
 export const XP_FOR_KIND: Record<string, [xp: number, gold: number]> = {
   green: [12, 3], blue: [26, 6], magma: [30, 8], cave: [22, 5], armour: [48, 14], orc: [420, 0], dummy: [0, 0],
+  rat: [4, 1], dire: [140, 30], bandit: [34, 12], banditChief: [260, 120],
+  zombie: [28, 5], skeleton: [32, 7], abomination: [650, 240],
 };
 
 /** XP a level cost under the old auto-levelling system (used to refund old saves). */
@@ -25,6 +29,7 @@ export class Progression {
   /** every XP point ever picked up */
   totalXp = 0;
   gold = 0;
+  origin: Origin = 'human';
 
   addXp(n: number) {
     this.xp += n;

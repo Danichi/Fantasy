@@ -39,6 +39,8 @@ export interface SkillDef {
   needTarget?: number;
   /** aim distance for targeted spells */
   range?: number;
+  /** an attack spell that may be cast without a lock-on (the rest need one) */
+  freeAim?: boolean;
   /** two uses before cooldown when this flag is learned */
   charges?: string;
   text: (r: number, rt: SkillRuntime) => string;
@@ -276,6 +278,12 @@ export class SkillRuntime {
     if (def.mana && p.mana < this.manaCost(def)) return 'Not enough mana';
     if (def.flow && this.flow < def.flow) return `Needs ${def.flow} Flow`;
     if (def.needTarget && !this.aim(def.needTarget).target) return 'No target in range';
+    // Attack spells go where you lock on (middle mouse or Q), like Fireball.
+    if ((def.action === 'sk_cast' || def.action === 'sk_castBig') && !def.freeAim) {
+      const lock = p.lock;
+      if (!lock?.alive) return 'Lock on to a target to cast this (middle mouse)';
+      if (lock.center.distanceTo(p.center) > (def.range ?? def.needTarget ?? 22)) return 'Your target is out of range';
+    }
     if (!p.canAct) return 'busy';
     return null;
   }

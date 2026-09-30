@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { heightTexture, TERRAIN_SIZE } from './terrain';
+import type { GroundWindow } from './groundWindow';
 import { Q } from '../core/settings';
 import { mulberry32 } from '../core/math';
 import { FLOWER_GLSL } from './flowerNoise';
@@ -10,7 +10,7 @@ import { FLOWER_GLSL } from './flowerNoise';
 // The terrain shader paints matching colour speckles further out, so meadows
 // read as flowering all the way to the horizon.
 
-const TILE = 36;
+const TILE = 60; // ~30 m around the camera (was 18 m: sprigs visibly popped in)
 
 /** Four flowers side by side: daisy, buttercup, cornflower, poppy. */
 function flowerAtlas() {
@@ -87,8 +87,8 @@ export class Flowers {
   readonly mesh: THREE.InstancedMesh;
   private uniforms: Record<string, THREE.IUniform>;
 
-  constructor(scene: THREE.Scene, splat: THREE.Texture) {
-    const count = Math.round(Q.grassCount * 0.35);
+  constructor(scene: THREE.Scene, ground: GroundWindow) {
+    const count = Math.round(Q.grassCount * 0.35 * 2.5); // same density over the wider tile
     const geo = sprigGeometry();
     const offs = new Float32Array(count * 4);
     const rnd = mulberry32(777);
@@ -102,9 +102,9 @@ export class Flowers {
     this.uniforms = {
       uCenter: { value: new THREE.Vector2() },
       uTime: { value: 0 },
-      uHeight: { value: heightTexture() },
-      uMask: { value: splat },
-      uSize: { value: TERRAIN_SIZE },
+      uGround: { value: ground.texture },
+      uGroundOrigin: ground.origin,
+      uGroundSize: ground.size,
       uTile: { value: TILE },
       uAtlas: { value: flowerAtlas() },
     };
@@ -116,18 +116,19 @@ export class Flowers {
           '#include <common>',
           `#include <common>
           attribute vec4 aOff;
-          uniform vec2 uCenter; uniform float uTime, uSize, uTile;
-          uniform sampler2D uHeight, uMask;
+          uniform vec2 uCenter, uGroundOrigin; uniform float uTime, uGroundSize, uTile;
+          uniform sampler2D uGround;
           varying vec2 vFUv; varying float vKind; varying float vStem;
           ${FLOWER_GLSL}`,
         )
         .replace(
           '#include <begin_vertex>',
           `vec2 world = uCenter + mod(aOff.xy - uCenter + uTile * 0.5, uTile) - uTile * 0.5;
-          vec2 uvT = world / uSize + 0.5;
-          float h = texture2D(uHeight, uvT).r;
-          vec4 spl = texture2D(uMask, uvT);
-          float grassy = clamp(spl.b - 0.3 * spl.g - spl.r, 0.0, 1.0);
+          vec2 guv = (world - uGroundOrigin) / uGroundSize;
+          vec4 gd = texture2D(uGround, guv);
+          float inWin = step(0.002, guv.x) * step(guv.x, 0.998) * step(0.002, guv.y) * step(guv.y, 0.998);
+          float h = gd.r;
+          float grassy = gd.b * inWin;
           float dens = flowerDensity(world) * grassy;
           float edge = 1.0 - smoothstep(uTile * 0.34, uTile * 0.5, length(world - uCenter));
           float keep = step(aOff.w, dens) * edge;

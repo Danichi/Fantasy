@@ -4,9 +4,8 @@ import { physics } from '../physics/physics';
 import { pbr } from '../world/props';
 import { mats, paintedWood } from '../items/materials';
 import { generateFloor, Grid, type Cell, type FloorLayout } from './generator';
-import { Slime, type SlimeKind } from '../enemies/slime';
-import { LivingArmour } from '../enemies/livingArmour';
 import { OrcWarlord } from '../enemies/orc';
+import { OrcMob } from '../enemies/orcMob';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { segmentPointDistance } from '../core/math';
 import type { Player } from '../player/player';
@@ -18,7 +17,8 @@ import type { FX } from '../fx/particles';
 // floor creates is tracked and removed again by dispose().
 // ---------------------------------------------------------------------------
 
-export const DUNGEON_ORIGIN = new THREE.Vector3(3000, 0, 0);
+// Far off the continent (the map spans about -9 to +14 km) so the overworld never overlaps it.
+export const DUNGEON_ORIGIN = new THREE.Vector3(40000, 0, 0);
 export const CELL = 4;
 const WALL_H = 4.4;
 const WALL_T = 0.8;
@@ -55,13 +55,13 @@ const DV: Record<Dir, [number, number]> = { n: [0, -1], s: [0, 1], e: [1, 0], w:
 let matCache: ReturnType<typeof buildMats> | null = null;
 function buildMats() {
   const L = new THREE.TextureLoader();
-  const wall = pbr(L, 'castle_brick_07', { color: 0x9a968f }, 4, 0.92);
-  const floor = pbr(L, 'cobblestone_floor_08', { color: 0x8a8580 }, 4, 0.4);
-  const ceil = pbr(L, 'rock_face_03', { color: 0x4c4a47 }, 4, 0.9);
-  const pillar = pbr(L, 'rock_face_03', { color: 0x9a9894 }, 4, 0.95);
+  const wall = pbr(L, 'castle_brick_07', { color: 0xb5c0bd }, 4, 0.72);
+  const floor = pbr(L, 'cobblestone_floor_08', { color: 0xa0aaa7 }, 4, 0.32);
+  const ceil = pbr(L, 'rock_face_03', { color: 0x687b82 }, 4, 0.72);
+  const pillar = pbr(L, 'rock_face_03', { color: 0xbac6c2 }, 4, 0.72);
   for (const m of [wall, pillar]) for (const t of [m.map, m.normalMap, m.roughnessMap]) t?.repeat.set(1.6, 1.6);
   for (const t of [floor.map, floor.normalMap, floor.roughnessMap]) t?.repeat.set(1.5, 1.5);
-  const flame = new THREE.SpriteMaterial({ map: glowTex(), color: new THREE.Color(3.2, 1.6, 0.55), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+  const flame = new THREE.SpriteMaterial({ map: glowTex(), color: new THREE.Color(3.5, 1.9, 0.7), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
   const wood = new THREE.MeshStandardMaterial({ map: paintedWood(51, () => {}, 5), roughness: 0.85, color: 0x9a7a5a });
   return { wall, floor, ceil, pillar, flame, wood, iron: mats().iron, dark: new THREE.MeshBasicMaterial({ color: 0x000000 }) };
 }
@@ -105,8 +105,7 @@ export class DungeonInstance {
   private darts: Dart[] = [];
   private gate: { bars: THREE.Group; collider: RAPIER.Collider | null; t: number; opening: boolean } | null = null;
   private portal: THREE.Group | null = null;
-  slimes: Slime[] = [];
-  armours: LivingArmour[] = [];
+  orcs: OrcMob[] = [];
   private boss: OrcWarlord | null = null;
   /** resolves when async content (the boss model) has loaded */
   ready: Promise<void> = Promise.resolve();
@@ -132,10 +131,10 @@ export class DungeonInstance {
     this.spawnEnemies();
     if (floor === 2) this.buildStatue();
     // Light pool: a lantern on the player plus the three nearest torches.
-    this.lantern = new THREE.PointLight(0xffe6c8, 4.5, 11, 1.6);
+    this.lantern = new THREE.PointLight(0xfff0c8, 5.2, 13, 1.5);
     this.group.add(this.lantern);
     for (let i = 0; i < 3; i++) {
-      const l = new THREE.PointLight(0xffb878, 0, 13, 1.7);
+      const l = new THREE.PointLight(0xffcf9a, 0, 15, 1.55);
       this.group.add(l);
       this.torchLights.push(l);
     }
@@ -542,13 +541,14 @@ export class DungeonInstance {
       const c = this.cellCenter(s.cell[0], s.cell[1], 0.3);
       c.x += (Math.random() - 0.5) * 1.2;
       c.z += (Math.random() - 0.5) * 1.2;
-      if (s.kind === 'armour') this.armours.push(new LivingArmour(c.setY(0), this.scene, this.fx));
-      else if (s.kind === 'orc') {
+
+      // The crypt's regular enemies are now orcs on both floors. The
+      // existing orc remains the end-of-dungeon boss.
+      if (s.kind === 'orc') {
         if (this.progress.bossDead) {
           this.buildPortal();
           continue;
         }
-        // Stands at the far end of his hall, facing the way you'll come in.
         const at = this.cellCenter(s.cell[0], s.cell[1]);
         const toEntrance = this.spawnPoint.sub(at);
         this.ready = OrcWarlord.create(at, Math.atan2(toEntrance.x, toEntrance.z), this.scene, this.fx).then((o) => {
@@ -565,7 +565,9 @@ export class DungeonInstance {
           };
           this.boss = o;
         });
-      } else this.slimes.push(new Slime(s.kind as SlimeKind, c, this.scene, this.fx));
+      } else {
+        this.orcs.push(new OrcMob(c.setY(0), this.scene, this.fx));
+      }
     }
   }
 
@@ -574,12 +576,9 @@ export class DungeonInstance {
     this.time += dt;
     const pp = player.pos;
     // Enemies.
-    for (const s of this.slimes) s.update(dt, player, this.slimes);
-    for (const a of this.armours) a.update(dt, player);
-    for (const s of this.slimes.filter((s) => s.dead)) s.dispose();
-    this.slimes = this.slimes.filter((s) => !s.dead);
-    for (const a of this.armours.filter((a) => a.dead)) a.dispose();
-    this.armours = this.armours.filter((a) => !a.dead);
+    for (const g of this.orcs) g.update(dt, player);
+    for (const g of this.orcs.filter((g) => g.dead)) g.dispose();
+    this.orcs = this.orcs.filter((g) => !g.dead);
     // Boss: fights once woken; the bar shows while he's awake.
     if (this.boss) {
       this.boss.update(dt, player);
@@ -674,7 +673,7 @@ export class DungeonInstance {
         const close = Math.min(segmentPointDistance(a, b, d.pos), segmentPointDistance(a, b, prev.lerp(d.pos, 0.5)));
         if (!d.hit && close < 0.38) {
           d.hit = true;
-          player.receiveAttack({ damage: 16, from: d.from.clone(), parryable: false, poise: 20 });
+          player.receiveAttack({ damage: 16, from: d.pos.clone(), parryable: true, poise: 20 });
           this.group.remove(d.mesh);
           d.mesh = null;
         } else if (d.t > 1.4) {
@@ -706,10 +705,8 @@ export class DungeonInstance {
     this.boss = null;
     for (const c of this.colliders) physics.world.removeCollider(c, false);
     this.colliders = [];
-    for (const s of this.slimes) s.dispose();
-    for (const a of this.armours) a.dispose();
-    this.slimes = [];
-    this.armours = [];
+    for (const g of this.orcs) g.dispose();
+    this.orcs = [];
     this.scene.remove(this.group);
     this.group.traverse((o) => {
       const m = o as THREE.Mesh;

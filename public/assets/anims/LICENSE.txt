@@ -1,0 +1,4 @@
+Animation clips from the Quaternius Universal Animation Library (quaternius.com),
+via the Drawcall Market mirror. License: CC0 1.0 (public domain).
+Added for phase 4: sword attack/idle/combo, hit, death, jog, bow aim/shoot, kneeling pick-up,
+farm harvest/plant/watering/tree picking, fishing cast/idle/reel (UAL 1 and 2, CC0).

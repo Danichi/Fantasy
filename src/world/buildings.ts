@@ -11,6 +11,7 @@ export interface WorldMats {
   plaster: THREE.Material;
   timber: THREE.Material;
   slate: THREE.Material;
+  tile?: THREE.Material;
   thatch: THREE.Material;
   planks: THREE.Material;
   glass: THREE.Material;
@@ -47,7 +48,7 @@ export interface HouseSpec {
   w: number; // along local x (facade width)
   d: number; // depth along local z
   floors: 1 | 2;
-  roof: 'slate' | 'thatch';
+  roof: 'slate' | 'thatch' | 'tile';
   seed: number;
 }
 
@@ -58,7 +59,7 @@ export interface HouseSpec {
 export function buildHouse(spec: HouseSpec, m: WorldMats) {
   const rnd = mulberry32(spec.seed);
   const parts: Record<keyof WorldMats, THREE.BufferGeometry[]> = {
-    stone: [], bridgeStone: [], plaster: [], timber: [], slate: [], thatch: [], planks: [], glass: [], bark: [],
+    stone: [], bridgeStone: [], plaster: [], timber: [], slate: [], tile: [], thatch: [], planks: [], glass: [], bark: [],
   };
   const { w, d } = spec;
   const plinth = 0.7;
@@ -123,11 +124,11 @@ export function buildHouse(spec: HouseSpec, m: WorldMats) {
 
   // Gable roof along x: the ridge runs left-right across the facade.
   const pitch = spec.roof === 'thatch' ? 0.85 : 0.72;
-  const over = 0.45;
+  const over = 0.85;
   const halfSpan = rd / 2 + over;
   const rise = Math.tan(pitch) * (rd / 2);
   const slopeLen = halfSpan / Math.cos(pitch);
-  const roofMat = spec.roof === 'thatch' ? 'thatch' : 'slate';
+  const roofMat = spec.roof;
   const thick = spec.roof === 'thatch' ? 0.35 : 0.12;
   for (const s of [-1, 1]) {
     const g = new THREE.BoxGeometry(rw + over * 2, thick, slopeLen);
@@ -154,10 +155,12 @@ export function buildHouse(spec: HouseSpec, m: WorldMats) {
   // Ridge beam.
   parts.timber.push(worldUV(box(rw + over * 2 + 0.1, 0.18, 0.2, 0, eaveY + rise + thick + 0.02, 0), 1.5));
 
-  // Chimney.
+  // Chimney (its top is returned so the village can give it smoke).
+  let chimney: THREE.Vector3 | null = null;
   if (rnd() < 0.7) {
     const cx = (rnd() < 0.5 ? -1 : 1) * rw * 0.3;
     parts.stone.push(worldUV(box(0.7, rise + 1.6, 0.7, cx, eaveY + (rise + 1.6) / 2 + 0.3, -rd * 0.15)));
+    chimney = new THREE.Vector3(cx, eaveY + rise + 1.9 + 0.3, -rd * 0.15);
   }
 
   // Door on the facade.
@@ -202,5 +205,7 @@ export function buildHouse(spec: HouseSpec, m: WorldMats) {
     group.add(mesh);
   }
   const half = new THREE.Vector3(rw / 2 + 0.15, (eaveY + rise) / 2, rd / 2 + 0.15);
-  return { group, half, height: eaveY + rise };
+  // The doorstep (outside the door, at the plinth top) for world/doors.ts.
+  const door = new THREE.Vector3(dx, plinth - 0.1, d / 2 + 0.9);
+  return { group, half, height: eaveY + rise, chimney, door };
 }

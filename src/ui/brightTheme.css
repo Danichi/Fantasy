@@ -1,0 +1,42 @@
+:root {
+  --ink: #263238;
+  --ink-dim: #64717a;
+  --gold: #c58a2b;
+  --gold-bright: #e2ad4f;
+  --panel: rgba(255, 253, 248, 0.96);
+  --panel-edge: rgba(197, 138, 43, 0.38);
+  --hp: #d94a45;
+  --hp-hi: #ff756d;
+  --st: #48a66a;
+  --st-hi: #79d493;
+  --mp: #4b8fe8;
+  --mp-hi: #82bcff;
+}
+html, body { background: #eef5f1; color: var(--ink); }
+/* Bright fantasy UI: parchment, ivory, sky-blue, living greens and warm gold. */
+.overlay .title-card, .dialogue, .dmap-editor, .inventory, .panel, .menu-panel {
+  background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(247,244,232,.97)) !important;
+  color: var(--ink) !important;
+  border-color: rgba(197,138,43,.48) !important;
+  box-shadow: 0 18px 60px rgba(48,67,65,.22), 0 2px 10px rgba(48,67,65,.12) !important;
+}
+.overlay .title-card h1, .dialogue .who, .dmap-head h2 { color: #b87518 !important; text-shadow: none !important; }
+.overlay .title-card .sub, .dialogue .say, .dmap-head .tip, .dmap-foot, .npc-tag small { color: #66737a !important; text-shadow: none !important; }
+button, .tab, .chip, .dialogue .opts button, .dmap-body .tools button, .newgame {
+  background: rgba(255,255,255,.84) !important;
+  color: #34434a !important;
+  border-color: rgba(197,138,43,.32) !important;
+}
+button:hover, .tab:hover, .chip:hover, .dialogue .opts button:hover { background: #fff8e8 !important; border-color: #d9a449 !important; color: #7d5519 !important; }
+.tab.on, .chip.on, .dmap-body .tools button.on { background: linear-gradient(180deg,#f1c86e,#dba746) !important; color: #fff !important; border-color: #c58a2b !important; }
+.bar { background: rgba(255,255,255,.72) !important; border-color: rgba(197,138,43,.42) !important; box-shadow: 0 2px 10px rgba(48,67,65,.16), inset 0 0 0 1px rgba(255,255,255,.7) !important; }
+.bar .label, .bar .num { color: #52636b !important; text-shadow: none !important; }
+.xprow .lv, .xprow .gold, .npc-tag { color: #b87518 !important; text-shadow: 0 1px 2px rgba(255,255,255,.8) !important; }
+.prompt { background: rgba(255,255,255,.94) !important; color: #33434a !important; box-shadow: 0 8px 24px rgba(48,67,65,.18); }
+.levelup { color: #e1ae43 !important; text-shadow: 0 0 18px rgba(226,174,67,.35) !important; }
+.dmap-mini .hint { color: #65757c !important; text-shadow: none !important; }
+.hand { background: radial-gradient(ellipse at 50% 60%, rgba(245,242,230,.98), rgba(224,231,226,.98) 75%) !important; border-color: rgba(197,138,43,.62) !important; box-shadow: inset 0 0 0 3px rgba(255,255,255,.8), inset 0 0 0 4px rgba(197,138,43,.18), 0 8px 24px rgba(48,67,65,.18) !important; }
+.hint, .controls, .mobile-note { color: #65757c !important; text-shadow: none !important; }
+/* Make the main menu feel like a fantasy game UI rather than a Soulslike HUD. */
+.overlay .title-card { border-radius: 18px; }
+.overlay .title-card::before { content: ''; display:block; height:4px; margin:-22px -28px 20px; border-radius:18px 18px 0 0; background: linear-gradient(90deg,#75b9dd,#e4b14d,#79b77c); }

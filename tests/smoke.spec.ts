@@ -1,31 +1,14 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, boot, SLOW } from './fixtures';
+import type { Page } from '@playwright/test';
 
 // End-to-end checks driven through the window.__game debug hook (?test mode:
 // no title overlay, no slime spawner, pointer lock not required).
 
-async function boot(page: Page) {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  // A missing /favicon.ico is reported as an error with no URL; ignore only that.
-  page.on('console', (m) => m.type() === 'error' && !m.text().startsWith('Failed to load resource') && errors.push(m.text()));
-  page.on('response', (r) => r.status() >= 400 && !r.url().endsWith('/favicon.ico') && errors.push(`${r.status()} ${r.url()}`));
-  await page.goto('/?test');
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
-  // In-page helper: wait for game time (simulation steps at 60 Hz), not
-  // wall-clock time, so slow machines don't cut actions short.
-  await page.evaluate(() => {
-    (window as any).W = async (n: number) => {
-      const g = (window as any).__game, s0 = g.steps;
-      while (g.steps < s0 + n) await new Promise((r) => setTimeout(r, 15));
-    };
-  });
-  return errors;
-}
-
 const wait = (page: Page, ms: number) => page.evaluate((n) => (window as any).W(n), Math.round((ms / 1000) * 60));
 
-test('player moves with WASD', async ({ page }) => {
-  const errors = await boot(page);
+test('player moves with WASD', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   const start = await page.evaluate(() => (window as any).__game.player.pos.toArray());
   await page.evaluate(() => (window as any).__game.input.press('KeyW'));
   await wait(page, 1500);
@@ -36,12 +19,16 @@ test('player moves with WASD', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('sword swing damages a slime', async ({ page }) => {
-  await boot(page);
+test('sword swing damages a beast', async ({ game }) => {
+  const { page } = game;
   const hp = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
     const s = g.slimes.spawn('blue', p.pos.x, p.pos.z - 1.5);
+    // A stag charges and attacks first; pin it in place (its hurt capsule is
+    // normally placed by update) so the test only measures the swing.
+    s.update = () => {};
+    s.center.set(s.position.x, s.position.y + 0.9, s.position.z);
     p.yaw = Math.PI;
     await (window as any).W(18);
     const before = s.hp;
@@ -54,30 +41,36 @@ test('sword swing damages a slime', async ({ page }) => {
   expect(hp.after).toBeLessThan(hp.before);
 });
 
-test('parry staggers a leaping slime', async ({ page }) => {
-  await boot(page);
+test('parry staggers an attacking beast', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
+    // Load the wolf model first so its first-use hitch can't land mid-bite.
+    const warm = g.slimes.spawn('green', p.pos.x + 40, p.pos.z + 40);
+    await new Promise((r) => setTimeout(r, 1500));
+    g.slimes.clear();
+    void warm;
     const s = g.slimes.spawn('green', p.pos.x, p.pos.z - 2.5);
     p.yaw = Math.PI;
-    // Wait for the slime to start its leap, then parry.
-    for (let i = 0; i < 300 && s.state !== 'leap'; i++) await new Promise((r) => setTimeout(r, 10));
-    // React as the slime closes in, like a player timing the impact.
-    for (let i = 0; i < 100 && s.center.distanceTo(p.center) > 1.9; i++) await new Promise((r) => setTimeout(r, 5));
+    // Step the simulation by hand so the parry lands on the beast's own clock
+    // however slowly frames are drawn (CI renders in software).
+    for (let i = 0; i < 600 && s.state !== 'attack'; i++) g.stepSim();
+    // Its bite lands 0.33 s into the attack; parry just before.
+    for (let i = 0; i < 60 && s.t < 0.2; i++) g.stepSim();
     g.input.press('KeyF');
-    await new Promise((r) => setTimeout(r, 30));
+    g.stepSim(2);
     g.input.release('KeyF');
-    for (let i = 0; i < 60 && s.state === 'leap'; i++) await new Promise((r) => setTimeout(r, 20));
+    for (let i = 0; i < 60 && s.state === 'attack'; i++) g.stepSim();
     return { state: s.state, stunned: s.stunned, hp: p.hp, max: p.maxHp };
   });
-  expect(res.state).toBe('stunned');
+  expect(res.state).toBe('hurt');
   expect(res.stunned).toBe(true);
   expect(res.hp).toBe(res.max);
 });
 
-test('blocking drains stamina instead of health', async ({ page }) => {
-  await boot(page);
+test('blocking drains stamina instead of health', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
@@ -94,12 +87,17 @@ test('blocking drains stamina instead of health', async ({ page }) => {
   expect(res.dHp).toBeLessThan(5);
 });
 
-test('fireball spends mana and hits', async ({ page }) => {
-  await boot(page);
+test('fireball spends mana and hits', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
+    // Magic is learned from Magus Orren now; hand the fireball over directly.
+    p.equip.equip(p.equip.add('fireball').uid);
     const s = g.slimes.spawn('green', p.pos.x, p.pos.z - 7);
+    // Hold the wolf still; its hurt capsule is normally placed by update.
+    s.update = () => {};
+    s.center.set(s.position.x, s.position.y + 0.6, s.position.z);
     p.yaw = Math.PI;
     g.cam.yaw = Math.PI;
     await (window as any).W(12);
@@ -119,8 +117,8 @@ test('fireball spends mana and hits', async ({ page }) => {
   expect(res.hit).toBe(true);
 });
 
-test('equipping swaps the weapon model in the hand, and accessories apply bonuses', async ({ page }) => {
-  await boot(page);
+test('equipping swaps the weapon model in the hand, and accessories apply bonuses', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const eq = g.player.equip;
@@ -138,8 +136,8 @@ test('equipping swaps the weapon model in the hand, and accessories apply bonuse
   expect(res.dMaxHp).toBe(25);
 });
 
-test('rocks block the player', async ({ page }) => {
-  await boot(page);
+test('rocks block the player', async ({ game }) => {
+  const { page } = game;
   const z = await page.evaluate(async () => {
     const g = (window as any).__game;
     // Stand south of the boulder at (-40, 112) and run north into it.
@@ -156,8 +154,8 @@ test('rocks block the player', async ({ page }) => {
   expect(z).toBeGreaterThan(112);
 });
 
-test('dual wield: off-hand attack and equip armour', async ({ page }) => {
-  await boot(page);
+test('dual wield: off-hand attack and equip armour', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const eq = g.player.equip;
@@ -178,12 +176,13 @@ test('dual wield: off-hand attack and equip armour', async ({ page }) => {
   expect(res.armor).toBeGreaterThan(15);
 });
 
-test('offensive spells refuse to cast without a lock-on', async ({ page }) => {
-  await boot(page);
+test('offensive spells refuse to cast without a lock-on', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
-    g.slimes.spawn('green', p.pos.x, p.pos.z - 7);
+    p.equip.equip(p.equip.add('fireball').uid);
+    g.slimes.spawn('green', p.pos.x, p.pos.z - 7).update = () => {};
     const m0 = p.mana;
     g.input.press('KeyR');
     await new Promise((r) => setTimeout(r, 40));
@@ -193,4 +192,34 @@ test('offensive spells refuse to cast without a lock-on', async ({ page }) => {
   });
   expect(res.dMana).toBeLessThan(1);
   expect(res.toast).toContain('Lock on');
+});
+
+test('walking uphill keeps its pace, and standing on a slope does not slide', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, T = g.THREE, W = (window as any).W;
+    const { heightAt } = await import('/src/world/terrainHeight.ts' as string);
+    // The crypt road climbs north at a 30-40% grade around here.
+    g.player.teleport(new T.Vector3(-7, heightAt(-7, -222) + 0.3, -222));
+    g.cam.yaw = Math.PI; // looking north: W walks uphill
+    await W(40);
+    g.input.press('KeyW');
+    await W(30); // up to speed
+    const b = g.player.pos.clone();
+    await W(60);
+    const c = g.player.pos.clone();
+    g.input.release('KeyW');
+    // Standing still on the slope.
+    g.player.teleport(new T.Vector3(-6, heightAt(-6, -240) + 0.3, -240));
+    await W(60);
+    const s0 = g.player.pos.clone();
+    await W(120);
+    return { speed: Math.hypot(c.x - b.x, c.z - b.z), rise: c.y - b.y, drift: Math.hypot(g.player.pos.x - s0.x, g.player.pos.z - s0.z), grounded: g.player.grounded };
+  });
+  expect(res.rise).toBeGreaterThan(0.8); // it really was uphill
+  expect(res.speed).toBeGreaterThan(3.5); // walking pace is 4.2 m/s on the flat
+  expect(res.drift).toBeLessThan(0.05);
+  expect(res.grounded).toBe(true);
+  expect(errors).toEqual([]);
 });

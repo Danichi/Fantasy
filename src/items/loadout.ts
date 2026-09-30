@@ -20,15 +20,12 @@ export function setupLoadout(eq: Equipment) {
   eq.add('ringSage');
   eq.add('warriorBelt');
   eq.add('luckyCharm');
-  const fire = eq.add('fireball');
-  const heal = eq.add('healingLight');
   const hp = eq.add('healthPotion', 5);
   const mp = eq.add('manaPotion', 3);
 
   eq.equip(longsword.uid, 'main');
   eq.equip(round.uid, 'off');
-  eq.equip(fire.uid);
 
   eq.quick = [hp.uid, mp.uid, null, null];
-  eq.moves = [fire.uid, heal.uid, null, null, null, null];
+  eq.moves = [null, null, null, null, null, null];
 }

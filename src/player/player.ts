@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { HERO } from '../npc/cast';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Character } from './character';
 import { RigLayer, blendPose, overlayPose, type ProcPose } from './rigLayer';
@@ -9,10 +10,11 @@ import { physics, groups, G_PLAYER, STATIC_ONLY } from '../physics/physics';
 import { clamp, damp, wrapAngle, segmentSegmentDistance, smoothstep } from '../core/math';
 import { events } from '../core/events';
 import { Equipment } from '../items/equipment';
-import { ACTIONS, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, resolveAction, type ActionDef } from '../combat/actions';
+import { ACTIONS, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, resolveAction, flairAt, type ActionDef } from '../combat/actions';
 import { targets, hurtSegment, type Target, type IncomingAttack, type DefenceResult } from '../combat/targets';
-import { surfaceAt } from '../world/terrain';
+import { surfaceAt, heightAt as heightAtGround } from '../world/terrain';
 import { waterDepthAt } from '../world/water';
+import { waterSurfaceAt } from '../world/waterLevel';
 import { Progression } from '../progression/progression';
 import { Paths } from '../paths/paths';
 import { baseMods, type CombatMods } from '../combat/mods';
@@ -25,7 +27,7 @@ const JUMP_V = 5.8;
 const BUFFER_TIME = 0.35;
 export const SIM_STEP = 1 / 60;
 
-type Buffered = 'attack' | 'offhand' | 'dodge' | 'parry' | 'cast';
+type Buffered = 'attack' | 'offhand' | 'dodge' | 'parry' | 'cast' | 'originAbility';
 
 interface ActiveAction {
   def: ActionDef; // resolved (clip timing applied when the clip is loaded)
@@ -50,6 +52,12 @@ interface ActiveAction {
  * frame: it interpolates between steps and poses the character, so motion
  * stays smooth at any frame rate.
  */
+/** How far the rider's root sits above the ground (horse back height minus leg length). */
+const RIDE_HEIGHT = 0.5;
+/** mana per second before bonuses: slow, so spells are a resource to plan around */
+const MANA_REGEN = 0.7;
+const MOUNT_TIME = 0.5;
+
 export class Player {
   readonly char = new Character();
   rig!: RigLayer;
@@ -90,6 +98,9 @@ export class Player {
   private staminaDelay = 0;
   private hot = { rate: 0, left: 0 };
   private burn = { dps: 0, left: 0 };
+  mounted = false;
+  private mountVisual = new THREE.Group();
+  private originCooldown = 0;
 
   act: ActiveAction | null = null;
   private buffer: { a: Buffered; t: number } | null = null;
@@ -108,7 +119,8 @@ export class Player {
   private poseFrom: ProcPose | null = null;
   private poseFade = 1;
   private lastPose: ProcPose = {};
-  private moveIntent = new THREE.Vector3();
+  /** camera-relative movement wish this step (boats steer from it) */
+  readonly moveIntent = new THREE.Vector3();
   private push = new THREE.Vector3();
   private bladePrev: Record<'main' | 'off', [THREE.Vector3, THREE.Vector3] | null> = { main: null, off: null };
   private lastPresentT = -1;
@@ -134,7 +146,9 @@ export class Player {
   meleeBonus?: (t: Target) => { mult: number; crit: boolean };
 
   async init(scene: THREE.Scene, spawn: THREE.Vector3) {
-    await this.char.load();
+    // The stylised hero (docs/ART-DIRECTION.md §7); ?paladin keeps the old Mixamo model.
+    const paladin = new URLSearchParams(location.search).has('paladin');
+    await this.char.load(undefined, undefined, paladin ? undefined : HERO);
     scene.add(this.char.root);
     this.anim = new Animator(this.char);
     // Real clips hold the sword and shield themselves; the placeholder's
@@ -146,6 +160,7 @@ export class Player {
     this.rig = new RigLayer(this.char);
     this.rig.setup();
     this.equip = new Equipment(this.char, this.rig);
+    this.buildMountVisual();
     for (const b of ['Head', 'Spine2', 'RightArm', 'LeftArm', 'RightForeArm', 'LeftForeArm', 'RightHand', 'LeftHand', 'RightUpLeg', 'LeftUpLeg', 'RightLeg', 'LeftLeg', 'RightFoot', 'LeftFoot']) {
       this.equip.limb(b);
     }
@@ -180,6 +195,80 @@ export class Player {
     }
   }
 
+  private buildMountVisual() {
+    const coat = new THREE.MeshStandardMaterial({ color: 0x6f4b35, roughness: 0.95 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x35261f, roughness: 1 });
+    const horse = this.mountVisual;
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.0, 5, 8), coat);
+    body.rotation.z = Math.PI / 2;
+    body.position.y = 0.72;
+    horse.add(body);
+    const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.68, 4, 7), coat);
+    neck.position.set(0.55, 1.18, 0);
+    neck.rotation.z = -0.38;
+    horse.add(neck);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.4, 0.34), coat);
+    head.position.set(0.91, 1.42, 0);
+    horse.add(head);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.62, 7), dark);
+      leg.position.set(sx * 0.3, 0.34, sz * 0.18);
+      horse.add(leg);
+    }
+    const mane = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.62, 0.06), dark);
+    mane.position.set(0.26, 1.28, 0);
+    horse.add(mane);
+    horse.position.set(0, -0.6, 0.05);
+    horse.visible = false;
+    horse.traverse((o) => ((o as THREE.Mesh).isMesh && ((o.castShadow = true), (o.receiveShadow = true))));
+    this.char.root.add(horse);
+  }
+
+  toggleMount() {
+    if (this.dead || this.act) return;
+    this.mounted = !this.mounted;
+    this.stamina = Math.min(this.maxStamina, this.stamina + 15);
+  }
+
+  /** a boat carrying the player (world/boats.ts) */
+  vehicle: { pos: THREE.Vector3; yaw: number; speed: number } | null = null;
+  /** in deep water (river pools, the canal, the sea) */
+  swimming = false;
+  private drownT = 0;
+  /** hp never drops below this (sparring duels) */
+  damageFloor = 0;
+  /** Height of the walkable surface (terrain, bridges, floors) under (x, z) near the player's feet. */
+  private probeGround(x: number, z: number) {
+    const top = this.pos.y + 1.3;
+    const t = physics.castRay(new THREE.Vector3(x, top, z), new THREE.Vector3(0, -1, 0), 3, STATIC_ONLY);
+    return t === null ? null : top - t;
+  }
+
+  private groundBelow() {
+    return heightAtGround(this.pos.x, this.pos.z);
+  }
+
+  /** Riding (world/horses.ts): speeds come from the horse's breed; null dismounts. */
+  mountStats: { canter: number; gallop: number; accel: number } | null = null;
+  /** the horse has breath left to gallop */
+  mountCanGallop = true;
+  setMount(stats: { canter: number; gallop: number; accel: number } | null) {
+    if (stats && !this.mountStats) this.mountT = 0;
+    this.mountStats = stats;
+    this.mounted = !!stats;
+    this.act = null;
+  }
+  /** mounting: 0 -> 1 over MOUNT_TIME (hop up from the horse's left side, swing the leg over) */
+  private mountT = 1;
+  /** dismounting: the saddle's offset from where the player landed, easing to zero */
+  private dismountFrom: THREE.Vector3 | null = null;
+  private dismountT = 1;
+  /** Play the step-down from the saddle after the player has been placed on the ground. */
+  animateDismount(saddle: THREE.Vector3) {
+    this.dismountFrom = saddle.clone().sub(this.pos);
+    this.dismountT = 0;
+  }
+
   get forward() {
     return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
   }
@@ -209,6 +298,25 @@ export class Player {
     }
     if (!input.uiMode) this.readInput(input, cam);
     else this.moveIntent.set(0, 0, 0);
+    // In a boat: the boat moves you (world/boats.ts); no walking or fighting.
+    if (this.vehicle) {
+      const v = this.vehicle;
+      this.pos.copy(v.pos);
+      this.yaw = v.yaw;
+      this.vel.set(Math.sin(v.yaw) * v.speed, 0, Math.cos(v.yaw) * v.speed);
+      const c = { x: v.pos.x, y: v.pos.y + CENTER_Y + 0.05, z: v.pos.z };
+      this.body.setTranslation(c, true);
+      this.collider.setTranslation(c);
+      this.grounded = true;
+      this.swimming = false;
+      this.act = null;
+      this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0;
+      return;
+    }
+    if (this.prog.origin === 'dragon' && !this.grounded && input.held('jump')) {
+      // Dragon origin: hold jump in the air to glide down slowly.
+      this.vel.y = Math.max(this.vel.y, -1.25);
+    }
     this.updateAction(dt, input);
     this.updateLock(cam);
     this.move(dt);
@@ -230,6 +338,7 @@ export class Player {
     if (input.wasPressed('parry')) buf('parry');
     if (input.wasPressed('dodge')) buf('dodge');
     if (input.wasPressed('cast')) buf('cast');
+    if (input.wasPressed('originAbility')) buf('originAbility');
     this.blocking = input.held('offhand') && this.equip.hasShield && this.mods.canBlock && (!this.act || this.act.def.id === 'parryShield');
     if (input.wasPressed('jump') && this.grounded && !this.act) {
       this.vel.y = JUMP_V;
@@ -237,7 +346,7 @@ export class Player {
       this.airTime = 0;
     }
     if (input.wasPressed('lockOn')) this.toggleLock(cam);
-    this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0 && !this.blocking && this.stamina > 0 && !this.act && this.grounded;
+    this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0 && !this.blocking && (this.mounted || this.stamina > 0) && !this.act && this.grounded;
   }
 
   // ---- actions --------------------------------------------------------------
@@ -290,6 +399,11 @@ export class Player {
     const offCombo = (d: ActionDef) => d.id.startsWith('offslash');
     let next: string | null = null;
     if (!a) {
+      if (b.a === 'originAbility') {
+        this.buffer = null;
+        this.useOriginAbility();
+        return;
+      }
       if (b.a === 'attack' && eq.mainWeapon) next = !this.grounded ? 'airAttack' : this.sprinting ? 'sprintAttack' : 'slash1';
       else if (b.a === 'offhand' && eq.dualWield) next = 'offslash1';
       else if (b.a === 'dodge') next = this.grounded ? (this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep') : null;
@@ -318,7 +432,7 @@ export class Player {
       events.emit('needTarget', {});
       return null;
     }
-    const cost = sp.def.stats.manaCost ?? 0;
+    const cost = Math.max(0, Math.round(sp.def.stats.manaCost ?? 0));
     if (this.mana < cost) {
       events.emit('notEnough', { stat: 'mana' });
       return null;
@@ -483,13 +597,30 @@ export class Player {
     const intent = this.moveIntent;
     let targetSpeed = 0;
     if (!a && intent.lengthSq() > 0) {
-      targetSpeed = (this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
+      const ms = this.mountStats ?? { canter: 11.5, gallop: 15, accel: 8 };
+      targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
-      // Wading slows you down.
+      // Wading slows you down; deep water means swimming.
       const wade = waterDepthAt(this.pos.x, this.pos.z);
       if (wade > 0.25) targetSpeed *= 0.5;
+      if (this.swimming) targetSpeed = this.sprinting ? 3.6 : 2.3;
     }
-    if (this.sprinting) {
+    // Swimming: float with the chest at the waterline, tire, and drown if spent.
+    const surface = waterSurfaceAt(this.pos.x, this.pos.z);
+    const depth = surface === null ? 0 : surface - this.groundBelow();
+    this.swimming = !this.dead && depth > 1.35;
+    if (this.swimming) {
+      this.stamina = Math.max(0, this.stamina - (this.sprinting ? 7 : 2.2) * dt);
+      this.staminaDelay = 0.6;
+      if (this.stamina <= 0) {
+        this.drownT += dt;
+        if (this.drownT > 1) {
+          this.drownT = 0;
+          this.applyDamage(this.maxHp * 0.08);
+        }
+      }
+    } else this.drownT = 0;
+    if (this.sprinting && !this.mounted && !this.swimming) {
       this.stamina = Math.max(0, this.stamina - 13 * dt);
       this.staminaDelay = 0.5;
     }
@@ -532,8 +663,13 @@ export class Player {
     } else this.yawVel *= Math.exp(-16 * dt);
 
     // Vertical.
-    this.vel.y -= GRAVITY * dt;
-    if (this.grounded && this.vel.y < 0) this.vel.y = -1.5;
+    if (this.swimming && surface !== null) {
+      // Buoyancy: ease toward treading water at the surface.
+      this.vel.y = (surface - 1.25 - this.pos.y) * 5;
+    } else {
+      this.vel.y -= GRAVITY * dt;
+      if (this.grounded && this.vel.y < 0) this.vel.y = 0;
+    }
     this.vel.x = hv.x;
     this.vel.z = hv.z;
 
@@ -551,6 +687,22 @@ export class Player {
     }
 
     const desired = { x: this.vel.x * dt + this.push.x, y: this.vel.y * dt, z: this.vel.z * dt + this.push.z };
+    // Ground following: on foot, the step rises and falls with the ground itself.
+    // A flat step pushed into a slope lost speed going uphill, and the constant
+    // downward push made you creep downhill while standing still.
+    if (this.grounded && this.vel.y <= 0 && !this.swimming) {
+      const h0 = this.probeGround(this.pos.x, this.pos.z);
+      const h1 = this.probeGround(this.pos.x + desired.x, this.pos.z + desired.z);
+      const run = Math.hypot(desired.x, desired.z);
+      if (run < 1e-4) {
+        desired.y = -0.001; // standing: just keep contact, nothing to slide on
+      } else if (h0 !== null && h1 !== null && h1 - h0 > -Math.max(0.3, run * 1.5)) {
+        desired.y = Math.min(h1 - h0, run * 1.25 + 0.02) - 0.005;
+      } else {
+        // Stepping off an edge: let gravity take over.
+        desired.y = -GRAVITY * dt * dt;
+      }
+    }
     this.kcc.computeColliderMovement(this.collider, desired, physics.R.QueryFilterFlags.EXCLUDE_SENSORS, STATIC_ONLY);
     const m = this.kcc.computedMovement();
     const cur = this.body.translation();
@@ -558,9 +710,15 @@ export class Player {
     this.body.setNextKinematicTranslation(next);
     this.collider.setTranslation(next); // keep queries in sync before the world steps
     // Walls redirect velocity (slide) instead of it piling up against them.
+    // Only when the step was actually cut short: taking every computed step as
+    // the new velocity turned tiny slope slides into a steady downhill creep.
     if (dt > 0 && !(a && (a.def.roll || a.usingClip || a.def.move || a.def.boost))) {
-      this.vel.x = (m.x - this.push.x) / dt;
-      this.vel.z = (m.z - this.push.z) / dt;
+      const mx = m.x - this.push.x, mz = m.z - this.push.z;
+      const want = Math.hypot(this.vel.x, this.vel.z) * dt;
+      if (Math.hypot(mx, mz) < want * 0.97) {
+        this.vel.x = mx / dt;
+        this.vel.z = mz / dt;
+      }
     }
     const wasGrounded = this.grounded;
     this.grounded = this.kcc.computedGrounded() && this.vel.y <= 0.1;
@@ -609,7 +767,10 @@ export class Player {
     this.pos.copy(p);
     this.prevPos.copy(p);
     this.vel.set(0, 0, 0);
+    this.onTeleport?.(p);
   }
+  /** Called after a teleport so streamed ground and trees can load around the new spot. */
+  onTeleport?: (p: THREE.Vector3) => void;
 
   // ==========================================================================
   // Presentation (once per rendered frame)
@@ -617,6 +778,28 @@ export class Player {
   present(alpha: number, dt: number) {
     const root = this.char.root;
     root.position.lerpVectors(this.prevPos, this.pos, alpha);
+    // In the saddle: the rider sits on the horse's back.
+    root.position.y += this.vehicle ? -0.32 : this.mounted && this.mountStats ? RIDE_HEIGHT : this.mounted ? -0.72 : 0;
+    // Getting on: start beside the horse's left flank and hop up into the saddle.
+    let rideW = 1;
+    if (this.mounted && this.mountStats && this.mountT < 1) {
+      this.mountT = Math.min(1, this.mountT + dt / MOUNT_TIME);
+      const e = smoothstep(0, 1, this.mountT);
+      const left = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+      root.position.addScaledVector(left, 0.85 * (1 - e));
+      root.position.y += -RIDE_HEIGHT * (1 - e) + Math.sin(Math.PI * e) * 0.35;
+      rideW = smoothstep(0.25, 0.85, this.mountT);
+    }
+    // Getting off: slide down from the saddle to where the player now stands.
+    if (this.dismountFrom && this.dismountT < 1) {
+      this.dismountT = Math.min(1, this.dismountT + dt / MOUNT_TIME);
+      const e = smoothstep(0, 1, this.dismountT);
+      root.position.addScaledVector(this.dismountFrom, 1 - e);
+      root.position.y += Math.sin(Math.PI * e) * 0.2;
+      rideW = 1 - smoothstep(0.1, 0.7, this.dismountT);
+      if (this.dismountT >= 1) this.dismountFrom = null;
+    }
+    this.mountVisual.visible = this.mounted && !this.mountStats;
     root.rotation.y = this.prevYaw + wrapAngle(this.yaw - this.prevYaw) * alpha;
     const yawR = root.rotation.y;
     this.idleClock += dt;
@@ -628,7 +811,7 @@ export class Player {
     // Local velocity for directional locomotion.
     const c = Math.cos(-yawR), s = Math.sin(-yawR);
     const local = { x: this.vel.x * c + this.vel.z * s, z: -this.vel.x * s + this.vel.z * c };
-    if (a) local.x = local.z = 0;
+    if (a || this.mounted || this.vehicle) local.x = local.z = 0;
 
     // ---- clip layers ------------------------------------------------------
     const anim = this.anim;
@@ -664,7 +847,7 @@ export class Player {
     const base: ProcPose = {};
     if (!this.armsFromClips) {
       // Placeholder rig: hold the weapons up in a guard with IK.
-      this.guardW = damp(this.guardW, this.sprinting ? 0 : speed > 3.2 ? 0.35 : 1, 8, dt);
+      this.guardW = damp(this.guardW, this.mounted || this.sprinting ? 0 : speed > 3.2 ? 0.35 : 1, 8, dt);
       if (eq.mainWeapon) base.right = { ...GUARD_R, w: this.guardW };
       if (eq.hasShield) {
         const sh = this.blockW > 0.01 ? blendHandSimple(SHIELD_CARRY_L, SHIELD_BLOCK_L, this.blockW) : SHIELD_CARRY_L;
@@ -691,6 +874,10 @@ export class Player {
       pose = { ...base, legTuck: smoothstep(0.02, 0.2, at) * (1 - smoothstep(0.5, 0.7, at)), spinePitch: 0.8 * smoothstep(0.02, 0.15, at) * (1 - smoothstep(0.5, 0.72, at)) };
     } else if (a?.usingClip) pose = {};
     if (!this.grounded && !a && !anim.has('jump_air')) pose = { ...pose, legTuck: 0.35 };
+    // Skill flourishes over the clip: leans and crouches go into the pose, spins,
+    // hops and banks turn and lift the whole body (below).
+    const fl = a && !this.dead ? flairAt(a.def.flair, at) : null;
+    if (fl && (fl.lean || fl.crouch)) pose = { ...pose, spinePitch: (pose.spinePitch ?? 0) + fl.lean, hipsDrop: (pose.hipsDrop ?? 0) + fl.crouch };
     if (this.dead) pose = {};
 
     if (this.poseFrom && this.poseFade < 1) {
@@ -711,6 +898,11 @@ export class Player {
       vis.position.set(0, pivot - Math.cos(ang) * pivot, -Math.sin(ang) * pivot);
       vis.position.y -= Math.sin(k * Math.PI) * 0.3;
     }
+    if (fl) {
+      vis.rotation.y += fl.spin;
+      vis.rotation.z += fl.bank;
+      vis.position.y += fl.hop;
+    }
     if (this.dead && !anim.has('death')) {
       const k = smoothstep(0, 0.9, this.deadT);
       vis.rotation.x = -k * Math.PI * 0.48;
@@ -718,10 +910,52 @@ export class Player {
       vis.position.z = -k * 0.2;
     }
     this.rig.apply(pose);
+    if ((this.mounted && this.mountStats) || this.vehicle || this.dismountFrom) this.ridePose(this.vehicle ? 1 : rideW);
 
     // Blade hit detection against the pose we just drew.
     if (a && at !== this.lastPresentT) this.detectHits(a, at);
     this.lastPresentT = at;
+  }
+
+  /** Sit astride: thighs forward and apart, knees bent, feet in the stirrups. */
+  private ridePose(w = 1) {
+    if (w <= 0.001) return;
+    const up = this.char.root.quaternion;
+    // Rotating about +x lifts a hanging leg toward +z (forward) for a +z-facing rider.
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(up);
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(up);
+    const turn = (bone: THREE.Object3D | undefined, axis: THREE.Vector3, ang: number) => {
+      if (!bone || !bone.parent) return;
+      const wq = bone.getWorldQuaternion(new THREE.Quaternion());
+      const target = new THREE.Quaternion().setFromAxisAngle(axis, ang).multiply(wq);
+      const pq = bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+      bone.quaternion.copy(pq.multiply(target));
+      bone.updateMatrixWorld(true);
+    };
+    for (const [side, s] of [['Left', 1], ['Right', -1]] as const) {
+      const thigh = this.char.bone(side + 'UpLeg');
+      const shin = this.char.bone(side + 'Leg');
+      // Left is +x for a +z-facing rider: spread each thigh out over the barrel.
+      turn(thigh, fwd, s * 0.55 * w);
+      turn(thigh, right, -0.7 * w);
+      turn(shin, right, 1.05 * w);
+      // The right leg swings high over the horse's back while mounting.
+      if (s < 0 && w < 1) turn(thigh, fwd, -Math.sin(Math.PI * w) * 0.9);
+    }
+    // Square the shoulders to the horse: the combat idle stance turns the torso
+    // sideways, which reads as riding side-saddle.
+    const ls = this.char.bone('LeftArm'), rs = this.char.bone('RightArm');
+    const spine = this.char.bone('Spine1') ?? this.char.bone('Spine');
+    if (ls && rs && spine) {
+      const a = ls.getWorldPosition(new THREE.Vector3()), b = rs.getWorldPosition(new THREE.Vector3());
+      const across = b.sub(a).setY(0);
+      if (across.lengthSq() > 1e-6) {
+        // Facing +z, the left shoulder sits at +x, so left->right points along -x.
+        const want = new THREE.Vector3(-1, 0, 0).applyQuaternion(up);
+        const ang = Math.atan2(across.x * want.z - across.z * want.x, across.x * want.x + across.z * want.z);
+        turn(spine, new THREE.Vector3(0, 1, 0), -ang * w);
+      }
+    }
   }
 
   /**
@@ -820,7 +1054,7 @@ export class Player {
       this.stamina -= cost;
       this.staminaDelay = 0.8;
       this.blockHitT = 0;
-      const through = att.damage * (1 - (st.block ?? 80) / 100);
+      const through = att.damage * (1 - Math.min(96, st.block ?? 80) / 100);
       const at = this.center.addScaledVector(toAtt, 0.5);
       if (this.stamina < 0) {
         this.stamina = 0;
@@ -839,7 +1073,10 @@ export class Player {
     const armor = this.equip.armorValue;
     const dmg = att.damage * (100 / (100 + armor * 5));
     this.applyDamage(dmg);
-    if (att.burn) this.burn = { dps: att.burn, left: 3 };
+    if (att.burn) {
+      const burnScale = this.prog.origin === 'dragon' ? 0.35 : 1;
+      this.burn = { dps: att.burn * burnScale, left: 3 };
+    }
     // Hyper-armour through the middle of heavy swings.
     const heavyArmor = (a?.def.id === 'heavy' || a?.def.id === 'airAttack') && a.def.hit && a.t > a.def.hit.from - 0.2 && a.t < a.def.hit.to;
     if (!this.dead && !heavyArmor && att.poise > this.equip.poise * 0.8) {
@@ -855,7 +1092,7 @@ export class Player {
     d *= this.mods.dmgTaken;
     if (this.absorb) d = this.absorb(d);
     if (d <= 0) return;
-    this.hp = Math.max(0, this.hp - d);
+    this.hp = Math.max(this.damageFloor, this.hp - d);
     if (this.hp <= 0 && this.cheatDeath?.()) {
       events.emit('playerDamaged', { amount: d, blocked: false });
       return;
@@ -868,6 +1105,10 @@ export class Player {
       this.lock = null;
       events.emit('playerDied', {});
     }
+  }
+
+  takeDamage(amount: number) {
+    this.applyDamage(amount);
   }
 
   respawn(at: THREE.Vector3) {
@@ -884,9 +1125,11 @@ export class Player {
   }
 
   private updateStats(dt: number) {
+    this.originCooldown = Math.max(0, this.originCooldown - dt);
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
     else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen + this.mods.staminaRegen) * dt);
-    this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen + this.mods.manaRegen) * dt);
+    this.mana = Math.min(this.maxMana, this.mana + MANA_REGEN * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen + this.mods.manaRegen) * dt);
+    if (this.prog.origin === 'demon' && !this.dead) this.hp = Math.min(this.maxHp, this.hp + 0.8 * dt);
     this.hp = Math.min(this.hp, this.maxHp);
     if (this.hot.left > 0 && !this.dead) {
       this.hot.left -= dt;
@@ -905,16 +1148,49 @@ export class Player {
     const st = it.def.stats;
     if (st.heal) this.hot = { rate: (st.heal * this.paths.healPower) / 1.2, left: 1.2 };
     if (st.restoreMana) this.mana = Math.min(this.maxMana, this.mana + st.restoreMana);
+    if (st.restoreStamina) this.stamina = Math.min(this.maxStamina, this.stamina + st.restoreStamina);
     this.equip.consume(uid);
     this.onSpell?.(st.heal ? 'potionHeal' : 'potionMana', this.center, this.forward, null);
   }
 
-  /** Cast a spell from the moveset bar. */
-  castMove(uid: number) {
-    const it = this.equip.get(uid);
+  /** Cast a spell item from the moves bar (class skills go through the skill runtime). */
+  useMove(ref: number) {
+    const it = this.equip.get(ref);
     if (!it || it.def.kind !== 'spell' || this.dead) return;
-    this.equip.activeSpell = uid;
+    this.equip.activeSpell = ref;
     this.buffer = { a: 'cast', t: performance.now() / 1000 };
+  }
+
+
+  private useOriginAbility() {
+    if (this.originCooldown > 0 || this.dead) return;
+    const origin = this.prog.origin;
+    if (origin === 'dragon') {
+      const f = this.forward;
+      const center = this.center;
+      for (const t of targets) {
+        if (!t.alive) continue;
+        const to = t.center.clone().sub(center).setY(0);
+        const d = to.length();
+        if (d > 6.5 || d < 0.01) continue;
+        if (to.normalize().dot(f) < 0.62) continue;
+        const dmg = Math.round(26 + this.prog.level * 2.5);
+        t.takeHit({ damage: dmg, poise: 35, dir: f.clone(), at: t.center.clone(), crit: false, source: 'melee' });
+        events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: false, enemyId: t.id });
+      }
+      this.originCooldown = 4.5;
+      events.emit('originAbility', { origin, ability: 'Dragon Breath' });
+    } else if (origin === 'demon') {
+      this.hot = { rate: Math.max(10, this.maxHp * 0.08), left: 2.5 };
+      this.stamina = Math.min(this.maxStamina, this.stamina + 30);
+      this.originCooldown = 5.5;
+      events.emit('originAbility', { origin, ability: 'Blood Awakening' });
+    } else {
+      this.mana = Math.min(this.maxMana, this.mana + 22);
+      this.stamina = Math.min(this.maxStamina, this.stamina + 22);
+      this.originCooldown = 6;
+      events.emit('originAbility', { origin, ability: 'Heroic Adaptation' });
+    }
   }
 
   /**

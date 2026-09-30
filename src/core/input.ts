@@ -6,7 +6,7 @@ export type Action =
   | 'forward' | 'back' | 'left' | 'right'
   | 'sprint' | 'dodge' | 'jump'
   | 'attack' | 'offhand' | 'parry' | 'lockOn' | 'cast'
-  | 'inventory' | 'skills' | 'help' | 'toggleBar' | 'interact' | 'map'
+  | 'inventory' | 'skills' | 'help' | 'toggleBar' | 'interact' | 'map' | 'originAbility'
   | 'slot1' | 'slot2' | 'slot3' | 'slot4' | 'slot5' | 'slot6' | 'slot7' | 'slot8';
 
 export const DEFAULT_BINDINGS: Record<Action, string[]> = {
@@ -24,6 +24,7 @@ export const DEFAULT_BINDINGS: Record<Action, string[]> = {
   toggleBar: ['Tab'],
   interact: ['KeyE'],
   map: ['KeyM'],
+  originAbility: ['KeyV'],
   cast: ['KeyR'],
   inventory: ['KeyI'],
   skills: ['KeyK'],
@@ -51,6 +52,9 @@ export class Input {
 
   constructor(private canvas: HTMLElement) {
     window.addEventListener('keydown', (e) => {
+      // Typing in a text field (the inventory search) is not playing.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
       if (e.code === 'Tab' || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
       if (e.ctrlKey || e.metaKey) return; // leave browser shortcuts alone
       this.shift = e.shiftKey;
@@ -112,6 +116,12 @@ export class Input {
     }
   }
 
+  /** Let go of every held key and button. */
+  releaseAll() {
+    for (const c of [...this.down]) this.release(c);
+    this.pressed.clear();
+  }
+
   release(code: string) {
     if (this.down.delete(code)) this.released.add(code);
   }
@@ -135,6 +145,11 @@ export class Input {
       if (this.down.has(c)) best = Math.max(best, (performance.now() - (this.pressTime.get(c) ?? 0)) / 1000);
     }
     return best;
+  }
+
+  /** Swallow a press that a UI already handled, so the next simulation step never sees it. */
+  consume(code: string) {
+    this.pressed.delete(code);
   }
 
   /** Call after each fixed simulation step. */

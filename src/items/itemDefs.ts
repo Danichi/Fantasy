@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { buildSword, buildRoundShield, buildKiteShield, buildOdachi } from './weaponModels';
 import { buildArmorPiece, type ArmorPieceId } from './armorModels';
+import { PRODUCE_ITEMS } from './produce';
+import { HERB_ITEMS, HERB_MODELS } from './herbs';
+import { FISH_ITEMS } from '../world/fishing';
 
 export type Slot =
   | 'main' | 'off'
@@ -8,7 +11,7 @@ export type Slot =
   | 'amulet' | 'ring1' | 'ring2' | 'belt' | 'trinket';
 export const ARMOR_SLOTS: Slot[] = ['head', 'shoulders', 'chest', 'cloak', 'hands', 'legs', 'feet'];
 export const ACCESSORY_SLOTS: Slot[] = ['amulet', 'ring1', 'ring2', 'belt', 'trinket'];
-export type ItemKind = 'sword' | 'shield' | 'armor' | 'accessory' | 'spell' | 'consumable' | 'key';
+export type ItemKind = 'sword' | 'shield' | 'armor' | 'accessory' | 'spell' | 'consumable' | 'key' | 'material';
 export type Rarity = 'common' | 'fine' | 'rare' | 'epic';
 
 export interface ItemStats {
@@ -21,6 +24,7 @@ export interface ItemStats {
   manaCost?: number;
   heal?: number;
   restoreMana?: number;
+  restoreStamina?: number;
   // bonuses (armour and accessories)
   maxHp?: number;
   maxStamina?: number;
@@ -160,7 +164,52 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'manaPotion', name: 'Mana Draught', kind: 'consumable', rarity: 'common', stack: true,
     desc: 'Restores 50 mana.', stats: { restoreMana: 50 },
   },
+  sungrass: {
+    id: 'sungrass', name: 'Sungrass', kind: 'consumable', rarity: 'common', stack: true,
+    desc: 'A warm prairie herb. Eating it restores a little health.', stats: { heal: 18 },
+  },
+  moongrass: {
+    id: 'moongrass', name: 'Moongrass', kind: 'consumable', rarity: 'fine', stack: true,
+    desc: 'A pale river herb that leaves a cool taste in the mouth. Restores mana.', stats: { restoreMana: 18 },
+  },
+  wildmint: {
+    id: 'wildmint', name: 'Wild Mint', kind: 'consumable', rarity: 'common', stack: true,
+    desc: 'Sharp and refreshing. Restores stamina immediately.', stats: { restoreStamina: 28 },
+  },
+  ironleaf: {
+    id: 'ironleaf', name: 'Ironleaf', kind: 'consumable', rarity: 'fine', stack: true,
+    desc: 'A tough mineral-rich leaf. Restores a modest amount of health and stamina.', stats: { heal: 12, restoreStamina: 20 },
+  },
+  greaterHealthPotion: {
+    id: 'greaterHealthPotion', name: 'Greater Health Draught', kind: 'consumable', rarity: 'fine', stack: true,
+    desc: 'A Port Aurelle distillation. Restores 130 health.', stats: { heal: 130 },
+  },
+  greaterManaPotion: {
+    id: 'greaterManaPotion', name: 'Greater Mana Draught', kind: 'consumable', rarity: 'fine', stack: true,
+    desc: 'Blue as the harbour at noon. Restores 110 mana.', stats: { restoreMana: 110 },
+  },
+  minersLantern: {
+    id: 'minersLantern', name: "Miner's Lantern", kind: 'key', rarity: 'common',
+    desc: 'A dwarven brass lantern with a shuttered flame. Required for the White Mountain expedition.', stats: {},
+    build: () => {
+      const g = new THREE.Group();
+      const brass = new THREE.MeshStandardMaterial({ color: 0xc9a25a, metalness: 0.8, roughness: 0.35 });
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.18, 8), new THREE.MeshStandardMaterial({ color: 0xffd080, emissive: 0xffa040, emissiveIntensity: 0.8 }));
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.08, 8), brass);
+      cap.position.y = 0.13;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.008, 5, 12), brass);
+      ring.position.y = 0.2;
+      g.add(body, cap, ring);
+      return g;
+    },
+  },
+  ...PRODUCE_ITEMS,
+  ...HERB_ITEMS,
+  ...FISH_ITEMS,
 };
+
+// The four original herbs use the foraging models for their icons too.
+for (const id of ['sungrass', 'moongrass', 'wildmint', 'ironleaf']) ITEMS[id].build = HERB_MODELS[id];
 
 export function buildItemModel(def: ItemDef): THREE.Object3D | null {
   if (def.build) return def.build();

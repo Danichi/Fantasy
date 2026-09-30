@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { RIG_PROFILES, detectRigFamily, type RigFamily, type RigProfile } from './rigProfile';
+import { buildCharacter, type Look } from '../npc/charBuilder';
+import { captureRest, retargetClip, MIXAMO_TO_UE } from '../anim/retarget';
 
 // ---------------------------------------------------------------------------
 // Character rig: loads the skinned model plus any animation files listed in
@@ -51,6 +55,23 @@ const FALLBACK: CharacterManifest = {
 const BONE_PREFIX = /^mixamorig\d*[:_]?/;
 export const shortBoneName = (n: string) => n.replace(BONE_PREFIX, '');
 
+/** Another body on the hero's skeleton (tools/rig-orcs.mjs), playing the hero's clips. */
+export interface BodyOptions {
+  /** absolute URL of a model skinned to the hero skeleton (default: the hero's own) */
+  model?: string;
+  /** standing height to normalise the model's bind pose to (metres); 0 keeps the file's size */
+  height?: number;
+  /** load only these clips (keys from the manifest) */
+  clips?: string[];
+}
+
+// Parsed files are shared by every character (each model instance is cloned).
+const fileCache = new Map<string, Promise<any>>();
+const loadShared = (url: string) => {
+  if (!fileCache.has(url)) fileCache.set(url, new GLTFLoader().loadAsync(url));
+  return fileCache.get(url)!;
+};
+
 export class Character {
   readonly root = new THREE.Group(); // positioned at the feet, yaw only
   readonly visual = new THREE.Group(); // procedural roll/lean/hit offsets go here
@@ -60,12 +81,23 @@ export class Character {
   clips = new Map<string, THREE.AnimationClip>();
   clipInfo = new Map<string, ClipEntry>();
   manifest!: CharacterManifest;
+  rigFamily: RigFamily = 'generic';
+  rigProfile: RigProfile = RIG_PROFILES.generic;
   usingPlaceholder = true;
   meshes: THREE.SkinnedMesh[] = [];
   /** standing hips height in metres (after height normalisation) */
   hipsHeight = 1;
+  /** built from the stylised kits (Mixamo clips are retargeted onto it) */
+  built = false;
+  private hipsTrack = 'mixamorigHips.position';
 
-  async load(base = '/assets/character/') {
+  /**
+   * `body`: another model on the hero's Mixamo skeleton (tools/rig-orcs.mjs).
+   * `look`: build the body from the stylised character kits instead; the
+   * manifest's Mixamo clips are retargeted onto it and its bones are also
+   * registered under their Mixamo names.
+   */
+  async load(base = '/assets/character/', body?: BodyOptions, look?: Look) {
     const loader = new GLTFLoader();
     let manifest = FALLBACK;
     // Dev preview: ?char=candidates/Soldier.glb swaps the model, keeping the fallback clips.
@@ -85,16 +117,22 @@ export class Character {
       for (const k of ['idle', 'walk', 'run']) clips[k] = pick(k) ? { file: override, name: pick(k), loop: true } : FALLBACK.clips[k];
       manifest = { ...FALLBACK, model: override, clips };
     }
+    if (body) manifest = { ...manifest, model: body.model ?? manifest.model, height: body.height ?? manifest.height, placeholderStyle: false };
     this.manifest = manifest;
 
-    const cache = new Map<string, Promise<any>>();
-    const get = (f: string) => {
-      if (!cache.has(f)) cache.set(f, loader.loadAsync(base + f));
-      return cache.get(f)!;
-    };
+    const get = (f: string) => loadShared(f.startsWith('/') ? f : base + f);
 
     const gltf = await get(manifest.model);
-    this.model = gltf.scene;
+    let mixamoRest: ReturnType<typeof captureRest> | null = null;
+    if (look) {
+      // The manifest model is still read for its Mixamo rest pose (the clips' source rig).
+      mixamoRest = captureRest(gltf.scene, shortBoneName);
+      const hero = await buildCharacter(look, [], { merge: false });
+      this.model = hero.model;
+      this.built = true;
+    } else {
+      this.model = SkeletonUtils.clone(gltf.scene);
+    }
     this.model.traverse((o: THREE.Object3D) => {
       if ((o as THREE.Bone).isBone) this.bones.set(shortBoneName(o.name), o as THREE.Bone);
       const m = o as THREE.SkinnedMesh;
@@ -103,6 +141,8 @@ export class Character {
         m.receiveShadow = true;
         m.frustumCulled = false; // skinned bounds are unreliable once animated
         if (m.isSkinnedMesh) this.meshes.push(m);
+        // Own materials: the parsed file is shared, and bodies get tinted or flashed.
+        if (!this.built) m.material = Array.isArray(m.material) ? m.material.map((x) => x.clone()) : m.material.clone();
         const mats = Array.isArray(m.material) ? m.material : [m.material];
         for (const mat of mats as THREE.MeshStandardMaterial[]) {
           if (mat && 'envMapIntensity' in mat) mat.envMapIntensity = 0.9;
@@ -110,15 +150,30 @@ export class Character {
       }
     });
 
-    // Normalise height so gameplay distances are in real metres.
-    this.model.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(this.model);
-    const h = box.max.y - box.min.y;
-    const target = manifest.height ?? 1.8;
-    if (h > 0.01) this.model.scale.multiplyScalar(target / h);
-    this.model.updateMatrixWorld(true);
-    const box2 = new THREE.Box3().setFromObject(this.model);
-    this.model.position.y -= box2.min.y;
+    if (this.built) {
+      // Gameplay, IK and sockets address bones by Mixamo names.
+      for (const [mix, ue] of Object.entries(MIXAMO_TO_UE)) {
+        const b = this.bones.get(ue);
+        if (b) this.bones.set(mix, b);
+      }
+      this.hipsTrack = 'pelvis.position';
+    }
+    this.rigFamily = detectRigFamily(this.bones.keys());
+    this.rigProfile = RIG_PROFILES[this.rigFamily];
+
+    // Normalise height so gameplay distances are in real metres. A body
+    // rebound onto the hero's skeleton is already in hero metres (height 0):
+    // its rest pose may be a crouch, so its bounds say nothing about its size.
+    if (body?.height !== 0) {
+      this.model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(this.model);
+      const h = box.max.y - box.min.y;
+      const target = manifest.height ?? 1.8;
+      if (h > 0.01) this.model.scale.multiplyScalar(target / h);
+      this.model.updateMatrixWorld(true);
+      const box2 = new THREE.Box3().setFromObject(this.model);
+      this.model.position.y -= box2.min.y;
+    }
 
     this.visual.add(this.model);
     this.root.add(this.visual);
@@ -126,16 +181,21 @@ export class Character {
 
     // Load every clip, remapping bone prefixes to match this model.
     const modelPrefix = this.detectPrefix(this.model);
+    if (!this.built) this.hipsTrack = `${modelPrefix}Hips.position`;
+    this.model.updateMatrixWorld(true);
     const hipsY = this.bones.get('Hips')?.getWorldPosition(new THREE.Vector3()).y ?? 1;
     this.hipsHeight = hipsY;
+    const heroRest = this.built ? captureRest(this.model) : null;
     for (const [key, entry] of Object.entries(manifest.clips)) {
+      if (body?.clips && !body.clips.includes(key)) continue;
       try {
         const g = await get(entry.file);
         const src: THREE.AnimationClip | undefined = entry.name
           ? g.animations.find((a: THREE.AnimationClip) => a.name === entry.name)
           : g.animations[0];
         if (!src) continue;
-        const clip = this.retarget(src.clone(), modelPrefix, !!entry.inPlace);
+        let clip = this.retarget(src.clone(), mixamoRest ? 'mixamorig' : modelPrefix, !!entry.inPlace);
+        if (mixamoRest && heroRest) clip = retargetClip(clip, mixamoRest, heroRest, MIXAMO_TO_UE, { srcName: shortBoneName, hips: 'pelvis' });
         clip.name = key;
         this.clips.set(key, clip);
         this.clipInfo.set(key, {
@@ -222,7 +282,8 @@ export class Character {
       if (!clip) continue;
       const c = clip.clone();
       c.name = dst;
-      const t = c.tracks.find((tr) => tr.name === `${prefix}Hips.position`);
+      const t = c.tracks.find((tr) => tr.name === this.hipsTrack);
+      void prefix;
       if (t) {
         const v = t.values;
         const y0 = v[1];
@@ -238,7 +299,14 @@ export class Character {
   }
 
   bone(name: string) {
-    return this.bones.get(name);
+    const candidates = [name, ...(this.rigProfile.aliases[name] ?? [])];
+    for (const candidate of candidates) {
+      const direct = this.bones.get(candidate);
+      if (direct) return direct;
+      const short = this.bones.get(shortBoneName(candidate));
+      if (short) return short;
+    }
+    return undefined;
   }
 
   /** Create an attachment point on a bone that ignores the rig's unit scale. */

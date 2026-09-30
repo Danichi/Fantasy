@@ -25,7 +25,12 @@ export interface GameEvents {
   pickup: { kind: 'xp' | 'gold' };
   bossSlam: { at: Vector3 };
   equipmentChanged: {};
+  originAbility: { origin: string; ability: string; };
   slimeLand: { at: Vector3; size: number };
+  mapRevealed: { cells: number };
+  regionEntered: { id: string; name: string; subtitle: string; first: boolean };
+  placeDiscovered: { id: string; name: string; kind: string };
+  questChanged: { id: string; status: 'active' | 'done' };
 }
 
 type Handler<T> = (payload: T) => void;

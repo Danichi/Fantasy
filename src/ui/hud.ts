@@ -55,7 +55,10 @@ export class HUD {
   private levelEl: HTMLDivElement;
   private boss: { hp: number; maxHp: number; alive: boolean } | null = null;
   private bossTrail = 1;
-  onSlotDrop?: (mode: 'items' | 'moves', slot: number, uid: number) => void;
+  private questEl: HTMLDivElement;
+  /** side quests shown under the main quest (set by the quest UI) */
+  sideQuestHtml = '';
+  onSlotDrop?: (mode: 'items' | 'moves', slot: number, ref: number | string) => void;
   /** class skills on the moves bar: how to draw one, and its live cooldown (0..1) */
   skillSlot?: (ref: string) => { svg: string; name: string; cost: string; cd: number; ready: boolean } | null;
   /** the active class's resource (Flow pips, Resolve bar) */
@@ -107,8 +110,12 @@ export class HUD {
       s.addEventListener('drop', (e) => {
         e.preventDefault();
         s.classList.remove('dragover');
-        const uid = Number(e.dataTransfer?.getData('text/uid'));
-        if (uid) this.onSlotDrop?.(this.mode, i, uid);
+        const move = e.dataTransfer?.getData('text/move');
+        if (move) this.onSlotDrop?.(this.mode, i, move);
+        else {
+          const uid = Number(e.dataTransfer?.getData('text/uid'));
+          if (uid) this.onSlotDrop?.(this.mode, i, uid);
+        }
       });
       this.slots.push(s);
     }
@@ -128,6 +135,7 @@ export class HUD {
       this.levelEl.classList.add('show');
     });
     el('div', 'hint', this.root, '<b>I</b> inventory &nbsp;·&nbsp; <b>K</b> skills &nbsp;·&nbsp; <b>H</b> controls');
+    this.questEl = el('div', 'quest-tracker', this.root);
 
     events.on('equipmentChanged', () => (this.hotbarDirty = true));
     events.on('notEnough', ({ stat }) => {
@@ -145,6 +153,7 @@ export class HUD {
       requestAnimationFrame(() => requestAnimationFrame(() => this.vignette.classList.remove('hurt')));
     });
     events.on('playerDied', () => this.death.classList.add('show'));
+    events.on('originAbility', ({ ability }) => this.showBanner(ability.toUpperCase()));
     events.on('playerRespawned', () => this.death.classList.remove('show'));
   }
 
@@ -190,6 +199,24 @@ export class HUD {
     this.toastT = 1.4;
   }
 
+  private regionCardEl: HTMLDivElement | null = null;
+  /** Big painted region title when the player enters a region (smaller on re-entry). */
+  regionCard(name: string, subtitle: string, first: boolean) {
+    if (!this.regionCardEl) {
+      this.regionCardEl = document.createElement('div');
+      this.regionCardEl.className = 'region-card';
+      this.root.appendChild(this.regionCardEl);
+    }
+    const el = this.regionCardEl;
+    el.innerHTML = `<div class="rc-name"></div><div class="rc-rule"></div><div class="rc-sub"></div>`;
+    el.querySelector('.rc-name')!.textContent = name;
+    el.querySelector('.rc-sub')!.textContent = subtitle;
+    el.classList.toggle('quiet', !first);
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  }
+
   showBanner(text: string) {
     this.banner.textContent = text;
     this.banner.classList.remove('show');
@@ -233,25 +260,26 @@ export class HUD {
     this.barTitle.innerHTML = `<span class="${moves ? '' : 'on'}">ITEMS</span><span class="${moves ? 'on' : ''}">MOVES</span><kbd>Tab</kbd>`;
     const list = moves ? eq.moves : eq.quick;
     this.slots.forEach((s, i) => {
-      const uid = list[i];
+      const ref = list[i];
       s.className = 'slot interactive' + (moves ? ' move' : '') + (i >= list.length ? ' hidden' : '');
       s.innerHTML = `<span class="key">${i + 1}</span><i class="cd"></i>`;
       s.title = '';
-      if (typeof uid === 'string') {
-        const sk = this.skillSlot?.(uid);
+      if (ref == null) return;
+      if (typeof ref === 'string') {
+        const sk = this.skillSlot?.(ref);
         if (!sk) return;
         s.classList.add('skill');
         s.innerHTML += `${sk.svg}<span class="cost">${sk.cost}</span>`;
         s.title = sk.name;
         return;
       }
-      const it = eq.get(uid);
+      const it = eq.get(ref);
       if (!it) return;
       s.innerHTML += `<img src="${iconFor(it.def.id)}" alt="">`;
       if (it.def.stack) s.innerHTML += `<span class="qty">${it.qty}</span>`;
       if (it.def.stats.manaCost) s.innerHTML += `<span class="cost">${it.def.stats.manaCost}</span>`;
       s.title = it.def.name;
-      if (moves && uid === eq.activeSpell) s.classList.add('spell');
+      if (moves && ref === eq.activeSpell) s.classList.add('spell');
     });
   }
 
@@ -306,6 +334,9 @@ export class HUD {
       else (this.resEl.querySelector('.rbar i') as HTMLElement).style.transform = `scaleX(${res.value / res.max})`;
     }
     const pr = p.prog;
+    // The tracked quest (the old "study the three schools" starter quest is gone:
+    // classes are learned from mentors and levelled on the Skills screen).
+    this.questEl.innerHTML = this.sideQuestHtml;
     // XP is spent, not auto-levelled: the bar fills towards the active class's next level.
     const need = p.paths.nextCost(p.paths.active);
     const ready = pr.xp >= need;

@@ -37,7 +37,7 @@ const FINAL_FRAG = /* glsl */ `
   uniform sampler2D tColor, tDepth, tBloom, tNoise;
   uniform mat4 uProjInv, uCamWorld;
   uniform vec3 uCamPos, uSunDir, uSunColor, uHazeColor;
-  uniform float uNear, uFar, uTime, uExposure, uBloom, uHaze, uClouds;
+  uniform float uNear, uFar, uTime, uExposure, uBloom, uHaze, uClouds, uMist;
   varying vec2 vUv;
 
   vec3 aces(vec3 x) {
@@ -66,7 +66,7 @@ const FINAL_FRAG = /* glsl */ `
       vec2 cp = wp.xz * 0.0045 + vec2(uTime * 0.006, uTime * 0.0025);
       float c = noise2(cp) * 0.65 + noise2(cp * 2.3 + 0.37) * 0.35;
       float shade = smoothstep(0.48, 0.72, c);
-      col *= mix(1.0, 0.68, shade * uClouds);
+      col *= mix(1.0, 0.78, shade * uClouds);
     }
 
     // Aerial perspective: exponential haze thinning with altitude, warmer
@@ -83,26 +83,31 @@ const FINAL_FRAG = /* glsl */ `
         ? uHaze * exp(-k * camH) * (1.0 - exp(-k * dy)) / (k * ray.y)
         : uHaze * exp(-k * camH) * dist;
       float f = 1.0 - exp(-max(amount, 0.0));
-      col = mix(col, haze, clamp(f, 0.0, 0.9));
+      // Distant land also loses saturation into the haze (aerial perspective).
+      float farL = dot(col, vec3(0.3, 0.55, 0.15));
+      col = mix(col, vec3(farL), smoothstep(80.0, 900.0, dist) * 0.35);
+      // uMist (the Gravewood's cursed fog) lets the haze swallow everything.
+      col = mix(col, haze, clamp(f, 0.0, mix(0.92, 0.995, uMist)));
     } else {
       // Soft horizon haze on the sky itself.
       float horizon = 1.0 - smoothstep(0.0, 0.22, ray.y);
       col = mix(col, haze * 1.05, horizon * 0.55);
+      col = mix(col, haze, uMist);
     }
 
     col += texture2D(tBloom, vUv).rgb * uBloom;
     col = aces(col * uExposure);
 
-    // Warm, rich grade: gentle S-curve, lifted warm highlights, cool shadows,
-    // extra saturation in the mids (greens and sky stay vivid).
+    // Map-palette grade (docs/ART-DIRECTION.md §2): deep, saturated, luminous.
     float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    col = mix(vec3(luma), col, 1.16);
-    col = mix(col, col * vec3(1.05, 1.0, 0.92), smoothstep(0.35, 1.0, luma));
-    col = mix(col, col * vec3(0.94, 0.98, 1.06), 1.0 - smoothstep(0.0, 0.35, luma));
-    col = col * col * (3.0 - 2.0 * col) * 0.35 + col * 0.65;
+    // Luminous rather than loud: gentle saturation, warm light, cool shade.
+    col = mix(vec3(luma), col, 1.12);
+    col = mix(col, col * vec3(1.025, 1.01, 0.975), smoothstep(0.35, 1.0, luma));
+    col = mix(col, col * vec3(0.93, 0.99, 1.07), 1.0 - smoothstep(0.0, 0.4, luma));
+    col = col * col * (3.0 - 2.0 * col) * 0.3 + col * 0.7;
     // Vignette.
     vec2 q = vUv - 0.5;
-    col *= 1.0 - dot(q, q) * 0.55;
+    col *= 1.0 - dot(q, q) * 0.28;
     gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
   }`;
 
@@ -166,9 +171,9 @@ export class Post {
         tColor: { value: null }, tDepth: { value: null }, tBloom: { value: null }, tNoise: { value: noiseTexture() },
         uProjInv: { value: new THREE.Matrix4() }, uCamWorld: { value: new THREE.Matrix4() },
         uCamPos: { value: new THREE.Vector3() }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
-        uSunColor: { value: new THREE.Color(1.0, 0.86, 0.62) }, uHazeColor: { value: new THREE.Color(0.66, 0.77, 0.9) },
+        uSunColor: { value: new THREE.Color(1.0, 0.93, 0.78) }, uHazeColor: { value: new THREE.Color(0.72, 0.86, 0.96) },
         uNear: { value: 0.1 }, uFar: { value: 900 }, uTime: { value: 0 },
-        uExposure: { value: 1.0 }, uBloom: { value: 0.5 }, uHaze: { value: 0.0012 }, uClouds: { value: 1.0 },
+        uExposure: { value: 1.0 }, uBloom: { value: 0.28 }, uHaze: { value: 0.00072 }, uClouds: { value: 0.85 }, uMist: { value: 0 },
       },
       depthTest: false,
       depthWrite: false,

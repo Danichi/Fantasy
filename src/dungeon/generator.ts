@@ -155,7 +155,7 @@ export function generateFloor(seed: number, floor: 1 | 2): FloorLayout {
   const same = (i1: number, j1: number, i2: number, j2: number) => region[j1 * w + i1] === region[j2 * w + i2];
 
   // 4. Loops: knock through some walls between cells of the same region.
-  const loopChance = floor === 1 ? 0.07 : 0.09;
+  const loopChance = floor === 1 ? 0.18 : 0.22;
   for (let j = 0; j < h; j++) {
     for (let i = 0; i < w; i++) {
       for (const [d, dx, dy] of DIRS.slice(1, 3)) {
@@ -167,7 +167,7 @@ export function generateFloor(seed: number, floor: 1 | 2): FloorLayout {
   }
 
   // 5. Small rooms (2x2 / 3x2), each entirely inside one region.
-  const nRooms = floor === 1 ? 3 : 2;
+  const nRooms = floor === 1 ? 5 : 4;
   for (let tries = 0; rooms.length < nRooms + (floor === 2 ? 1 : 0) && tries < 60; tries++) {
     const rw = 2 + Math.floor(rnd() * 2), rh = 2;
     const rx = Math.floor(rnd() * (w - rw)), ry = Math.floor(rnd() * (h - rh - 1));
@@ -181,6 +181,21 @@ export function generateFloor(seed: number, floor: 1 | 2): FloorLayout {
     }
     rooms.push({ x: rx, y: ry, w: rw, h: rh });
   }
+  // 5b. Open the layout into broader avenues. The old recursive maze remains
+  // deterministic, but several safe same-region walls are removed to create
+  // readable rooms and intersections instead of constant 90-degree turns.
+  for (let pass = 0; pass < 2; pass++) {
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const degree = g.openSides(i, j);
+      if (degree >= 3) continue;
+      for (const [d, dx, dy] of DIRS.slice(2, 4)) {
+        const ni = i + dx, nj = j + dy;
+        if (!g.in(ni, nj) || !g.wall(i, j, d) || !same(i, j, ni, nj)) continue;
+        if (rnd() < 0.34) g.set(i, j, d, 0);
+      }
+    }
+  }
+
   // Keep the gate shut in the wall data (it's a door in an open edge, handled by the kit).
 
   // 6. Dead ends: key (farthest in region 0), chests.

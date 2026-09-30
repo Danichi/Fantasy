@@ -64,6 +64,18 @@ The crypt entrance is at the end of the north road, in the hills. Inside:
 
 You map the dungeon yourself: the minimap only shows where you are and which way you face. Press **M** to draw. Enemies drop XP and gold. XP is a currency: press **K** to invest it in your classes and callings, open each one's skill tree, and spend attribute points. Mentors in town teach new classes, switch your active combat class, and reset a class for 75% of its XP. Progress, gear and your maps save to the browser automatically.
 
+## The Gravewood (overworld graveyard)
+
+South-west of Elder Glen, a dead, fog-bound wood: take the Logging Road west out of town and turn south at the "The Gravewood (danger)" signpost onto the Gravewood Trail. At its heart is a walled graveyard.
+
+- Walk through the gate and it slams shut. A wall of smoke rises around the graveyard, both maps fog over and you can't leave.
+- About 20 seconds later the dead start clawing out of their graves: zombies and skeleton warriors, in three waves. A cold light heals you a little between waves.
+- In the third wave the Stitched Abomination climbs out of the pit in the middle and roars. It fights like Grukk without the bow: cleaves, sweeps, combos, leaps and kicks.
+- Die and you wake at the gate with everything reset; walk back in to try again.
+- Win and a beam of light breaks the curse: the fog clears, the gate opens and an old stone doorway rises out of the ground (it does nothing yet). The graveyard stays cleared.
+
+Code: `src/world/gravewood.ts` (the place and the trap), `src/enemies/undead.ts` (zombies and skeletons), `src/audio/sfx.ts` (synthesised roar, gate slam, rumbles, groans). Aimed at about level 2–4.
+
 ## Layout
 
 ```
@@ -86,6 +98,10 @@ tools/
   import-mixamo.mjs    FBX -> GLB, root-motion extraction, manifest
   fetch-polyhaven.mjs  download CC0 textures/models
   optimize-props.mjs   simplify Poly Haven photoscans to game budgets
+  prep-models.mjs      shrink downloaded Sketchfab models (triangles, WebP textures)
+  rig-orcs.mjs         skin static models (orcs, the abomination) onto the hero
+                       skeleton, or rebind an already-rigged one (the zombie), so
+                       they play the hero's mocap clips (run prep-models first)
   shot.mjs, poses.mjs  screenshot + pose contact-sheet helpers
 tests/smoke.spec.ts    Playwright end-to-end checks
 ```

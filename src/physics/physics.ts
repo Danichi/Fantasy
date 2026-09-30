@@ -56,6 +56,26 @@ export class Physics {
     );
   }
 
+  /**
+   * Terrain heightfield centred at `center`, spanning sizeX x sizeZ metres.
+   * `heights` is (rows+1) x (cols+1) samples in column-major order: the sample
+   * for column c (along +X) and row r (along +Z) is heights[c * (rows + 1) + r].
+   */
+  addHeightfield(center: THREE.Vector3, rows: number, cols: number, heights: Float32Array, sizeX: number, sizeZ: number) {
+    const b = this.fixedBody(center);
+    return this.world.createCollider(
+      RAPIER.ColliderDesc.heightfield(rows, cols, heights, { x: sizeX, y: 1, z: sizeZ }).setCollisionGroups(groups(G_STATIC, 0xffff)),
+      b,
+    );
+  }
+
+  /** Remove a static collider and the fixed body it was created on. */
+  removeStatic(c: RAPIER.Collider) {
+    const body = c.parent();
+    this.world.removeCollider(c, false);
+    if (body) this.world.removeRigidBody(body);
+  }
+
   /** Ray against static geometry. Returns hit distance or null. */
   castRay(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number, filterGroups = STATIC_ONLY): number | null {
     const ray = new RAPIER.Ray(origin, dir);

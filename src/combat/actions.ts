@@ -35,8 +35,52 @@ export interface ActionDef {
   startAt?: number;
   /** airborne action: gravity keeps acting; lands with a shockwave */
   air?: boolean;
+  /** procedural flourishes layered over the clip (skills): see Flair */
+  flair?: Flair[];
   /** timing for the real Mixamo clip (measured from the clip), replacing the procedural timing */
   clipTiming?: Partial<Omit<ActionDef, 'id' | 'clip' | 'proc' | 'clipTiming'>> & { speed?: number };
+}
+
+/**
+ * A flourish over [from, to] (action seconds):
+ *  - spin: `amt` extra whole turns of the body (whirlwinds);
+ *  - lean: spine pitch in radians (+ forward into a dash, - arching back);
+ *  - hop: the body lifts `amt` metres on an arc (leaps into a slam, levitating casts);
+ *  - crouch: hips drop `amt` metres (wind-ups, landings);
+ *  - bank: roll the body `amt` radians (carving through a turn).
+ * Lean, crouch and bank ease in over the first quarter and out over the last.
+ */
+export interface Flair {
+  kind: 'spin' | 'lean' | 'hop' | 'crouch' | 'bank';
+  from: number;
+  to: number;
+  amt: number;
+}
+
+/** The summed flourishes at action time `at`. */
+export function flairAt(list: Flair[] | undefined, at: number) {
+  const out = { spin: 0, lean: 0, hop: 0, crouch: 0, bank: 0 };
+  if (!list) return out;
+  for (const f of list) {
+    if (at <= f.from) continue;
+    const len = Math.max(1e-3, f.to - f.from);
+    const u = Math.min(1, (at - f.from) / len);
+    if (f.kind === 'spin') {
+      // Whole turns, easing in and out so the body settles facing forward.
+      out.spin += f.amt * Math.PI * 2 * (u * u * (3 - 2 * u));
+      continue;
+    }
+    if (at >= f.to) continue;
+    if (f.kind === 'hop') {
+      out.hop += f.amt * Math.sin(Math.PI * u);
+      continue;
+    }
+    const q = 0.25;
+    const env = Math.min(1, u / q) * Math.min(1, (1 - u) / q);
+    const e = env * env * (3 - 2 * env);
+    out[f.kind] += f.amt * e;
+  }
+  return out;
 }
 
 /** The effective definition: real-clip timing when that clip is loaded. */
@@ -245,9 +289,10 @@ export const ACTIONS: Record<string, ActionDef> = {
   roll: {
     id: 'roll', dur: 0.78, stamina: 18, clip: 'roll',
     iframes: [0.06, 0.46], roll: { dist: 4.6 }, cancel: 0.62, track: 0.02,
-    // Mixamo "Stand To Roll" (2.33 s): skip the wind-up, play fast, stop once up.
-    // Times here are clip seconds; at 1.8x the whole dodge takes ~1 s.
-    clipTiming: { startAt: 0.22, dur: 1.95, speed: 1.8, iframes: [0.3, 1.25], cancel: 1.6, track: 0.3 },
+    // Mixamo "Stand To Roll" (2.33 s), played whole at 1.8x (~1.3 s) so the
+    // wind-up and the get-up stay smooth. Times here are clip seconds; you can
+    // still act from 1.6 s, before the get-up finishes.
+    clipTiming: { dur: 2.33, speed: 1.8, iframes: [0.3, 1.25], cancel: 1.6, track: 0.3 },
   },
   backstep: {
     id: 'backstep', dur: 0.5, stamina: 12, clip: 'backstep',
@@ -280,5 +325,36 @@ export const ACTIONS: Record<string, ActionDef> = {
   },
 };
 
+Object.assign(ACTIONS, {
+  swordsmanLunge: { ...ACTIONS.slash3, id: 'swordsmanLunge', stamina: 18, hit: { from: 0.42, to: 0.62, dmg: 1.65, poise: 42, hand: 'main' }, move: { dist: 1.75, from: 0.2, to: 0.62 }, track: 0.55 },
+  swordsmanRising: { ...ACTIONS.slash2, id: 'swordsmanRising', stamina: 16, hit: { from: 0.34, to: 0.52, dmg: 1.85, poise: 52, hand: 'main' }, move: { dist: 0.9, from: 0.22, to: 0.54 }, track: 0.48 },
+  swordsmanCrosscut: { ...ACTIONS.slash1, id: 'swordsmanCrosscut', stamina: 17, hit: { from: 0.32, to: 0.5, dmg: 1.55, poise: 30, hand: 'main' }, move: { dist: 0.65, from: 0.22, to: 0.5 }, track: 0.4 },
+  swordsmanExecutioner: { ...ACTIONS.heavy, id: 'swordsmanExecutioner', dur: 1.65, stamina: 30, hit: { from: 0.88, to: 1.16, dmg: 3.15, poise: 92, hand: 'main' }, move: { dist: 1.2, from: 0.72, to: 1.14 }, track: 0.95 },
+  swordsmanTempest: { ...ACTIONS.sprintAttack, id: 'swordsmanTempest', dur: 1.25, stamina: 24, hit: { from: 0.44, to: 0.72, dmg: 2.15, poise: 58, hand: 'main' }, move: { dist: 2.8, from: 0.04, to: 0.72 }, track: 0.32 },
+  bulwarkBreaker: { ...ACTIONS.heavy, id: 'bulwarkBreaker', dur: 1.72, stamina: 30, hit: { from: 0.92, to: 1.2, dmg: 2.65, poise: 110, hand: 'main' }, move: { dist: 0.9, from: 0.78, to: 1.2 }, track: 1.0 },
+  bulwarkCharge: { ...ACTIONS.sprintAttack, id: 'bulwarkCharge', dur: 1.35, stamina: 24, hit: { from: 0.46, to: 0.75, dmg: 2.25, poise: 82, hand: 'main' }, move: { dist: 3, from: 0.04, to: 0.74 }, track: 0.34 },
+  bulwarkCounter: { ...ACTIONS.slash3, id: 'bulwarkCounter', stamina: 20, hit: { from: 0.5, to: 0.72, dmg: 2.05, poise: 118, hand: 'main' }, move: { dist: 0.55, from: 0.38, to: 0.72 }, track: 0.6 },
+  bulwarkCrush: { ...ACTIONS.heavy, id: 'bulwarkCrush', dur: 1.82, stamina: 34, hit: { from: 0.98, to: 1.28, dmg: 3.35, poise: 128, hand: 'main' }, move: { dist: 0.75, from: 0.82, to: 1.28 }, track: 1.05 },
+  bulwarkAdvance: { ...ACTIONS.sprintAttack, id: 'bulwarkAdvance', dur: 1.4, stamina: 28, hit: { from: 0.5, to: 0.82, dmg: 2.85, poise: 140, hand: 'main' }, move: { dist: 2.5, from: 0.05, to: 0.8 }, track: 0.38 },
+});
+
+Object.assign(ACTIONS, {
+  galeStep: { ...ACTIONS.slash1, id: 'galeStep', dur: 0.72, stamina: 11, hit: { from: 0.28, to: 0.44, dmg: 1.05, poise: 18, hand: 'main' }, move: { dist: 0.95, from: 0.12, to: 0.46 }, track: 0.38 },
+  galeRush: { ...ACTIONS.slash2, id: 'galeRush', dur: 0.76, stamina: 12, hit: { from: 0.26, to: 0.46, dmg: 1.1, poise: 20, hand: 'main' }, move: { dist: 1.2, from: 0.1, to: 0.5 }, track: 0.36 },
+  galeCrosswind: { ...ACTIONS.slash3, id: 'galeCrosswind', dur: 0.9, stamina: 14, hit: { from: 0.36, to: 0.58, dmg: 1.3, poise: 26, hand: 'main' }, move: { dist: 0.8, from: 0.25, to: 0.62 }, track: 0.46 },
+  galeFinish: { ...ACTIONS.heavy, id: 'galeFinish', dur: 1.32, stamina: 24, hit: { from: 0.72, to: 0.98, dmg: 2.6, poise: 70, hand: 'main' }, move: { dist: 1.0, from: 0.62, to: 1.02 }, track: 0.78 },
+  galeTempest: { ...ACTIONS.sprintAttack, id: 'galeTempest', dur: 1.05, stamina: 19, hit: { from: 0.36, to: 0.68, dmg: 2.0, poise: 44, hand: 'main' }, move: { dist: 2.4, from: 0.03, to: 0.7 }, track: 0.34 },
+
+  boundaryPulse: { ...ACTIONS.slash3, id: 'boundaryPulse', dur: 0.95, stamina: 15, hit: { from: 0.38, to: 0.62, dmg: 1.4, poise: 64, hand: 'main' }, move: { dist: 0.2, from: 0.35, to: 0.62 }, track: 0.52 },
+  boundaryCounter: { ...ACTIONS.heavy, id: 'boundaryCounter', dur: 1.4, stamina: 22, hit: { from: 0.78, to: 1.04, dmg: 2.55, poise: 92, hand: 'main' }, move: { dist: 0.75, from: 0.66, to: 1.08 }, track: 0.86 },
+
+  crossParry: { ...ACTIONS.parryDual, id: 'crossParry', dur: 0.66, stamina: 9, parry: [0.05, 0.34], cancel: 0.45, track: 0.12 },
+  crossLunge: { ...ACTIONS.slash1, id: 'crossLunge', dur: 0.78, stamina: 13, hit: { from: 0.28, to: 0.48, dmg: 1.5, poise: 42, hand: 'main' }, move: { dist: 1.3, from: 0.12, to: 0.52 }, track: 0.4 },
+  crossFeint: { ...ACTIONS.slash2, id: 'crossFeint', dur: 0.75, stamina: 12, hit: { from: 0.25, to: 0.46, dmg: 1.3, poise: 34, hand: 'main' }, move: { dist: 0.7, from: 0.1, to: 0.5 }, track: 0.34 },
+  crossExecution: { ...ACTIONS.heavy, id: 'crossExecution', dur: 1.45, stamina: 25, hit: { from: 0.8, to: 1.08, dmg: 2.9, poise: 96, hand: 'main' }, move: { dist: 0.95, from: 0.64, to: 1.1 }, track: 0.9 },
+  crossMaster: { ...ACTIONS.sprintAttack, id: 'crossMaster', dur: 1.0, stamina: 18, hit: { from: 0.34, to: 0.62, dmg: 2.1, poise: 68, hand: 'main' }, move: { dist: 1.9, from: 0.04, to: 0.68 }, track: 0.32 },
+});
+
 export const LIGHT_COMBO_START = 'slash1';
 export const OFF_COMBO_START = 'offslash1';
+
