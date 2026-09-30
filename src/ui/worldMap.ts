@@ -13,9 +13,18 @@ import type { Discovery } from '../world/discovery';
 export interface MapMarker {
   x: number;
   z: number;
-  kind: 'quest' | 'pin';
+  /** quest: an objective; offer: someone with a quest for you; pin: your own */
+  kind: 'quest' | 'offer' | 'pin';
   label?: string;
+  /** the tracked quest's objective (drawn larger, with a ring) */
+  tracked?: boolean;
 }
+
+const MARK_STYLE: Record<MapMarker['kind'], { glyph: string; color: string }> = {
+  quest: { glyph: '❗', color: '#ffd76a' },
+  offer: { glyph: '!', color: '#ffe9a8' },
+  pin: { glyph: '⚑', color: '#ff7ad9' },
+};
 
 const KIND_ICON: Record<string, { color: string; glyph: string }> = {
   town: { color: '#f2c14e', glyph: '◉' },
@@ -159,10 +168,22 @@ export class WorldMapUI {
     return inside;
   }
 
+  /** Centre the map on a world point (the journal's "Show on map"). */
+  focus(x: number, z: number) {
+    const p = worldToPx(x, z);
+    this.pan.set(p.x, p.y);
+    this.zoom = 2.6;
+    this.focused = true;
+  }
+  private focused = false;
+
   toggle(open = !this.open) {
     this.open = open;
     this.el.classList.toggle('hidden', !open);
-    if (open) {
+    if (open && this.focused) {
+      this.focused = false;
+      this.resize();
+    } else if (open) {
       const p = worldToPx(this.player.x, this.player.z);
       this.pan.set(p.x, p.y);
       this.zoom = 2.2;
@@ -297,16 +318,37 @@ export class WorldMapUI {
         g.fillText(l.name, p.x, p.y + 22);
       }
     }
-    // Quest markers and pins.
-    for (const m of [...this.questMarkers(), ...this.pins]) {
+    // Quest objectives, quest givers and pins (the tracked objective on top, ringed).
+    const marks = [...this.questMarkers(), ...this.pins].sort((a, b) => Number(!!a.tracked) - Number(!!b.tracked));
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 280);
+    for (const m of marks) {
       const p = this.mapToScreen(m.x / 14.8 + 620, m.z / 14.8 + 445);
-      g.font = '18px serif';
-      g.fillStyle = m.kind === 'quest' ? '#ffd76a' : '#ff7ad9';
+      const st = MARK_STYLE[m.kind];
+      if (m.tracked) {
+        g.beginPath();
+        g.arc(p.x, p.y, 13 + pulse * 5, 0, Math.PI * 2);
+        g.strokeStyle = `rgba(255, 215, 106, ${0.9 - pulse * 0.5})`;
+        g.lineWidth = 2.5;
+        g.stroke();
+      } else if (m.kind === 'offer') {
+        g.beginPath();
+        g.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        g.fillStyle = 'rgba(40, 28, 6, 0.85)';
+        g.fill();
+      }
+      g.font = m.tracked ? 'bold 22px serif' : m.kind === 'offer' ? 'bold 13px serif' : '17px serif';
+      g.fillStyle = st.color;
       g.strokeStyle = 'rgba(0,0,0,0.75)';
       g.lineWidth = 3;
-      const glyph = m.kind === 'quest' ? '❗' : '⚑';
-      g.strokeText(glyph, p.x, p.y + 6);
-      g.fillText(glyph, p.x, p.y + 6);
+      g.strokeText(st.glyph, p.x, p.y + (m.kind === 'offer' ? 5 : 6));
+      g.fillText(st.glyph, p.x, p.y + (m.kind === 'offer' ? 5 : 6));
+      if (m.tracked && m.label) {
+        g.font = '600 12px Inter, sans-serif';
+        g.lineWidth = 4;
+        g.strokeText(m.label, p.x, p.y + 30);
+        g.fillStyle = '#fff4d8';
+        g.fillText(m.label, p.x, p.y + 30);
+      }
     }
     // The player.
     const pp = worldToPx(this.player.x, this.player.z);
@@ -409,16 +451,18 @@ export class WorldMapUI {
     }
     for (const m of this.questMarkers()) {
       let sx = S / 2 + (m.x - this.player.x) * pxPerM, sy = S / 2 + (m.z - this.player.z) * pxPerM;
-      // Off-map quests pin to the rim.
+      // Off-map objectives pin to the rim (quest givers only show when close).
       const d = Math.hypot(sx - S / 2, sy - S / 2);
       if (d > S / 2 - 10) {
+        if (m.kind === 'offer') continue;
         sx = S / 2 + ((sx - S / 2) / d) * (S / 2 - 10);
         sy = S / 2 + ((sy - S / 2) / d) * (S / 2 - 10);
       }
-      g.font = '15px serif';
-      g.fillStyle = '#ffd76a';
-      g.strokeText('❗', sx, sy + 5);
-      g.fillText('❗', sx, sy + 5);
+      const st = MARK_STYLE[m.kind];
+      g.font = m.tracked ? 'bold 18px serif' : m.kind === 'offer' ? 'bold 12px serif' : '14px serif';
+      g.fillStyle = st.color;
+      g.strokeText(st.glyph, sx, sy + 5);
+      g.fillText(st.glyph, sx, sy + 5);
     }
     // Player arrow.
     g.translate(S / 2, S / 2);

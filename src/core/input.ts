@@ -52,6 +52,9 @@ export class Input {
 
   constructor(private canvas: HTMLElement) {
     window.addEventListener('keydown', (e) => {
+      // Typing in a text field (the inventory search) is not playing.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
       if (e.code === 'Tab' || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
       if (e.ctrlKey || e.metaKey) return; // leave browser shortcuts alone
       this.shift = e.shiftKey;

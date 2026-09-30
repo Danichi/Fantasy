@@ -43,24 +43,30 @@ test('fishing: cast, strike, reel, sell the catch by weight', async ({ game }) =
     g.player.teleport(spot.pos.clone().setY(spot.pos.y + 0.3));
     g.player.equip.add('fishingRod', 1);
     await new Promise((r) => setTimeout(r, 1500));
-    f.start(spot);
     const key = (code: string, type = 'keydown') => window.dispatchEvent(new KeyboardEvent(type, { code }));
-    await new Promise((r) => setTimeout(r, 900));
-    key('KeyE'); // cast
-    const castPhase = f.phase;
-    // Drive the minigame on its own clock (a synchronous loop: no frames run in
-    // between), so it plays the same however slowly the page renders.
-    for (let i = 0; i < 4000 && f.phase !== 'bite'; i++) f.update(0.05);
-    const bit = f.phase === 'bite';
-    key('KeyE'); // strike
-    // Reel in bursts, easing off when the line strains.
-    for (let i = 0; i < 4000 && f.phase === 'reel'; i++) {
-      f['reeling'] = f['tension'] < 0.6;
-      f.update(0.05);
+    const weight = () => Object.values(f.held as Record<string, number>).reduce((a, b) => a + b, 0);
+    let castPhase = '', bit = false, landed = false;
+    // Some catches are junk (an old boot sells for nothing): fish until something sellable bites.
+    for (let attempt = 0; attempt < 5 && weight() === 0; attempt++) {
+      if (f.active) f.stop();
+      f.start(spot);
+      await new Promise((r) => setTimeout(r, 900));
+      key('KeyE'); // cast
+      castPhase = f.phase;
+      // Drive the minigame on its own clock (a synchronous loop: no frames run in
+      // between), so it plays the same however slowly the page renders.
+      for (let i = 0; i < 4000 && f.phase !== 'bite'; i++) f.update(0.05);
+      bit = f.phase === 'bite';
+      key('KeyE'); // strike
+      // Reel in bursts, easing off when the line strains.
+      for (let i = 0; i < 4000 && f.phase === 'reel'; i++) {
+        f['reeling'] = f['tension'] < 0.6;
+        f.update(0.05);
+      }
+      f['reeling'] = false;
+      landed = f.phase === 'done';
     }
-    f['reeling'] = false;
-    const landed = f.phase === 'done';
-    const held = Object.values(f.held as Record<string, number>).reduce((a, b) => a + b, 0);
+    const held = weight();
     const gold0 = g.player.prog.gold;
     const sell = g.sellFish();
     return { castPhase, bit, landed, held, sold: g.player.prog.gold - gold0, sell };

@@ -52,6 +52,7 @@ import { buildGlenLandmarks, LANDMARK_CLEARINGS } from './world/glenLandmarks';
 import { QuestLog } from './quests/questLog';
 import { setupElderGlenQuests } from './quests/elderGlenQuests';
 import { QuestUI } from './ui/questUI';
+import { MenuBook } from './ui/menuBook';
 import { glenNamedFolk } from './npc/glenNamed';
 import { ITEMS } from './items/itemDefs';
 import { buildGlenDressing, MARKET_SPOTS, NOTICEBOARD, WELL } from './world/glenDressing';
@@ -627,6 +628,22 @@ async function boot() {
     const f = npcs.find(id);
     return f && !f.hidden ? f.pos.clone().setY(f.pos.y + (f.rec.look.height ?? 1.75)) : null;
   }, () => questNpcIds);
+  // The book: the menus as tabbed pages, opened from the corner button or their keys.
+  const book = new MenuBook([
+    { id: 'inventory', label: 'Inventory', key: 'I', isOpen: () => inv.open, open: () => inv.toggle(true), close: () => inv.toggle(false) },
+    { id: 'skills', label: 'Skills', key: 'K', isOpen: () => skills.open, open: () => skills.toggle(true), close: () => skills.toggle(false) },
+    { id: 'journal', label: 'Journal', key: 'J', isOpen: () => questUI.open, open: () => questUI.toggle(true), close: () => questUI.toggle(false) },
+    {
+      id: 'map', label: 'Map', key: 'M',
+      isOpen: () => worldMap.open || mapUI.open,
+      open: () => (realm.mode === 'dungeon' ? mapUI.toggle(true) : worldMap.toggle(true)),
+      close: () => (worldMap.open ? worldMap.toggle(false) : mapUI.toggle(false)),
+    },
+  ]);
+  questUI.onShowOnMap = (x, z) => {
+    worldMap.focus(x, z);
+    book.show('map');
+  };
   questUI.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open || dialogue.open;
     if (open) input.exitLock();
@@ -660,7 +677,18 @@ async function boot() {
   const discovery = new Discovery();
   if (saveData) discovery.fromJSON(saveData.world?.discovery);
   const worldMap = new WorldMapUI(discovery);
-  worldMap.questMarkers = () => quests.markers().map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label }));
+  worldMap.questMarkers = () => {
+    const tracked = quests.tracked ?? quests.active()[0]?.id;
+    const out: { x: number; z: number; kind: 'quest' | 'offer'; label?: string; tracked?: boolean }[] =
+      quests.markers().map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label, tracked: m.quest === tracked }));
+    // Townsfolk with a quest to offer (a gold ! over their heads).
+    for (const id of questNpcIds) {
+      if (quests.indicator(id) !== '!') continue;
+      const p = serviceNpc(id)?.pos ?? npcs.find(id)?.pos;
+      if (p) out.push({ x: p.x, z: p.z, kind: 'offer' });
+    }
+    return out;
+  };
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
   // Waystones: touching one attunes it; once Magus Orren has explained the Sunwheel
   // (The Sunwheel quest), attuned stones carry you between each other.
@@ -1053,7 +1081,7 @@ async function boot() {
         quests.update(dt, player.pos);
         glenQuests.update(dt);
       }
-      questUI.update();
+      questUI.update(player.pos);
       folkTalk.npc = npcs.nearest(player.pos);
       if (folkTalk.npc) folkTalk.pos.copy(folkTalk.npc.pos);
       else folkTalk.pos.set(0, -999, 0);
@@ -1068,6 +1096,7 @@ async function boot() {
     if (realm.mode === 'overworld') stylizedNature.update(dt, r.camera.position, player.pos);
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
+    book.update();
     mapUI.update();
     if (realm.mode === 'overworld') discovery.update(player.pos);
     worldMap.update(dt, player.pos, player.yaw, realm.mode === 'overworld' && !overlayUp);
@@ -1152,7 +1181,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, book, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

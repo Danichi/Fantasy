@@ -3,8 +3,9 @@ import type { QuestLog } from '../quests/questLog';
 import type { HUD } from './hud';
 
 // Quest presentation (World Expansion §46): side quests under the main quest
-// in the HUD tracker, a journal (J) with active and completed quests, and
-// gold ❗ / ❓ markers over the heads of NPCs with something for you.
+// in the HUD tracker, a journal (J) with active and completed quests, gold
+// ❗ / ❓ markers over the heads of NPCs with something for you, and a compass
+// strip at the top of the screen pointing to the tracked quest's next step.
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -16,6 +17,12 @@ export class QuestUI {
   private selected: string | null = null;
   private tmp = new THREE.Vector3();
   private dirty = true;
+  private compass: HTMLDivElement;
+  private cmpTicks: { el: HTMLElement; bearing: number }[] = [];
+  private cmpTarget: HTMLDivElement;
+  private camDir = new THREE.Vector3();
+  /** "Show on map" in the journal */
+  onShowOnMap?: (x: number, z: number) => void;
 
   constructor(
     private quests: QuestLog,
@@ -29,6 +36,22 @@ export class QuestUI {
     this.journal = document.createElement('div');
     this.journal.className = 'journal interactive hidden';
     root.appendChild(this.journal);
+    // Compass: cardinal points every 90 degrees, ticks every 15.
+    this.compass = document.createElement('div');
+    this.compass.className = 'compass';
+    for (let deg = 0; deg < 360; deg += 15) {
+      const el = document.createElement('i');
+      const cardinal = ({ 0: 'N', 90: 'E', 180: 'S', 270: 'W' } as Record<number, string>)[deg];
+      el.className = cardinal ? 'cmp-card' : deg % 45 === 0 ? 'cmp-mid' : 'cmp-tick';
+      if (cardinal) el.textContent = cardinal;
+      this.compass.appendChild(el);
+      // Bearing as yaw: north is -Z (yaw pi), east is +X (yaw pi/2).
+      this.cmpTicks.push({ el, bearing: Math.PI - (deg * Math.PI) / 180 });
+    }
+    this.cmpTarget = document.createElement('div');
+    this.cmpTarget.className = 'cmp-target';
+    this.compass.appendChild(this.cmpTarget);
+    root.appendChild(this.compass);
     this.journal.addEventListener('click', (e) => {
       const t = e.target as HTMLElement;
       const pick = t.closest('[data-quest]') as HTMLElement | null;
@@ -42,6 +65,10 @@ export class QuestUI {
         this.render();
       }
       if (t.dataset.close !== undefined) this.toggle(false);
+      if (t.dataset.map) {
+        const m = this.quests.markers().find((x) => x.quest === t.dataset.map);
+        if (m) this.onShowOnMap?.(m.x, m.z);
+      }
     });
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyJ' && !e.repeat) {
@@ -92,13 +119,14 @@ export class QuestUI {
         (lines.length ? `<div class="j-objs">${lines.map(([t, p, n]) => `<div class="${p >= n ? 'ok' : ''}"><i>${p >= n ? '✔' : '◇'}</i>${esc(t)}${n > 1 ? ` <span>${p}/${n}</span>` : ''}</div>`).join('')}</div>` : '') +
         `<div class="j-log">${stages.map((s, i) => `<div class="${st && (st.status === 'done' || i < st.stage) ? 'past' : ''}">${esc(s.note)}</div>`).join('')}</div>` +
         `<div class="j-rewards">Rewards · ${q.rewards.gold} gold · ${q.rewards.xp} XP${q.rewards.guildRep ? ` · ${q.rewards.guildRep} guild rep` : ''}${q.rewards.items?.length ? ' · items' : ''}</div>` +
-        (st?.status === 'active' && this.quests.tracked !== q.id ? `<button class="j-track" data-track="${q.id}">Track this quest</button>` : '');
+        (st?.status === 'active' ? `<div class="j-actions">${this.quests.tracked !== q.id ? `<button class="j-track" data-track="${q.id}">Track this quest</button>` : ''}${this.quests.markers().some((m) => m.quest === q.id) ? `<button class="j-track" data-map="${q.id}">Show on map</button>` : ''}</div>` : '');
     }
     this.journal.innerHTML = `<header><span>JOURNAL</span><button data-close>✕</button></header><div class="j-body"><nav>${list}</nav><section>${detail}</section></div><footer>J · close</footer>`;
   }
 
-  /** Per frame: tracker text and NPC head markers. */
-  update() {
+  /** Per frame: tracker text, the compass and NPC head markers. */
+  update(player?: THREE.Vector3) {
+    if (player) this.updateCompass(player);
     if (this.dirty) {
       this.dirty = false;
       const act = this.quests.active();
@@ -141,8 +169,40 @@ export class QuestUI {
     for (const [id, el] of this.marks) if (!seen.has(id)) el.style.display = 'none';
   }
 
+  /** The compass strip: headings slide under a fixed centre; the tracked objective shows its distance. */
+  private updateCompass(player: THREE.Vector3) {
+    const HALF = (80 * Math.PI) / 180; // the strip shows 160 degrees
+    this.camera.getWorldDirection(this.camDir);
+    const heading = Math.atan2(this.camDir.x, this.camDir.z);
+    const rel = (b: number) => Math.atan2(Math.sin(b - heading), Math.cos(b - heading));
+    for (const t of this.cmpTicks) {
+      const r = rel(t.bearing);
+      const show = Math.abs(r) < HALF;
+      t.el.style.display = show ? '' : 'none';
+      if (show) t.el.style.left = `${50 - (r / HALF) * 50}%`;
+    }
+    const tracked = this.quests.tracked ?? this.quests.active()[0]?.id;
+    let best: { x: number; z: number; label: string } | null = null, bd = Infinity;
+    for (const m of this.quests.markers()) {
+      if (m.quest !== tracked) continue;
+      const d = Math.hypot(m.x - player.x, m.z - player.z);
+      if (d < bd) (bd = d), (best = m);
+    }
+    this.cmpTarget.style.display = best ? '' : 'none';
+    if (!best) return;
+    const r = rel(Math.atan2(best.x - player.x, best.z - player.z));
+    const clamped = Math.max(-HALF, Math.min(HALF, r));
+    this.cmpTarget.style.left = `${50 - (clamped / HALF) * 50}%`;
+    const off = Math.abs(r) > HALF ? (r > 0 ? '◀ ' : '') : '';
+    const offR = Math.abs(r) > HALF && r < 0 ? ' ▶' : '';
+    const dist = bd < 1000 ? `${Math.round(bd)} m` : `${(bd / 1000).toFixed(1)} km`;
+    this.cmpTarget.innerHTML = `<b>◆</b><span>${off}${bd < 6 ? 'here' : dist}${offR}</span>`;
+    this.cmpTarget.title = best.label;
+  }
+
   setVisible(v: boolean) {
     if (!v) for (const el of this.marks.values()) el.style.display = 'none';
+    this.compass.style.display = v ? '' : 'none';
   }
 
   /** Force a tracker refresh (e.g. after inventory changes). */
