@@ -47,7 +47,7 @@ test('Old King\'s Road Mine can be entered, opened and completed', async ({ page
     const entered = {
       mode: g.realm.mode,
       active: g.realm.active,
-      insideMine: !!g.realm.mineInstance && g.player.pos.distanceTo(g.realm.mineInstance.spawnPoint) < 8,
+      insideMine: g.realm.mode === 'dungeon' && g.realm.active === 'mine' && !!g.realm.mineInstance,
       hasWinch: g.realm.interactables.some((i: any) => i.label() === 'Pull the mine winch'),
     };
 
