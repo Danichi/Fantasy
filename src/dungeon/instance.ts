@@ -107,6 +107,9 @@ export class DungeonInstance {
   private portal: THREE.Group | null = null;
   orcs: OrcMob[] = [];
   private boss: OrcWarlord | null = null;
+  /** where Grukk stands before the fight, to put him back if the player dies */
+  private bossHome: { at: THREE.Vector3; yaw: number } | null = null;
+  private playerWasDead = false;
   /** resolves when async content (the boss model) has loaded */
   ready: Promise<void> = Promise.resolve();
   private time = 0;
@@ -551,6 +554,7 @@ export class DungeonInstance {
         }
         const at = this.cellCenter(s.cell[0], s.cell[1]);
         const toEntrance = this.spawnPoint.sub(at);
+        this.bossHome = { at: at.clone(), yaw: Math.atan2(toEntrance.x, toEntrance.z) };
         this.ready = OrcWarlord.create(at, Math.atan2(toEntrance.x, toEntrance.z), this.scene, this.fx).then((o) => {
           if (this.disposed) return o.dispose();
           o.onDeath = (dead) => {
@@ -579,6 +583,15 @@ export class DungeonInstance {
     for (const g of this.orcs) g.update(dt, player);
     for (const g of this.orcs.filter((g) => g.dead)) g.dispose();
     this.orcs = this.orcs.filter((g) => !g.dead);
+    // The player died and has come back: Grukk returns to his hall at full strength.
+    if (player.dead) this.playerWasDead = true;
+    else if (this.playerWasDead) {
+      this.playerWasDead = false;
+      if (this.boss?.alive && this.bossHome) {
+        this.boss.reset(this.bossHome.at, this.bossHome.yaw);
+        this.hooks.bossBar(null);
+      }
+    }
     // Boss: fights once woken; the bar shows while he's awake.
     if (this.boss) {
       this.boss.update(dt, player);
