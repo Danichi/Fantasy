@@ -211,6 +211,23 @@ export class MineInstance {
     axle.rotation.z = Math.PI / 2;
     axle.position.set(MINE_ORIGIN.x + 5.5, 2.2, MINE_ORIGIN.z - 43);
     this.group.add(axle);
+
+    const lever = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.3, 0.8), m.brass);
+    base.position.y = 0.15;
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.6, 0.16), m.metal);
+    arm.position.y = 0.95;
+    arm.rotation.z = this.progress.gateOpen ? 0.45 : -0.45;
+    lever.add(base, arm);
+    lever.position.set(MINE_ORIGIN.x - 6.6, 0, MINE_ORIGIN.z - 25.5);
+    this.group.add(lever);
+    this.interactables.push({
+      pos: lever.position.clone(),
+      radius: 2.1,
+      label: () => this.progress.gateOpen ? 'The winch is engaged' : 'Pull the mine winch',
+      enabled: () => !this.progress.gateOpen,
+      action: () => this.openGate(lever),
+    });
   }
 
   private buildGate(m: ReturnType<typeof makeMaterials>) {
