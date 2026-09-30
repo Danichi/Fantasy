@@ -13,9 +13,14 @@ export function buildMineEntrance(scene: THREE.Scene, m: WorldMats, fx: FX) {
   const metal = new THREE.MeshStandardMaterial({ color: 0x34383a, metalness: 0.82, roughness: 0.42 });
   const rock = new THREE.MeshStandardMaterial({ color: 0x383632, roughness: 1 });
 
-  const facade = new THREE.Mesh(new THREE.BoxGeometry(10, 6.4, 2.3), stone);
-  facade.position.y = 3.2;
-  g.add(facade);
+  g.add(
+    new THREE.Mesh(new THREE.BoxGeometry(1.7, 6.4, 2.3), stone),
+    new THREE.Mesh(new THREE.BoxGeometry(1.7, 6.4, 2.3), stone),
+    new THREE.Mesh(new THREE.BoxGeometry(6.6, 1.7, 2.3), stone),
+  );
+  g.children[0].position.set(-4.15, 3.2, 0);
+  g.children[1].position.set(4.15, 3.2, 0);
+  g.children[2].position.set(0, 5.55, 0);
 
   const darkness = new THREE.Mesh(
     new THREE.PlaneGeometry(6.8, 4.8),
