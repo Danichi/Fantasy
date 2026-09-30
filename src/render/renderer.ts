@@ -110,7 +110,7 @@ export class Renderer {
       const stormy = THREE.MathUtils.smoothstep(w.cloud, 0.72, 1);
       haze.lerp(new THREE.Color(0.6, 0.64, 0.7).lerp(new THREE.Color(0.3, 0.34, 0.42), stormy).multiplyScalar(1 - s.night * 0.8), Math.min(1, w.cloud * 0.55 + w.fog * 0.6));
       (u.uSunColor.value as THREE.Color).copy(s.sunColor);
-      u.uHaze.value = 0.0008 + w.fog * 0.0045 + w.rain * 0.0015 + w.snow * 0.003;
+      u.uHaze.value = 0.0016 + w.fog * 0.0045 + w.rain * 0.0015 + w.snow * 0.003;
       u.uExposure.value = s.exposure * (1 - stormy * 0.26) * (1 + flash * 0.8);
       u.uClouds.value = 0.85 * (1 - w.cloud * 0.8) * (1 - s.night);
     } else if (this.scene.fog instanceof THREE.Fog) {

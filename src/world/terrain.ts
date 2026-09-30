@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { MEADOW_FIELD_GLSL } from '../render/palette';
 import { worldNoise } from '../render/noise';
 import { paintedTexture } from '../render/painted';
 import type RAPIER from '@dimforge/rapier3d-compat';
@@ -101,6 +102,7 @@ vWN = normal;`);
         uniform vec3 uHole;
         uniform float uWet;
         vec3 terrainGlow = vec3(0.0);
+        ${MEADOW_FIELD_GLSL}
         ${FLOWER_GLSL}
         // Rock strata shared by mountains, cliffs and mesas.
         vec3 strata(vec3 a, vec3 b, float y, vec4 fN, vec4 pN, float dist) {
@@ -141,6 +143,8 @@ vWN = normal;`);
         vec4 fineN = texture2D(tNoise, vWPos.xz * 0.05);
         vec3 gNear = mix(vec3(0.12, 0.25, 0.06), vec3(0.18, 0.31, 0.07), patchN.r);
         vec3 gFar = mix(vec3(0.22, 0.4, 0.1), vec3(0.36, 0.43, 0.13), smoothstep(0.55, 0.85, patchN.g));
+        vec3 field = meadowTint(vWPos.xz, tNoise);
+        gNear *= field; gFar *= field;
 
         // Macro relief: blend the four surrounding 60 m cells, with a noisy
         // offset so the borders wander like painted brush edges.

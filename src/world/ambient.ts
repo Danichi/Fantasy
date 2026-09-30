@@ -8,7 +8,7 @@ import { mulberry32 } from '../core/math';
 // valley. Everything is instanced and animated in the vertex shader, so it
 // costs three draw calls and almost no CPU.
 
-const POLLEN = 260;
+const POLLEN = 120;
 const POLLEN_BOX = 36;
 const BUTTERFLIES = 28;
 const BIRDS = 26;
@@ -69,14 +69,17 @@ export class Ambient {
           vFly = uNight;
           float pulse = smoothstep(0.3, 1.0, sin(uTime * (1.5 + aSeed * 2.0) + aSeed * 40.0));
           vA = mix(vA, vA * pulse * 1.6, uNight);
-          gl_PointSize = (1.2 + aSeed * 1.6) * (28.0 / max(-mv.z, 1.0)) * mix(1.0, 2.2, uNight);
+          // Small on screen, capped: close motes used to swell into big white blobs.
+          float px = (0.5 + aSeed * 0.7) * (22.0 / max(-mv.z, 2.0));
+          gl_PointSize = clamp(px * mix(1.0, 1.6, uNight), 1.5, mix(4.5, 7.0, uNight));
         }`,
       fragmentShader: /* glsl */ `
         varying float vA; varying float vFly;
         void main() {
           float r = length(gl_PointCoord - 0.5);
-          if (vFly > 0.5) { gl_FragColor = vec4(vec3(0.85, 1.0, 0.45) * 1.6, smoothstep(0.5, 0.0, r) * vA); return; }
-          gl_FragColor = vec4(vec3(1.0, 0.96, 0.8), smoothstep(0.5, 0.0, r) * vA * 0.4);
+          // A bright core with a soft glow for fireflies; faint warm pollen by day.
+          if (vFly > 0.5) { gl_FragColor = vec4(vec3(0.8, 1.0, 0.42) * (1.2 + smoothstep(0.25, 0.0, r) * 1.4), smoothstep(0.5, 0.05, r) * vA * 0.9); return; }
+          gl_FragColor = vec4(vec3(1.0, 0.95, 0.78), smoothstep(0.5, 0.1, r) * vA * 0.22);
         }`,
     });
     const pts = new THREE.Points(geo, mat);

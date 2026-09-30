@@ -345,7 +345,8 @@ export class StylizedNature {
     const giant = region === 'verdantElves' ? 1.2 + smoothstep(-2200, -3600, z) * 0.9 : region === 'deepWilderness' ? 1.35 : 1;
     switch (rel) {
       case RELIEF.forest: return [0.5 + grove * 0.3, alpine || z < -4200 ? 'pine' : 'mix', giant];
-      case RELIEF.open: return [smoothstep(0.58, 0.8, grove) * 0.4 + 0.012, alpine ? 'pine' : 'tree', giant];
+      // Plains: groves and copses with lone trees between (Zelda-style open country, not an empty lawn).
+      case RELIEF.open: return [smoothstep(0.5, 0.74, grove) * 0.52 + 0.02, alpine ? 'pine' : 'tree', giant];
       case RELIEF.marsh: return [0.12 + grove * 0.15, 'tree', giant];
       case RELIEF.mountain: return [h < 320 ? 0.16 + grove * 0.2 : h < 420 ? 0.05 : 0, 'pine', 1];
       case RELIEF.mesa: return [0.004, 'tree', 0.8];
@@ -384,8 +385,8 @@ export class StylizedNature {
         if (!this.clearSpot(px, pz)) continue;
         const [d] = this.density(px, pz);
         const wood = d > 0.25;
-        const meadow = d < 0.2 && heightAt(px, pz) > SEA_LEVEL + 1 && fbm(px * 0.025, pz * 0.025, 3) > 0.55;
-        if (!(wood && roll < 0.35) && !(meadow && roll < 0.18)) continue;
+        const meadow = d < 0.2 && heightAt(px, pz) > SEA_LEVEL + 1 && fbm(px * 0.025, pz * 0.025, 3) > 0.5;
+        if (!(wood && roll < 0.35) && !(meadow && roll < 0.26)) continue;
         const list = wood ? (pick < 0.7 ? this.smalls.fern : this.smalls.mushroom) : this.smalls.flower;
         if (!list.length) continue;
         under.push(px, heightAt(px, pz) - 0.02, pz, rot, 0.72 + sc * 0.65, list[Math.floor(pick * 991) % list.length]);

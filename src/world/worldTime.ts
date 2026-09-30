@@ -25,16 +25,16 @@ interface LightKey {
 
 // Board palette: "Day / Sunset / Night" in Environments & Atmosphere.
 const KEYS: LightKey[] = [
-  { h: 0, zenith: '#050b1f', horizon: '#1b2a4d', sun: '#8fa8ff', sunI: 0.35, hemiSky: '#2c3c70', hemiGround: '#141a24', hemiI: 0.55, env: 0.12, haze: '#1a2848', exposure: 1.15, night: 1 },
-  { h: 4.5, zenith: '#0a1430', horizon: '#243559', sun: '#8fa8ff', sunI: 0.3, hemiSky: '#2f406f', hemiGround: '#161b24', hemiI: 0.55, env: 0.12, haze: '#223358', exposure: 1.15, night: 1 },
+  { h: 0, zenith: '#07102a', horizon: '#22355f', sun: '#a9bcff', sunI: 0.62, hemiSky: '#3d5596', hemiGround: '#1a2230', hemiI: 0.95, env: 0.2, haze: '#1f3060', exposure: 1.32, night: 1 },
+  { h: 4.5, zenith: '#0b1636', horizon: '#2a3d68', sun: '#a9bcff', sunI: 0.55, hemiSky: '#3f5796', hemiGround: '#1b2230', hemiI: 0.92, env: 0.2, haze: '#27386a', exposure: 1.3, night: 1 },
   { h: 5.6, zenith: '#2a3f78', horizon: '#f0a07a', sun: '#ffb37a', sunI: 0.9, hemiSky: '#8a8fc0', hemiGround: '#3a3530', hemiI: 0.75, env: 0.22, haze: '#e6a38a', exposure: 1.05, night: 0.45 },
   { h: 7, zenith: '#3d86d8', horizon: '#ffd9b0', sun: '#ffd6a0', sunI: 1.8, hemiSky: '#9cbce6', hemiGround: '#5a5a40', hemiI: 0.95, env: 0.34, haze: '#f0d6bc', exposure: 1.0, night: 0 },
   { h: 10, zenith: '#2f7fd6', horizon: '#a9d3ec', sun: '#fff1d6', sunI: 2.3, hemiSky: '#a9c7ee', hemiGround: '#6d6a4a', hemiI: 1.05, env: 0.42, haze: '#a9d3ec', exposure: 1.0, night: 0 },
   { h: 15, zenith: '#2f7fd6', horizon: '#a9d3ec', sun: '#fff1d6', sunI: 2.3, hemiSky: '#a9c7ee', hemiGround: '#6d6a4a', hemiI: 1.05, env: 0.42, haze: '#a9d3ec', exposure: 1.0, night: 0 },
   { h: 18, zenith: '#3a74c8', horizon: '#ffcf96', sun: '#ffc27a', sunI: 1.9, hemiSky: '#a6b6de', hemiGround: '#6a5a40', hemiI: 0.95, env: 0.34, haze: '#f2c9a0', exposure: 1.0, night: 0 },
   { h: 19.6, zenith: '#34427e', horizon: '#ff8a5c', sun: '#ff8a4c', sunI: 1.1, hemiSky: '#8c7fb0', hemiGround: '#3e3028', hemiI: 0.75, env: 0.22, haze: '#e88a6a', exposure: 1.05, night: 0.35 },
-  { h: 20.8, zenith: '#0e1838', horizon: '#3a3a6a', sun: '#8fa8ff', sunI: 0.4, hemiSky: '#34427a', hemiGround: '#181c26', hemiI: 0.6, env: 0.14, haze: '#2a3460', exposure: 1.12, night: 0.9 },
-  { h: 24, zenith: '#050b1f', horizon: '#1b2a4d', sun: '#8fa8ff', sunI: 0.35, hemiSky: '#2c3c70', hemiGround: '#141a24', hemiI: 0.55, env: 0.12, haze: '#1a2848', exposure: 1.15, night: 1 },
+  { h: 20.8, zenith: '#101c40', horizon: '#3c4274', sun: '#a9bcff', sunI: 0.6, hemiSky: '#3f4f8a', hemiGround: '#1c2230', hemiI: 0.9, env: 0.2, haze: '#2c3866', exposure: 1.26, night: 0.9 },
+  { h: 24, zenith: '#07102a', horizon: '#22355f', sun: '#a9bcff', sunI: 0.62, hemiSky: '#3d5596', hemiGround: '#1a2230', hemiI: 0.95, env: 0.2, haze: '#1f3060', exposure: 1.32, night: 1 },
 ];
 
 const tmpA = new THREE.Color(), tmpB = new THREE.Color();

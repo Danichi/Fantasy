@@ -83,7 +83,10 @@ const FINAL_FRAG = /* glsl */ `
         ? uHaze * exp(-k * camH) * (1.0 - exp(-k * dy)) / (k * ray.y)
         : uHaze * exp(-k * camH) * dist;
       float f = 1.0 - exp(-max(amount, 0.0));
-      col = mix(col, haze, clamp(f, 0.0, 0.9));
+      // Distant land also loses saturation into the haze (aerial perspective).
+      float farL = dot(col, vec3(0.3, 0.55, 0.15));
+      col = mix(col, vec3(farL), smoothstep(80.0, 900.0, dist) * 0.35);
+      col = mix(col, haze, clamp(f, 0.0, 0.92));
     } else {
       // Soft horizon haze on the sky itself.
       float horizon = 1.0 - smoothstep(0.0, 0.22, ray.y);
@@ -95,10 +98,11 @@ const FINAL_FRAG = /* glsl */ `
 
     // Map-palette grade (docs/ART-DIRECTION.md §2): deep, saturated, luminous.
     float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    col = mix(vec3(luma), col, 1.3);
-    col = mix(col, col * vec3(1.025, 1.01, 0.97), smoothstep(0.35, 1.0, luma));
-    col = mix(col, col * vec3(0.95, 0.995, 1.045), 1.0 - smoothstep(0.0, 0.35, luma));
-    col = col * col * (3.0 - 2.0 * col) * 0.5 + col * 0.5;
+    // Luminous rather than loud: gentle saturation, warm light, cool shade.
+    col = mix(vec3(luma), col, 1.12);
+    col = mix(col, col * vec3(1.025, 1.01, 0.975), smoothstep(0.35, 1.0, luma));
+    col = mix(col, col * vec3(0.93, 0.99, 1.07), 1.0 - smoothstep(0.0, 0.4, luma));
+    col = col * col * (3.0 - 2.0 * col) * 0.3 + col * 0.7;
     // Vignette.
     vec2 q = vUv - 0.5;
     col *= 1.0 - dot(q, q) * 0.28;

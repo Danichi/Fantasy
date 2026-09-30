@@ -137,6 +137,8 @@ export class Sky {
   readonly clouds = new THREE.Group();
   private cloudItems: { mesh: THREE.Mesh; az: number; el: number; speed: number }[] = [];
   private mat: THREE.ShaderMaterial;
+  private cloudTop = { value: new THREE.Color(1, 1, 1) };
+  private cloudBelly = { value: new THREE.Color(0.7, 0.76, 0.86) };
 
   constructor(sunDir: THREE.Vector3) {
     this.mat = new THREE.ShaderMaterial({
@@ -163,6 +165,16 @@ export class Sky {
     for (let i = 0; i < 26; i++) {
       const tex = textures[i % textures.length];
       const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, opacity: 0.96, toneMapped: false });
+      // Remap the painted card: bright puffs take the top colour, grey bellies the shade colour.
+      mat.onBeforeCompile = (sh) => {
+        sh.uniforms.uTop = this.cloudTop;
+        sh.uniforms.uBelly = this.cloudBelly;
+        sh.fragmentShader = sh.fragmentShader
+          .replace('#include <common>', '#include <common>\nuniform vec3 uTop, uBelly;')
+          .replace('#include <map_fragment>', `#include <map_fragment>
+          float cl = smoothstep(0.72, 0.98, dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15)));
+          diffuseColor.rgb = mix(uBelly, uTop, cl);`);
+      };
       const w = 260 + rnd() * 320;
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.5), mat);
       mesh.renderOrder = -9;
@@ -197,11 +209,14 @@ export class Sky {
     u.uOvercast.value = overcast;
     u.uFlash.value = flash;
     // Cumulus cards: greyer and denser when overcast, dim blue at night.
-    const lit = (u.uCloudLit.value as THREE.Color).setRGB(1, 1, 1).lerp(new THREE.Color(0.62, 0.66, 0.72), overcast).lerp(new THREE.Color(0.12, 0.15, 0.25), night * 0.9);
+    (u.uCloudLit.value as THREE.Color).setRGB(1, 1, 1).lerp(new THREE.Color(0.62, 0.66, 0.72), overcast).lerp(new THREE.Color(0.12, 0.15, 0.25), night * 0.9);
+    // Golden hour paints the cumulus: peach tops, lavender bellies. Night: dim moonlit blue.
+    const golden = THREE.MathUtils.smoothstep(0.42, 0.04, sunDir.y) * (1 - night) * (1 - overcast * 0.7);
+    this.cloudTop.value.setRGB(1, 1, 1).lerp(new THREE.Color(1.0, 0.74, 0.56), golden).lerp(new THREE.Color(0.66, 0.68, 0.72), overcast).lerp(new THREE.Color(0.13, 0.16, 0.26), night).addScalar(flash * 0.6);
+    this.cloudBelly.value.setRGB(0.7, 0.76, 0.86).lerp(new THREE.Color(0.66, 0.52, 0.66), golden).lerp(new THREE.Color(0.42, 0.45, 0.5), overcast).lerp(new THREE.Color(0.05, 0.07, 0.13), night);
     for (const c of this.cloudItems) {
       const m = c.mesh.material as THREE.MeshBasicMaterial;
-      m.color.copy(lit).addScalar(flash * 0.6);
-      m.opacity = 0.96 * (1 - night * 0.55);
+      m.opacity = 0.96 * (1 - night * 0.45);
     }
     (u.uCloudShade.value as THREE.Color).setRGB(0.66, 0.73, 0.82).lerp(new THREE.Color(0.35, 0.38, 0.44), overcast).lerp(new THREE.Color(0.06, 0.08, 0.14), night * 0.9);
   }

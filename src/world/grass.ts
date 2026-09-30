@@ -3,6 +3,7 @@ import type { GroundWindow } from './groundWindow';
 import { Q } from '../core/settings';
 import { mulberry32 } from '../core/math';
 import { worldNoise } from '../render/noise';
+import { MEADOW_FIELD_GLSL } from '../render/palette';
 
 // Meadow grass (docs/ART-DIRECTION.md §5): dense, knee-high single blades that
 // fade from a dark root to sunlit tips, with gusts rolling across the field as
@@ -92,7 +93,8 @@ class GrassLayer {
           attribute vec4 aOff; attribute float aT;
           uniform vec2 uCenter, uWindDir, uGroundOrigin; uniform float uTime, uGroundSize, uTile, uWidth, uFadeIn, uWindStrength; uniform vec3 uPlayer;
           uniform sampler2D uGround, uNoise;
-          varying float vT; varying vec3 vCol; varying float vGust;`,
+          varying float vT; varying vec3 vCol; varying float vGust;
+          ${MEADOW_FIELD_GLSL}`,
         )
         .replace(
           '#include <begin_vertex>',
@@ -125,7 +127,7 @@ class GrassLayer {
           p.y *= height;
           float c = cos(aOff.z), s = sin(aOff.z);
           p.xz = mat2(c, -s, s, c) * p.xz;
-          vec2 bend = uWindDir * (0.12 + gust * 0.55 + flutter * 0.06) * uWindStrength;
+          vec2 bend = uWindDir * (0.12 + gust * 0.7 + flutter * 0.06) * uWindStrength;
           // Push aside around the player.
           vec2 away = world - uPlayer.xz;
           float pd = length(away);
@@ -137,6 +139,9 @@ class GrassLayer {
           vec3 root = vec3(0.105, 0.2, 0.075);
           vec3 body = mix(vec3(0.19, 0.35, 0.1), vec3(0.28, 0.41, 0.12), patchN.r);
           vec3 tipC = mix(vec3(0.5, 0.6, 0.2), vec3(0.66, 0.6, 0.28), smoothstep(0.55, 0.85, patchN.g));
+          // Broad painterly fields (shared with the ground: render/palette.ts).
+          vec3 field = meadowTint(world, uNoise);
+          body *= field; tipC *= field;
           // Biome tint: alpine blue-green, jungle deep green, dry straw.
           float alp = smoothstep(0.2, 0.4, tintK) * (1.0 - smoothstep(0.5, 0.6, tintK));
           float jung = smoothstep(0.55, 0.7, tintK) * (1.0 - smoothstep(0.8, 0.95, tintK));
@@ -156,7 +161,8 @@ class GrassLayer {
         .replace(
           '#include <color_fragment>',
           `// Gusts flash the tips brighter, like wind combing a real field.
-          diffuseColor.rgb = vCol * (1.0 + vGust * vT * 0.35);`,
+          // (Zelda-style: you can watch the wind roll across a field.)
+          diffuseColor.rgb = vCol * (1.0 + vGust * vT * vT * 0.7);`,
         )
         .replace(
           '#include <emissivemap_fragment>',
