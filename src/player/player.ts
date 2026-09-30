@@ -10,7 +10,7 @@ import { physics, groups, G_PLAYER, STATIC_ONLY } from '../physics/physics';
 import { clamp, damp, wrapAngle, segmentSegmentDistance, smoothstep } from '../core/math';
 import { events } from '../core/events';
 import { Equipment } from '../items/equipment';
-import { ACTIONS, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, resolveAction, type ActionDef } from '../combat/actions';
+import { ACTIONS, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, resolveAction, flairAt, type ActionDef } from '../combat/actions';
 import { targets, hurtSegment, type Target, type IncomingAttack, type DefenceResult } from '../combat/targets';
 import { surfaceAt, heightAt as heightAtGround } from '../world/terrain';
 import { waterDepthAt } from '../world/water';
@@ -874,6 +874,10 @@ export class Player {
       pose = { ...base, legTuck: smoothstep(0.02, 0.2, at) * (1 - smoothstep(0.5, 0.7, at)), spinePitch: 0.8 * smoothstep(0.02, 0.15, at) * (1 - smoothstep(0.5, 0.72, at)) };
     } else if (a?.usingClip) pose = {};
     if (!this.grounded && !a && !anim.has('jump_air')) pose = { ...pose, legTuck: 0.35 };
+    // Skill flourishes over the clip: leans and crouches go into the pose, spins,
+    // hops and banks turn and lift the whole body (below).
+    const fl = a && !this.dead ? flairAt(a.def.flair, at) : null;
+    if (fl && (fl.lean || fl.crouch)) pose = { ...pose, spinePitch: (pose.spinePitch ?? 0) + fl.lean, hipsDrop: (pose.hipsDrop ?? 0) + fl.crouch };
     if (this.dead) pose = {};
 
     if (this.poseFrom && this.poseFade < 1) {
@@ -893,6 +897,11 @@ export class Player {
       vis.rotation.x = ang;
       vis.position.set(0, pivot - Math.cos(ang) * pivot, -Math.sin(ang) * pivot);
       vis.position.y -= Math.sin(k * Math.PI) * 0.3;
+    }
+    if (fl) {
+      vis.rotation.y += fl.spin;
+      vis.rotation.z += fl.bank;
+      vis.position.y += fl.hop;
     }
     if (this.dead && !anim.has('death')) {
       const k = smoothstep(0, 0.9, this.deadT);

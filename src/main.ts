@@ -45,7 +45,8 @@ import { DOORS, type Door, type InteriorKind } from './world/doors';
 import type { Interior } from './world/interior';
 import type { Interactable } from './dungeon/instance';
 import { setupAcademy } from './quests/academy';
-import { setupLowerCity } from './quests/lowerCity';
+import { setupLowerCity, SALLOW_LOOK, NIX_LOOK } from './quests/lowerCity';
+import { Rat } from './enemies/vermin';
 import { Boats } from './world/boats';
 import { RiverLife } from './world/riverLife';
 import { PORT_QUESTS } from './quests/portQuests';
@@ -645,9 +646,15 @@ async function boot() {
   }
   // People inside: a borrowed town NPC (moved in, put back on the way out) or
   // characters built for the visit from resident records.
-  const inside = { borrowed: null as null | { n: (typeof town.npcs)[number]; pos: THREE.Vector3; yaw: number; vis: boolean }, built: [] as { root: THREE.Object3D; mixer: THREE.AnimationMixer }[] };
-  const folkInside = (st: NonNullable<ReturnType<typeof npcs.find>>, spot: { pos: THREE.Vector3; yaw: number; seated: boolean }, it: Interior, extras: Interactable[], clip: string) => {
-    void buildCharacter(st.rec.look, ['idle', 'talk', 'sit']).then((b) => {
+  const inside = {
+    borrowed: null as null | { n: (typeof town.npcs)[number]; pos: THREE.Vector3; yaw: number; vis: boolean },
+    built: [] as { root: THREE.Object3D; mixer: THREE.AnimationMixer }[],
+    rats: [] as Rat[],
+  };
+  type Spot = { pos: THREE.Vector3; yaw: number; seated: boolean };
+  /** Someone built for the visit, standing (or sitting) at `spot`, who talks when asked. */
+  const lookInside = (look: Look, spot: Spot, it: Interior, extras: Interactable[], clip: string, label: string, talk: () => void) => {
+    void buildCharacter(look, ['idle', 'talk', 'sit']).then((b) => {
       if (realm.interior !== it) return; // left before they arrived
       b.root.position.copy(spot.pos);
       b.root.rotation.y = spot.yaw;
@@ -656,13 +663,46 @@ async function boot() {
       (acts.find((a) => a.getClip().name === clip) ?? acts[0])?.play();
       b.mixer.update(Math.random() * 3);
       inside.built.push({ root: b.root, mixer: b.mixer });
-      extras.push({
-        pos: spot.pos, radius: 1.8,
-        label: () => `Talk to ${st.rec.name}`,
-        enabled: () => true,
-        action: () => { folkTalk.npc = st; folkTalk.action(); },
-      });
+      extras.push({ pos: spot.pos, radius: 1.8, label: () => label, enabled: () => true, action: talk });
     });
+  };
+  const folkInside = (st: NonNullable<ReturnType<typeof npcs.find>>, spot: Spot, it: Interior, extras: Interactable[], clip: string) =>
+    lookInside(st.rec.look, spot, it, extras, clip, `Talk to ${st.rec.name}`, () => {
+      folkTalk.npc = st;
+      folkTalk.action();
+    });
+  /** The undercity: the Quiet Hands in their den, and whatever the Hands' jobs put in the cistern. */
+  const fillUndercity = (it: Interior, extras: Interactable[]) => {
+    if (it.keeperSpot) lookInside(SALLOW_LOOK, it.keeperSpot, it, extras, 'idle', 'Talk to Mother Sallow', () => lowerCity.den());
+    if (it.spots.nix) lookInside(NIX_LOOK, it.spots.nix, it, extras, 'idle', 'Talk to Nix the Fence', () => lowerCity.nix());
+    const c = it.spots.cistern?.pos;
+    if (c && quests.isActive('cistern-rats', 0)) {
+      // A brood around the pool, and their mother, fat as a hound.
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const at = new THREE.Vector3(c.x + Math.cos(a) * 5.5, 0, c.z - 4.7 + Math.sin(a) * 4.2);
+        const rat = new Rat(at, r.scene, fx);
+        rat.kind = 'cistern-rat';
+        if (i === 0) {
+          rat.hp = 70;
+          rat.root.scale.setScalar(2.1);
+          rat.radius = 0.6;
+        }
+        inside.rats.push(rat);
+      }
+    }
+    const l = it.spots.ledger?.pos;
+    if (l) {
+      extras.push({
+        pos: l, radius: 1.8,
+        label: () => 'Fish out the satchel',
+        enabled: () => quests.wants('satchel-found'),
+        action: () => {
+          quests.signal('satchel-found');
+          hud.toast('You haul a dripping oilskin satchel out of the muck. The seal is still whole.');
+        },
+      });
+    }
   };
   realm.onInterior = (it) => {
     const extras: Interactable[] = [];
@@ -683,7 +723,8 @@ async function boot() {
     }
     if (it.kind === 'guild') extras.push({ pos: it.at(0, -it.D / 2 + 0.8), radius: 2, label: () => 'Read the quest board', enabled: () => true, action: () => town.guild.open('board') });
     // Taverns and the guild have company: residents who live nearby.
-    const want = it.kind === 'tavern' ? (time.state.night > 0.3 ? 5 : 3) : it.kind === 'guild' ? 3 : 0;
+    if (it.kind === 'undercity') fillUndercity(it, extras);
+    const want = it.kind === 'tavern' ? (time.state.night > 0.3 ? 5 : 3) : it.kind === 'guild' || it.kind === 'undercity' ? 3 : 0;
     if (want) {
       const near = npcs.npcs
         .filter((s) => !s.rec.named && s.rec.id !== keeper && s.pos.distanceTo(it.door.pos) < 260)
@@ -707,6 +748,8 @@ async function boot() {
       r.scene.remove(c.root);
     }
     inside.built = [];
+    for (const rat of inside.rats) rat.dispose();
+    inside.rats = [];
     folkTalk.npc = null;
   };
   const questNpcIds = [...town.npcs.map((n) => n.spec.id), ...npcs.npcs.filter((n) => n.rec.named).map((n) => n.rec.id)];
@@ -820,9 +863,12 @@ async function boot() {
     dormitory: PORT_SPOTS.dormitory.clone().setY(heightAt(PORT_SPOTS.dormitory.x, PORT_SPOTS.dormitory.z)),
   });
   for (const [id, opts] of academy.services) folkServices.set(id, opts);
+  const trapdoor = PORT_SPOTS.thievesDoor.clone().setY(heightAt(PORT_SPOTS.thievesDoor.x, PORT_SPOTS.thievesDoor.z));
+  const denDoor: Door = { pos: trapdoor, yaw: 0, spec: { w: 22, d: 44, floors: 1, roof: 'tile', seed: 4242 }, kind: 'undercity', name: 'the undercity' };
   const lowerCity = setupLowerCity({
     quests, player, flags: worldFlags,
-    door: PORT_SPOTS.thievesDoor.clone().setY(heightAt(PORT_SPOTS.thievesDoor.x, PORT_SPOTS.thievesDoor.z)),
+    door: trapdoor,
+    enter: () => void realm.enterInterior(denDoor, 'undercity', world.mats, spells),
     talk: (who, title, text, opts) => dialogue.show(who, title, text, opts), close: () => dialogue.close(),
     shop: (who, title, intro, stock) => town.showShop(who, title, intro, stock),
     sell: (back) => town.sellOptions('nix', 'Nix the Fence', 'Black Market of the Quiet Hands', back),
@@ -1183,6 +1229,7 @@ async function boot() {
       realm.interior.setDaylight(1 - ts.night);
       inside.borrowed?.n.update(dt, player.pos);
       for (const c of inside.built) c.mixer.update(dt);
+      for (const rat of inside.rats) rat.update(dt, player);
     }
     worldMap.setRegionLabel(`${regionName} · ${time.label.split(', ')[1]}`);
     flowers.update(dt, r.camera.position);

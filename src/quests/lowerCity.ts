@@ -3,12 +3,16 @@ import type { QuestDef, QuestLog } from './questLog';
 import type { DialogueOption } from '../ui/dialogue';
 import type { Player } from '../player/player';
 import type { Interactable } from '../dungeon/instance';
+import type { Look } from '../npc/charBuilder';
 
 // Port Aurelle's Lower City underworld (World Expansion phase 5): the Guild
 // of Quiet Hands, whose den lies under a trapdoor beside the Drowned Lantern.
-// The door shows nothing until someone tells you about it. Settling Aldric
-// Aurelle's debt (in gold or in a favour owed) opens their black market and
-// Nix the fence, who pays over the odds for goods nobody asks about.
+// The door shows nothing until someone tells you about it. Below it is the
+// undercity (world/interior.ts, kind 'undercity'): a tunnel along the old
+// sewer channel, the den with Mother Sallow and Nix the fence, a canal landing
+// for the smugglers' skiffs, and the flooded cistern behind an iron gate.
+// Settling Aldric Aurelle's debt (in gold or in a favour owed) opens their
+// black market; after that the Hands have work for you down there.
 
 export const DEN_DEBT = 80;
 
@@ -28,6 +32,38 @@ export const LOWER_CITY_QUESTS: QuestDef[] = [
   },
 ];
 
+/** The Quiet Hands' own jobs, once they know your face (after Aldric). */
+export const UNDERCITY_QUESTS: QuestDef[] = [
+  {
+    id: 'cistern-rats', title: 'Rats in the Cistern', giver: 'sallow', region: 'portAurelle', requires: ['quiet-hands'],
+    summary: 'Something big is breeding in the old cistern behind the Quiet Hands’ den. Mother Sallow wants it gone.',
+    offer: 'The old cistern, through the gate. Rats. Not the little dock kind: the kind that ate half a sack of pepper and one of Nix’s boots. There’s a mother one, fat as a hound. Kill it and its brood and I’ll pay like honest folk.',
+    acceptLabel: 'I’ll clear the cistern.',
+    stages: [
+      { note: 'Go through the iron gate at the back of the den and kill the rats in the old cistern.', objectives: [{ type: 'kill', kind: 'cistern-rat', count: 8, text: 'Kill the cistern rats and their mother' }] },
+      { note: 'Tell Mother Sallow the cistern is clear.', objectives: [{ type: 'talk', npc: 'sallow', text: 'Tell Mother Sallow', say: 'Quiet again. Good. Here: honest pay, and don’t spread it about that we have any.' }] },
+    ],
+    done: 'The cistern is quiet. Mother Sallow pays in clean coin, which surprised everyone.',
+    rewards: { gold: 110, xp: 220 },
+  },
+  {
+    id: 'drowned-satchel', title: 'The Drowned Satchel', giver: 'nix', region: 'portAurelle', requires: ['quiet-hands'],
+    summary: 'A courier of the Hands fled the Watch through the cistern and dropped his satchel in the water. Nix wants it back unopened.',
+    offer: 'Little Pim came down the cistern with the Watch on his heels and lost the satchel in the dark. Far corner, past the pool. It’s oilskin, it’ll float in the muck. Bring it back and don’t read what’s inside. I’ll know.',
+    acceptLabel: 'I’ll fish it out.',
+    stages: [
+      { note: 'Find the courier’s satchel in the far corner of the old cistern.', objectives: [{ type: 'signal', id: 'satchel-found', text: 'Fish the satchel out of the cistern' }] },
+      { note: 'Bring the satchel to Nix, unopened.', objectives: [{ type: 'talk', npc: 'nix', text: 'Give the satchel to Nix', reply: 'Here. I didn’t open it.', say: 'Seal’s whole. You’re either honest or very good. Either way: good.' }] },
+    ],
+    done: 'Nix has his satchel, seal unbroken. The Hands remember a courier who keeps their mouth shut.',
+    rewards: { gold: 75, xp: 160, items: [['greaterHealthPotion', 2]] },
+  },
+];
+
+/** How the den's people look (built like the townsfolk). */
+export const SALLOW_LOOK: Look = { body: 'female', outfit: 'ranger', hood: true, hair: 'long', hairColor: 0x9c9690, skin: 0xd9b89a, cloth: 0x3a2e40, linen: 0x6a5a58, height: 1.64 };
+export const NIX_LOOK: Look = { body: 'male', outfit: 'peasant', hair: 'buzzed', beard: true, hairColor: 0x6a3a1c, skin: 0xc49070, cloth: 0x7a3a24, height: 1.72 };
+
 /** The black market: better than the Grand Market on some things, and nobody asks. */
 export const BLACK_MARKET: [string, number][] = [
   ['greaterHealthPotion', 42], ['greaterManaPotion', 46], ['duskbloom', 26], ['emberroot', 14], ['knightSword', 92], ['kiteShield', 76], ['ringSage', 165],
@@ -38,6 +74,8 @@ interface Deps {
   player: Player;
   flags: Record<string, unknown>;
   door: THREE.Vector3;
+  /** go down the trapdoor into the undercity */
+  enter: () => void;
   talk: (who: string, title: string, text: string, opts: DialogueOption[]) => void;
   close: () => void;
   shop: (who: string, title: string, intro: string, stock: [string, number][]) => void;
@@ -47,7 +85,7 @@ interface Deps {
 
 export function setupLowerCity(d: Deps) {
   const { quests, flags } = d;
-  quests.add(...LOWER_CITY_QUESTS);
+  quests.add(...LOWER_CITY_QUESTS, ...UNDERCITY_QUESTS);
   quests.hooks.set('quiet:door', () => (flags.denKnown = true));
   quests.hooks.set('quiet-hands:done', () => {
     flags.denKnown = true;
@@ -58,7 +96,7 @@ export function setupLowerCity(d: Deps) {
   const den = () => {
     const show = (t: string, opts: DialogueOption[]) => d.talk('Mother Sallow', 'The Quiet Hands', t, opts);
     const back = () => den();
-    const opts: DialogueOption[] = [];
+    const opts: DialogueOption[] = [...quests.options('sallow', show, back)];
     if (quests.wants('aldric-freed')) {
       opts.push({
         label: 'I’m here for Aldric Aurelle.',
@@ -76,20 +114,28 @@ export function setupLowerCity(d: Deps) {
         ]),
       });
     }
+    opts.push({ label: 'Farewell.', run: () => d.close() });
+    show(open()
+      ? 'Mother Sallow does not look up from her ledger. “Well? Nix does the selling. I do the owing.”'
+      : 'A grey-haired woman looks up from a ledger stamped with half the merchant marks in Cresha. “The lantern is drowned. So someone talked. Well, sit.”', opts);
+  };
+  /** Nix the fence, behind his stall in the den. */
+  const nix = () => {
+    const show = (t: string, opts: DialogueOption[]) => d.talk('Nix the Fence', 'Black Market of the Quiet Hands', t, opts);
+    const back = () => nix();
+    const opts: DialogueOption[] = [...quests.options('nix', show, back)];
     if (open()) {
-      opts.push({ label: 'Browse the black market', run: () => d.shop('Nix the Fence', 'Black Market of the Quiet Hands', 'Fell off a wagon, all of it. Very clumsy wagons, in this city.', BLACK_MARKET) });
+      opts.push({ label: 'Let me see what fell off the wagons.', run: () => d.shop('Nix the Fence', 'Black Market of the Quiet Hands', 'Fell off a wagon, all of it. Very clumsy wagons, in this city.', BLACK_MARKET) });
       opts.push(...d.sell(back));
     }
-    opts.push({ label: 'Climb back up to the alley.', run: () => d.close() });
-    show(open()
-      ? 'Candle-smoke and brine. Nix waves from behind his crates; Mother Sallow does not look up from her ledger.'
-      : 'You drop down a ladder into a low cellar lit by guttering candles. Crates stamped with half the merchant marks in Cresha line the walls. A grey-haired woman looks up from a ledger. “The lantern is drowned. So someone talked. Well, sit.”', opts);
+    opts.push({ label: 'Farewell.', run: () => d.close() });
+    show(open() ? 'Nix spreads his hands over the counter. “Everything’s legal down here. Just not up there.”' : '“Friend of Sallow’s? No? Then we haven’t met.” Nix goes back to counting spoons.', opts);
   };
   const free = (line: string) => {
     flags.aldricFreed = true;
     quests.signal('aldric-freed');
     d.save();
-    d.talk('Mother Sallow', 'The Quiet Hands', line, [{ label: 'Back.', run: den }, { label: 'Leave.', run: () => d.close() }]);
+    d.talk('Mother Sallow', 'The Quiet Hands', line, [{ label: 'Back.', run: den }, { label: 'Farewell.', run: () => d.close() }]);
   };
 
   const trapdoor: Interactable = {
@@ -97,7 +143,7 @@ export function setupLowerCity(d: Deps) {
     // Hidden: an unmarked alley until someone tells you where to knock.
     label: () => (flags.denKnown ? 'Knock twice on the trapdoor' : ''),
     enabled: () => !!flags.denKnown,
-    action: den,
+    action: d.enter,
   };
-  return { interactables: [trapdoor], den, open };
+  return { interactables: [trapdoor], den, nix, open };
 }

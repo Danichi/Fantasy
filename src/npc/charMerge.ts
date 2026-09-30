@@ -120,7 +120,31 @@ export function characterAtlas(files: string[], load: (f: string) => Promise<GLT
 /** Build counters (perf probes). */
 export const mergeStats = { merges: 0, geometries: 0, simplifyMs: 0 };
 
-const geoCache = new Map<string, { hi: THREE.BufferGeometry; lo: THREE.BufferGeometry | null }>();
+interface GeoEntry {
+  hi: THREE.BufferGeometry;
+  /** undefined while the simplified index is still being made (after the build, off its path) */
+  lo: THREE.BufferGeometry | null | undefined;
+  /** characters built before `lo` was ready: they get their far level when it is */
+  waiting: ((lo: THREE.BufferGeometry) => void)[];
+}
+const geoCache = new Map<string, GeoEntry>();
+/** Simplification queue: one at a time, a little after each build, never inside one. */
+const simplifyQueue: GeoEntry[] = [];
+let simplifying = false;
+function pumpSimplify() {
+  if (simplifying || !simplifyQueue.length) return;
+  simplifying = true;
+  setTimeout(() => {
+    const e = simplifyQueue.shift()!;
+    const t0 = performance.now();
+    e.lo = simplified(e.hi);
+    mergeStats.simplifyMs += performance.now() - t0;
+    if (e.lo) for (const w of e.waiting) w(e.lo);
+    e.waiting.length = 0;
+    simplifying = false;
+    pumpSimplify();
+  }, 120);
+}
 
 /**
  * Replace the skinned parts under `model` with one mesh. Parts must share
@@ -154,8 +178,13 @@ export function mergeParts(model: THREE.Object3D, anchor: THREE.SkinnedMesh, at:
         const at2 = src.getAttribute(a);
         if (!at2) return null;
         const size = at2.itemSize;
-        const out = a === 'skinIndex' ? new Uint16Array(n * size) : new Float32Array(n * size);
-        for (let i = 0; i < n; i++) for (let c = 0; c < size; c++) out[i * size + c] = at2.getComponent(i, c);
+        const plain = !(at2 as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute && !at2.normalized;
+        let out: Uint16Array | Float32Array;
+        if (plain) out = a === 'skinIndex' ? Uint16Array.from(at2.array as ArrayLike<number>) : Float32Array.from(at2.array as ArrayLike<number>);
+        else {
+          out = a === 'skinIndex' ? new Uint16Array(n * size) : new Float32Array(n * size);
+          for (let i = 0; i < n; i++) for (let c = 0; c < size; c++) out[i * size + c] = at2.getComponent(i, c);
+        }
         g.setAttribute(a, new THREE.BufferAttribute(out, size));
       }
       // Tint and (where the part uses them) vertex colours, baked together.
@@ -176,11 +205,11 @@ export function mergeParts(model: THREE.Object3D, anchor: THREE.SkinnedMesh, at:
     const merged = mergeGeometries(pieces, false);
     for (const p of pieces) p.dispose();
     if (!merged) return null;
-    const t0 = performance.now();
-    geo = { hi: merged, lo: simplified(merged) };
-    mergeStats.simplifyMs += performance.now() - t0;
+    geo = { hi: merged, lo: undefined, waiting: [] };
     mergeStats.geometries++;
     geoCache.set(key, geo);
+    simplifyQueue.push(geo);
+    pumpSimplify();
   }
   mergeStats.merges++;
   const mat = characterMaterial(at, hue, linen);
@@ -193,13 +222,17 @@ export function mergeParts(model: THREE.Object3D, anchor: THREE.SkinnedMesh, at:
     return mesh;
   };
   const hi = skinned(geo.hi, 'character');
-  if (geo.lo) {
-    const lod = new THREE.LOD();
-    lod.name = 'character-lod';
-    lod.addLevel(hi, 0);
-    lod.addLevel(skinned(geo.lo, 'character-lo'), LOD_NEAR);
-    anchor.parent!.add(lod);
-  } else anchor.parent!.add(hi);
+  const lod = new THREE.LOD();
+  lod.name = 'character-lod';
+  lod.addLevel(hi, 0);
+  anchor.parent!.add(lod);
+  const addFar = (lo: THREE.BufferGeometry) => {
+    const far = skinned(lo, 'character-lo');
+    far.castShadow = hi.castShadow; // (the crowd switches shadows by distance)
+    lod.addLevel(far, LOD_NEAR);
+  };
+  if (geo.lo) addFar(geo.lo);
+  else if (geo.lo === undefined) geo.waiting.push(addFar);
   for (const p of parts) p.removeFromParent();
   return hi;
 }

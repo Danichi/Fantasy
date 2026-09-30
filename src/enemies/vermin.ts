@@ -56,7 +56,7 @@ export class Rat implements Target {
   lockable = true;
   hp = 16;
   maxHp = 16;
-  private root = ratModel();
+  readonly root = ratModel();
   private yaw = Math.random() * 6.28;
   private cooldown = 1 + Math.random();
   private hurtT = 0;

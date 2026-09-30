@@ -35,8 +35,52 @@ export interface ActionDef {
   startAt?: number;
   /** airborne action: gravity keeps acting; lands with a shockwave */
   air?: boolean;
+  /** procedural flourishes layered over the clip (skills): see Flair */
+  flair?: Flair[];
   /** timing for the real Mixamo clip (measured from the clip), replacing the procedural timing */
   clipTiming?: Partial<Omit<ActionDef, 'id' | 'clip' | 'proc' | 'clipTiming'>> & { speed?: number };
+}
+
+/**
+ * A flourish over [from, to] (action seconds):
+ *  - spin: `amt` extra whole turns of the body (whirlwinds);
+ *  - lean: spine pitch in radians (+ forward into a dash, - arching back);
+ *  - hop: the body lifts `amt` metres on an arc (leaps into a slam, levitating casts);
+ *  - crouch: hips drop `amt` metres (wind-ups, landings);
+ *  - bank: roll the body `amt` radians (carving through a turn).
+ * Lean, crouch and bank ease in over the first quarter and out over the last.
+ */
+export interface Flair {
+  kind: 'spin' | 'lean' | 'hop' | 'crouch' | 'bank';
+  from: number;
+  to: number;
+  amt: number;
+}
+
+/** The summed flourishes at action time `at`. */
+export function flairAt(list: Flair[] | undefined, at: number) {
+  const out = { spin: 0, lean: 0, hop: 0, crouch: 0, bank: 0 };
+  if (!list) return out;
+  for (const f of list) {
+    if (at <= f.from) continue;
+    const len = Math.max(1e-3, f.to - f.from);
+    const u = Math.min(1, (at - f.from) / len);
+    if (f.kind === 'spin') {
+      // Whole turns, easing in and out so the body settles facing forward.
+      out.spin += f.amt * Math.PI * 2 * (u * u * (3 - 2 * u));
+      continue;
+    }
+    if (at >= f.to) continue;
+    if (f.kind === 'hop') {
+      out.hop += f.amt * Math.sin(Math.PI * u);
+      continue;
+    }
+    const q = 0.25;
+    const env = Math.min(1, u / q) * Math.min(1, (1 - u) / q);
+    const e = env * env * (3 - 2 * env);
+    out[f.kind] += f.amt * e;
+  }
+  return out;
 }
 
 /** The effective definition: real-clip timing when that clip is loaded. */

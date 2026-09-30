@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { physics } from '../physics/physics';
 import { mulberry32 } from '../core/math';
-import type { WorldMats } from './buildings';
+import { worldUV, type WorldMats } from './buildings';
 import type { Door, InteriorKind } from './doors';
 import type { Interactable } from '../dungeon/instance';
 
@@ -24,13 +24,23 @@ export interface LightLender {
 interface LightWant { pos: THREE.Vector3; color: number; intensity: number; distance: number; decay: number; fire: boolean }
 
 // Materials outlive a visit so the next room doesn't compile them again.
-let shared: { cloth: THREE.MeshStandardMaterial[]; window: THREE.MeshBasicMaterial; coals: THREE.MeshStandardMaterial; forge: THREE.MeshStandardMaterial } | null = null;
+let shared: {
+  cloth: THREE.MeshStandardMaterial[]; window: THREE.MeshBasicMaterial; coals: THREE.MeshStandardMaterial; forge: THREE.MeshStandardMaterial;
+  iron: THREE.MeshStandardMaterial; flame: THREE.MeshBasicMaterial; flameCore: THREE.MeshBasicMaterial; water: THREE.MeshStandardMaterial; ledger: THREE.MeshStandardMaterial; redHand: THREE.MeshBasicMaterial;
+} | null = null;
 const sharedMats = () =>
   (shared ??= {
     cloth: [0x8a2f2a, 0x2f5f9a, 0x3f6f34, 0x7a3f8a, 0xb8862e].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.95 })),
     window: new THREE.MeshBasicMaterial({ color: 0xfff1cf, toneMapped: false }),
     coals: new THREE.MeshStandardMaterial({ color: 0x3a1206, emissive: 0xff7a2a, emissiveIntensity: 1.8 }),
     forge: new THREE.MeshStandardMaterial({ color: 0x3a1206, emissive: 0xff6a10, emissiveIntensity: 2.6 }),
+    iron: new THREE.MeshStandardMaterial({ color: 0x2e2f34, metalness: 0.7, roughness: 0.5 }),
+    // Flames glow additively: an orange tongue around a pale core.
+    flame: new THREE.MeshBasicMaterial({ color: 0xff7a1e, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false }),
+    flameCore: new THREE.MeshBasicMaterial({ color: 0xffe0a0, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+    water: new THREE.MeshStandardMaterial({ color: 0x10262a, roughness: 0.25, metalness: 0.1, envMapIntensity: 0.35, emissive: 0x040a0a }),
+    ledger: new THREE.MeshStandardMaterial({ color: 0x5a2a1a, roughness: 0.8 }),
+    redHand: new THREE.MeshBasicMaterial({ color: 0x9a1a14 }),
   });
 
 export const INTERIOR_ORIGIN = new THREE.Vector3(-40000, 0, 0);
@@ -53,9 +63,14 @@ export class Interior {
   keeperSpot: Seat | null = null;
   /** places for patrons and residents */
   readonly seats: Seat[] = [];
+  /** named places in bigger layouts (the undercity: 'nix', 'cistern', 'ledger', 'boat') */
+  readonly spots: Record<string, Seat> = {};
   private colliders: RAPIER.Collider[] = [];
   private fire: { light: THREE.PointLight | null; mat: THREE.MeshStandardMaterial } | null = null;
   private wants: LightWant[] = [];
+  private flames: THREE.Mesh[] = [];
+  /** metres per texture repeat on boxes (the undercity's stonework is finer) */
+  private uvScale = 1.5;
   private borrowed: THREE.PointLight[] = [];
   private windowMat: THREE.MeshBasicMaterial;
   private t = 0;
@@ -67,22 +82,27 @@ export class Interior {
   constructor(readonly door: Door, readonly kind: InteriorKind, private scene: THREE.Scene, private m: WorldMats, onLeave: () => void, private lender?: LightLender) {
     this.rnd = mulberry32(door.spec.seed * 7 + 11);
     const big = kind === 'guild' || kind === 'hall' || kind === 'tavern';
-    this.W = Math.max(big ? 9 : 6, door.spec.w - 0.6);
-    this.D = Math.max(big ? 8 : 5.5, door.spec.d - 0.6);
+    this.W = kind === 'undercity' ? 22 : Math.max(big ? 9 : 6, door.spec.w - 0.6);
+    this.D = kind === 'undercity' ? 44 : Math.max(big ? 8 : 5.5, door.spec.d - 0.6);
     this.group.position.copy(INTERIOR_ORIGIN);
     scene.add(this.group);
     const sm = sharedMats();
     this.cloth = sm.cloth;
     this.windowMat = sm.window;
-    this.shell();
-    this.spawn = this.at(0, this.D / 2 - 1.1);
-    this.furnish();
+    if (kind === 'undercity') {
+      this.undercity();
+      this.spawn = this.at(0, this.D / 2 - 5.2);
+    } else {
+      this.shell();
+      this.spawn = this.at(0, this.D / 2 - 1.1);
+      this.furnish();
+    }
     this.lightUp();
     // The way out.
-    const exit = this.at(0, this.D / 2 - 0.5);
+    const exit = kind === 'undercity' ? this.at(0, this.D / 2 - 4.2) : this.at(0, this.D / 2 - 0.5);
     this.interactables.push({
       pos: exit, radius: 1.6,
-      label: () => `Leave ${door.name ?? 'the house'}`,
+      label: () => (kind === 'undercity' ? 'Climb back up to the alley' : `Leave ${door.name ?? 'the house'}`),
       enabled: () => true,
       action: onLeave,
     });
@@ -101,7 +121,8 @@ export class Interior {
 
   // ---- building blocks ------------------------------------------------------------
   private box(mat: THREE.Material, w: number, h: number, d: number, x: number, y: number, z: number, ry = 0, collide = false) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    // World-scale UVs: plank and stone textures keep one size on every surface.
+    const mesh = new THREE.Mesh(worldUV(new THREE.BoxGeometry(w, h, d), this.uvScale), mat);
     mesh.position.set(x, y, z);
     mesh.rotation.y = ry;
     mesh.castShadow = mesh.receiveShadow = true;
@@ -328,6 +349,201 @@ export class Interior {
     this.seats.push({ pos: this.at(x, z), yaw, seated });
   }
 
+  /** An iron-bracketed wall torch: an emissive flame (no light of its own). */
+  private sconce(x: number, y: number, z: number, ry: number) {
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry;
+    this.group.add(g);
+    const iron = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.35), sharedMats().iron);
+    iron.position.z = 0.15;
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.06, 0.14, 8), sharedMats().iron);
+    cup.position.set(0, 0.05, 0.32);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 7), sharedMats().flame);
+    flame.position.set(0, 0.22, 0.32);
+    const core = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.13, 6), sharedMats().flameCore);
+    core.position.set(0, 0.18, 0.32);
+    g.add(iron, cup, flame, core);
+    this.flames.push(flame, core);
+  }
+
+  // ---- the undercity: tunnels, the Quiet Hands' den, the old cistern -------------------
+  //
+  // Laid out from the stairs at the front (+z) to the cistern at the back:
+  //   z 18..22  stairs up to the trapdoor
+  //   z  6..18  a vaulted tunnel, walkway on the left, the sewer channel on the right
+  //   z -10..6  the den: Sallow's table, Nix's stall, a gaming table, bedrolls, and the
+  //             canal landing on the right with a moored skiff
+  //   z -22..-10 the old cistern behind an iron gate: a sunken pool, pillars, rats
+  private undercity() {
+    const { W, D, m } = this;
+    const sm = sharedMats();
+    const HT = 3.6; // vault height
+    this.uvScale = 0.9;
+    // Walls reach below the floor so the water's edges never show a gap.
+    const wall = (x: number, z: number, w: number, d: number, h = HT) => this.box(m.stone, w, h + 1, d, x, (h - 1) / 2, z, 0, true);
+    const water = (x: number, z: number, w: number, d: number) => {
+      const wtr = new THREE.Mesh(new THREE.PlaneGeometry(w, d), sm.water);
+      wtr.rotation.x = -Math.PI / 2;
+      wtr.position.set(x, -0.35, z);
+      this.group.add(wtr);
+      this.box(m.stone, w, 0.2, d, x, -0.7, z, 0, true); // channel bed (shallow: you can climb out)
+      // Stone sides down to the bed.
+      for (const s of [-1, 1]) {
+        this.box(m.stone, w + 0.2, 0.9, 0.1, x, -0.45, z + s * (d / 2 + 0.05));
+        this.box(m.stone, 0.1, 0.9, d + 0.2, x + s * (w / 2 + 0.05), -0.45, z);
+      }
+    };
+    // Floor: stone throughout (the channel and pools read as cut into it).
+    this.box(m.stone, 4.4, 0.2, 16, -0.1, -0.1, 12, 0, true); // stairs + tunnel walkway
+    // The den floor stops at the quay; the canal and the cistern pool are open water.
+    this.box(m.stone, 13.3, 0.2, 16, -4.35, -0.1, -2, 0, true);
+    this.box(m.stone, 2.6, 0.2, 14, 3.6, -0.1, -3, 0, true);
+    this.box(m.stone, W, 0.2, 3.3, 0, -0.1, -11.65, 0, true);
+    this.box(m.stone, W, 0.2, 2.3, 0, -0.1, -20.85, 0, true);
+    for (const sx of [-1, 1]) this.box(m.stone, 6.85, 0.2, 6.4, sx * 7.575, -0.1, -16.5, 0, true);
+    // Planks laid over the channel where it runs out of the tunnel into the canal.
+    this.box(m.planks, 2.6, 0.12, 2.2, 3.55, -0.04, 5, 0, true);
+    this.box(m.stone, W + 1, 0.3, D + 1, 0, HT + 0.15, 0); // ceiling
+
+    // Stairs up to the trapdoor.
+    for (let i = 0; i < 8; i++) this.box(m.stone, 2.6, 0.22 + i * 0.42, 0.5, 0, (0.22 + i * 0.42) / 2, D / 2 - 3.6 + i * 0.5, 0, true);
+    this.box(m.planks, 1.6, 0.1, 1.2, 0, HT - 0.1, D / 2 - 0.6); // the trapdoor from below
+    wall(-1.6, 20, 0.4, 4);
+    wall(1.6, 20, 0.4, 4);
+    wall(0, D / 2 + 0.2, 3.6, 0.4);
+
+    // The tunnel: walkway left, channel right, ribbed vault.
+    wall(-2.4, 12, 0.4, 12);
+    wall(4.6, 12, 0.4, 12);
+    this.box(m.stone, 0.35, 0.5, 12, 2.2, 0.25, 12, 0, true); // curb along the channel
+    water(3.4, 12, 2.1, 12);
+    for (let z = 7; z <= 17; z += 2.5) {
+      this.box(m.stone, 7.2, 0.35, 0.4, 1.1, HT - 0.18, z);
+      for (const sx of [-2.1, 4.3]) this.box(m.stone, 0.3, HT, 0.45, sx, HT / 2, z);
+    }
+    this.sconce(-2.15, 1.9, 15, Math.PI / 2);
+    this.sconce(-2.15, 1.9, 9, Math.PI / 2);
+    // A red hand painted where the tunnel opens: the Quiet Hands' mark.
+    const hand = new THREE.Mesh(new THREE.CircleGeometry(0.35, 5), sm.redHand);
+    hand.position.set(-2.18, 2.0, 12);
+    hand.rotation.y = Math.PI / 2;
+    this.group.add(hand);
+
+    // The den's walls, with the tunnel mouth (x -2..4.6) at z 6 and the cistern gate at x -6.9.
+    wall(-6.2, 6, 7.6, 0.4);
+    wall(7.8, 6, 6.4, 0.4);
+    wall(-W / 2 - 0.2, -8, 0.4, 28);
+    wall(W / 2 + 0.2, -8, 0.4, 28);
+    wall(-9.3, -10, 2.6, 0.4);
+    wall(2.2, -10, 16.4, 0.4);
+    wall(0, -D / 2 - 0.2, W, 0.4);
+    // Pillars holding up the den.
+    for (const [px, pz] of [[-4, -1], [2.5, -1], [-4, -6.5], [2.5, -6.5]]) this.box(m.stone, 0.7, HT, 0.7, px, HT / 2, pz, 0, true);
+
+    // The canal landing (right): water, a jetty, a moored skiff, stacked cargo.
+    water(7.5, -2, 5, 16);
+    water(3.4, 5, 2.1, 2); // the channel joining it
+    this.box(m.stone, 0.35, 0.5, 14, 4.95, 0.25, -3, 0, true); // quay edge
+    for (let z = -8; z <= 3; z += 1.1) this.box(m.planks, 1.6, 0.1, 1.0, 5.6, 0.02, z);
+    this.skiff(8, -3);
+    this.spots.boat = { pos: this.at(5.8, -3), yaw: -Math.PI / 2, seated: false };
+    for (const [cx, cz] of [[9.5, 4.5], [9.5, 3.7], [8.7, 4.6], [10, -9], [9.2, -9.2]]) this.crate(cx, cz, 0.8);
+    this.barrel(8.2, -9.2);
+
+    // Mother Sallow's table at the back, her ledgers and the strongbox.
+    this.table(-5.5, -8.4, 2.2, 1.0);
+    this.box(sm.ledger, 0.5, 0.06, 0.35, -5.2, 0.85, -8.4, 0.2);
+    this.box(sm.iron, 0.8, 0.5, 0.5, -7.8, 0.25, -9.3, 0, true);
+    this.shelf(-9.4, -6, Math.PI / 2, 2.4, 'jars');
+    this.keeperSpot = { pos: this.at(-5.5, -9.3), yaw: 0, seated: false };
+
+    // Nix's stall: a counter heaped with goods that fell off a wagon.
+    this.counter(-7.5, -1.5, 2.6, Math.PI / 2);
+    this.shelf(-10.6, -1.5, Math.PI / 2, 2.6, 'cloth');
+    for (let i = 0; i < 5; i++) this.cyl(this.cloth[i], 0.07, 0.18, -7.5 + (this.rnd() - 0.5) * 0.3, 1.17, -2.6 + i * 0.5, false, 8);
+    this.spots.nix = { pos: this.at(-8.6, -1.5), yaw: Math.PI / 2, seated: false };
+
+    // The gaming table: dice and cards by the brazier.
+    this.table(-0.8, -3.8, 2.0, 1.1);
+    this.bench(-0.8, -2.9, 1.8, Math.PI);
+    this.bench(-0.8, -4.7, 1.8, 0);
+    this.seat(-1.3, -2.9, Math.PI);
+    this.seat(-0.3, -2.9, Math.PI);
+    this.seat(-1.3, -4.7, 0);
+    this.seat(-0.3, -4.7, 0);
+    // Bedrolls along the left wall, a brazier in the middle of the den.
+    for (let i = 0; i < 3; i++) this.rug(-9.8, 2.5 - i * 1.4, 0.9, 1.1);
+    this.brazier(1, 1.8);
+    this.sconce(-10.8, 1.9, -8, Math.PI / 2);
+    this.sconce(10.8, 1.9, -5, -Math.PI / 2);
+
+    // The old cistern: an iron gate, a sunken pool ringed by pillars, rubbish at the edges.
+    for (let i = 0; i < 5; i++) this.box(sm.iron, 0.06, 2.4, 0.06, -7.5 + i * 0.3, 1.2, -10);
+    this.box(sm.iron, 1.8, 0.08, 0.08, -6.9, 2.35, -10);
+    water(0, -16.5, 8, 6);
+    for (const [cx, cz, cw, cd] of [[0, -13.3, 8.4, 0.35], [0, -19.7, 8.4, 0.35], [-4.15, -16.5, 0.35, 6.8], [4.15, -16.5, 0.35, 6.8]] as const) {
+      this.box(m.stone, cw, 0.45, cd, cx, 0.22, cz, 0, true);
+    }
+    for (const [px, pz] of [[-6.5, -13], [6.5, -13], [-6.5, -20], [6.5, -20]]) this.box(m.stone, 0.8, HT, 0.8, px, HT / 2, pz, 0, true);
+    for (const [cx, cz] of [[9, -12], [-9, -21], [9.4, -20.6]]) this.crate(cx, cz, 0.6);
+    this.sconce(-10.8, 1.9, -15, Math.PI / 2);
+    this.sconce(10.8, 1.9, -18, -Math.PI / 2);
+    this.spots.cistern = { pos: this.at(0, -11.8), yaw: Math.PI, seated: false };
+    // Where a courier's satchel went into the water.
+    this.spots.ledger = { pos: this.at(8.8, -21), yaw: 0, seated: false };
+    this.box(sm.ledger, 0.4, 0.25, 0.3, 8.8, 0.12, -21.2, 0.4);
+
+    this.wants.push({ pos: this.at(0, 0, HT - 0.8), color: 0xffcf9a, intensity: 2.2, distance: 26, decay: 1.4, fire: false });
+  }
+
+  /** A little flat-bottomed boat, tied up. */
+  private skiff(x: number, z: number) {
+    const { m } = this;
+    const g = new THREE.Group();
+    g.position.set(x, -0.3, z);
+    this.group.add(g);
+    const plank = (w: number, h: number, d: number, px: number, py: number, pz: number, rz = 0) => {
+      const b = new THREE.Mesh(worldUV(new THREE.BoxGeometry(w, h, d), 1.5), m.planks);
+      b.position.set(px, py, pz);
+      b.rotation.z = rz;
+      b.castShadow = b.receiveShadow = true;
+      g.add(b);
+    };
+    plank(1.3, 0.08, 4.2, 0, 0.05, 0);
+    for (const s of [-1, 1]) plank(0.08, 0.5, 4.2, s * 0.7, 0.28, 0, s * 0.25);
+    plank(1.5, 0.5, 0.08, 0, 0.28, 2.1);
+    plank(1.5, 0.5, 0.08, 0, 0.28, -2.1);
+    plank(1.3, 0.06, 0.35, 0, 0.35, 0.6);
+    const oar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.4, 6), m.timber);
+    oar.rotation.set(0, 0, Math.PI / 2 - 0.2);
+    oar.position.set(0.3, 0.5, -0.4);
+    g.add(oar);
+  }
+
+  /** An iron fire basket on legs: the den's warm heart. */
+  private brazier(x: number, z: number) {
+    const sm = sharedMats();
+    this.cyl(sm.iron, 0.42, 0.35, x, 0.95, z, false, 10);
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      this.box(sm.iron, 0.05, 0.9, 0.05, x + Math.cos(a) * 0.3, 0.45, z + Math.sin(a) * 0.3);
+    }
+    const coals = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.3, 0.12, 10), sm.coals);
+    coals.position.set(x, 1.12, z);
+    this.group.add(coals);
+    for (let i = 0; i < 4; i++) {
+      const core = i === 3;
+      const f = new THREE.Mesh(new THREE.ConeGeometry(core ? 0.12 : 0.11, core ? 0.28 : 0.42, 7), core ? sm.flameCore : sm.flame);
+      f.position.set(x + (core ? 0 : (i - 1) * 0.13), core ? 1.3 : 1.36, z + (core ? 0 : (i % 2) * 0.1 - 0.05));
+      this.group.add(f);
+      this.flames.push(f);
+    }
+    this.colliders.push(physics.addCylinder(this.at(x, z, 0.6), 0.6, 0.45));
+    this.wants.push({ pos: this.at(x, z, 2.0), color: 0xff9a4a, intensity: 10, distance: 16, decay: 1.3, fire: true });
+    this.fire = { light: null, mat: sm.coals };
+  }
+
   // ---- layouts --------------------------------------------------------------------
   private furnish() {
     const { W, D, kind } = this;
@@ -430,9 +646,15 @@ export class Interior {
 
   update(dt: number) {
     this.t += dt;
+    // Torch flames lick and sway.
+    this.flames.forEach((f, i) => {
+      const k = 1 + Math.sin(this.t * 11 + i * 1.7) * 0.12 + Math.sin(this.t * 23 + i) * 0.06;
+      f.scale.set(1, k, 1);
+      f.rotation.z = Math.sin(this.t * 3.1 + i) * 0.08;
+    });
     if (this.fire) {
       const f = 0.85 + Math.sin(this.t * 9.1) * 0.08 + Math.sin(this.t * 23.7) * 0.05 + Math.sin(this.t * 3.3) * 0.05;
-      if (this.fire.light) this.fire.light.intensity = (this.kind === 'smithy' ? 12 : 8) * f;
+      if (this.fire.light) this.fire.light.intensity = (this.kind === 'smithy' ? 12 : this.kind === 'undercity' ? 10 : 8) * f;
       this.fire.mat.emissiveIntensity = (this.kind === 'smithy' ? 2.6 : 1.8) * f;
     }
   }

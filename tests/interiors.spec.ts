@@ -68,3 +68,61 @@ test('walk into the inn, meet the innkeeper, and step back out onto the doorstep
   expect(await page.locator('.inventory').isVisible()).toBe(false);
   expect(game.errors).toEqual([]);
 });
+
+test('down the trapdoor: the Quiet Hands’ den, the cistern rats and the drowned satchel', async ({ game }) => {
+  const { page } = game;
+  const res = await page.evaluate(async (slow) => {
+    const g = window.__game, T = g.THREE;
+    const W = (n: number) => (window as any).waitSteps(n);
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    const until = async (f: () => boolean, ms = 20000) => {
+      const t0 = performance.now();
+      while (!f() && performance.now() - t0 < ms * slow) await wait(50);
+      return f();
+    };
+    const press = async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE' }));
+      await W(3);
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE' }));
+    };
+    const labels = () => g.realm.interactables.map((i: { label: () => string }) => i.label());
+    // Aldric is already home: the Hands know you.
+    g.quests.state['quiet-hands'] = { status: 'done', stage: 2, progress: [] };
+    g.worldFlags.denKnown = true;
+    g.worldFlags.aldricFreed = true;
+    g.quests.accept('cistern-rats');
+    g.quests.accept('drowned-satchel');
+    const out: Record<string, unknown> = {};
+    const trap = g.realm.overworldInteractables.find((i: { label: () => string }) => i.label() === 'Knock twice on the trapdoor');
+    out.trapdoor = !!trap;
+    g.player.teleport(new T.Vector3(trap.pos.x + 0.5, trap.pos.y + 0.4, trap.pos.z));
+    await W(15);
+    await press();
+    out.entered = await until(() => g.realm.mode === 'interior' && !g.realm.busy);
+    out.kind = g.realm.interior?.kind;
+    // Sallow and Nix are built for the visit and can be talked to.
+    out.people = await until(() => labels().includes('Talk to Mother Sallow') && labels().includes('Talk to Nix the Fence'));
+    out.rats = g.inside.rats.length;
+    // Stand still: the floor holds.
+    await W(40);
+    out.floor = g.player.pos.y > -0.5 && g.player.pos.y < 1;
+    // Clear the cistern.
+    for (const rat of g.inside.rats) rat.takeHit({ damage: 999, poise: 0, dir: new T.Vector3(0, 0, 1), at: rat.center.clone(), crit: false, source: 'melee' });
+    await W(5);
+    out.ratsStage = g.quests.state['cistern-rats'].stage;
+    // Fish out the satchel.
+    const sat = g.realm.interior.spots.ledger.pos;
+    g.player.teleport(new T.Vector3(sat.x, 0.4, sat.z + 0.5));
+    await W(20);
+    await press();
+    await W(5);
+    out.satchelStage = g.quests.state['drowned-satchel'].stage;
+    // Back up the stairs.
+    await g.realm.leaveInterior();
+    out.back = g.realm.mode === 'overworld' && g.player.pos.distanceTo(trap.pos) < 2.5;
+    out.ratsGone = g.inside.rats.length === 0;
+    return out;
+  }, SLOW);
+  expect(res).toEqual({ trapdoor: true, entered: true, kind: 'undercity', people: true, rats: 8, floor: true, ratsStage: 1, satchelStage: 1, back: true, ratsGone: true });
+  expect(game.errors).toEqual([]);
+});

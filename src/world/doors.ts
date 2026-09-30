@@ -5,7 +5,7 @@ import type { HouseSpec } from './buildings';
 // house (buildHouse knows where its door is); the interior behind it is built
 // only when you step through (world/interior.ts).
 
-export type InteriorKind = 'home' | 'tavern' | 'shop' | 'smithy' | 'guild' | 'hall';
+export type InteriorKind = 'home' | 'tavern' | 'shop' | 'smithy' | 'guild' | 'hall' | 'undercity';
 
 export interface Door {
   /** the doorstep, just outside, on the ground */

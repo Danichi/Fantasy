@@ -454,7 +454,7 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
     // All six ship types of the Grand Ocean (sailing opens in a later chapter):
     // merchantmen, the great ocean vessel, a sloop, a Crown naval ship, and
     // the dwarves' expedition ship, the Iron Kettle, at the berth.
-    const fleet: [number, number, Parameters<typeof buildShip>[0], number][] = [[98, 1, 'merchant', 0x5a3a24], [130, -1, 'galleon', 0x3a2a24], [236, 1, 'naval', 0x2a3a5a], [262, -1, 'sloop', 0x2f4a6a], [150, 0, 'expedition', 0x6a4a2a]];
+    const fleet: [number, number, Parameters<typeof buildShip>[0], number][] = [[98, 1, 'merchant', 0x5a3a24], [130, -1, 'galleon', 0x5a3420], [236, 1, 'naval', 0x2a3a5a], [262, -1, 'sloop', 0x2f4a6a], [150, 0, 'expedition', 0x6a4a2a]];
     for (const [pz, side, kind, col] of fleet) {
       const { group, beam, length } = buildShip(kind, col);
       const x = side === 0 ? QUAY_X + 30 : QUAY_X + 6 + length / 2 + 4;
@@ -726,6 +726,10 @@ const NAMED: Named[] = [
     look: { body: 'female', outfit: 'peasant', hair: 'long', hairColor: 0x1f1a17, skin: 0xfff0e6, linen: 0xd9cfe8, cloth: 0x2f3f7a, height: 1.74 } },
   { id: 'hobbs', name: 'Jory Hobbs', title: 'Ostler · West Gate Stables & Coaches', post: [2716, 164], activity: 'work', hours: [6, 21], lines: { any: ['Coach to the Wayfarer’s Rest and Elder Glen, leaving on the hour.'] },
     look: { body: 'male', outfit: 'ranger', hair: 'simpleparted', beard: true, hairColor: 0x6a4428, skin: 0xe0b894, cloth: 0x7a5a3a, height: 1.8 } },
+  { id: 'dice', name: 'Delphine “Dice” Coveley', title: 'Cardsharp of the Lower City', post: [2886, 292], activity: 'talk', hours: [17, 28], lines: { any: ['Cut the deck? No? Wise.', 'Everyone in the Lower City owes someone. Mostly me.'], evening: ['The Lantern’s filling up. Good. Full rooms have loose purses.'] },
+    look: { body: 'female', outfit: 'peasant', hair: 'long', hairColor: 0x8a3f22, skin: 0xe0b894, linen: 0xe8c8c0, cloth: 0x7a2a3a, height: 1.68 } },
+  { id: 'pim', name: 'Little Pim', title: 'Runner for the Quiet Hands', post: [2866, 306], activity: 'idle', hours: [9, 23], lines: { any: ['I run messages. Fast ones. Don’t ask what’s in ’em.', 'The Watch nearly had me in the cistern last week. Nearly.'] },
+    look: { body: 'male', outfit: 'peasant', hair: 'buzzed', hairColor: 0x3a2618, skin: 0xa8744e, linen: 0xd8c29a, height: 1.42 } },
   { id: 'marlo', name: 'Slick Marlo', title: 'Loiterer by the Drowned Lantern', post: [2880, 294], activity: 'idle', hours: [16, 27], lines: { any: ['Never seen you. Never seen anyone. That\'s my trade.'] },
     look: { body: 'male', outfit: 'ranger', hair: 'buzzed', hairColor: 0x1f1a17, skin: 0xa8744e, cloth: 0x2a2a30, hood: true, height: 1.74 } },
 ];
@@ -733,6 +737,8 @@ const NAMED: Named[] = [
 const JOBS: [string, number, ScheduleEntry['activity'], string][] = [
   ['dockworker', 12, 'work', 'harbour'], ['sailor', 10, 'talk', 'harbour'], ['merchant', 12, 'shop', 'market'], ['citizen', 30, 'shop', 'market'],
   ['guard', 8, 'patrol', 'gate'], ['cadet', 6, 'patrol', 'academy'], ['fisher', 6, 'work', 'wharf'], ['smith', 3, 'work', 'forge'], ['child', 5, 'play', 'market'], ['noble', 4, 'talk', 'gardens'],
+  // The Lower City: idlers and dockhands out of work, washerwomen at the canal.
+  ['idler', 8, 'talk', 'lowercity'], ['washer', 4, 'work', 'lowercity'],
 ];
 
 function portResidents(): { settlement: Settlement; records: NpcRecord[] } {
@@ -747,6 +753,7 @@ function portResidents(): { settlement: Settlement; records: NpcRecord[] } {
   places.set('gardens', { id: 'gardens', spots: [v(2740, 84), v(2760, 70), v(2728, 80)] });
   places.set('tavern', { id: 'tavern', spots: ring(2784, 264, 3.5, 6) });
   places.set('homes', { id: 'homes', spots: ring(2830, 250, 30, 12), indoors: true });
+  places.set('lowercity', { id: 'lowercity', spots: [v(2868, 296), v(2872, 292), v(2878, 292), v(2884, 296), v(2890, 294), v(2862, 300), v(2866, 311), v(2892, 309)] });
   const graph = cityGraph(places);
   const records: NpcRecord[] = [];
   for (const n of NAMED) {
@@ -766,7 +773,7 @@ function portResidents(): { settlement: Settlement; records: NpcRecord[] } {
     for (let i = 0; i < count; i++, k++) {
       const female = rnd() < 0.5;
       const look: Look = {
-        body: female ? 'female' : 'male', outfit: job === 'guard' || job === 'cadet' || job === 'sailor' ? 'ranger' : 'peasant',
+        body: job === 'washer' || female ? 'female' : 'male', outfit: job === 'guard' || job === 'cadet' || job === 'sailor' ? 'ranger' : 'peasant',
         hair: female ? (['long', 'buns', 'buzzedfemale'] as const)[Math.floor(rnd() * 3)] : (['simpleparted', 'buzzed'] as const)[Math.floor(rnd() * 2)],
         beard: !female && rnd() < 0.35, hairColor: [0x1f1a17, 0x3a2618, 0x6a4428, 0x8a3f22, 0xd2b26a, 0xb8b4ae][Math.floor(rnd() * 6)],
         skin: [0xfff0e6, 0xffffff, 0xe0b894, 0xa8744e, 0x7a4e32][Math.floor(rnd() * 5)],
@@ -797,6 +804,8 @@ const PORT_LINES: Record<string, NpcRecord['lines']> = {
   smith: { any: ['Hot iron waits for no one.'] },
   child: { any: ['Race you to the lighthouse!'] },
   noble: { any: ['Do mind the hem.', 'The Governor\'s ball is next week. One simply must.'] },
+  idler: { any: ['Ships don’t need hands like they used to.', 'Watch your purse round here. Not from me. Probably.'], evening: ['The Lantern’s pouring cheap tonight.'], night: ['Nothing to see. Move along.'] },
+  washer: { any: ['Canal water’s no good for whites. Try telling the Upper City that.', 'Mind the lines, love, those are the Governor’s shirts.'] },
 };
 
 /** Walking graph from the city streets (subdivided, junctions merged, spots hooked on). */
