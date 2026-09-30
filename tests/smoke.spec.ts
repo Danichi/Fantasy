@@ -242,14 +242,13 @@ test('living-world micro discoveries persist and award once', async ({ game }) =
       flag,
       firstGain: afterFirst - before,
       secondGain: afterSecond - afterFirst,
-      errors: game.errors,
     };
   });
   expect(result.count).toBeGreaterThanOrEqual(8);
   expect(result.flag).toBe(true);
   expect(result.firstGain).toBe(28);
   expect(result.secondGain).toBe(0);
-  expect(result.errors).toEqual([]);
+  expect(game.errors).toEqual([]);
 });
 
 test('key Elder Glen interiors have role-specific detail and working inspections', async ({ game }) => {
@@ -278,12 +277,12 @@ test('key Elder Glen interiors have role-specific detail and working inspections
       while (g.realm.busy) await new Promise((r) => setTimeout(r, 25));
       void before;
     }
-    return { seen, errors: game.errors };
+    return { seen };
   });
   for (const keeper of ['baker', 'apothecary', 'tailor', 'carpenter', 'arcanist', 'froest']) {
     expect(result.seen[keeper].kind).toBe(keeper === 'froest' ? 'smithy' : 'shop');
     expect(result.seen[keeper].inspect).toBe(true);
     expect(result.seen[keeper].children).toBeGreaterThan(25);
   }
-  expect(result.errors).toEqual([]);
+  expect(game.errors).toEqual([]);
 });
