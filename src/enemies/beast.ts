@@ -37,9 +37,17 @@ const LOADER = compressedGltf;
 const CACHE = new Map<string, Promise<GLTF>>();
 
 type State = 'idle' | 'chase' | 'attack' | 'hurt' | 'dying';
+/** seconds a dead beast lies before it has sunk away */
+const DEATH_TIME = 3.8;
 
-const findClip = (clips: THREE.AnimationClip[], patterns: RegExp[]) =>
-  clips.find((clip) => patterns.some((p) => p.test(clip.name)));
+/** First clip matching a pattern, in pattern order (so exact names win), skipping any `not` match. */
+const findClip = (clips: THREE.AnimationClip[], patterns: RegExp[], not?: RegExp) => {
+  for (const p of patterns) {
+    const c = clips.find((clip) => p.test(clip.name) && !(not && not.test(clip.name)));
+    if (c) return c;
+  }
+  return undefined;
+};
 
 function loadFile(file: string) {
   const cached = CACHE.get(file);
@@ -80,6 +88,11 @@ export class Beast implements Target {
   private model: THREE.Object3D | null = null;
   private modelHeight = 1;
   private hitFlash = 0;
+  private walkSpeed = 1.2;
+  private runSpeed = 3.5;
+  /** idle wandering: a spot near home to amble to, and a timer */
+  private wander: THREE.Vector3 | null = null;
+  private wanderT = 2 + Math.random() * 4;
 
   constructor(
     readonly variantKind: BeastKind,
@@ -153,14 +166,23 @@ export class Beast implements Target {
       this.group.add(model);
       if (gltf.animations.length) {
         this.mixer = new THREE.AnimationMixer(model);
-        const idle = findClip(gltf.animations, [/idle/i, /stand/i, /breath/i]) ?? gltf.animations[0];
-        const move = findClip(gltf.animations, [/run/i, /walk/i, /move/i, /locomotion/i]) ?? idle;
-        const attack = findClip(gltf.animations, [/attack/i, /bite/i, /slash/i, /hit/i]) ?? move;
-        const death = findClip(gltf.animations, [/death/i, /die/i]) ?? null;
-        if (idle) this.actions.set('idle', this.makeAction(idle, true));
-        if (move) this.actions.set('move', this.makeAction(move, true));
-        if (attack) this.actions.set('attack', this.makeAction(attack, false));
+        const clips = gltf.animations;
+        const flinch = /hit|react|recieve|receive/i;
+        const idle = findClip(clips, [/^idle$/i, /idle/i, /stand/i, /breath/i], flinch) ?? clips[0];
+        const walk = findClip(clips, [/^walk$/i, /walk/i], flinch) ?? idle;
+        const run = findClip(clips, [/^gallop$/i, /^run$/i, /gallop/i, /run/i], /jump/i) ?? walk;
+        const attack = findClip(clips, [/^attack$/i, /attack/i, /bite/i, /punch/i, /weapon/i, /slash/i], flinch) ?? idle;
+        const hurt = findClip(clips, [/hitreact_left/i, /hitreact/i, /hit/i, /recieve|receive/i]) ?? null;
+        const death = findClip(clips, [/^death$/i, /death/i, /die/i]) ?? null;
+        this.actions.set('idle', this.makeAction(idle, true));
+        this.actions.set('walk', this.makeAction(walk, true));
+        this.actions.set('run', this.makeAction(run, true));
+        this.actions.set('attack', this.makeAction(attack, false));
+        if (hurt) this.actions.set('hurt', this.makeAction(hurt, false));
         if (death) this.actions.set('death', this.makeAction(death, false));
+        // Natural ground speeds of the clips at this size, so feet don't skate.
+        this.walkSpeed = this.modelHeight * 1.1;
+        this.runSpeed = this.modelHeight * 3.4;
         this.playAction('idle', 0);
       }
     } catch (error) {
@@ -180,11 +202,13 @@ export class Beast implements Target {
     const next = this.actions.get(name);
     if (!next || next === this.activeAction) return;
     if (this.activeAction) this.activeAction.fadeOut(fade);
+    next.timeScale = 1;
     next.reset().fadeIn(fade).play();
     this.activeAction = next;
   }
 
   private setState(next: State) {
+    if (next === this.state) return;
     this.state = next;
     this.t = 0;
     this.attackDone = false;
@@ -194,7 +218,6 @@ export class Beast implements Target {
     if (!this.alive || this.state === 'dying') return;
     this.hp -= hit.damage;
     this.hitFlash = 0.18;
-    this.t = 0;
     this.vel.addScaledVector(hit.dir, 2.6);
 
     if (this.hp <= 0) {
@@ -204,7 +227,9 @@ export class Beast implements Target {
 
     if (hit.crit || hit.poise > 25) {
       this.stunned = true;
+      this.state = 'idle'; // re-enter so the flinch replays on every heavy hit
       this.setState('hurt');
+      this.playAction('hurt', 0.05);
     }
   }
 
@@ -247,9 +272,8 @@ export class Beast implements Target {
     if (this.state === 'dying') {
       this.deadT += dt;
       this.mixer?.update(dt);
-      const k = clamp(1 - this.deadT / 0.9, 0, 1);
-      this.group.scale.setScalar(Math.max(0.001, k));
-      if (this.deadT > 0.9) this.dispose();
+      this.group.position.y = this.position.y - clamp((this.deadT - 1.8) * 0.5, 0, 1) * this.modelHeight;
+      if (this.deadT > DEATH_TIME) this.dispose();
       return;
     }
 
@@ -259,50 +283,77 @@ export class Beast implements Target {
     const toPlayer = player.pos.clone().sub(this.position);
     const distance = Math.hypot(toPlayer.x, toPlayer.z);
 
+    const attackDur = this.actions.get('attack')?.getClip().duration ?? 0.9;
+    let speed = 0; // desired ground speed this step
     if (this.state === 'hurt') {
-      this.playAction('idle');
       if (this.t > 0.55) {
         this.stunned = false;
         this.setState('chase');
       }
     } else if (this.state === 'attack') {
       this.playAction('attack', 0.07);
-      if (this.t > 0.33 && !this.attackDone) {
+      // Track the target through the wind-up; the bite lands a third of the way in.
+      if (this.t < attackDur * 0.3) this.yaw = dampAngle(this.yaw, Math.atan2(toPlayer.x, toPlayer.z), 8, dt);
+      if (this.t > attackDur * 0.35 && !this.attackDone) {
         this.attackDone = true;
         this.attack(player);
       }
-      if (this.t > 0.9) {
+      if (this.t > Math.min(attackDur, 1.2)) {
         this.cooldown = v.attackCooldown;
         this.setState('chase');
       }
+    } else if (!player.dead && distance < v.aggro) {
+      this.wander = null;
+      this.yaw = dampAngle(this.yaw, Math.atan2(toPlayer.x, toPlayer.z), 8, dt);
+      if (distance < v.attackRange && this.cooldown <= 0) this.setState('attack');
+      else {
+        this.setState('chase');
+        // Close in at a run; circle at a trot while the bite recharges.
+        speed = distance > v.attackRange * 1.4 ? v.speed : this.cooldown > 0 ? this.walkSpeed * 0.8 : v.speed * 0.6;
+        if (distance < v.attackRange * 0.8) speed = 0;
+      }
     } else {
-      if (!player.dead && distance < v.aggro) {
-        this.yaw = dampAngle(this.yaw, Math.atan2(toPlayer.x, toPlayer.z), 10, dt);
-        if (distance < v.attackRange && this.cooldown <= 0) {
-          this.setState('attack');
-        } else {
-          this.setState(distance < v.aggro ? 'chase' : 'idle');
-        }
+      const fromHome = this.home.clone().sub(this.position).setY(0);
+      if (fromHome.length() > 9) {
+        // Lost the scent: trot back home.
+        this.wander = null;
+        this.yaw = dampAngle(this.yaw, Math.atan2(fromHome.x, fromHome.z), 4, dt);
+        this.setState('chase');
+        speed = this.walkSpeed * 1.4;
       } else {
-        const fromHome = this.home.clone().sub(this.position).setY(0);
-        if (fromHome.length() > 7) {
-          this.yaw = dampAngle(this.yaw, Math.atan2(fromHome.x, fromHome.z), 3, dt);
-          this.setState('chase');
-        } else if (Math.sin(this.t * 0.75) > 0.995) {
-          this.yaw = dampAngle(this.yaw, this.yaw + 0.45, 1, dt);
-          this.setState('idle');
-        } else {
-          this.setState('idle');
+        this.setState('idle');
+        this.wanderT -= dt;
+        if (this.wanderT <= 0 && !this.wander) {
+          const a = Math.random() * Math.PI * 2, r = 2 + Math.random() * 5;
+          this.wander = this.home.clone().add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
+        }
+        if (this.wander) {
+          const to = this.wander.clone().sub(this.position).setY(0);
+          if (to.length() < 0.6) {
+            this.wander = null;
+            this.wanderT = 3 + Math.random() * 6;
+          } else {
+            this.yaw = dampAngle(this.yaw, Math.atan2(to.x, to.z), 3, dt);
+            speed = this.walkSpeed;
+          }
         }
       }
     }
 
-    const move = new THREE.Vector3();
-    if (this.state === 'chase') {
-      move.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(v.speed);
-      this.playAction('move');
-    } else if (this.state === 'idle') {
-      this.playAction('idle');
+    const move = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(speed);
+    // Legs match the ground speed: walk or gallop, played at the speed it covers.
+    if (this.mixer && (this.state === 'chase' || this.state === 'idle')) {
+      const ground = Math.hypot(this.vel.x, this.vel.z);
+      if (ground > this.walkSpeed * 1.5) {
+        this.playAction('run', 0.18);
+        this.activeAction!.timeScale = clamp(ground / this.runSpeed, 0.6, 1.5);
+      } else if (ground > 0.25) {
+        this.playAction('walk', 0.2);
+        this.activeAction!.timeScale = clamp(ground / this.walkSpeed, 0.5, 1.6);
+      } else {
+        this.playAction('idle', 0.3);
+        this.activeAction!.timeScale = 1;
+      }
     }
 
     this.vel.x = damp(this.vel.x, move.x, 10, dt);
@@ -334,7 +385,7 @@ export class Beast implements Target {
   }
 
   get dead() {
-    return !this.alive && this.state === 'dying' && this.deadT > 0.9;
+    return !this.alive && this.state === 'dying' && this.deadT > DEATH_TIME;
   }
 
   private disposed = false;
