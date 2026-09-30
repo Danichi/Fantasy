@@ -9,8 +9,8 @@ import { pbr } from '../world/props';
 
 export const MINE_ORIGIN = new THREE.Vector3(5000, 0, 0);
 export const MINE_CELL = 4;
-export const MINE_MAP_W = 36;
-export const MINE_MAP_H = 34;
+export const MINE_MAP_W = 48;
+export const MINE_MAP_H = 42;
 
 export interface MineProgress {
   gateOpen: boolean;
@@ -26,9 +26,22 @@ export interface MineHooks {
   save: () => void;
 }
 
-interface Rect { x: number; z: number; w: number; d: number; }
+interface Rect {
+  x: number;
+  z: number;
+  w: number;
+  d: number;
+}
+
+interface Openings {
+  north?: boolean;
+  south?: boolean;
+  east?: boolean;
+  west?: boolean;
+}
 
 let shared: ReturnType<typeof makeMaterials> | null = null;
+
 function makeMaterials() {
   const L = new THREE.TextureLoader();
   const stone = pbr(L, 'rock_face_03', { color: 0x756f66 }, 4, 0.55);
@@ -38,7 +51,20 @@ function makeMaterials() {
   const metal = new THREE.MeshStandardMaterial({ color: 0x35383a, metalness: 0.8, roughness: 0.42 });
   const brass = new THREE.MeshStandardMaterial({ color: 0x9b7130, metalness: 0.7, roughness: 0.35 });
   const rail = new THREE.MeshStandardMaterial({ color: 0x26282b, metalness: 0.8, roughness: 0.5 });
-  return { stone, stoneDark, wood, planks, metal, brass, rail };
+  const crystal = new THREE.MeshStandardMaterial({
+    color: 0x4a5662,
+    emissive: 0x1a2b38,
+    emissiveIntensity: 0.55,
+    roughness: 0.45,
+    metalness: 0.55,
+  });
+  const rune = new THREE.MeshStandardMaterial({
+    color: 0x5a3e69,
+    emissive: 0x351f46,
+    emissiveIntensity: 0.4,
+    roughness: 0.6,
+  });
+  return { stone, stoneDark, wood, planks, metal, brass, rail, crystal, rune };
 }
 
 function meshBox(group: THREE.Group, pos: THREE.Vector3, size: THREE.Vector3, mat: THREE.Material) {
@@ -51,10 +77,22 @@ function meshBox(group: THREE.Group, pos: THREE.Vector3, size: THREE.Vector3, ma
 
 export class MineInstance {
   readonly group = new THREE.Group();
-  readonly interactables: Array<{ pos: THREE.Vector3; radius: number; label: () => string; enabled: () => boolean; action: () => void }> = [];
+  readonly interactables: Array<{
+    pos: THREE.Vector3;
+    radius: number;
+    label: () => string;
+    enabled: () => boolean;
+    action: () => void;
+  }> = [];
   readonly map: MapData = emptyMap(MINE_MAP_W, MINE_MAP_H);
+
   readonly groundAt = (x: number, z: number): number | null => {
-    if (x < MINE_ORIGIN.x - 18 || x > MINE_ORIGIN.x + 18 || z < MINE_ORIGIN.z - 118 || z > MINE_ORIGIN.z + 12) return null;
+    if (
+      x < MINE_ORIGIN.x - 31 ||
+      x > MINE_ORIGIN.x + 31 ||
+      z < MINE_ORIGIN.z - 151 ||
+      z > MINE_ORIGIN.z + 12
+    ) return null;
     return MINE_ORIGIN.y;
   };
 
@@ -77,15 +115,19 @@ export class MineInstance {
   ) {
     const m = shared ??= makeMaterials();
     scene.add(this.group);
+
     this.buildShell(m);
-    this.buildEntranceTunnel(m);
-    this.buildSupports(m);
+    this.buildEntrance(m);
+    this.buildForemanCamp(m);
+    this.buildTunnelSupports(m);
     this.buildRails(m);
     this.buildMachinery(m);
     this.buildGate(m);
+    this.buildAncientRuins(m);
+    this.buildDeepMine(m);
+    this.buildBossArena(m);
     this.buildMineCart(m);
     this.spawnEnemies();
-    this.buildBossArena(m);
     this.buildExit(m);
   }
 
@@ -110,193 +152,551 @@ export class MineInstance {
     return c;
   }
 
-  private wall(x: number, z: number, w: number, h: number, d: number, mat: THREE.Material) {
+  private wall(
+    x: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+    mat: THREE.Material,
+  ) {
     const p = new THREE.Vector3(x, MINE_ORIGIN.y + h / 2, z);
     meshBox(this.group, p, new THREE.Vector3(w, h, d), mat);
     this.box(p, new THREE.Vector3(w / 2, h / 2, d / 2));
   }
 
-  private room(r: Rect, m: ReturnType<typeof makeMaterials>, openSouth: boolean, openNorth: boolean) {
+  private room(
+    r: Rect,
+    m: ReturnType<typeof makeMaterials>,
+    openings: Openings = {},
+  ) {
     const floor = meshBox(
       this.group,
       new THREE.Vector3(MINE_ORIGIN.x + r.x, -0.175, MINE_ORIGIN.z + r.z),
       new THREE.Vector3(r.w, 0.35, r.d),
       m.stone,
     );
-    floor.receiveShadow = true;
     this.box(floor.position.clone(), new THREE.Vector3(r.w / 2, 0.175, r.d / 2));
 
-    const h = 5.6, t = 0.6;
+    const h = 5.8;
+    const t = 0.65;
     const lx = MINE_ORIGIN.x + r.x - r.w / 2;
     const rx = MINE_ORIGIN.x + r.x + r.w / 2;
     const nz = MINE_ORIGIN.z + r.z - r.d / 2;
     const sz = MINE_ORIGIN.z + r.z + r.d / 2;
+    const opening = 4.6;
+    const sideW = (r.w - opening) / 2;
+    const sideD = (r.d - opening) / 2;
+
     this.wall(lx, MINE_ORIGIN.z + r.z, t, h, r.d, m.stoneDark);
     this.wall(rx, MINE_ORIGIN.z + r.z, t, h, r.d, m.stoneDark);
+    this.wall(MINE_ORIGIN.x + r.x, nz, r.w, h, t, m.stoneDark);
+    this.wall(MINE_ORIGIN.x + r.x, sz, r.w, h, t, m.stoneDark);
 
-    const opening = 4.2;
-    const sideW = (r.w - opening) / 2;
-    this.wall(lx + t / 2 + sideW / 2, nz, sideW, h, t, m.stoneDark);
-    this.wall(rx - t / 2 - sideW / 2, nz, sideW, h, t, m.stoneDark);
-    this.wall(lx + t / 2 + sideW / 2, sz, sideW, h, t, m.stoneDark);
-    this.wall(rx - t / 2 - sideW / 2, sz, sideW, h, t, m.stoneDark);
-    if (!openNorth) this.wall(MINE_ORIGIN.x + r.x, nz, opening, h, t, m.stoneDark);
-    if (!openSouth) this.wall(MINE_ORIGIN.x + r.x, sz, opening, h, t, m.stoneDark);
+    if (openings.north) {
+      this.cutWallOpening(lx + t, nz, sideW, h, t, m.stoneDark, -1, 0);
+      this.cutWallOpening(rx - t, nz, sideW, h, t, m.stoneDark, 1, 0);
+    }
+    if (openings.south) {
+      this.cutWallOpening(lx + t, sz, sideW, h, t, m.stoneDark, -1, 0);
+      this.cutWallOpening(rx - t, sz, sideW, h, t, m.stoneDark, 1, 0);
+    }
+    if (openings.east) {
+      this.cutSideOpening(nz + t, sideD, h, t, m.stoneDark, rx, 1);
+      this.cutSideOpening(sz - t, sideD, h, t, m.stoneDark, rx, 1);
+    }
+    if (openings.west) {
+      this.cutSideOpening(nz + t, sideD, h, t, m.stoneDark, lx, -1);
+      this.cutSideOpening(sz - t, sideD, h, t, m.stoneDark, lx, -1);
+    }
 
     meshBox(
       this.group,
-      new THREE.Vector3(MINE_ORIGIN.x + r.x, MINE_ORIGIN.y + 6.0, MINE_ORIGIN.z + r.z),
-      new THREE.Vector3(r.w + 1.2, 0.35, r.d + 1.2),
+      new THREE.Vector3(MINE_ORIGIN.x + r.x, MINE_ORIGIN.y + 6.15, MINE_ORIGIN.z + r.z),
+      new THREE.Vector3(r.w + 1.2, 0.38, r.d + 1.2),
       m.stoneDark,
     );
+  }
+
+  private cutWallOpening(
+    x: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+    mat: THREE.Material,
+    side: number,
+    _axis: number,
+  ) {
+    const center = x + side * (w / 2);
+    this.wall(center, z, w, h, d, mat);
+  }
+
+  private cutSideOpening(
+    z: number,
+    d: number,
+    h: number,
+    t: number,
+    mat: THREE.Material,
+    x: number,
+    side: number,
+  ) {
+    const center = z + side * (d / 2);
+    this.wall(x, center, t, h, d, mat);
+  }
+
+  private corridor(
+    x: number,
+    z: number,
+    w: number,
+    d: number,
+    m: ReturnType<typeof makeMaterials>,
+  ) {
+    const floor = meshBox(
+      this.group,
+      new THREE.Vector3(MINE_ORIGIN.x + x, -0.175, MINE_ORIGIN.z + z),
+      new THREE.Vector3(w, 0.35, d),
+      m.stone,
+    );
+    this.box(floor.position.clone(), new THREE.Vector3(w / 2, 0.175, d / 2));
   }
 
   private buildShell(m: ReturnType<typeof makeMaterials>) {
-    this.room({ x: 0, z: 0, w: 9, d: 18 }, m, true, true);
-    this.room({ x: 0, z: -24, w: 22, d: 18 }, m, true, true);
-    this.room({ x: 0, z: -45, w: 24, d: 20 }, m, true, true);
-    this.room({ x: 0, z: -63, w: 18, d: 16 }, m, true, true);
-    this.room({ x: 0, z: -81, w: 24, d: 18 }, m, true, true);
-    this.room({ x: 0, z: -103, w: 28, d: 24 }, m, true, false);
+    // The mine follows the concept image's progression:
+    // entrance -> foreman's camp -> winding tunnels -> machinery -> ruins -> blue deep mine -> boss.
+    this.room({ x: 0, z: 0, w: 14, d: 14 }, m, { south: true });
+    this.corridor(0, -9, 7, 10, m);
 
-    for (const [z, w, d] of [[-9, 4.2, 6], [-33, 4.2, 12], [-54, 4.2, 6], [-72, 4.2, 6], [-92, 5, 6]] as const) {
-      const floor = meshBox(this.group, new THREE.Vector3(MINE_ORIGIN.x, -0.175, MINE_ORIGIN.z + z), new THREE.Vector3(w, 0.35, d), m.stone);
-      this.box(floor.position.clone(), new THREE.Vector3(w / 2, 0.175, d / 2));
+    this.room({ x: -7, z: -22, w: 20, d: 18 }, m, { east: true, south: true });
+    this.corridor(5, -35, 10, 9, m);
+
+    this.room({ x: 0, z: -47, w: 12, d: 20 }, m, { north: true, south: true, west: true });
+    this.corridor(0, -61, 7, 8, m);
+
+    this.room({ x: 8, z: -72, w: 28, d: 22 }, m, { west: true, south: true });
+    this.corridor(0, -89, 10, 8, m);
+
+    this.room({ x: 0, z: -103, w: 30, d: 24 }, m, { north: true, south: true, east: true });
+    this.corridor(0, -122, 9, 12, m);
+
+    this.room({ x: 0, z: -140, w: 24, d: 20 }, m, { north: true });
+
+    // Small side galleries make the silhouette match the concept's branching cutaway.
+    this.room({ x: -18, z: -72, w: 12, d: 14 }, m, { east: true });
+    this.room({ x: 20, z: -49, w: 11, d: 13 }, m, { west: true });
+
+    // Rock ceiling slabs visually unify the separate chambers.
+    for (const [x, z, w, d] of [
+      [0, -20, 26, 23],
+      [0, -48, 20, 25],
+      [8, -72, 34, 27],
+      [0, -103, 36, 29],
+      [0, -140, 29, 25],
+    ] as const) {
+      meshBox(
+        this.group,
+        new THREE.Vector3(MINE_ORIGIN.x + x, MINE_ORIGIN.y + 6.15, MINE_ORIGIN.z + z),
+        new THREE.Vector3(w, 0.42, d),
+        m.stoneDark,
+      );
+    }
+  }
+
+  private buildEntrance(m: ReturnType<typeof makeMaterials>) {
+    for (const z of [4, 0, -4, -8, -12]) {
+      for (const sx of [-1, 1]) {
+        meshBox(
+          this.group,
+          new THREE.Vector3(MINE_ORIGIN.x + sx * 5.3, 2.35, MINE_ORIGIN.z + z),
+          new THREE.Vector3(0.38, 4.7, 0.38),
+          m.wood,
+        );
+      }
+      meshBox(
+        this.group,
+        new THREE.Vector3(MINE_ORIGIN.x, 4.58, MINE_ORIGIN.z + z),
+        new THREE.Vector3(10.8, 0.38, 0.38),
+        m.wood,
+      );
+    }
+
+    // Entrance arch and warning lanterns.
+    for (const sx of [-1, 1]) {
+      meshBox(
+        this.group,
+        new THREE.Vector3(MINE_ORIGIN.x + sx * 6.5, 3.0, MINE_ORIGIN.z + 1),
+        new THREE.Vector3(0.65, 6, 0.65),
+        m.stoneDark,
+      );
+    }
+    meshBox(
+      this.group,
+      new THREE.Vector3(MINE_ORIGIN.x, 5.7, MINE_ORIGIN.z + 1),
+      new THREE.Vector3(13.6, 0.65, 0.75),
+      m.stoneDark,
+    );
+    this.addLantern(new THREE.Vector3(MINE_ORIGIN.x - 5.4, 3.0, MINE_ORIGIN.z - 2), m.brass);
+    this.addLantern(new THREE.Vector3(MINE_ORIGIN.x + 5.4, 3.0, MINE_ORIGIN.z - 2), m.brass);
+  }
+
+  private buildForemanCamp(m: ReturnType<typeof makeMaterials>) {
+    const base = new THREE.Vector3(MINE_ORIGIN.x - 7, 0, MINE_ORIGIN.z - 22);
+
+    // Work table, crates and a rough bunk.
+    meshBox(this.group, base.clone().add(new THREE.Vector3(-3, 1.0, -2)), new THREE.Vector3(4.2, 0.25, 1.5), m.planks);
+    for (const x of [-4.5, -1.5]) {
+      meshBox(this.group, base.clone().add(new THREE.Vector3(x, 0.55, -2)), new THREE.Vector3(0.22, 1.1, 0.22), m.wood);
+    }
+
+    for (const p of [
+      [-5.5, 0.7, 3.0],
+      [-3.9, 0.65, 4.0],
+      [1.2, 0.65, 3.4],
+      [2.5, 0.95, 1.7],
+    ] as const) {
+      const s = p[1] > 0.8 ? 1.8 : 1.3;
+      meshBox(
+        this.group,
+        base.clone().add(new THREE.Vector3(p[0], p[1], p[2])),
+        new THREE.Vector3(s, s, s),
+        m.planks,
+      );
     }
 
     meshBox(
       this.group,
-      new THREE.Vector3(MINE_ORIGIN.x, MINE_ORIGIN.y + 6.05, MINE_ORIGIN.z - 53),
-      new THREE.Vector3(37, 0.4, 130),
-      m.stoneDark,
+      base.clone().add(new THREE.Vector3(-1.8, 0.35, 2.5)),
+      new THREE.Vector3(3.6, 0.5, 1.35),
+      m.wood,
     );
+    this.addLantern(base.clone().add(new THREE.Vector3(0, 2.8, -3.5)), m.brass);
+    this.addLantern(base.clone().add(new THREE.Vector3(5.2, 3.0, 1.5)), m.brass);
   }
 
-  private buildEntranceTunnel(m: ReturnType<typeof makeMaterials>) {
-    for (const z of [7, 2, -3, -8, -13]) {
-      for (const sx of [-1, 1]) meshBox(this.group, new THREE.Vector3(MINE_ORIGIN.x + sx * 3.5, 2.25, MINE_ORIGIN.z + z), new THREE.Vector3(0.34, 4.6, 0.34), m.wood);
-      meshBox(this.group, new THREE.Vector3(MINE_ORIGIN.x, 4.45, MINE_ORIGIN.z + z), new THREE.Vector3(7.2, 0.34, 0.34), m.wood);
-    }
-  }
-
-  private buildSupports(m: ReturnType<typeof makeMaterials>) {
-    for (const z of [-19, -27, -35, -44, -52, -61, -70, -80, -90, -101, -112]) {
+  private buildTunnelSupports(m: ReturnType<typeof makeMaterials>) {
+    for (const [z, x] of [
+      [-14, 0],
+      [-29, 0],
+      [-39, 2],
+      [-54, 0],
+      [-62, 0],
+      [-83, 8],
+      [-95, 0],
+      [-112, 0],
+      [-127, 0],
+    ] as const) {
+      const half = x === 8 ? 12.5 : 5.2;
       for (const sx of [-1, 1]) {
-        meshBox(this.group, new THREE.Vector3(MINE_ORIGIN.x + sx * 9.7, 2.65, MINE_ORIGIN.z + z), new THREE.Vector3(0.35, 5.3, 0.35), m.wood);
+        meshBox(
+          this.group,
+          new THREE.Vector3(MINE_ORIGIN.x + x + sx * half, 2.65, MINE_ORIGIN.z + z),
+          new THREE.Vector3(0.38, 5.3, 0.38),
+          m.wood,
+        );
       }
-      meshBox(this.group, new THREE.Vector3(MINE_ORIGIN.x, 5.15, MINE_ORIGIN.z + z), new THREE.Vector3(20.1, 0.38, 0.38), m.wood);
+      meshBox(
+        this.group,
+        new THREE.Vector3(MINE_ORIGIN.x + x, 5.15, MINE_ORIGIN.z + z),
+        new THREE.Vector3(half * 2, 0.38, 0.38),
+        m.wood,
+      );
     }
+
+    // Broken support and fallen beam in the side gallery.
+    const fallen = meshBox(
+      this.group,
+      new THREE.Vector3(MINE_ORIGIN.x - 18, 1.15, MINE_ORIGIN.z - 72),
+      new THREE.Vector3(8.5, 0.35, 0.55),
+      m.wood,
+    );
+    fallen.rotation.y = 0.45;
   }
 
   private buildRails(m: ReturnType<typeof makeMaterials>) {
-    for (const x of [-0.72, 0.72]) {
-      const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 112, 6), m.rail);
-      rail.rotation.x = Math.PI / 2;
-      rail.position.set(MINE_ORIGIN.x + x, 0.12, MINE_ORIGIN.z - 49);
-      this.group.add(rail);
+    for (const [x, z0, z1] of [
+      [0, -8, -42],
+      [0, -40, -78],
+      [0, -80, -126],
+    ] as const) {
+      for (const dx of [-0.72, 0.72]) {
+        const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, Math.abs(z1 - z0), 6), m.rail);
+        rail.rotation.x = Math.PI / 2;
+        rail.position.set(MINE_ORIGIN.x + x + dx, 0.12, MINE_ORIGIN.z + (z0 + z1) / 2);
+        this.group.add(rail);
+      }
+      for (let z = z0; z >= z1; z -= 2.2) {
+        meshBox(
+          this.group,
+          new THREE.Vector3(MINE_ORIGIN.x + x, 0.02, MINE_ORIGIN.z + z),
+          new THREE.Vector3(2.1, 0.16, 0.34),
+          m.wood,
+        );
+      }
     }
-    for (let z = -8; z >= -108; z -= 2.2) meshBox(this.group, new THREE.Vector3(MINE_ORIGIN.x, 0.02, MINE_ORIGIN.z + z), new THREE.Vector3(2.1, 0.16, 0.34), m.wood);
   }
 
   private buildMachinery(m: ReturnType<typeof makeMaterials>) {
-    meshBox(this.group, new THREE.Vector3(MINE_ORIGIN.x - 6.5, 1.25, MINE_ORIGIN.z - 21), new THREE.Vector3(3.2, 0.25, 1.2), m.planks);
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-      meshBox(this.group, new THREE.Vector3(MINE_ORIGIN.x - 6.5 + sx * 1.25, 0.65, MINE_ORIGIN.z - 21 + sz * 0.45), new THREE.Vector3(0.18, 1.25, 0.18), m.wood);
-    }
-    const wheel = new THREE.Mesh(new THREE.TorusGeometry(2, 0.16, 8, 28), m.brass);
+    const center = new THREE.Vector3(MINE_ORIGIN.x + 8, 0, MINE_ORIGIN.z - 72);
+
+    // Large haul wheel / winch assembly.
+    const wheel = new THREE.Mesh(new THREE.TorusGeometry(3.3, 0.22, 10, 34), m.brass);
     wheel.rotation.x = Math.PI / 2;
-    wheel.position.set(MINE_ORIGIN.x + 5.5, 2.2, MINE_ORIGIN.z - 43);
+    wheel.position.copy(center).add(new THREE.Vector3(6.0, 3.0, -2.0));
     this.group.add(wheel);
-    const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 2.6, 10), m.metal);
+
+    const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 4.2, 12), m.metal);
     axle.rotation.z = Math.PI / 2;
-    axle.position.set(MINE_ORIGIN.x + 5.5, 2.2, MINE_ORIGIN.z - 43);
+    axle.position.copy(center).add(new THREE.Vector3(6.0, 3.0, -2.0));
     this.group.add(axle);
 
+    for (const z of [-5, 0, 5]) {
+      meshBox(
+        this.group,
+        center.clone().add(new THREE.Vector3(-7, 1.2, z)),
+        new THREE.Vector3(4.5, 0.3, 1.4),
+        m.planks,
+      );
+      meshBox(
+        this.group,
+        center.clone().add(new THREE.Vector3(-7, 0.7, z)),
+        new THREE.Vector3(0.3, 1.2, 0.3),
+        m.wood,
+      );
+    }
+
     const lever = new THREE.Group();
-    const base = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.3, 0.8), m.brass);
-    base.position.y = 0.15;
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.6, 0.16), m.metal);
-    arm.position.y = 0.95;
-    arm.rotation.z = this.progress.gateOpen ? 0.45 : -0.45;
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.34, 0.9), m.brass);
+    base.position.y = 0.17;
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.8, 0.16), m.metal);
+    arm.position.y = 1.05;
+    arm.rotation.z = this.progress.gateOpen ? 0.5 : -0.5;
     lever.add(base, arm);
-    lever.position.set(MINE_ORIGIN.x - 6.6, 0, MINE_ORIGIN.z - 25.5);
+    lever.position.set(MINE_ORIGIN.x + 4.6, 0, MINE_ORIGIN.z - 67.5);
     this.group.add(lever);
+
     this.interactables.push({
       pos: lever.position.clone(),
-      radius: 2.1,
+      radius: 2.3,
       label: () => this.progress.gateOpen ? 'The winch is engaged' : 'Pull the mine winch',
       enabled: () => !this.progress.gateOpen,
       action: () => this.openGate(lever),
     });
+
+    this.addLantern(new THREE.Vector3(MINE_ORIGIN.x + 1.5, 3.2, MINE_ORIGIN.z - 65), m.brass);
+    this.addLantern(new THREE.Vector3(MINE_ORIGIN.x + 15, 3.0, MINE_ORIGIN.z - 77), m.brass);
   }
 
   private buildGate(m: ReturnType<typeof makeMaterials>) {
     const g = new THREE.Group();
-    for (let i = -4; i <= 4; i++) {
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 5.1, 0.18), m.metal);
-      bar.position.set(i * 0.42, 2.55, 0);
+    for (let i = -5; i <= 5; i++) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.17, 5.4, 0.2), m.metal);
+      bar.position.set(i * 0.42, 2.7, 0);
       g.add(bar);
     }
-    const top = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.2, 0.3), m.metal);
-    top.position.y = 5;
+    const top = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.22, 0.34), m.metal);
+    top.position.y = 5.25;
     g.add(top);
-    g.position.set(MINE_ORIGIN.x, 0, MINE_ORIGIN.z - 34);
+
+    g.position.set(MINE_ORIGIN.x, 0, MINE_ORIGIN.z - 82);
     this.group.add(g);
     this.gateBars = g;
     this.gateT = this.progress.gateOpen ? 1 : 0;
     if (!this.progress.gateOpen) {
-      this.gateCollider = this.box(new THREE.Vector3(MINE_ORIGIN.x, 2.5, MINE_ORIGIN.z - 34), new THREE.Vector3(2.2, 2.5, 0.28));
+      this.gateCollider = this.box(
+        new THREE.Vector3(MINE_ORIGIN.x, 2.6, MINE_ORIGIN.z - 82),
+        new THREE.Vector3(2.5, 2.6, 0.3),
+      );
     } else {
-      g.position.y = 5.7;
+      g.position.y = 5.9;
     }
+  }
+
+  private buildAncientRuins(m: ReturnType<typeof makeMaterials>) {
+    const c = new THREE.Vector3(MINE_ORIGIN.x - 18, 0, MINE_ORIGIN.z - 72);
+
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        meshBox(
+          this.group,
+          c.clone().add(new THREE.Vector3(sx * 4.1, 2.2, sz * 4.3)),
+          new THREE.Vector3(0.75, 4.4, 0.75),
+          m.stoneDark,
+        );
+      }
+    }
+
+    // Broken arch.
+    meshBox(
+      this.group,
+      c.clone().add(new THREE.Vector3(-4.0, 4.6, 0)),
+      new THREE.Vector3(0.7, 1.0, 7.2),
+      m.stoneDark,
+    );
+    meshBox(
+      this.group,
+      c.clone().add(new THREE.Vector3(4.0, 4.6, 0)),
+      new THREE.Vector3(0.7, 1.0, 7.2),
+      m.stoneDark,
+    );
+    const lintel = meshBox(
+      this.group,
+      c.clone().add(new THREE.Vector3(0, 5.15, 0)),
+      new THREE.Vector3(8.0, 0.8, 0.9),
+      m.stoneDark,
+    );
+    lintel.rotation.z = -0.08;
+
+    const altar = meshBox(
+      this.group,
+      c.clone().add(new THREE.Vector3(0, 0.45, 0)),
+      new THREE.Vector3(4.0, 0.9, 4.0),
+      m.stoneDark,
+    );
+    this.box(altar.position.clone(), new THREE.Vector3(2, 0.45, 2));
+
+    for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+      const rune = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.5, 0.18, 8), m.rune);
+      rune.position.copy(c).add(new THREE.Vector3(Math.cos(a) * 3, 0.85, Math.sin(a) * 3));
+      this.group.add(rune);
+    }
+
+    this.addLantern(c.clone().add(new THREE.Vector3(0, 3.0, -5.4)), m.brass);
+  }
+
+  private buildDeepMine(m: ReturnType<typeof makeMaterials>) {
+    const c = new THREE.Vector3(MINE_ORIGIN.x, 0, MINE_ORIGIN.z - 103);
+
+    // A lower-looking cavern is communicated through stone shelves, huge ribs and luminous ore.
+    for (const [x, z, s] of [
+      [-12, -8, 1.8],
+      [12, -8, 2.4],
+      [-13, 4, 2.0],
+      [13, 5, 2.1],
+      [-8, 9, 1.5],
+      [8, 8, 1.6],
+    ] as const) {
+      const pillar = new THREE.Mesh(new THREE.CylinderGeometry(s, s * 1.25, 5.6, 7), m.stoneDark);
+      pillar.position.copy(c).add(new THREE.Vector3(x, 2.8, z));
+      pillar.rotation.y = (x + z) * 0.03;
+      this.group.add(pillar);
+    }
+
+    for (const [x, z, y, scale] of [
+      [-10, -5, 1.1, 1.0],
+      [11, -3, 1.2, 1.2],
+      [-12, 7, 1.0, 0.9],
+      [12, 7, 1.2, 1.1],
+      [-4, 10, 0.9, 0.8],
+      [4, 9, 1.1, 0.9],
+    ] as const) {
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.85, 0), m.crystal);
+      crystal.scale.set(scale, 2.5 * scale, scale);
+      crystal.position.copy(c).add(new THREE.Vector3(x, y, z));
+      crystal.rotation.set(0.2, (x + z) * 0.05, -0.15);
+      this.group.add(crystal);
+    }
+
+    // Ore shelf in the center visually separates the deep mine from the boss arena.
+    const shelf = meshBox(
+      this.group,
+      c.clone().add(new THREE.Vector3(0, 0.55, 7.5)),
+      new THREE.Vector3(12.5, 1.1, 2.4),
+      m.stoneDark,
+    );
+    this.box(shelf.position.clone(), new THREE.Vector3(6.25, 0.55, 1.2));
+  }
+
+  private buildBossArena(m: ReturnType<typeof makeMaterials>) {
+    const c = new THREE.Vector3(MINE_ORIGIN.x, 0, MINE_ORIGIN.z - 140);
+
+    const altar = meshBox(
+      this.group,
+      c.clone().add(new THREE.Vector3(0, 0.45, -1)),
+      new THREE.Vector3(6.5, 0.9, 6.5),
+      m.stoneDark,
+    );
+    this.box(altar.position.clone(), new THREE.Vector3(3.25, 0.45, 3.25));
+
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(8.2, 0.45, 8, 34),
+      m.stoneDark,
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.copy(c).add(new THREE.Vector3(0, 0.25, -1));
+    this.group.add(ring);
+
+    for (const a of [0, Math.PI / 3, (2 * Math.PI) / 3, Math.PI, (4 * Math.PI) / 3, (5 * Math.PI) / 3]) {
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.9, 0), m.crystal);
+      crystal.scale.set(1, 2.7, 1);
+      crystal.position.copy(c).add(new THREE.Vector3(Math.cos(a) * 9.5, 1.2, Math.sin(a) * 8.0));
+      crystal.rotation.y = a;
+      this.group.add(crystal);
+    }
+
+    this.addLantern(c.clone().add(new THREE.Vector3(-9, 3.5, 0)), m.brass);
+    this.addLantern(c.clone().add(new THREE.Vector3(9, 3.5, 0)), m.brass);
   }
 
   private buildMineCart(m: ReturnType<typeof makeMaterials>) {
     const g = new THREE.Group();
-    meshBox(g, new THREE.Vector3(0, 0.85, 0), new THREE.Vector3(2.1, 0.5, 1.3), shared!.metal);
-    meshBox(g, new THREE.Vector3(0, 1.15, 0), new THREE.Vector3(2.3, 0.18, 1.45), shared!.wood);
-    for (const x of [-0.78, 0.78]) for (const z of [-0.45, 0.45]) {
-      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.12, 10), shared!.metal);
-      wheel.rotation.z = Math.PI / 2;
-      wheel.position.set(x, 0.45, z);
-      g.add(wheel);
+    meshBox(g, new THREE.Vector3(0, 0.85, 0), new THREE.Vector3(2.2, 0.5, 1.35), m.metal);
+    meshBox(g, new THREE.Vector3(0, 1.15, 0), new THREE.Vector3(2.35, 0.18, 1.48), m.wood);
+
+    for (const x of [-0.82, 0.82]) {
+      for (const z of [-0.46, 0.46]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.13, 10), m.metal);
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(x, 0.45, z);
+        g.add(wheel);
+      }
     }
-    g.position.set(MINE_ORIGIN.x - 2.4, 0, MINE_ORIGIN.z - 20);
+
+    g.position.set(MINE_ORIGIN.x - 2.0, 0, MINE_ORIGIN.z - 12.5);
     this.group.add(g);
+  }
+
+  private addLantern(pos: THREE.Vector3, mat: THREE.Material) {
+    const post = meshBox(this.group, pos.clone().setY(1.6), new THREE.Vector3(0.14, 3.2, 0.14), mat);
+    post.castShadow = true;
+    const light = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18, 8, 8),
+      new THREE.MeshStandardMaterial({ color: 0xe8b75c, emissive: 0xa85b17, emissiveIntensity: 1.1 }),
+    );
+    light.position.copy(pos).setY(3.2);
+    this.group.add(light);
   }
 
   private spawnEnemies() {
     const pts = [
-      new THREE.Vector3(MINE_ORIGIN.x - 5, 0, MINE_ORIGIN.z - 23),
-      new THREE.Vector3(MINE_ORIGIN.x + 5, 0, MINE_ORIGIN.z - 29),
-      new THREE.Vector3(MINE_ORIGIN.x - 6, 0, MINE_ORIGIN.z - 74),
-      new THREE.Vector3(MINE_ORIGIN.x + 6, 0, MINE_ORIGIN.z - 84),
+      new THREE.Vector3(MINE_ORIGIN.x - 2.5, 0, MINE_ORIGIN.z - 26),
+      new THREE.Vector3(MINE_ORIGIN.x + 3.0, 0, MINE_ORIGIN.z - 43),
+      new THREE.Vector3(MINE_ORIGIN.x + 16, 0, MINE_ORIGIN.z - 74),
+      new THREE.Vector3(MINE_ORIGIN.x - 11, 0, MINE_ORIGIN.z - 101),
     ];
+
     this.enemies.push(new Slime('cave', pts[0], this.scene, this.fx));
     this.enemies.push(new Slime('green', pts[1], this.scene, this.fx));
     this.enemies.push(new LivingArmour(pts[2], this.scene, this.fx));
     this.enemies.push(new LivingArmour(pts[3], this.scene, this.fx));
+
     if (!this.progress.guardianDead) {
-      this.boss = new LivingArmour(new THREE.Vector3(MINE_ORIGIN.x, 0, MINE_ORIGIN.z - 103), this.scene, this.fx);
+      this.boss = new LivingArmour(
+        new THREE.Vector3(MINE_ORIGIN.x, 0, MINE_ORIGIN.z - 140),
+        this.scene,
+        this.fx,
+      );
       this.enemies.push(this.boss);
     }
   }
 
-  private buildBossArena(m: ReturnType<typeof makeMaterials>) {
-    const altar = meshBox(this.group, new THREE.Vector3(MINE_ORIGIN.x, 0.4, MINE_ORIGIN.z - 100), new THREE.Vector3(5.2, 0.8, 5.2), m.stoneDark);
-    this.box(altar.position.clone(), new THREE.Vector3(2.6, 0.4, 2.6));
-    const ore = new THREE.MeshStandardMaterial({ color: 0x4a5662, emissive: 0x1a2b38, emissiveIntensity: 0.35, roughness: 0.45, metalness: 0.55 });
-    for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
-      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), ore);
-      crystal.scale.set(1, 2.2, 1);
-      crystal.position.set(MINE_ORIGIN.x + Math.cos(a) * 9.2, 1.1, MINE_ORIGIN.z - 100 + Math.sin(a) * 9.2);
-      crystal.rotation.y = a;
-      this.group.add(crystal);
-    }
-  }
-
   private buildExit(m: ReturnType<typeof makeMaterials>) {
-    meshBox(this.group, new THREE.Vector3(MINE_ORIGIN.x + 4.8, 1.4, MINE_ORIGIN.z + 5.5), new THREE.Vector3(0.32, 1.3, 0.32), m.brass);
+    meshBox(
+      this.group,
+      new THREE.Vector3(MINE_ORIGIN.x + 5.8, 1.4, MINE_ORIGIN.z + 5.5),
+      new THREE.Vector3(0.32, 1.3, 0.32),
+      m.brass,
+    );
+
     this.interactables.push({
       pos: new THREE.Vector3(MINE_ORIGIN.x, 0, MINE_ORIGIN.z + 7.5),
       radius: 2.4,
@@ -304,12 +704,13 @@ export class MineInstance {
       enabled: () => true,
       action: () => this.hooks.leave(),
     });
+
     this.interactables.push({
-      pos: new THREE.Vector3(MINE_ORIGIN.x, 0, MINE_ORIGIN.z - 62),
-      radius: 2.4,
-      label: () => 'Inspect the collapsed shaft',
+      pos: new THREE.Vector3(MINE_ORIGIN.x - 18, 0, MINE_ORIGIN.z - 72),
+      radius: 2.6,
+      label: () => 'Inspect the ancient altar',
       enabled: () => true,
-      action: () => this.hooks.toast('The old lift is jammed. The lower workings continue beyond it.'),
+      action: () => this.hooks.toast('The old kings carved this shrine into the mine rock. The ore below is still warm.'),
     });
   }
 
@@ -317,12 +718,11 @@ export class MineInstance {
     if (this.progress.gateOpen) return;
     this.progress.gateOpen = true;
     const arm = lever.children[1];
-    if (arm) arm.rotation.z = 0.45;
+    if (arm) arm.rotation.z = 0.5;
     this.gateT = 0;
     this.hooks.toast('The winch groans. The blast gate rises.');
     this.hooks.save();
   }
-
 
   update(dt: number, player: Player) {
     if (this.disposed) return;
@@ -330,13 +730,15 @@ export class MineInstance {
 
     if (this.progress.gateOpen && this.gateBars && this.gateT < 1) {
       this.gateT = Math.min(1, this.gateT + dt * 0.8);
-      this.gateBars.position.y = 5.7 * this.gateT;
+      this.gateBars.position.y = 5.9 * this.gateT;
       if (this.gateT >= 1 && this.gateCollider) {
         physics.world.removeCollider(this.gateCollider, false);
         this.colliders = this.colliders.filter((c) => c !== this.gateCollider);
         this.gateCollider = null;
       }
-      if (Math.random() < dt * 7) this.fx.dust(this.gateBars.position.clone().setY(0.4), 0.45);
+      if (Math.random() < dt * 8) {
+        this.fx.dust(this.gateBars.position.clone().setY(0.4), 0.5);
+      }
     }
 
     const slimes = this.enemies.filter((e): e is Slime => e instanceof Slime);
@@ -361,16 +763,30 @@ export class MineInstance {
     for (const e of [...this.enemies]) {
       if (!e.alive && e !== this.boss) e.dispose();
     }
+
     this.enemies = this.enemies.filter((e) => e.alive || e === this.boss);
     if (this.boss && !this.boss.alive && this.boss.dead) {
       this.boss.dispose();
       this.boss = null;
     }
 
-    // Keep the mine alive with cheap dust rather than many ticking lights.
     if (Math.random() < dt * 5) {
-      const p = player.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 8, 1.2 + Math.random() * 2, (Math.random() - 0.5) * 8));
-      this.fx.alpha.spawn({ pos: p, spread: 0.05, count: 1, life: [2, 4], size: [0.03, 0.03], color: 0xb9aa8f, alpha: 0.38 });
+      const p = player.pos.clone().add(
+        new THREE.Vector3(
+          (Math.random() - 0.5) * 8,
+          1.2 + Math.random() * 2,
+          (Math.random() - 0.5) * 8,
+        ),
+      );
+      this.fx.alpha.spawn({
+        pos: p,
+        spread: 0.05,
+        count: 1,
+        life: [2, 4],
+        size: [0.03, 0.03],
+        color: 0xb9aa8f,
+        alpha: 0.38,
+      });
     }
   }
 
@@ -380,10 +796,15 @@ export class MineInstance {
     if (this.disposed) return;
     this.disposed = true;
     this.hooks.bossBar(null);
+
     for (const e of this.enemies) e.dispose();
     this.enemies = [];
-    for (const c of this.colliders) physics.world.removeCollider(c, false);
+
+    for (const c of this.colliders) {
+      physics.world.removeCollider(c, false);
+    }
     this.colliders = [];
+
     this.scene.remove(this.group);
     this.group.traverse((o) => {
       const mesh = o as THREE.Mesh;
