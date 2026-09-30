@@ -119,7 +119,7 @@ export class Realm {
     };
   }
 
-  private atmosphere(dungeon: boolean) {
+  private atmosphere(dungeon: boolean, mine = false) {
     const r = this.r, s = r.scene;
     const u = r.post?.finalMat.uniforms;
     if (dungeon && !this.saved) {
@@ -130,13 +130,13 @@ export class Realm {
         sunColor: (u?.uSunColor.value as THREE.Color)?.clone() ?? new THREE.Color(), clouds: u?.uClouds.value ?? 0,
       };
       s.background = new THREE.Color(0x000000);
-      s.environmentIntensity = 0.12;
+      s.environmentIntensity = mine ? 0.08 : 0.12;
       r.sun.intensity = 0;
-      r.hemi.intensity = 0.22;
-      r.hemi.color.set(0x7d8aa6);
-      r.hemi.groundColor.set(0x2a2018);
-      r.camera.far = 140;
-      if (!Q.post) s.fog = new THREE.Fog(0x050608, 8, 30);
+      r.hemi.intensity = mine ? 0.18 : 0.22;
+      r.hemi.color.set(mine ? 0x7186a5 : 0x7d8aa6);
+      r.hemi.groundColor.set(mine ? 0x18130f : 0x2a2018);
+      r.camera.far = mine ? 175 : 140;
+      if (!Q.post) s.fog = new THREE.Fog(mine ? 0x06080c : 0x050608, mine ? 12 : 8, mine ? 48 : 30);
       if (u) {
         u.uHaze.value = 0.03;
         (u.uHazeColor.value as THREE.Color).setRGB(0.015, 0.016, 0.022);
@@ -212,7 +212,7 @@ export class Realm {
     this.overworld.clearEnemies();
     this.overworld.enemiesEnabled(false);
     this.overworld.hide(true);
-    this.atmosphere(true);
+    this.atmosphere(true, true);
     this.mode = 'dungeon';
     this.active = 'mine';
     this.mineInstance = new MineInstance(this.r.scene, this.fx, this.mineProgress, {
