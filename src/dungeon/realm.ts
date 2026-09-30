@@ -304,7 +304,7 @@ export class Realm {
   }
 
   /** Step through a door into the building behind it. */
-  async enterInterior(door: Door, kind: InteriorKind, mats: WorldMats, lights?: LightLender) {
+  async enterInterior(door: Door, kind: InteriorKind, mats: WorldMats, lights?: LightLender, onInspect?: (label: string, text: string) => void) {
     if (this.busy || this.mode !== 'overworld') return;
     this.busy = true;
     await this.hud.fade(true);
@@ -313,7 +313,7 @@ export class Realm {
     this.overworld.hide(true);
     this.atmosphere(true, true);
     this.mode = 'interior';
-    const it = new Interior(door, kind, this.r.scene, mats, () => void this.leaveInterior(), lights);
+    const it = new Interior(door, kind, this.r.scene, mats, () => void this.leaveInterior(), lights, onInspect);
     this.interior = it;
     setGroundOverride(it.groundAt);
     this.interiorExtras = this.onInterior?.(it) ?? [];
