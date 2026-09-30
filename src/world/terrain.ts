@@ -153,14 +153,24 @@ vWN = normal;`);
         vec2 f = smoothstep(0.0, 1.0, fract(gc));
         vec3 biome = vec3(0.0);
         float snowW = 0.0, beachW = 0.0;
+        int rels[4];
         for (int k = 0; k < 4; k++) {
           vec2 o = vec2(float(k - (k / 2) * 2), float(k / 2));
-          vec4 m = texture2D(tMacro, (i0 + o + 0.5) / uGrid);
-          int rel = int(m.g * 255.0 + 0.5);
-          float w = (o.x > 0.5 ? f.x : 1.0 - f.x) * (o.y > 0.5 ? f.y : 1.0 - f.y);
-          biome += reliefColor(rel, patchN, fineN, dist, gNear, gFar) * w;
-          if (rel == 6) snowW += w;
-          if (rel == 2) beachW += w;
+          rels[k] = int(texture2D(tMacro, (i0 + o + 0.5) / uGrid).g * 255.0 + 0.5);
+        }
+        if (rels[0] == rels[1] && rels[0] == rels[2] && rels[0] == rels[3]) {
+          // Inside one biome (almost everywhere): colour it once, not four times.
+          biome = reliefColor(rels[0], patchN, fineN, dist, gNear, gFar);
+          snowW = rels[0] == 6 ? 1.0 : 0.0;
+          beachW = rels[0] == 2 ? 1.0 : 0.0;
+        } else {
+          for (int k = 0; k < 4; k++) {
+            vec2 o = vec2(float(k - (k / 2) * 2), float(k / 2));
+            float w = (o.x > 0.5 ? f.x : 1.0 - f.x) * (o.y > 0.5 ? f.y : 1.0 - f.y);
+            biome += reliefColor(rels[k], patchN, fineN, dist, gNear, gFar) * w;
+            if (rels[k] == 6) snowW += w;
+            if (rels[k] == 2) beachW += w;
+          }
         }
         // Hue of the painted map, so each region carries the map's colours.
         vec2 muv = (vWPos.xz - uWorld.xy) / uWorld.zw;

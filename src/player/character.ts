@@ -127,7 +127,7 @@ export class Character {
     if (look) {
       // The manifest model is still read for its Mixamo rest pose (the clips' source rig).
       mixamoRest = captureRest(gltf.scene, shortBoneName);
-      const hero = await buildCharacter(look, []);
+      const hero = await buildCharacter(look, [], { merge: false });
       this.model = hero.model;
       this.built = true;
     } else {

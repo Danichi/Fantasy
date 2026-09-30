@@ -20,9 +20,12 @@ const NEAR_TILE = 44;
 const MID_TILE = 132;
 const FAR_TILE = 232;
 
-/** A single tapered, curved blade: 3 segments + tip, height 1, width 1. */
-function bladeGeometry() {
-  const rows = [0, 0.3, 0.6, 0.85];
+/**
+ * A single tapered, curved blade, height 1, width 1: 3 segments + tip close
+ * up (7 triangles). Distant layers use fewer rows, where the curve can't be
+ * seen: 3 triangles in the middle distance, 1 far away.
+ */
+function bladeGeometry(rows = [0, 0.3, 0.6, 0.85]) {
   const pos: number[] = [];
   const t: number[] = [];
   for (const y of rows) {
@@ -68,8 +71,8 @@ class GrassLayer {
   readonly mesh: THREE.InstancedMesh;
   private center = { value: new THREE.Vector2() };
 
-  constructor(scene: THREE.Scene, count: number, tile: number, width: number, fadeIn: number, seed: number) {
-    const geo = bladeGeometry();
+  constructor(scene: THREE.Scene, count: number, tile: number, width: number, fadeIn: number, seed: number, rows?: number[]) {
+    const geo = bladeGeometry(rows);
     const offs = new Float32Array(count * 4);
     const rnd = mulberry32(seed);
     // Jittered grid keeps coverage even (no clumps of empty ground).
@@ -205,8 +208,8 @@ export class Grass {
     shared.uGroundSize = ground.size;
     scene.add(this.mesh);
     this.near = new GrassLayer(this.mesh as unknown as THREE.Scene, Q.grassBlades, NEAR_TILE, 0.055, 0, 1234);
-    this.mid = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.5), MID_TILE, 0.11, NEAR_TILE * 0.36, 555);
-    this.far = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.22), FAR_TILE, 0.2, MID_TILE * 0.36, 987);
+    this.mid = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.5), MID_TILE, 0.11, NEAR_TILE * 0.36, 555, [0, 0.5]);
+    this.far = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.22), FAR_TILE, 0.2, MID_TILE * 0.36, 987, [0]);
   }
 
   /** Follow a (mutable) sun direction by reference. */

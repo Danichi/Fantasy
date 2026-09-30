@@ -10,6 +10,7 @@ import type { NpcRecord, Place, Settlement, ScheduleEntry } from '../npc/npcMana
 import type { Look } from '../npc/charBuilder';
 import { CREEK, CREEK_BRIDGE } from './roadData';
 import { sunwheelTexture } from './glenLandmarks';
+import { StaticBatch } from './cityKit';
 
 /** Ancient waystones along the road (the Sunwheel on each); attune by touch. */
 export const WAYSTONES: { id: string; name: string; pos: THREE.Vector3 }[] = [
@@ -144,6 +145,13 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
     l.position.set(x + 0.5, y + 2.15, z);
     scene.add(l);
   };
+  // Fences are hundreds of posts and rails: merged, not a mesh each.
+  const fences = new StaticBatch();
+  const fencePiece = (w: number, h: number, d: number, x: number, y: number, z: number, ry = 0) => {
+    const g = worldUV(new THREE.BoxGeometry(w, h, d), 1.5);
+    fences.add(g, m.timber, new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), new THREE.Vector3(1, 1, 1)));
+    g.dispose();
+  };
   const fenceRun = (pts: [number, number][]) => {
     for (let i = 0; i < pts.length - 1; i++) {
       const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
@@ -152,12 +160,12 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
       const yaw = Math.atan2(bx - ax, bz - az);
       for (let k = 0; k <= n; k++) {
         const x = ax + ((bx - ax) * k) / n, z = az + ((bz - az) * k) / n;
-        box(m.timber, 0.12, 1.1, 0.12, x, heightAt(x, z) + 0.5, z);
+        fencePiece(0.12, 1.1, 0.12, x, heightAt(x, z) + 0.5, z);
       }
       for (let k = 0; k < n; k++) {
         const x = ax + ((bx - ax) * (k + 0.5)) / n, z = az + ((bz - az) * (k + 0.5)) / n;
         const y = heightAt(x, z);
-        for (const yy of [0.45, 0.9]) box(m.timber, 0.06, 0.09, len / n, x, y + yy, z, yaw);
+        for (const yy of [0.45, 0.9]) fencePiece(0.06, 0.09, len / n, x, y + yy, z, yaw);
         physics.addBox(new THREE.Vector3(x, y + 0.6, z), new THREE.Vector3(0.08, 0.6, len / n / 2), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)));
       }
     }
@@ -257,6 +265,7 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
   // Paddock behind the stable.
   const paddock = { center: v(W.x - 40, W.z - 22), radius: 14, half: new THREE.Vector2(14, 10), yaw: 0 };
   fenceRun([[W.x - 54, W.z - 12], [W.x - 54, W.z - 32], [W.x - 26, W.z - 32], [W.x - 26, W.z - 16]]);
+  fences.build(scene, 120);
   clearings.push([paddock.center.x, paddock.center.z, 18]);
   // Courtyard: well, wagons, hitching rail, a merchant's cart and lanterns.
   {

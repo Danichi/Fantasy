@@ -151,8 +151,9 @@ export class NpcManager {
     const sun = new THREE.DirectionalLight(0xfff1d6, 2.2);
     sun.position.set(-2, 4, 5);
     this.bakeScene.add(sun);
-    this.bakeCam.position.set(0, 1, 6);
-    this.bakeCam.lookAt(0, 1, 0);
+    // The ortho frustum (-0.1..2.1 m) is relative to the camera: keep it at ground level.
+    this.bakeCam.position.set(0, 0, 6);
+    this.bakeCam.lookAt(0, 0, 0);
     const quad = new THREE.PlaneGeometry(1, 1);
     quad.translate(0, 0.5, 0);
     this.spriteData = new THREE.InstancedBufferAttribute(new Float32Array(SPRITE_CAP * 2), 2); // cell, height
@@ -206,19 +207,24 @@ export class NpcManager {
     const prevTarget = r.getRenderTarget();
     const prevAlpha = r.getClearAlpha();
     const prevColor = r.getClearColor(new THREE.Color());
-    r.setRenderTarget(this.atlas);
+    // A render target's own viewport/scissor apply while it's bound (the
+    // renderer's setViewport doesn't): baking through those once scattered
+    // half-cut figures across the atlas, and the crowd stood waist-deep.
     const col = cell % ATLAS_COLS, row = Math.floor(cell / ATLAS_COLS);
     const vx = col * CELL_W, vy = (ATLAS_ROWS - 1 - row) * CELL_H;
-    r.setViewport(vx, vy, CELL_W, CELL_H);
-    r.setScissor(vx, vy, CELL_W, CELL_H);
-    r.setScissorTest(true);
+    const rt = this.atlas;
+    rt.viewport.set(vx, vy, CELL_W, CELL_H);
+    rt.scissor.set(vx, vy, CELL_W, CELL_H);
+    rt.scissorTest = true;
+    r.setRenderTarget(rt);
     r.setClearColor(0x000000, 0);
     r.clear();
     r.render(this.bakeScene, this.bakeCam);
-    r.setScissorTest(false);
+    rt.viewport.set(0, 0, rt.width, rt.height);
+    rt.scissor.set(0, 0, rt.width, rt.height);
+    rt.scissorTest = false;
     r.setRenderTarget(prevTarget);
     r.setClearColor(prevColor, prevAlpha);
-    r.setViewport(0, 0, r.domElement.width / r.getPixelRatio(), r.domElement.height / r.getPixelRatio());
     idle?.stop();
     this.bakeScene.remove(built.root);
     if (parent) parent.add(built.root);
@@ -353,7 +359,8 @@ export class NpcManager {
       const actions: Actor['actions'] = {};
       for (const a of acts) actions[a.getClip().name] = a;
       const actor: Actor = { key, built, actions, current: '', headBone: built.bones.get('Head'), headYaw: 0 };
-      this.scene.add(built.root);
+      // Out of the scene until someone uses it: parked actors (dozens, one per
+      // look baked for its sprite) otherwise cost a matrix update per bone every frame.
       this.bakeSprite(key, built);
       built.root.visible = false;
       const list = this.pool.get(key) ?? [];
@@ -367,7 +374,7 @@ export class NpcManager {
   private take(st: NpcState): Actor | null {
     const key = lookKey(st.rec.look);
     const list = this.pool.get(key);
-    const free = list?.find((a) => !a.built.root.visible);
+    const free = list?.find((a) => !a.built.root.parent);
     if (free) return free;
     // Nothing free: build another in the background (one at a time: each build
     // is a burst of main-thread work), try next tick.
@@ -382,6 +389,7 @@ export class NpcManager {
   private release(st: NpcState) {
     if (!st.actor) return;
     st.actor.built.root.visible = false;
+    st.actor.built.root.removeFromParent();
     st.actor.current = '';
     for (const a of Object.values(st.actor.actions)) a?.stop();
     st.actor = null;
@@ -545,6 +553,7 @@ export class NpcManager {
         a.built.root.position.copy(st.pos);
         a.built.root.rotation.y = st.yaw;
         a.built.root.visible = true;
+        this.scene.add(a.built.root);
       }
     }
     // Only when nobody nearby is waiting does a distant look get built (for its sprite).
@@ -590,7 +599,7 @@ export class NpcManager {
 
   setVisible(v: boolean) {
     this.sprites.visible = v;
-    for (const list of this.pool.values()) for (const a of list) if (!v) a.built.root.visible = false;
+    for (const list of this.pool.values()) for (const a of list) if (!v) (a.built.root.visible = false), a.built.root.removeFromParent();
     if (!v) for (const st of this.npcs) if (st.actor) this.release(st);
   }
 

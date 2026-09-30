@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { captureRest, retargetClip, HUMANOID_TO_UE } from '../anim/retarget';
+import { characterAtlas, mergeParts, DYE_FNS, dyeBlock, dyeUniforms } from './charMerge';
 
 // Storybook cast builder (docs/ART-DIRECTION.md §7). Characters are assembled
 // from Quaternius' CC0 kits: a Fantasy outfit (clothed body on the shared
@@ -175,52 +176,13 @@ const retargetCache = new Map<string, THREE.AnimationClip>();
 // ---- recolouring --------------------------------------------------------------------
 
 function recolor(mat: THREE.MeshStandardMaterial, hue: THREE.Color | null, linen: THREE.Color | null) {
-  const hueTarget = new THREE.Vector3();
-  if (hue) {
-    const hsl = { h: 0, s: 0, l: 0 };
-    hue.getHSL(hsl);
-    hueTarget.set(hsl.h, hsl.s, 1);
-  }
-  const u = {
-    uHueTarget: { value: hueTarget },
-    uLinen: { value: linen ?? new THREE.Color(1, 1, 1) },
-    uLinenAmt: { value: linen ? 0.65 : 0 },
-  };
+  const u = dyeUniforms(hue, linen);
+  mat.userData.dye = true; // merged characters dye these parts per vertex (charMerge)
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
     sh.fragmentShader = sh.fragmentShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-        uniform vec3 uHueTarget; uniform vec3 uLinen; uniform float uLinenAmt;
-        vec3 rgb2hsv(vec3 c) {
-          vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-          vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-          vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-          float d = q.x - min(q.w, q.y);
-          return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + 1e-10)), d / (q.x + 1e-10), q.x);
-        }
-        vec3 hsv2rgb(vec3 c) {
-          vec3 p = abs(fract(c.xxx + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
-          return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
-        }`,
-      )
-      .replace(
-        '#include <map_fragment>',
-        `#include <map_fragment>
-        {
-          vec3 hsv = rgb2hsv(diffuseColor.rgb);
-          // Saturated, non-brown cloth takes the signature hue.
-          float isCloth = smoothstep(0.22, 0.4, hsv.y) * (1.0 - smoothstep(0.02, 0.12, abs(hsv.x - 0.08)) * step(hsv.x, 0.16));
-          if (uHueTarget.z > 0.5) {
-            vec3 dyed = hsv2rgb(vec3(uHueTarget.x, mix(hsv.y, uHueTarget.y, 0.45) * 0.9, hsv.z * 0.95));
-            diffuseColor.rgb = mix(diffuseColor.rgb, dyed, isCloth);
-          }
-          // Pale linen (bright, low saturation) is dyed.
-          float isLinen = smoothstep(0.55, 0.75, hsv.z) * (1.0 - smoothstep(0.12, 0.3, hsv.y));
-          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * uLinen * 1.15, isLinen * uLinenAmt);
-        }`,
-      );
+      .replace('#include <common>', `#include <common>\n${DYE_FNS}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>\n${dyeBlock('1.0')}`);
   };
   mat.customProgramCacheKey = () => 'recolor';
 }
@@ -271,7 +233,16 @@ const firstSkinned = (o: THREE.Object3D) => {
   return found as THREE.SkinnedMesh | null;
 };
 
-export async function buildCharacter(look: Look, clips: string[] = ['idle', 'talk']): Promise<BuiltCharacter> {
+/** Every file a character can be built from (the shared texture array covers them all). */
+/** `?nomerge` keeps characters in parts (to compare looks). */
+const NO_MERGE = typeof location !== 'undefined' && location.search.includes('nomerge');
+const ALL_FILES = ['base_female.glb', 'base_male.glb', 'hair_beard.glb', ...Object.values(HAIR_FILE), ...['female', 'male'].flatMap((b) => ['peasant', 'ranger'].map((o) => `outfit_${b}_${o}.glb`))];
+
+/**
+ * `merge` (default) folds the parts into one skinned mesh: one draw call per
+ * character (charMerge). The player's hero keeps its parts.
+ */
+export async function buildCharacter(look: Look, clips: string[] = ['idle', 'talk'], opts: { merge?: boolean } = {}): Promise<BuiltCharacter> {
   const sex = look.body;
   const [outfitG, baseG] = await Promise.all([load(`outfit_${sex}_${look.outfit}.glb`), load(`base_${sex}.glb`)]);
   const model = SkeletonUtils.clone(outfitG.scene);
@@ -358,6 +329,11 @@ export async function buildCharacter(look: Look, clips: string[] = ['idle', 'tal
     m.material = Array.isArray(m.material) ? next : next[0];
   });
   if (skinMat) (skinMat as THREE.MeshStandardMaterial).color.copy(skin);
+  if (opts.merge !== false && !NO_MERGE) {
+    const at = await characterAtlas(ALL_FILES, load);
+    const key = [sex, look.outfit, !!look.hood, !!look.pauldron, look.bracers !== false, look.hair ?? '', !!look.beard, look.skin ?? '', look.hairColor ?? ''].join('|');
+    mergeParts(model, anchor, at, key, hue, linen);
+  }
 
   // Normalise height (the rig is in metres already; this only fine-tunes).
   const root = new THREE.Group();
