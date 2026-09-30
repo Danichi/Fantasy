@@ -38,6 +38,71 @@ test('enter the crypt from the overworld and leave again', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+
+test('Old King\'s Road Mine can be entered, opened and completed', async ({ page }) => {
+  await boot(page);
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game;
+    await g.realm.enterMine();
+    const entered = {
+      mode: g.realm.mode,
+      active: g.realm.active,
+      insideMine: Math.abs(g.player.pos.x - 5000) < 1,
+      hasWinch: g.realm.interactables.some((i: any) => i.label() === 'Pull the mine winch'),
+    };
+
+    const winch = g.realm.interactables.find((i: any) => i.label() === 'Pull the mine winch');
+    winch?.action();
+    for (let i = 0; i < 20 && !g.realm.mineProgress.gateOpen; i++) await new Promise((r) => setTimeout(r, 50));
+
+    const opened = {
+      gateOpen: g.realm.mineProgress.gateOpen,
+      winchGone: !g.realm.interactables.some((i: any) => i.label() === 'Pull the mine winch'),
+    };
+
+    const boss = g.realm.mineInstance.boss;
+    const p = g.player;
+    if (boss) {
+      boss.takeHit({
+        damage: 99999,
+        poise: 0,
+        dir: new g.THREE.Vector3(0, 0, -1),
+        at: boss.center.clone(),
+        crit: true,
+        source: 'melee',
+      });
+      for (let i = 0; i < 120 && !g.realm.mineProgress.guardianDead; i++) await new Promise((r) => setTimeout(r, 50));
+    }
+
+    const defeated = {
+      guardianDead: g.realm.mineProgress.guardianDead,
+      reward: p.equip.items.some((i: any) => i.def.id === 'knightSword'),
+    };
+
+    await g.realm.leave();
+    for (let i = 0; i < 20 && g.realm.busy; i++) await new Promise((r) => setTimeout(r, 50));
+
+    return {
+      entered,
+      opened,
+      defeated,
+      after: { mode: g.realm.mode, active: g.realm.active, nearMine: Math.abs(g.player.pos.x - 250) < 10 && Math.abs(g.player.pos.z - 39) < 10 },
+    };
+  });
+
+  expect(res.entered.mode).toBe('dungeon');
+  expect(res.entered.active).toBe('mine');
+  expect(res.entered.insideMine).toBe(true);
+  expect(res.entered.hasWinch).toBe(true);
+  expect(res.opened.gateOpen).toBe(true);
+  expect(res.opened.winchGone).toBe(true);
+  expect(res.defeated.guardianDead).toBe(true);
+  expect(res.defeated.reward).toBe(true);
+  expect(res.after.mode).toBe('overworld');
+  expect(res.after.active).toBe(null);
+  expect(res.after.nearMine).toBe(true);
+});
+
 test('the labyrinth is connected and the gate guards the stairs', async ({ page }) => {
   await boot(page);
   const res = await page.evaluate(async () => {
