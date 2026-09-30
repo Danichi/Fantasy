@@ -296,10 +296,7 @@ export class SkillRuntime {
       this.pending = pend;
     } else if (def.now && def.now(this, pend) === false) return 'Nothing happens';
     // Pay.
-    if (def.stamina) {
-      p.stamina = Math.max(0, p.stamina - def.stamina * p.mods.staminaCost);
-      p.stamina = Math.max(0, p.stamina);
-    }
+    if (def.stamina) p.spendStamina(def.stamina * p.mods.staminaCost);
     p.mana -= this.manaCost(def);
     if (def.flow) this.flow -= def.flow;
     const extra = def.charges && this.has(def.charges) ? 2 : 1;

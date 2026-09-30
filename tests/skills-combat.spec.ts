@@ -92,8 +92,9 @@ test('skills on the moves bar cost resources, animate and hurt enemies', async (
     g.input.release('Digit1');
     await W(4);
     const action = pl.act?.def.id;
+    const spent = st0 - pl.stamina; // before regen refills it
     await W(120);
-    const step1 = { stamina: st0 - pl.stamina > 10, dmg: hp0 - Math.max(0, s.hp), action, cd: rt.cooldown('gale:Gale Step') > 0 };
+    const step1 = { stamina: spent > 10, dmg: hp0 - Math.max(0, s.hp), action, cd: rt.cooldown('gale:Gale Step') > 0 };
     // Fireball: mana, and the burst sets the slime burning.
     if (s.alive) s.takeHit({ damage: 999, poise: 0, dir: new g.THREE.Vector3(0, 0, 1), at: s.center.clone(), crit: false, source: 'melee' });
     await W(60);
@@ -104,8 +105,10 @@ test('skills on the moves bar cost resources, animate and hurt enemies', async (
     g.input.press('Digit2');
     await W(3);
     g.input.release('Digit2');
+    await W(2);
+    const manaSpent = m0 - pl.mana; // before regen
     await W(150);
-    const fire1 = { mana: m0 - pl.mana, dmg: hp1 - Math.max(0, s.hp) };
+    const fire1 = { mana: manaSpent, dmg: hp1 - Math.max(0, s.hp) };
     // Not enough Flow: Severing Arc refuses and says why.
     const arc = learn('gale', 'Severing Arc');
     rt.flow = 0;

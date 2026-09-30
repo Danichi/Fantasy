@@ -935,6 +935,13 @@ export class Player {
     return !this.dead && (!this.act || this.act.t >= this.act.def.cancel);
   }
 
+  /** Pay stamina for a skill; regen pauses like it does after an attack. */
+  spendStamina(n: number) {
+    if (n <= 0) return;
+    this.stamina = Math.max(0, this.stamina - n);
+    this.staminaDelay = Math.max(this.staminaDelay, 0.65);
+  }
+
   heal(amount: number) {
     if (this.dead) return;
     this.hp = Math.min(this.maxHp, this.hp + amount * this.mods.heal * this.paths.healPower);
