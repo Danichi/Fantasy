@@ -79,7 +79,7 @@ export class Interior {
   private rnd: () => number;
   private cloth: THREE.MeshStandardMaterial[];
 
-  constructor(readonly door: Door, readonly kind: InteriorKind, private scene: THREE.Scene, private m: WorldMats, onLeave: () => void, private lender?: LightLender) {
+  constructor(readonly door: Door, readonly kind: InteriorKind, private scene: THREE.Scene, private m: WorldMats, onLeave: () => void, private lender?: LightLender, private onInspect?: (label: string, text: string) => void) {
     this.rnd = mulberry32(door.spec.seed * 7 + 11);
     const big = kind === 'guild' || kind === 'hall' || kind === 'tavern';
     this.W = kind === 'undercity' ? 22 : Math.max(big ? 9 : 6, door.spec.w - 0.6);
@@ -356,17 +356,7 @@ export class Interior {
       radius: 1.4,
       label: () => label,
       enabled: () => true,
-      action: () => {
-        const speaker = this.door.name ?? 'This place';
-        void speaker;
-        const el = document.querySelector('.dialogue');
-        if (el) {
-          // Keep the world interaction lightweight; the HUD toast is owned by the
-          // caller in main, so an inspectable object simply becomes a promptless
-          // room detail when activated. The text is stored on the object for tools.
-          pos.userData = { ...(pos.userData ?? {}), inspection: text };
-        }
-      },
+      action: () => this.onInspect?.(label, text),
     });
     pos.userData = { inspection: text };
   }
@@ -403,7 +393,7 @@ export class Interior {
     } else if (keeper === 'apothecary') {
       this.bottleRack(left + 1.0, back + 1.0, 2.1);
       this.bottleRack(right - 1.0, back + 0.9, 1.8);
-      for (const x of [-0.7, 0, 0.7]) this.smallProp(this.cloth[(x + 1) * 3 as number], x, 0.18, 0.3, 0.12);
+      for (const [x, mat] of [[-0.7, this.cloth[0]], [0, this.cloth[2]], [0.7, this.cloth[4]]] as const) this.smallProp(mat, x, 0.18, 0.3, 0.12);
       this.inspectProp(0, back + 1.0, 'Inspect the apothecary table', 'Dried herbs, crushed roots and colored tinctures cover the workbench. A little brass mortar is still warm.');
     } else if (keeper === 'tailor') {
       for (const x of [-1.0, 0, 1.0]) this.box(this.cloth[Math.round((x + 1) * 2) % this.cloth.length], 0.55, 0.25, 0.55, x, 0.55, 0.4, 0.15);
