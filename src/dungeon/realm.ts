@@ -54,7 +54,10 @@ export class Realm {
   private interiorExtras: Interactable[] = [];
   floor: 1 | 2 = 1;
   instance: DungeonInstance | null = null;
+  mineInstance: MineInstance | null = null;
+  active: 'crypt' | 'mine' | null = null;
   progress: DungeonProgress = { gateOpen: false, bossDead: false, chests: [] };
+  mineProgress: MineProgress = { gateOpen: false, guardianDead: false };
   maps: Record<string, MapData> = {};
   readonly seed = 1337;
   private saved: Saved | null = null;
