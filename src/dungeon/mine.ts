@@ -243,6 +243,7 @@ export class MineInstance {
     g.position.set(MINE_ORIGIN.x, 0, MINE_ORIGIN.z - 34);
     this.group.add(g);
     this.gateBars = g;
+    this.gateT = this.progress.gateOpen ? 1 : 0;
     if (!this.progress.gateOpen) {
       this.gateCollider = this.box(new THREE.Vector3(MINE_ORIGIN.x, 2.5, MINE_ORIGIN.z - 34), new THREE.Vector3(2.2, 2.5, 0.28));
     } else {
