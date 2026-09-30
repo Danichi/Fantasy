@@ -322,6 +322,7 @@ export class MineInstance {
       this.gateBars.position.y = 5.7 * this.gateT;
       if (this.gateT >= 1 && this.gateCollider) {
         physics.world.removeCollider(this.gateCollider, false);
+        this.colliders = this.colliders.filter((c) => c !== this.gateCollider);
         this.gateCollider = null;
       }
       if (Math.random() < dt * 7) this.fx.dust(this.gateBars.position.clone().setY(0.4), 0.45);
