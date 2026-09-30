@@ -212,7 +212,7 @@ export class Sky {
     (u.uCloudLit.value as THREE.Color).setRGB(1, 1, 1).lerp(new THREE.Color(0.62, 0.66, 0.72), overcast).lerp(new THREE.Color(0.12, 0.15, 0.25), night * 0.9);
     // Golden hour paints the cumulus: peach tops, lavender bellies. Night: dim moonlit blue.
     const golden = THREE.MathUtils.smoothstep(0.42, 0.04, sunDir.y) * (1 - night) * (1 - overcast * 0.7);
-    this.cloudTop.value.setRGB(1, 1, 1).lerp(new THREE.Color(1.0, 0.74, 0.56), golden).lerp(new THREE.Color(0.66, 0.68, 0.72), overcast).lerp(new THREE.Color(0.13, 0.16, 0.26), night).addScalar(flash * 0.6);
+    this.cloudTop.value.setRGB(0.96, 0.985, 1.05).lerp(new THREE.Color(1.0, 0.74, 0.56), golden).lerp(new THREE.Color(0.66, 0.68, 0.72), overcast).lerp(new THREE.Color(0.13, 0.16, 0.26), night).addScalar(flash * 0.6);
     this.cloudBelly.value.setRGB(0.7, 0.76, 0.86).lerp(new THREE.Color(0.66, 0.52, 0.66), golden).lerp(new THREE.Color(0.42, 0.45, 0.5), overcast).lerp(new THREE.Color(0.05, 0.07, 0.13), night);
     for (const c of this.cloudItems) {
       const m = c.mesh.material as THREE.MeshBasicMaterial;

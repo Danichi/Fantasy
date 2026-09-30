@@ -148,15 +148,20 @@ export class Renderer {
     this.sun.position.set(fx, focus.y, fz).addScaledVector(SUN_DIR, 110);
   }
 
-  /** Nudge render resolution to hold ~60fps. */
+  /**
+   * Nudge render resolution only when the frame rate really sags. Chasing
+   * 60 fps on an integrated GPU blurred busy places like Port Aurelle for a
+   * few frames' worth of speed; a sharp ~35-45 fps reads better (the game
+   * this style comes from runs at 30).
+   */
   trackFrame(dtMs: number, now: number) {
     this.frameTimes.push(dtMs);
     if (this.frameTimes.length > 60) this.frameTimes.shift();
     if (now - this.lastDynAdjust < 2000 || this.frameTimes.length < 60) return;
     const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
     let next = this.dynScale;
-    if (avg > 19.5) next = Math.max(0.6, this.dynScale - 0.1);
-    else if (avg < 14.5) next = Math.min(1, this.dynScale + 0.05);
+    if (avg > 30) next = Math.max(0.75, this.dynScale - 0.08);
+    else if (avg < 24) next = Math.min(1, this.dynScale + 0.05);
     if (next !== this.dynScale) {
       this.dynScale = next;
       this.resize();

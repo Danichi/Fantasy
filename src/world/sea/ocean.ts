@@ -116,9 +116,12 @@ export class Ocean {
           // Only where the map has sea: inland hollows and river beds stay dry.
           if (elev > ${(SEA_LEVEL + 1.4).toFixed(2)}) discard;
           float depth = max(0.0, ${SEA_LEVEL.toFixed(2)} - elev);
-          vec3 shallow = vec3(0.05, 0.62, 0.64), mid = vec3(0.02, 0.36, 0.52), deep = vec3(0.01, 0.12, 0.3);
-          vec3 water = mix(shallow, mid, smoothstep(1.0, 9.0, depth));
-          water = mix(water, deep, smoothstep(9.0, 45.0, depth));
+          // Clear turquoise shallows, teal, then deep blue; open water deepens with distance too.
+          vec3 shallow = vec3(0.09, 0.56, 0.56), mid = vec3(0.025, 0.3, 0.44), deep = vec3(0.012, 0.1, 0.25);
+          vec3 water = mix(shallow, mid, smoothstep(0.6, 4.0, depth));
+          water = mix(water, deep, smoothstep(4.0, 28.0, depth));
+          float viewDist = length(cameraPosition - vW);
+          water = mix(water, deep * 1.15, smoothstep(40.0, 520.0, viewDist) * 0.55);
           vec3 N = normalize(vN + vec3(vnoise(vW.xz * 0.35 + uTime * 0.4) - 0.5, 0.0, vnoise(vW.zx * 0.3 - uTime * 0.35) - 0.5) * 0.18 * vCalm);
           vec3 V = normalize(cameraPosition - vW);
           float fres = pow(1.0 - max(dot(N, V), 0.0), 4.0);
