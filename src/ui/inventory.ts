@@ -4,14 +4,13 @@ import type { ItemInstance } from '../items/equipment';
 import { events } from '../core/events';
 import { iconFor, wideIconFor } from './icons';
 import type { CharPreview } from './charPreview';
-import { DISCIPLINES, SPECIALIZATIONS, LEARNED_CLASSES } from '../progression/combatProgression';
-import { CLASS_ABILITIES } from '../progression/classData';
-import { COMBAT_STYLES, styleIds, type CombatStyleId } from '../progression/styles';
+import { COMBAT_STYLES } from '../progression/styles';
 
 // Inventory & equipment screen (I).
 //   left:   armour slots          centre: live 3D character + weapons + summary
 //   right:  accessories, quick items
-//   far:    tabs (Items / Skills / Stats) with the item grid and details
+//   far:    tabs (Items / Stats) with the item grid and details.
+// Skills, classes and attributes live on their own screen (K, ui/skills.ts).
 // Click an item to equip it (Shift-click a sword for the off hand), click an
 // equipped slot to take it off, or drag items onto slots and the HUD bar.
 
@@ -20,7 +19,7 @@ const SLOT_LABEL: Record<Slot, string> = {
   hands: 'Hands', legs: 'Legs', feet: 'Feet', amulet: 'Amulet', ring1: 'Ring', ring2: 'Ring', belt: 'Belt', trinket: 'Trinket',
 };
 
-type Tab = 'items' | 'skills' | 'legacy' | 'stats';
+type Tab = 'items' | 'stats';
 type Filter = 'all' | 'weapons' | 'armour' | 'accessories' | 'magic' | 'consumables' | 'materials';
 const FILTERS: [Filter, string, ItemKind[]][] = [
   ['all', 'All', []],
@@ -31,8 +30,6 @@ const FILTERS: [Filter, string, ItemKind[]][] = [
   ['consumables', 'Usables', ['consumable']],
   ['materials', 'Materials', ['material', 'key']],
 ];
-
-
 
 function fmtStat(k: keyof ItemStats, v: number) {
   if (k === 'staminaRegen' || k === 'manaRegen' || k === 'damagePct') return `+${Math.round(v * 100)}%`;
@@ -53,7 +50,6 @@ export class InventoryUI {
   private tab: Tab = 'items';
   private filter: Filter = 'all';
   private hovered: ItemInstance | undefined;
-  private skillStyle: CombatStyleId = 'gale';
   open = false;
   onToggle?: (open: boolean) => void;
   onQuickDrop?: (slot: number, uid: number) => void;
@@ -71,7 +67,7 @@ export class InventoryUI {
       </section>
       <section class="inv-col acc"><h2>ACCESSORIES</h2><div class="slots"></div></section>
       <section class="inv-main"><div class="tabs"></div><div class="body"></div></section>
-      <div class="inv-help">Click to equip · <b>Shift-click</b> a sword for the off hand · Click an equipped slot to remove it · Drag items onto slots or the HUD bar · <b>I</b> / <b>Esc</b> to close</div>`;
+      <div class="inv-help">Click to equip · <b>Shift-click</b> a sword for the off hand · Click an equipped slot to remove it · Drag items onto slots or the HUD bar · <b>K</b> skills · <b>I</b> / <b>Esc</b> to close</div>`;
     root.appendChild(this.el);
     this.armorCol = this.el.querySelector('.armor .slots')!;
     this.accCol = this.el.querySelector('.acc .slots')!;
@@ -167,7 +163,7 @@ export class InventoryUI {
       <span><b>${p.prog.activeStyle ? COMBAT_STYLES[p.prog.activeStyle].name : 'Untrained'}</b>Style</span>`;
 
     this.tabs.innerHTML = '';
-    for (const [id, label] of [['items', 'ITEMS'], ['skills', 'SKILLS'], ['legacy', 'LEGACY'], ['stats', 'STATS']] as [Tab, string][]) {
+    for (const [id, label] of [['items', 'ITEMS'], ['stats', 'STATS']] as [Tab, string][]) {
       const b = document.createElement('button');
       b.className = 'tab' + (this.tab === id ? ' on' : '');
       b.textContent = label;
@@ -178,8 +174,6 @@ export class InventoryUI {
       this.tabs.appendChild(b);
     }
     if (this.tab === 'items') this.renderItems();
-    else if (this.tab === 'skills') this.renderSkills();
-    else if (this.tab === 'legacy') this.renderLegacy();
     else this.renderStats();
   }
 
@@ -235,153 +229,13 @@ export class InventoryUI {
     this.showDetail(this.hovered);
   }
 
-  private renderSkills() {
-    const prog = this.player.prog;
-    const selected = COMBAT_STYLES[this.skillStyle];
-    const learned = prog.knowsStyle(this.skillStyle);
-    const styleCards = styleIds.map((id) => {
-      const s = COMBAT_STYLES[id];
-      const on = prog.activeStyle === id;
-      const known = prog.knowsStyle(id);
-      return `<button class="style-card ${known ? 'known' : 'locked'} ${on ? 'active' : ''}" data-style="${id}">
-        <span class="style-orb" style="--style:${s.color}"></span>
-        <b>${s.name}</b><small>${known ? (on ? 'ACTIVE' : 'LEARNED') : `TRAIN WITH ${s.trainer.toUpperCase()}`}</small>
-      </button>`;
-    }).join('');
-
-    const nodes = selected.nodes.map((node, i) => {
-      const owned = prog.hasSkill(selected.id, node.id);
-      const prereq = node.requires?.every((r) => prog.hasSkill(selected.id, r)) ?? true;
-      const canBuy = learned && !owned && prereq && prog.skillPoints >= node.cost;
-      const lockedReason = !learned ? `Train with ${selected.trainer}` : !prereq ? 'Prerequisite required' : prog.skillPoints < node.cost ? 'Need more skill points' : 'Unlock move';
-      const row = node.requires?.length ? Math.min(3, node.requires.length + 1) : 1;
-      const col = (i % 2) + 1;
-      const reqNames = node.requires?.map((req) => selected.nodes.find((n) => n.id === req)?.name ?? req).join(' · ') ?? 'Starting move';
-      const ref = `skill:${selected.id}:${node.id}`;
-      return `<button class="skill-node ${owned ? 'owned' : ''} ${canBuy ? 'available' : ''}" data-skill="${node.id}" data-move="${ref}" ${owned && node.actionId ? 'draggable="true"' : ''} style="grid-column:${col};grid-row:${row}" title="${node.desc}">
-        <span class="node-num">${String(i + 1).padStart(2, '0')}</span>
-        <b>${node.name}</b>
-        <small>${owned ? 'MASTERED · DRAG TO MOVES' : lockedReason}</small>
-        <p>${node.desc}</p>
-        <span class="requires">${reqNames}</span>
-        <em>${node.cost} SP</em>
-      </button>`;
-    }).join('');
-
-    const switcher = prog.knowsStyle(selected.id)
-      ? `<button class="style-switch ${prog.activeStyle === selected.id ? 'active' : ''}" data-switch="${selected.id}" ${prog.activeStyle === selected.id ? 'disabled' : ''}>
-          ${prog.activeStyle === selected.id ? 'ACTIVE STYLE' : 'USE THIS STYLE'}
-        </button>`
-      : `<div class="style-lock">Train with ${selected.trainer} to learn this combat style.</div>`;
-
-    this.body.innerHTML = `
-      <div class="style-head">
-        <div><span class="eyebrow">PRIMARY COMBAT SCHOOL</span><h3>${selected.name}</h3><p>${selected.short}</p><small class="magic-note">${selected.mechanic} Magic is a separate system and does not change your combat school.</small></div>
-        <div class="sp-badge"><small>SKILL POINTS</small><b>${prog.skillPoints}</b></div>
-      </div>
-      <div class="style-cards">${styleCards}</div>
-      <div class="tree-shell">
-        <div class="tree-line"></div>
-        <div class="skill-tree">${nodes}</div>
-      </div>
-      <div class="style-footer">${switcher}<span>${prog.starterStyleChosen ? 'Primary school chosen. A secondary school slot can be unlocked later through mastery.' : `Starter quest: study all three mentors, then choose your school.`}</span></div>`;
-
-    this.body.querySelectorAll<HTMLButtonElement>('.style-card').forEach((b) => {
-      b.addEventListener('click', () => {
-        this.skillStyle = b.dataset.style as CombatStyleId;
-        this.renderSkills();
-      });
-    });
-
-    this.body.querySelectorAll<HTMLButtonElement>('.skill-node').forEach((b) => {
-      b.addEventListener('click', () => {
-        const id = b.dataset.skill!;
-        if (prog.unlockSkill(selected.id, id)) {
-          this.renderSkills();
-        } else {
-          const node = selected.nodes.find((n) => n.id === id)!;
-          const reason = !learned ? `Train with ${selected.trainer} first.` : !(node.requires?.every((r) => prog.hasSkill(selected.id, r)) ?? true) ? 'Unlock the prerequisite moves first.' : 'You need more skill points.';
-          const toast = document.querySelector('.toast') as HTMLElement | null;
-          if (toast) {
-            toast.textContent = reason;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 1800);
-          }
-        }
-      });
-      b.addEventListener('dragstart', (e) => {
-        const ref = b.dataset.move;
-        const node = selected.nodes.find((n) => n.id === b.dataset.skill!);
-        if (ref && node?.actionId && prog.hasSkill(selected.id, b.dataset.skill!)) e.dataTransfer?.setData('text/move', ref);
-      });
-    });
-
-    const switchButton = this.body.querySelector<HTMLButtonElement>('[data-switch]');
-    switchButton?.addEventListener('click', () => {
-      if (prog.setActiveStyle(switchButton.dataset.switch as CombatStyleId)) this.renderSkills();
-    });
-  }
-
-  /** Long-term progression: disciplines, specializations, origin and learned classes. */
-  private renderLegacy() {
-    const p = this.player.prog.combat;
-    const primary = p.primary;
-    const secondary = p.secondary;
-    const disciplineCards = (Object.values(DISCIPLINES)).map((d) => {
-      const s = p.disciplines[d.id];
-      const isPrimary = primary === d.id;
-      const isSecondary = secondary === d.id;
-      const button = isPrimary ? 'PRIMARY' : isSecondary ? 'SECONDARY' : 'NOT TRAINED';
-      const chosenSpec = p.specializations[d.id];
-      const specButtons = d.specializations.map((sid) => {
-        const spec = SPECIALIZATIONS[sid];
-        const ok = s.level >= 10 && s.mastery >= 50;
-        return `<button class="spec-pick ${chosenSpec === sid ? 'selected' : ''}" data-spec="${sid}" data-spec-discipline="${d.id}" ${ok ? '' : 'disabled'}>${spec.name}</button>`;
-      }).join('');
-      return `<div class="discipline-card ${isPrimary ? 'primary' : isSecondary ? 'secondary' : ''}">
-        <div class="dc-head"><h3>${d.name}</h3><span>LV ${s.level}</span></div>
-        <p>${d.summary}</p>
-        <div class="dc-meta">${Math.round(s.mastery)}% mastery · ${Math.round(s.xp)} XP</div>
-        <span class="discipline-pick">${button}</span>
-        <div class="spec-label">Specialization</div><div class="spec-grid">${specButtons}</div>
-      </div>`;
-    }).join('');
-    const learned = Object.entries(p.learnedClasses);
-    const learnedHtml = learned.length
-      ? learned.map(([id, s]) => {
-          const data = CLASS_ABILITIES[id];
-          const abilities = data?.abilities?.slice(0, 4).map((a) => a.name).join(' · ') ?? 'Abilities loading';
-          return `<div class="class-card learned"><h3>${LEARNED_CLASSES[id as keyof typeof LEARNED_CLASSES]?.name ?? data?.name ?? id}</h3><span>LV ${s.level} · ${Math.round(s.mastery)}% mastery</span><small>${abilities}</small></div>`;
-        }).join('')
-      : '<div class="class-card empty"><h3>No learned classes yet</h3><span>Class quests and trainers unlock professions.</span></div>';
-    const starter = Object.values(LEARNED_CLASSES).filter((x) => x.rarity === 'common').slice(0, 10);
-    const starterHtml = starter.map((x) => `<div class="class-card"><h3>${x.name}</h3><span>${x.summary}</span></div>`).join('');
-    this.body.innerHTML = `
-      <div class="discipline-panel">
-        <div class="heroic-card"><b>HEROIC LEGACY · LV ${p.heroic.level}</b><span>Legendary origin path · slow progression · ${Math.round(p.heroic.mastery)}% mastery</span></div>
-        <div class="origin-line"><b>Origin:</b> ${p.origin} · <b>Primary:</b> ${DISCIPLINES[primary].name} · <b>Secondary:</b> ${secondary ? DISCIPLINES[secondary].name : 'Locked until Heroic Legacy 10'}</div>
-        <div class="discipline-grid">${disciplineCards}</div>
-        <div class="hybrid-line"><b>Hybrid techniques:</b> ${p.hybridUnlocks.length ? p.hybridUnlocks.join(', ') : 'Earned by reaching discipline level/mastery requirements.'}</div>
-      </div>
-      <p class="lead">Your discipline follows the combat school you chose with the trainers (Skills tab) and grows with real use in fights. Combat disciplines define how you fight. Learned classes define what you can do outside that core. Mastery is earned from actual use rather than a second level bar.</p>
-      <h2 class="skills-title">LEARNED CLASSES</h2>
-      <div class="classes">${learnedHtml}${starterHtml}</div>`;
-    this.body.querySelectorAll<HTMLButtonElement>('.spec-pick').forEach((b) => {
-      b.addEventListener('click', () => {
-        const did = b.dataset.specDiscipline as keyof typeof DISCIPLINES;
-        const sid = b.dataset.spec as keyof typeof SPECIALIZATIONS;
-        if (did && sid && p.chooseSpecialization(did, sid)) this.render();
-      });
-    });
-  }
-
   private renderStats() {
     const p = this.player, eq = p.equip;
     const rows: [string, string][] = [
-      ['Level', `${p.prog.level}`],
-      ['Experience', `${p.prog.xp} / ${p.prog.next}`],
+      ['Character level', `${p.prog.level}`],
+      ['Unspent XP', `${p.prog.xp.toLocaleString()}`],
+      ['Attribute points', `${p.paths.attrFree}`],
       ['Gold', `${p.prog.gold}`],
-      ['Skill points', `${p.prog.skillPoints}`],
       ['Health', `${Math.ceil(p.hp)} / ${p.maxHp}`],
       ['Stamina', `${Math.ceil(p.stamina)} / ${p.maxStamina}`],
       ['Mana', `${Math.ceil(p.mana)} / ${p.maxMana}`],
@@ -392,7 +246,8 @@ export class InventoryUI {
       ['Mana regen', `+${Math.round(eq.bonus('manaRegen') * 100)}%`],
       ['Damage bonus', `+${Math.round(eq.bonus('damagePct') * 100)}%`],
     ];
-    this.body.innerHTML = `<div class="statgrid">${rows.map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>`;
+    this.body.innerHTML = `<div class="statgrid">${rows.map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('')}</div>
+      <p class="lead">Spend XP on classes and callings, and attribute points on Vigor, Might and the rest, in the Skills screen (<b>K</b>).</p>`;
   }
 
   private showDetail(it: ItemInstance | undefined) {
@@ -436,7 +291,7 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon') =>
       <span><kbd>LMB</kbd> Attack · hold for heavy</span><span><kbd>RMB</kbd> Block / off-hand attack</span>
       <span><kbd>F</kbd> Parry · hold while standing still for Boundary stance</span><span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on</span>
       <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span><span><kbd>V</kbd> Origin ability</span>
-      <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory</span>
+      <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory · <kbd>K</kbd> Skills</span>
       <span><kbd>E</kbd> Interact (doors, chests, gates)</span><span><kbd>M</kbd> Draw the dungeon map</span>
     </div>`;
   const start = document.createElement('div');

@@ -17,6 +17,7 @@ import { waterDepthAt } from '../world/water';
 import { waterSurfaceAt } from '../world/waterLevel';
 import { Progression } from '../progression/progression';
 import { COMBAT_STYLES, type CombatStyleId } from '../progression/styles';
+import { Paths } from '../paths/paths';
 
 const CAPSULE_HALF = 0.55;
 const CAPSULE_R = 0.32;
@@ -87,14 +88,16 @@ export class Player {
   private boundaryRing: THREE.Mesh | null = null;
   private boundaryOuterRing: THREE.Mesh | null = null;
   readonly prog = new Progression();
+  /** disciplines, attributes and the active combat class */
+  readonly paths = new Paths(this.prog);
   get maxHp() {
-    return 120 + this.prog.bonusHp + (this.equip?.bonus('maxHp') ?? 0);
+    return 120 + this.paths.bonusHp + (this.equip?.bonus('maxHp') ?? 0);
   }
   get maxStamina() {
-    return 100 + this.prog.bonusStamina + (this.equip?.bonus('maxStamina') ?? 0);
+    return 100 + this.paths.bonusStamina + (this.equip?.bonus('maxStamina') ?? 0);
   }
   get maxMana() {
-    return 80 + this.prog.bonusMana + (this.equip?.bonus('maxMana') ?? 0);
+    return 80 + this.paths.bonusMana + (this.equip?.bonus('maxMana') ?? 0);
   }
   private staminaDelay = 0;
   private hot = { rate: 0, left: 0 };
@@ -579,7 +582,7 @@ export class Player {
     } else {
       const sp = this.equip.get(this.equip.activeSpell);
       const heal = sp?.def.stats.heal ?? 50;
-      this.hot = { rate: heal / 3, left: 3 };
+      this.hot = { rate: (heal * this.paths.healPower) / 3, left: 3 };
       this.onSpell?.('healingLight', this.center, this.forward, null);
     }
   }
@@ -1073,12 +1076,12 @@ export class Player {
           a.hitSet.add(tg.id);
           const crit = tg.stunned;
           const charge = 1 + a.charge * 0.6;
-          const bonus = 1 + this.equip.bonus('damagePct');
+          const bonus = (1 + this.equip.bonus('damagePct')) * this.paths.meleePower(weapon?.def.stats.speed ?? 1);
           const styleBonus = this.galeDamageMultiplier * this.crossDamageMultiplier;
           const dmg = Math.round(base * h.dmg * charge * bonus * styleBonus * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
           const dir = tg.position.clone().sub(this.pos).setY(0).normalize();
           const at2 = tg.center.clone().addScaledVector(dir, -tg.radius * 0.8);
-          const poise = h.poise * charge * this.crossPoiseMultiplier * (this.boundaryCounterReady ? 1.35 : 1);
+          const poise = h.poise * charge * this.paths.poisePower * this.crossPoiseMultiplier * (this.boundaryCounterReady ? 1.35 : 1);
           tg.takeHit({ damage: dmg, poise, dir, at: at2, crit, source: 'melee' });
           events.emit('enemyHit', { at: at2, amount: dmg, crit, enemyId: tg.id });
           if (this.activeCombatStyle === 'gale') this.addMomentum(13 + Math.min(8, h.dmg * 4));
@@ -1211,8 +1214,8 @@ export class Player {
   private updateStats(dt: number) {
     this.originCooldown = Math.max(0, this.originCooldown - dt);
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
-    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen')) * dt);
-    this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen')) * dt);
+    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen) * dt);
+    this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen) * dt);
     if (this.prog.combat.origin === 'demon' && !this.dead) this.hp = Math.min(this.maxHp, this.hp + 0.8 * dt);
     this.hp = Math.min(this.hp, this.maxHp);
     if (this.hot.left > 0 && !this.dead) {
@@ -1230,7 +1233,7 @@ export class Player {
     const it = this.equip.get(uid);
     if (!it || it.def.kind !== 'consumable' || this.dead) return;
     const st = it.def.stats;
-    if (st.heal) this.hot = { rate: st.heal / 1.2, left: 1.2 };
+    if (st.heal) this.hot = { rate: (st.heal * this.paths.healPower) / 1.2, left: 1.2 };
     if (st.restoreMana) this.mana = Math.min(this.maxMana, this.mana + st.restoreMana);
     if (st.restoreStamina) this.stamina = Math.min(this.maxStamina, this.stamina + st.restoreStamina);
     this.equip.consume(uid);

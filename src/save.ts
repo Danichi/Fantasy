@@ -5,6 +5,8 @@ import type { MapData } from './ui/dungeonMap';
 import type { DungeonProgress } from './dungeon/instance';
 import type { GuildSaveData } from './guild/adventurerGuild';
 import type { DiscoverySave } from './world/discovery';
+import { xpToNext } from './progression/progression';
+import type { PathsSave } from './paths/paths';
 
 // Browser save (localStorage). Hand-drawn maps have to survive a reload, so
 // the whole game state lives here: progression, inventory, loadout, dungeon
@@ -38,14 +40,17 @@ export interface WorldSave {
 export interface SaveData {
   v: 6;
   seed: number;
+  /** xp is the unspent pool; level is informational (derived from disciplines) */
   prog: {
-    level: number; xp: number; gold: number; sp: number;
+    level: number; xp: number; gold: number; sp?: number; total?: number;
     /** long-term discipline tracks (levels, mastery, specializations, origin) */
-    combat: ReturnType<Player['prog']['combat']['toJSON']> | null;
-    /** trained combat schools and their skill trees */
-    primaryStyle: string | null; secondaryStyle: string | null; activeStyle: string | null;
-    styleIntroductions: string[]; learnedSkills: Record<string, string[]>; styleMastery: Record<string, number>;
+    combat?: ReturnType<Player['prog']['combat']['toJSON']> | null;
+    /** trained combat schools (the school runtime: momentum, focus, openings) */
+    primaryStyle?: string | null; secondaryStyle?: string | null; activeStyle?: string | null;
+    styleIntroductions?: string[]; learnedSkills?: Record<string, string[]>; styleMastery?: Record<string, number>;
   };
+  /** disciplines and attributes; missing in saves from before XP was a currency */
+  paths?: PathsSave;
   items: { id: string; qty: number }[];
   equipped: Partial<Record<Slot, number>>; // slot -> index into items
   quick: (number | null)[];
@@ -127,11 +132,12 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     v: 6,
     seed,
     prog: {
-      level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, sp: player.prog.skillPoints,
+      level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, total: player.prog.totalXp, sp: player.prog.skillPoints,
       combat: player.prog.combat.toJSON(),
       primaryStyle: player.prog.primaryStyle, secondaryStyle: player.prog.secondaryStyle, activeStyle: player.prog.activeStyle,
       styleIntroductions: [...player.prog.styleIntroductions], learnedSkills: structuredClone(player.prog.learnedSkills), styleMastery: structuredClone(player.prog.styleMastery),
     },
+    paths: player.paths.serialize(),
     items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty })),
     equipped,
     quick: cleanItems(eq.quick),
@@ -151,10 +157,21 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
 export function applySave(player: Player, d: SaveData) {
   const eq = player.equip;
   const p = player.prog;
-  p.level = d.prog.level;
-  p.xp = d.prog.xp;
   p.gold = d.prog.gold;
-  p.skillPoints = d.prog.sp;
+  if (d.paths) {
+    p.xp = d.prog.xp;
+    p.totalXp = d.prog.total ?? d.prog.xp;
+    player.paths.load(d.paths);
+  } else {
+    // Old save: levels were bought automatically. Refund every XP point earned
+    // so it can be invested in disciplines instead.
+    let refund = d.prog.xp;
+    for (let l = 1; l < d.prog.level; l++) refund += xpToNext(l);
+    p.xp = refund;
+    p.totalXp = refund;
+    player.paths.reset();
+  }
+  p.skillPoints = d.prog.sp ?? 0;
   if (d.prog.combat) p.combat.fromJSON(d.prog.combat);
   p.primaryStyle = (d.prog.primaryStyle === 'gale' || d.prog.primaryStyle === 'boundary' || d.prog.primaryStyle === 'cross') ? d.prog.primaryStyle : null;
   p.secondaryStyle = (d.prog.secondaryStyle === 'gale' || d.prog.secondaryStyle === 'boundary' || d.prog.secondaryStyle === 'cross') ? d.prog.secondaryStyle : null;

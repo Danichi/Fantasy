@@ -79,7 +79,7 @@ test('killing an enemy awards XP and gold that fly to the player', async ({ page
     const xp0 = p.prog.xp, gold0 = p.prog.gold;
     s.takeHit({ damage: 999, poise: 0, dir: new g.THREE.Vector3(0, 0, -1), at: s.center.clone(), crit: false, source: 'melee' });
     await new Promise((r) => setTimeout(r, 2500));
-    return { dXp: p.prog.xp - xp0 + (p.prog.level - 1) * 1000, dGold: p.prog.gold - gold0 };
+    return { dXp: p.prog.xp - xp0, dGold: p.prog.gold - gold0 };
   });
   expect(res.dXp).toBeGreaterThanOrEqual(26);
   expect(res.dGold).toBeGreaterThanOrEqual(6);

@@ -328,6 +328,9 @@ export class Town {
     }];
   }
 
+  /** Extra replies from the discipline system (teach, switch class, respec). */
+  mentorOptions?: (s: NpcSpec, say: (text: string) => void) => DialogueOption[];
+
   talk(s: NpcSpec, text = s.greeting, skipQuests = false) {
     const npc = this.npcs.find((n) => n.spec.id === s.id);
     if (npc) npc.talkT = 6 + text.length * 0.035;
@@ -347,7 +350,8 @@ export class Town {
       const style = COMBAT_STYLES[s.trainerStyle];
       text = `${s.greeting} ${style.name} is the art of ${style.mechanic.charAt(0).toLowerCase() + style.mechanic.slice(1)}`;
     }
-    const opts = s.lines.map((l) => ({ label: l.q, run: () => this.talk(s, l.a) }));
+    const opts: DialogueOption[] = s.lines.map((l) => ({ label: l.q, run: () => this.talk(s, l.a) }));
+    opts.push(...(this.mentorOptions?.(s, (t) => this.talk(s, t)) ?? []));
     if (s.trainerStyle) {
       const train = trainingOption(this.player, s.trainerStyle, (next) => this.talk(s, next));
       opts.unshift(...starterChoiceOptions(this.player, (next) => this.talk(s, next)), train);

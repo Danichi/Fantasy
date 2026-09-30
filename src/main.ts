@@ -68,6 +68,9 @@ import { regionAt, reliefAt, RELIEF } from './world/worldMap';
 import { targets } from './combat/targets';
 import { Ocean } from './world/sea/ocean';
 import { GroundWindow } from './world/groundWindow';
+import { SkillsUI } from './ui/skills';
+import { DISC } from './paths/data';
+import { mentorOptions } from './paths/mentors';
 import { CharPreview } from './ui/charPreview';
 import { events } from './core/events';
 import { buildWorld } from './world/props';
@@ -118,7 +121,13 @@ async function boot() {
   mark('player');
   const saveData = TEST_MODE && !location.search.includes('save') ? null : loadSave();
   if (saveData) applySave(player, saveData);
-  else setupLoadout(player.equip);
+  else {
+    setupLoadout(player.equip);
+    // A new character starts full (max health depends on level and attributes).
+    player.hp = player.maxHp;
+    player.stamina = player.maxStamina;
+    player.mana = player.maxMana;
+  }
 
   const fx = new FX(r.scene, heightAt);
   const slimes = new BeastSpawner(r.scene, fx);
@@ -247,6 +256,7 @@ async function boot() {
   const hud = new HUD(player, r.camera);
   const preview = new CharPreview(r.renderer, r.scene, player, [r.sun, r.hemi]);
   const inv = new InventoryUI(player, preview);
+  const skills = new SkillsUI(player);
   const mapUI = new DungeonMapUI();
   let frontier!: FrontierRegion;
   const realm = new Realm(r, player, cam, fx, hud, mapUI, {
@@ -275,6 +285,7 @@ async function boot() {
   }, rewards, world.crypt.door);
   const dialogue = new DialogueUI();
   const town = new Town(r.scene, r.camera, dialogue, player);
+  town.mentorOptions = (spec, say) => mentorOptions(player.paths, spec, say, (m) => hud.toast(m));
   frontier = new FrontierRegion(
     r.scene, player, fx, dialogue, world.mats,
     (msg) => hud.toast(msg),
@@ -616,7 +627,7 @@ async function boot() {
   const resume = saveData?.world?.pos;
   if (resume && !TEST_MODE) player.teleport(new THREE.Vector3(resume[0], Math.max(resume[1], heightAt(resume[0], resume[2])) + 0.2, resume[2]));
   dialogue.onToggle = (open) => {
-    input.uiMode = open || inv.open || mapUI.open;
+    input.uiMode = open || inv.open || skills.open || mapUI.open;
     if (open) input.exitLock();
     else input.requestLock();
   };
@@ -730,7 +741,7 @@ async function boot() {
   window.addEventListener('beforeunload', save);
   setInterval(save, 30000);
   mapUI.onToggle = (open) => {
-    input.uiMode = open || inv.open;
+    input.uiMode = open || inv.open || skills.open;
     if (open) input.exitLock();
     else input.requestLock();
   };
@@ -771,13 +782,22 @@ async function boot() {
     hud.markHotbarDirty();
   };
   inv.onToggle = (open) => {
+    if (open) skills.toggle(false);
     document.body.classList.toggle('inv-open', open);
-    input.uiMode = open;
+    input.uiMode = open || skills.open;
     if (open) input.exitLock();
-    else input.requestLock();
+    else if (!skills.open) input.requestLock();
+  };
+  skills.onToggle = (open) => {
+    if (open) inv.toggle(false);
+    document.body.classList.toggle('inv-open', open);
+    input.uiMode = open || inv.open;
+    if (open) input.exitLock();
+    else if (!inv.open) input.requestLock();
+    if (!open) save();
   };
   const pause = () => {
-    if (!started || TEST_MODE || inv.open) return;
+    if (!started || TEST_MODE || inv.open || skills.open) return;
     pausedByUser = true;
     overlays.showPaused(true);
   };
@@ -811,8 +831,8 @@ async function boot() {
       setTimeout(() => input.endStep(), 0);
       return;
     }
-    if (e.code === 'Escape' && (dialogue.open || mapUI.open || inv.open)) return;
-    if (e.code === 'Escape' && !input.locked && !inv.open && !mapUI.open && !dialogue.open && !pausedByUser) pause();
+    if (e.code === 'Escape' && (dialogue.open || mapUI.open || inv.open || skills.open)) return;
+    if (e.code === 'Escape' && !input.locked && !inv.open && !skills.open && !mapUI.open && !dialogue.open && !pausedByUser) pause();
   });
 
   const useHotbar = (i: number) => {
@@ -841,6 +861,14 @@ async function boot() {
     }, 4200);
   });
 
+  // Nudge the player when they can afford their active class's next level.
+  let couldLevel = player.paths.canInvest(player.paths.active);
+  events.on('progressChanged', () => {
+    const P = player.paths, can = P.canInvest(P.active);
+    if (can && !couldLevel && !skills.open) hud.toast(`Enough XP to raise ${DISC[P.active].name} · press K`);
+    couldLevel = can;
+  });
+
   // ---- loop -----------------------------------------------------------------
   let hitStop = 0;
   let paused = false;
@@ -865,6 +893,7 @@ async function boot() {
   const simStep = () => {
     simSteps++;
     if (input.wasPressed('inventory')) inv.toggle();
+    if (input.wasPressed('skills')) skills.toggle();
     if (input.wasPressed('help')) overlays.toggleHelp();
     if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
     if (input.wasPressed('map')) {
@@ -1050,7 +1079,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {
