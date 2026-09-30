@@ -491,10 +491,10 @@ export class Gravewood {
     {
       const ruin = gateG.scene;
       ruin.scale.setScalar(0.19);
-      ruin.rotation.y = Math.PI * 0.62;
+      ruin.rotation.y = Math.PI; // its gateway faces up the trail, toward whoever is coming
       ruin.updateMatrixWorld(true);
       const bb = new THREE.Box3().setFromObject(ruin);
-      const at = world(-15, -HZ - 17);
+      const at = world(-17, -HZ - 30);
       // The scan carries a sloping bank of its own ground: bury that, stonework on the terrain.
       ruin.position.set(at.x - (bb.min.x + bb.max.x) / 2, at.y - bb.min.y - 2.4, at.z - (bb.min.z + bb.max.z) / 2);
       ruin.traverse((o) => ((o as THREE.Mesh).isMesh && (((o as THREE.Mesh).castShadow = true), ((o as THREE.Mesh).receiveShadow = true))));
