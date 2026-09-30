@@ -135,7 +135,7 @@ export class Encounters {
   readonly bandits: Bandit[] = [];
 
   constructor(private scene: THREE.Scene, private player: Player, private beasts: BeastSpawner, fx: FX) {
-    this.bolts = new Bolts(scene, fx);
+    this.bolts = new Bolts(scene);
     const pos = new THREE.Vector3(0, -999, 0);
     const self = this;
     this.interactable = {

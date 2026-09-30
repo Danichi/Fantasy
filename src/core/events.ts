@@ -8,6 +8,8 @@ export interface GameEvents {
   parrySuccess: { at: Vector3 };
   blockImpact: { at: Vector3; guardBroken: boolean };
   enemyHit: { at: Vector3; amount: number; crit: boolean; enemyId: number };
+  /** the player's blade connected (after enemyHit) */
+  meleeHit: { target: import('../combat/targets').Target; amount: number; crit: boolean; action: string };
   enemyDied: { at: Vector3; enemyId: number; kind: string };
   swing: { heavy: boolean };
   spellCast: { spell: string };
@@ -23,9 +25,6 @@ export interface GameEvents {
   pickup: { kind: 'xp' | 'gold' };
   bossSlam: { at: Vector3 };
   equipmentChanged: {};
-  disciplineChanged: { discipline: 'gale' | 'boundary' | 'crossblade'; momentum: number; focus: number; openings: number; };
-  masteryChanged: { discipline: 'gale' | 'boundary' | 'crossblade'; mastery: number; level: number; };
-  boundaryIntercept: { at: Vector3; perfect: boolean; };
   originAbility: { origin: string; ability: string; };
   slimeLand: { at: Vector3; size: number };
   mapRevealed: { cells: number };

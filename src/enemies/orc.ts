@@ -530,10 +530,6 @@ export class OrcWarlord implements Target {
       a.mesh.lookAt(a.pos.clone().add(a.vel));
       const pa = player.pos.clone().setY(player.pos.y + 0.35), pb = player.pos.clone().setY(player.pos.y + 1.5);
       const close = Math.min(segmentPointDistance(pa, pb, a.pos), segmentPointDistance(pa, pb, prev.lerp(a.pos, 0.5)));
-      if (!player.dead && player.canIntercept(a.pos.x, a.pos.z)) {
-        const res = player.receiveAttack({ damage: 20, from: a.pos.clone(), at: a.pos.clone(), parryable: true, poise: 30 });
-        if (res === 'parried') { this.fx.sparks(a.pos.clone()); a.life = 0; continue; }
-      }
       if (close < 0.4 && !player.dead) {
         const res = player.receiveAttack({ damage: 20, from: a.pos.clone().sub(a.vel.clone().normalize()), parryable: true, poise: 30 });
         if (res === 'blocked' || res === 'guardBroken') this.fx.sparks(a.pos.clone());

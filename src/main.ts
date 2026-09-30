@@ -71,6 +71,8 @@ import { GroundWindow } from './world/groundWindow';
 import { SkillsUI } from './ui/skills';
 import { DISC } from './paths/data';
 import { mentorOptions } from './paths/mentors';
+import { SkillRuntime } from './paths/skills';
+import { skillIcon } from './ui/skillTree';
 import { CharPreview } from './ui/charPreview';
 import { events } from './core/events';
 import { buildWorld } from './world/props';
@@ -133,6 +135,7 @@ async function boot() {
   const slimes = new BeastSpawner(r.scene, fx);
   if (TEST_MODE) slimes.enabled = false;
   const spells = new Spells(r.scene, fx, player);
+  const skillRt = new SkillRuntime(r.scene, player, fx, spells);
   // The village leaves NPC spots, the guild and the stables open.
   const keepClear = [...NPCS.map((n) => new THREE.Vector2(n.pos[0], n.pos[1])), new THREE.Vector2(22, -12), new THREE.Vector2(48, -39)];
   const world = await buildWorld(r.scene, r.renderer, fx, keepClear);
@@ -231,8 +234,6 @@ async function boot() {
   events.on('enemyDied', ({ at, kind }) => {
     const [xp, gold] = XP_FOR_KIND[kind] ?? [10, 2];
     rewards.spawn(at, xp, gold);
-    // Combat Legacy learns from the whole fight, not only the pickup meter.
-    player.prog.combat.addHeroicXp(Math.max(1, xp * 0.08));
   });
   events.on('bossSlam', ({ at }) => cam.shake(Math.max(0.15, 0.6 - at.distanceTo(player.pos) * 0.04)));
   events.on('levelUp', () => {
@@ -254,9 +255,27 @@ async function boot() {
 
   // ---- UI ------------------------------------------------------------------
   const hud = new HUD(player, r.camera);
+  hud.resource = () => skillRt.resource();
+  hud.skillSlot = (ref) => {
+    const sk = SkillRuntime.parse(ref);
+    if (!sk?.def) return null;
+    const v = player.paths.node(sk.d.id, sk.n.id);
+    const def = sk.def;
+    const cost = def.mana ? `${skillRt.manaCost(def)}` : def.flow ? `${def.flow}F` : def.stamina ? `${def.stamina}` : '';
+    const why = skillRt.blocked(ref);
+    return {
+      svg: skillIcon(sk.d.id, sk.d.color, sk.n.name, v?.r ?? 0),
+      name: `${sk.n.name} (${sk.d.name})`,
+      cost,
+      cd: def.cd > 0 ? skillRt.cooldown(sk.key) / def.cd : 0,
+      ready: !why || why === 'busy',
+    };
+  };
+  events.on('pathsChanged', () => hud.markHotbarDirty());
   const preview = new CharPreview(r.renderer, r.scene, player, [r.sun, r.hemi]);
   const inv = new InventoryUI(player, preview);
   const skills = new SkillsUI(player);
+  skills.runtime = skillRt;
   const mapUI = new DungeonMapUI();
   let frontier!: FrontierRegion;
   const realm = new Realm(r, player, cam, fx, hud, mapUI, {
@@ -753,14 +772,14 @@ async function boot() {
   let hadLock = false;
   const music = new Music();
   const overlays = buildOverlays((origin) => {
-    if (origin) player.prog.combat.origin = origin;
+    if (origin) player.prog.origin = origin;
     started = true;
     music.start();
     ambience.start();
     pausedByUser = false;
     input.fallbackLook = true;
     input.requestLock();
-  }, player.prog.combat.origin, music);
+  }, player.prog.origin, music);
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
   hud.onSlotDrop = (mode, slot, ref) => {
@@ -848,7 +867,15 @@ async function boot() {
       hud.markHotbarDirty();
     } else {
       const ref = eq.moves[i];
+      if (typeof ref === 'string') {
+        const why = skillRt.use(ref);
+        if (why && why !== 'busy') hud.toast(why);
+        else if (!why) hud.pulseSlot(i);
+        return;
+      }
       if (ref == null) return;
+      const it = eq.get(ref);
+      if (!it) return;
       hud.pulseSlot(i);
       player.useMove(ref);
       hud.markHotbarDirty();
@@ -904,6 +931,7 @@ async function boot() {
     }
     slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
     player.update(STEP, input, cam);
+    skillRt.update(STEP);
     if (realm.mode === 'overworld') {
       slimes.update(STEP, player);
       frontier.update(STEP);
@@ -1081,7 +1109,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

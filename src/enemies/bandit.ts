@@ -7,7 +7,6 @@ import { newTargetId, targets, type HitInfo, type Target } from '../combat/targe
 import { buildCharacter, type Look, type BuiltCharacter } from '../npc/charBuilder';
 import { buildSword } from '../items/weaponModels';
 import type { Player } from '../player/player';
-import type { FX } from '../fx/particles';
 
 // Road bandits (World Expansion phase 4): humans built from the character
 // kit, animated with the Universal Animation Library. Swordsmen close in and
@@ -47,7 +46,7 @@ export class Bolts {
   private list: { mesh: THREE.Mesh; vel: THREE.Vector3; life: number; damage: number }[] = [];
   private geo = new THREE.CylinderGeometry(0.012, 0.012, 0.5, 5).rotateX(Math.PI / 2);
   private mat = new THREE.MeshStandardMaterial({ color: 0x5a4028, roughness: 0.7 });
-  constructor(private scene: THREE.Scene, private fx: FX) {}
+  constructor(private scene: THREE.Scene) {}
 
   fire(from: THREE.Vector3, to: THREE.Vector3, speed: number, damage: number) {
     const mesh = new THREE.Mesh(this.geo, this.mat);
@@ -68,13 +67,6 @@ export class Bolts {
       b.mesh.position.addScaledVector(b.vel, dt);
       b.mesh.lookAt(b.mesh.position.clone().add(b.vel));
       const p = b.mesh.position;
-      if (player.canIntercept(p.x, p.z)) {
-        // The Boundary field catches the bolt in the air.
-        events.emit('boundaryIntercept', { at: p.clone(), perfect: false });
-        this.fx.add.spawn({ pos: p.clone(), spread: 0.3, count: 14, life: [0.2, 0.4], size: [0.06, 0.01], color: 0xcfe8ff, color2: 0x7fb6ff, upBias: 0.4 });
-        b.life = 0;
-        continue;
-      }
       const a = player.pos.clone().setY(player.pos.y + 0.3), c = player.pos.clone().setY(player.pos.y + 1.6);
       if (!player.dead && segmentPointDistance(a, c, p) < 0.45) {
         player.receiveAttack({ damage: b.damage, from: p.clone().sub(b.vel.clone().normalize().multiplyScalar(4)), at: p.clone(), parryable: false, poise: 12 });

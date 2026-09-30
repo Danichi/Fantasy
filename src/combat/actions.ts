@@ -23,7 +23,11 @@ export interface ActionDef {
   iframes?: [number, number];
   parry?: [number, number];
   roll?: { dist: number; back?: boolean };
-  event?: { at: number; name: 'fireball' | 'heal' };
+  event?: { at: number; name: string };
+  /** further timed events (skills: each hit of a multi-hit technique, a projectile release...) */
+  events?: { at: number; name: string }[];
+  /** extra forward travel on top of the clip's own root motion (dashes, charges) */
+  boost?: { dist: number; from: number; to: number };
   weaponSpeed?: boolean;
   /** charge: hold the pose at this normalised time while the button is held */
   chargeAt?: number;

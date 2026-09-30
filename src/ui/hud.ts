@@ -3,7 +3,6 @@ import type { Player } from '../player/player';
 import { targets } from '../combat/targets';
 import { events } from '../core/events';
 import { iconFor, wideIconFor } from './icons';
-import { COMBAT_STYLES } from '../progression/styles';
 
 // Heads-up display: vitals (top right); bottom left, the two big hand frames
 // (main / off hand) beside a bar that Tab flips between quick items (keys 1-4)
@@ -31,9 +30,6 @@ interface BarEls {
 export class HUD {
   readonly root: HTMLElement;
   private bars: Record<'hp' | 'st' | 'mp', BarEls>;
-  private momentumEl: HTMLDivElement;
-  private focusEl: HTMLDivElement;
-  private crossEl: HTMLDivElement;
   private slots: HTMLDivElement[] = [];
   private hands: Record<'main' | 'off', HTMLDivElement>;
   private barTitle: HTMLDivElement;
@@ -57,13 +53,17 @@ export class HUD {
   private bossEl: HTMLDivElement;
   private fadeEl: HTMLDivElement;
   private levelEl: HTMLDivElement;
-  private disciplineEl!: HTMLDivElement;
   private boss: { hp: number; maxHp: number; alive: boolean } | null = null;
   private bossTrail = 1;
   private questEl: HTMLDivElement;
   /** side quests shown under the main quest (set by the quest UI) */
   sideQuestHtml = '';
   onSlotDrop?: (mode: 'items' | 'moves', slot: number, ref: number | string) => void;
+  /** class skills on the moves bar: how to draw one, and its live cooldown (0..1) */
+  skillSlot?: (ref: string) => { svg: string; name: string; cost: string; cd: number; ready: boolean } | null;
+  /** the active class's resource (Flow pips, Resolve bar) */
+  resource?: () => { name: string; value: number; max: number; kind: 'pips' | 'bar'; color: string } | null;
+  private resEl!: HTMLElement;
 
   constructor(private player: Player, private camera: THREE.Camera) {
     this.root = document.getElementById('ui')!;
@@ -79,11 +79,6 @@ export class HUD {
       return { root, fill, trail, num, trailV: 1, trailHold: 0, last: 1 };
     };
     this.bars = { hp: mk('hp', 'HEALTH'), st: mk('st', 'STAMINA'), mp: mk('mp', 'MANA') };
-    const discipline = el('div', 'discipline-hud', this.root);
-    this.disciplineEl = el('div', 'discipline-name', discipline);
-    this.momentumEl = el('div', 'style-resource momentum hidden', vit, '<span class="sr-label">MOMENTUM</span><i></i><b></b>');
-    this.focusEl = el('div', 'style-resource focus hidden', vit, '<span class="sr-label">FOCUS</span><i></i><b></b>');
-    this.crossEl = el('div', 'style-resource cross hidden', vit, '<span class="sr-label">CROSS OPENING</span><i></i><b></b>');
     const xpRow = el('div', 'xprow', vit);
     xpRow.innerHTML = '<span class="lv">LV 1</span><div class="xpbar" title="Unspent XP towards your active class\'s next level"><i></i></div><span class="xpv">0</span><span class="gold">0</span>';
     this.xpFill = xpRow.querySelector('.xpbar i')!;
@@ -91,6 +86,7 @@ export class HUD {
     this.goldEl = xpRow.querySelector('.gold')!;
     this.xpVal = xpRow.querySelector('.xpv')!;
     this.xpBar = xpRow.querySelector('.xpbar')!;
+    this.resEl = el('div', 'resrow', vit);
 
     const wrap = el('div', 'loadout-wrap', this.root);
     const handRow = el('div', 'hands', wrap);
@@ -269,17 +265,14 @@ export class HUD {
       s.innerHTML = `<span class="key">${i + 1}</span><i class="cd"></i>`;
       s.title = '';
       if (ref == null) return;
-      if (typeof ref === 'string' && ref.startsWith('skill:')) {
-        const [, styleId, nodeId] = ref.split(':');
-        const style = COMBAT_STYLES[styleId as keyof typeof COMBAT_STYLES];
-        const node = style?.nodes.find((n) => n.id === nodeId);
-        if (!node) return;
+      if (typeof ref === 'string') {
+        const sk = this.skillSlot?.(ref);
+        if (!sk) return;
         s.classList.add('skill');
-        s.innerHTML += `<span class="skill-glyph">⚔</span><span class="skill-name">${node.name}</span>`;
-        s.title = `${style.name}: ${node.name}`;
+        s.innerHTML += `${sk.svg}<span class="cost">${sk.cost}</span>`;
+        s.title = sk.name;
         return;
       }
-      if (typeof ref !== 'number') return;
       const it = eq.get(ref);
       if (!it) return;
       s.innerHTML += `<img src="${iconFor(it.def.id)}" alt="">`;
@@ -307,40 +300,43 @@ export class HUD {
 
   update(dt: number, lockTargetId: number | null) {
     const p = this.player;
-    // Long-term discipline track for the trained school (hidden until one is chosen).
-    const cp = p.prog.combat;
-    const trained = p.prog.primaryStyle !== null;
-    this.disciplineEl.parentElement!.style.display = trained ? '' : 'none';
-    if (trained) {
-      const name = cp.primary === 'gale' ? 'GALE' : cp.primary === 'boundary' ? 'BOUNDARY' : 'CROSSBLADE';
-      this.disciplineEl.textContent = `${name} · LV ${cp.disciplines[cp.primary].level} · ${Math.round(cp.disciplines[cp.primary].mastery)}% MASTERY`;
-    }
     // Bar length grows with the stat's maximum, Souls-style.
     this.updateBar(this.bars.hp, p.hp, p.maxHp, dt, 120 + p.maxHp * 1.6);
     this.updateBar(this.bars.st, p.stamina, p.maxStamina, dt, 110 + p.maxStamina * 1.5);
     this.updateBar(this.bars.mp, p.mana, p.maxMana, dt, 100 + p.maxMana * 1.5);
-    const style = p.prog.activeStyle;
-    const showMomentum = style === 'gale';
-    const showFocus = style === 'boundary';
-    const showCross = style === 'cross' && p.crossOpening > 0;
-    this.momentumEl.classList.toggle('hidden', !showMomentum);
-    this.focusEl.classList.toggle('hidden', !showFocus);
-    this.crossEl.classList.toggle('hidden', !showCross);
-    (this.momentumEl.querySelector('i') as HTMLElement).style.transform = `scaleX(${p.momentum / 100})`;
-    (this.focusEl.querySelector('i') as HTMLElement).style.transform = `scaleX(${p.focus / 100})`;
-    (this.crossEl.querySelector('i') as HTMLElement).style.transform = `scaleX(${Math.min(1, p.crossOpening / 2.2)})`;
-    (this.momentumEl.querySelector('b') as HTMLElement).textContent = `${Math.round(p.momentum)}`;
-    (this.focusEl.querySelector('b') as HTMLElement).textContent = `${Math.round(p.focus)}`;
-    (this.crossEl.querySelector('b') as HTMLElement).textContent = `${p.crossOpening.toFixed(1)}s`;
     if (this.hotbarDirty) {
       this.hotbarDirty = false;
       this.renderHotbar();
     }
+    // Skill cooldowns sweep round their slots.
+    if (this.mode === 'moves') {
+      p.equip.moves.forEach((ref, i) => {
+        if (typeof ref !== 'string') return;
+        const sk = this.skillSlot?.(ref);
+        const s = this.slots[i];
+        const cd = s?.querySelector<HTMLElement>('.cd');
+        if (!sk || !cd) return;
+        cd.style.background = sk.cd > 0 ? `conic-gradient(rgba(0,0,0,0.72) ${sk.cd * 360}deg, transparent 0)` : '';
+        s.classList.toggle('dim', !sk.ready);
+      });
+    }
+    const res = this.resource?.();
+    if (!res) this.resEl.style.display = 'none';
+    else {
+      this.resEl.style.display = '';
+      const key = `${res.name}|${res.kind}|${res.max}`;
+      if (this.resEl.dataset.k !== key) {
+        this.resEl.dataset.k = key;
+        this.resEl.innerHTML = `<span class="rn">${res.name}</span>` + (res.kind === 'pips' ? Array.from({ length: res.max }, () => '<i class="pip"></i>').join('') : '<span class="rbar"><i></i></span>');
+        this.resEl.style.setProperty('--rc', res.color);
+      }
+      if (res.kind === 'pips') this.resEl.querySelectorAll('.pip').forEach((e, i) => e.classList.toggle('on', i < Math.floor(res.value + 1e-6)));
+      else (this.resEl.querySelector('.rbar i') as HTMLElement).style.transform = `scaleX(${res.value / res.max})`;
+    }
     const pr = p.prog;
-    this.questEl.innerHTML = pr.starterStyleChosen
-      ? `<span class="q-kicker">MAIN QUEST</span><b>STARTER SCHOOL CHOSEN</b><small>Primary: ${pr.activeStyle ? pr.activeStyle.toUpperCase() : '—'} · Build your mastery.</small>`
-      : `<span class="q-kicker">MAIN QUEST</span><b>STUDY THE THREE SCHOOLS</b><small>${pr.starterQuestCount}/3 mentors met · Learn Gale, Boundary and Cross, then choose your starter.</small>`
-      + this.sideQuestHtml;
+    // The tracked quest (the old "study the three schools" starter quest is gone:
+    // classes are learned from mentors and levelled on the Skills screen).
+    this.questEl.innerHTML = this.sideQuestHtml;
     // XP is spent, not auto-levelled: the bar fills towards the active class's next level.
     const need = p.paths.nextCost(p.paths.active);
     const ready = pr.xp >= need;

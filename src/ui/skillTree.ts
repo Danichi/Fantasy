@@ -29,6 +29,23 @@ export const ICONS: Record<string, string> = {
   beastbinding: 'M6 14c0-4 3-7 6-7s6 3 6 7-3 6-6 6-6-2-6-6zM8 7L6 3M16 7l2-4M10 13h.01M14 13h.01',
 };
 
+/** Hex values of the discipline colour tokens (the canvas and HUD can't read CSS variables). */
+export const HEX: Record<string, string> = {
+  '--c-gale': '#6fd6c6', '--c-fire': '#ff8246', '--c-frost': '#9cc8ff', '--c-wind': '#b7e38a', '--c-herb': '#8fcf6a',
+  '--c-steel': '#aeb8cc', '--c-light': '#ffe08a', '--c-shadow': '#b48cff', '--c-blood': '#d8574a', '--c-gold': '#d9b15a',
+};
+
+/** Hotbar icon for a skill: its class sigil in a ring, with the skill's initials. */
+export function skillIcon(discId: string, color: string, name: string, rank: number) {
+  const c = HEX[color] ?? '#d9b15a';
+  const initials = name.split(/\s+/).filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).join('').slice(0, 2);
+  const pips = Array.from({ length: 5 }, (_, i) => `<circle cx="${22 + (i - 2) * 5}" cy="41" r="1.6" fill="${i < rank ? c : '#333'}"/>`).join('');
+  return `<svg viewBox="0 0 44 44" aria-hidden="true"><defs><radialGradient id="sg-${discId}" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="${c}" stop-opacity=".35"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs>
+    <circle cx="22" cy="20" r="17" fill="url(#sg-${discId})" stroke="${c}" stroke-width="1.2"/>
+    <g transform="translate(13 9) scale(0.75)" opacity=".55"><path d="${ICONS[discId] ?? ICONS.runecraft}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <text x="22" y="25" text-anchor="middle" font-family="Cinzel, serif" font-size="13" font-weight="700" fill="#fff" stroke="#000" stroke-width="0.6" paint-order="stroke">${initials}</text>${pips}</svg>`;
+}
+
 const reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const RUNES = 'ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊᛏᛒᛖᛗᛚᛜᛞᛟ';
 const BR_ANG = [-Math.PI / 2, Math.PI / 6, (Math.PI * 5) / 6];

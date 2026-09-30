@@ -671,10 +671,6 @@ export class DungeonInstance {
         d.mesh.position.copy(d.pos);
         const a = player.pos.clone().setY(player.pos.y + 0.4), b = player.pos.clone().setY(player.pos.y + 1.6);
         const close = Math.min(segmentPointDistance(a, b, d.pos), segmentPointDistance(a, b, prev.lerp(d.pos, 0.5)));
-        if (!d.hit && player.canIntercept(d.pos.x, d.pos.z)) {
-          const res = player.receiveAttack({ damage: 16, from: d.pos.clone(), at: d.pos.clone(), parryable: true, poise: 20 });
-          if (res === 'parried') { d.hit = true; this.fx.sparks(d.pos.clone()); this.group.remove(d.mesh!); d.mesh = null; continue; }
-        }
         if (!d.hit && close < 0.38) {
           d.hit = true;
           player.receiveAttack({ damage: 16, from: d.pos.clone(), parryable: true, poise: 20 });

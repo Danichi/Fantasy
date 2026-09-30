@@ -244,7 +244,6 @@ export class AdventurerGuild {
     if (!this.canOffer(q)) return;
     this.active.push(q);
     this.ensureBoard();
-    this.progression.combat.learnClass('dungeoneer');
     this.onSave?.();
     this.render();
   }
@@ -280,7 +279,6 @@ export class AdventurerGuild {
     const oldRank = this.rank;
     this.rank = rankForRep(this._rep);
     if (rankIndex(this.rank) > rankIndex(oldRank)) {
-      this.progression.combat.learnClass('dungeoneer');
       this.progression.addGold(75 * rankIndex(this.rank));
       this.dialogue.show('Guild Registrar', 'Adventurer\'s Guild', 'Your deeds have been recorded. You have been promoted to ' + this.rank + ' rank.', [
         { label: 'Accept promotion.', run: () => this.dialogue.close() },

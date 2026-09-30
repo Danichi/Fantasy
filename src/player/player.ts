@@ -16,8 +16,8 @@ import { surfaceAt, heightAt as heightAtGround } from '../world/terrain';
 import { waterDepthAt } from '../world/water';
 import { waterSurfaceAt } from '../world/waterLevel';
 import { Progression } from '../progression/progression';
-import { COMBAT_STYLES, type CombatStyleId } from '../progression/styles';
 import { Paths } from '../paths/paths';
+import { baseMods, type CombatMods } from '../combat/mods';
 
 const CAPSULE_HALF = 0.55;
 const CAPSULE_R = 0.32;
@@ -40,6 +40,10 @@ interface ActiveAction {
   fired: boolean;
   usingClip: boolean;
   landed: boolean;
+  /** skill damage multiplier on this action's blade hits */
+  mult: number;
+  /** index of the next entry in def.events */
+  ev: number;
 }
 
 /**
@@ -75,29 +79,19 @@ export class Player {
   hp = 120;
   stamina = 100;
   mana = 80;
-  /** Live primary-school combat resources. */
-  momentum = 0;
-  focus = 100;
-  crossOpening = 0;
-  boundaryActive = false;
-  boundaryRadius = 0;
-  private boundaryBreak = 0;
-  private combatClock = 0;
-  private lastGaleHit = -999;
-  private boundaryCounterReady = false;
-  private boundaryRing: THREE.Mesh | null = null;
-  private boundaryOuterRing: THREE.Mesh | null = null;
   readonly prog = new Progression();
   /** disciplines, attributes and the active combat class */
   readonly paths = new Paths(this.prog);
+  /** combat modifiers from skill passives and buffs, rewritten every step by the skill runtime */
+  mods: CombatMods = baseMods();
   get maxHp() {
-    return 120 + this.paths.bonusHp + (this.equip?.bonus('maxHp') ?? 0);
+    return Math.round(120 + this.paths.bonusHp + this.mods.hp + (this.equip?.bonus('maxHp') ?? 0));
   }
   get maxStamina() {
-    return 100 + this.paths.bonusStamina + (this.equip?.bonus('maxStamina') ?? 0);
+    return Math.round(100 + this.paths.bonusStamina + this.mods.stamina + (this.equip?.bonus('maxStamina') ?? 0));
   }
   get maxMana() {
-    return 80 + this.paths.bonusMana + (this.equip?.bonus('maxMana') ?? 0);
+    return Math.round(80 + this.paths.bonusMana + this.mods.mana + (this.equip?.bonus('maxMana') ?? 0));
   }
   private staminaDelay = 0;
   private hot = { rate: 0, left: 0 };
@@ -138,21 +132,22 @@ export class Player {
   onShake?: (amt: number) => void;
   onSpell?: (spell: string, from: THREE.Vector3, dir: THREE.Vector3, target: Target | null) => void;
   onPlungeLand?: (at: THREE.Vector3) => void;
+  /** a skill action reached one of its named events */
+  onSkillEvent?: (name: string) => void;
+  /** skill defence hook (auto-parry stances, reflecting walls): return a result to override */
+  defend?: (att: IncomingAttack, facing: number) => DefenceResult | null;
+  /** damage shields: returns what's left after absorbing */
+  absorb?: (dmg: number) => number;
+  /** return true to survive a killing blow (the hook sets health) */
+  cheatDeath?: () => boolean;
+  /** per-target bonus for blade hits (brands, forced crits) */
+  meleeBonus?: (t: Target) => { mult: number; crit: boolean };
 
   async init(scene: THREE.Scene, spawn: THREE.Vector3) {
     // The stylised hero (docs/ART-DIRECTION.md §7); ?paladin keeps the old Mixamo model.
     const paladin = new URLSearchParams(location.search).has('paladin');
     await this.char.load(undefined, undefined, paladin ? undefined : HERO);
     scene.add(this.char.root);
-    const ringMat = new THREE.MeshBasicMaterial({ color: COMBAT_STYLES.boundary.color, transparent: true, opacity: 0.72, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
-    const outerMat = new THREE.MeshBasicMaterial({ color: 0xfff0b0, transparent: true, opacity: 0.13, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
-    this.boundaryRing = new THREE.Mesh(new THREE.RingGeometry(0.94, 1.0, 96), ringMat);
-    this.boundaryOuterRing = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.018, 96), outerMat);
-    for (const ring of [this.boundaryRing, this.boundaryOuterRing]) {
-      ring.rotation.x = -Math.PI / 2;
-      ring.visible = false;
-      scene.add(ring);
-    }
     this.anim = new Animator(this.char);
     // Real clips hold the sword and shield themselves; the placeholder's
     // idle/walk/run don't, so the rig poses its arms procedurally.
@@ -273,87 +268,6 @@ export class Player {
     return new THREE.Vector3(this.pos.x, this.pos.y + 1.0, this.pos.z);
   }
 
-  get activeCombatStyle(): CombatStyleId | null {
-    return this.prog.activeStyle;
-  }
-
-  get galeSpeedMultiplier() {
-    if (this.activeCombatStyle !== 'gale') return 1;
-    return 1 + (this.momentum / 100) * 0.18;
-  }
-
-  get galeDamageMultiplier() {
-    if (this.activeCombatStyle !== 'gale') return 1;
-    return 1 + (this.momentum / 100) * 0.22;
-  }
-
-  get crossDamageMultiplier() {
-    if (this.activeCombatStyle !== 'cross' || this.crossOpening <= 0) return 1;
-    return this.prog.hasSkill('cross', 'cross-master') ? 1.8 : 1.5;
-  }
-
-  get crossPoiseMultiplier() {
-    return this.activeCombatStyle === 'cross' && this.crossOpening > 0 ? 1.55 : 1;
-  }
-
-  private hasStyleSkill(style: CombatStyleId, id: string) {
-    return this.prog.hasSkill(style, id);
-  }
-
-  private addMomentum(base: number) {
-    if (this.activeCombatStyle !== 'gale') return;
-    const tight = this.combatClock - this.lastGaleHit;
-    const timing = tight <= 0.42 ? 1.8 : tight <= 0.75 ? 1.35 : 1;
-    const skill = this.hasStyleSkill('gale', 'gale-step') ? 1.15 : 1;
-    this.momentum = clamp(this.momentum + base * timing * skill, 0, 100);
-    this.lastGaleHit = this.combatClock;
-    this.prog.addMastery('gale', 1);
-  }
-
-  private breakMomentum(amount = 30) {
-    if (this.activeCombatStyle !== 'gale') return;
-    this.momentum = Math.max(0, this.momentum - amount);
-  }
-
-  private breakBoundary() {
-    this.boundaryActive = false;
-    this.boundaryBreak = 0.45;
-    this.boundaryCounterReady = false;
-  }
-
-  private updateCombatResources(dt: number) {
-    this.combatClock += dt;
-    if (this.boundaryBreak > 0) this.boundaryBreak = Math.max(0, this.boundaryBreak - dt);
-
-    if (this.activeCombatStyle === 'gale') {
-      if (this.combatClock - this.lastGaleHit > 0.7) this.momentum = Math.max(0, this.momentum - 18 * dt);
-    } else {
-      this.momentum = 0;
-    }
-
-    this.crossOpening = Math.max(0, this.crossOpening - dt);
-
-    if (this.boundaryActive) {
-      const anchor = this.hasStyleSkill('boundary', 'boundary-anchor');
-      const wall = this.hasStyleSkill('boundary', 'boundary-wall');
-      const domain = this.hasStyleSkill('boundary', 'boundary-domain');
-      const base = 2.8 + (anchor ? 0.45 : 0) + (domain ? 0.85 : 0);
-      const maxBonus = 0.032 + (wall ? 0.012 : 0);
-      const efficiency = anchor ? 0.78 : domain ? 0.68 : 1;
-      const desired = Math.min(base + this.focus * maxBonus, base + 3.2 + (wall ? 1.2 : 0));
-      this.boundaryRadius += (desired - this.boundaryRadius) * Math.min(1, dt * 10);
-      this.focus = Math.max(0, this.focus - (7 + this.boundaryRadius * 1.7) * efficiency * dt);
-      if (this.focus <= 0.1) this.breakBoundary();
-    } else {
-      this.boundaryRadius = 0;
-      this.focus = Math.min(100, this.focus + 24 * dt);
-    }
-  }
-
-  private isBoundaryHeld(input: Input) {
-    return this.activeCombatStyle === 'boundary' && input.held('parry') && this.grounded && !this.act && !this.sprinting && this.moveIntent.lengthSq() < 0.001 && this.boundaryBreak <= 0;
-  }
-
   inIframes() {
     const a = this.act;
     if (this.invulnerable) return true;
@@ -367,7 +281,6 @@ export class Player {
     this.prevPos.copy(this.pos);
     this.prevYaw = this.yaw;
     this.updateStats(dt);
-    this.updateCombatResources(dt);
     this.blockHitT += dt;
 
     if (this.dead) {
@@ -391,9 +304,9 @@ export class Player {
       this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0;
       return;
     }
-    if (this.prog.combat.origin === 'dragon' && !this.grounded && input.held('jump')) {
-      // Early draconic flight is deliberately weak; it becomes more useful as Heroic Legacy grows.
-      this.vel.y = Math.max(this.vel.y, -1.25 - this.prog.combat.heroic.level * 0.06);
+    if (this.prog.origin === 'dragon' && !this.grounded && input.held('jump')) {
+      // Dragon origin: hold jump in the air to glide down slowly.
+      this.vel.y = Math.max(this.vel.y, -1.25);
     }
     this.updateAction(dt, input);
     this.updateLock(cam);
@@ -411,23 +324,20 @@ export class Player {
 
     const now = performance.now() / 1000;
     const buf = (a: Buffered) => (this.buffer = { a, t: now });
-    this.boundaryActive = this.isBoundaryHeld(input);
-    if (this.boundaryActive) this.buffer = null;
     if (input.wasPressed('attack')) buf('attack');
     if (input.wasPressed('offhand') && this.equip.dualWield) buf('offhand');
-    if (input.wasPressed('parry') && !this.boundaryActive) buf('parry');
+    if (input.wasPressed('parry')) buf('parry');
     if (input.wasPressed('dodge')) buf('dodge');
     if (input.wasPressed('cast')) buf('cast');
     if (input.wasPressed('originAbility')) buf('originAbility');
-    this.blocking = !this.boundaryActive && input.held('offhand') && this.equip.hasShield && (!this.act || this.act.def.id === 'parryShield');
+    this.blocking = input.held('offhand') && this.equip.hasShield && this.mods.canBlock && (!this.act || this.act.def.id === 'parryShield');
     if (input.wasPressed('jump') && this.grounded && !this.act) {
       this.vel.y = JUMP_V;
       this.grounded = false;
       this.airTime = 0;
     }
     if (input.wasPressed('lockOn')) this.toggleLock(cam);
-    this.sprinting = !this.boundaryActive && input.held('sprint') && this.moveIntent.lengthSq() > 0 && !this.blocking && (this.mounted || this.stamina > 0) && !this.act && this.grounded;
-    if (this.boundaryActive && this.moveIntent.lengthSq() > 0) this.breakBoundary();
+    this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0 && !this.blocking && (this.mounted || this.stamina > 0) && !this.act && this.grounded;
   }
 
   // ---- actions --------------------------------------------------------------
@@ -436,18 +346,19 @@ export class Player {
     if (!raw) return false;
     const usingClip = !!raw.clip && this.char.has(raw.clip);
     const def = resolveAction(raw, usingClip);
-    if (def.stamina > 0 && this.stamina <= 0) {
+    const m = this.mods;
+    const stam = def.stamina * m.staminaCost * (def.roll ? m.dodgeCost : 1);
+    if (stam > 0 && this.stamina <= 0) {
       events.emit('notEnough', { stat: 'stamina' });
       return false;
     }
-    this.stamina = Math.max(0, this.stamina - def.stamina);
-    if (def.stamina > 0) this.staminaDelay = 0.65;
+    this.stamina = Math.max(0, this.stamina - stam);
+    if (stam > 0) this.staminaDelay = 0.65;
     const w = def.hit?.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
-    const styleSpeed = this.activeCombatStyle === 'gale' && !!def.hit ? this.galeSpeedMultiplier : 1;
-    const speed = (def.weaponSpeed ? w?.def.stats.speed ?? 1 : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1) * styleSpeed;
+    const speed = (def.weaponSpeed ? (w?.def.stats.speed ?? 1) * m.attackSpeed : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1) * (id.startsWith('cast') ? m.castSpeed : 1);
     this.poseFrom = this.lastPose;
     this.poseFade = 0;
-    this.act = { def, t: t0 ?? def.startAt ?? 0, speed, hitSet: new Set(), charge: 0, charging: false, fired: false, usingClip, landed: false };
+    this.act = { def, t: t0 ?? def.startAt ?? 0, speed, hitSet: new Set(), charge: 0, charging: false, fired: false, usingClip, landed: false, mult: 1, ev: 0 };
     this.bladePrev.main = this.bladePrev.off = null;
     this.lastPresentT = -1;
 
@@ -455,13 +366,11 @@ export class Player {
       const dir = def.roll.back ? this.forward.negate() : this.moveIntent.lengthSq() > 0 ? this.moveIntent.clone() : this.forward;
       this.act.rollDir = dir;
     }
-    if (def.roll) this.prog.combat.addCombatEvent('dodge', 1);
     if (def.hit) events.emit('swing', { heavy: id === 'heavy' });
     return true;
   }
 
   private endAction() {
-    if (this.activeCombatStyle === 'gale' && this.act?.def.hit && this.act.hitSet.size === 0) this.breakMomentum(24);
     this.poseFrom = this.lastPose;
     this.poseFade = 0;
     this.act = null;
@@ -503,16 +412,6 @@ export class Player {
     }
     this.buffer = null;
     if (next) this.startAction(next);
-  }
-
-  private boundaryPulse() {
-    const radius = Math.min(this.boundaryRadius + 0.45, 6.5);
-    for (const target of targets) {
-      if (!target.alive || target.position.distanceTo(this.pos) > radius + target.radius) continue;
-      const dir = target.position.clone().sub(this.pos).setY(0).normalize();
-      target.takeHit({ damage: Math.max(1, (this.equip.mainWeapon?.def.stats.damage ?? 10) * 0.28), poise: 34, dir, at: target.center.clone(), crit: false, source: 'melee' });
-    }
-    this.onShake?.(0.12);
   }
 
   private spellAction(): string | null {
@@ -564,13 +463,18 @@ export class Player {
       a.fired = true;
       this.fireEvent(d.event.name);
     }
+    while (d.events && a.ev < d.events.length && a.t >= d.events[a.ev].at) this.onSkillEvent?.(d.events[a.ev++].name);
     if (a.t >= d.dur) {
       this.endAction();
       this.consumeBuffer();
     }
   }
 
-  private fireEvent(name: 'fireball' | 'heal') {
+  private fireEvent(name: string) {
+    if (name !== 'fireball' && name !== 'heal') {
+      this.onSkillEvent?.(name);
+      return;
+    }
     if (name === 'fireball') {
       const main = this.equip.model('main');
       const from = new THREE.Vector3();
@@ -656,6 +560,12 @@ export class Player {
   /** Forward distance an action has travelled by time t (root motion). */
   private travelAt(a: ActiveAction, t: number): number {
     const def = a.def;
+    const boost = def.boost ? smoothstep(def.boost.from, def.boost.to, t) * def.boost.dist : 0;
+    return boost + this.baseTravelAt(a, t);
+  }
+
+  private baseTravelAt(a: ActiveAction, t: number): number {
+    const def = a.def;
     const info = a.usingClip ? this.char.clipInfo.get(def.clip!) : undefined;
     if (info?.rootCurve && info.rootCurve.length > 1) {
       const f = clamp(t, 0, (info.rootCurve.length - 1) / 30) * 30;
@@ -679,7 +589,7 @@ export class Player {
     let targetSpeed = 0;
     if (!a && intent.lengthSq() > 0) {
       const ms = this.mountStats ?? { canter: 11.5, gallop: 15, accel: 8 };
-      targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2);
+      targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
       // Wading slows you down; deep water means swimming.
       const wade = waterDepthAt(this.pos.x, this.pos.z);
@@ -707,7 +617,7 @@ export class Player {
     }
 
     const hv = new THREE.Vector3(this.vel.x, 0, this.vel.z);
-    if (a && (a.def.roll || a.def.move || a.usingClip)) {
+    if (a && (a.def.roll || a.def.move || a.def.boost || a.usingClip)) {
       // Root motion: follow the action's travel curve along its direction.
       const dir = a.rollDir ?? this.forward;
       let d = this.travelAt(a, a.t + (a.charging ? 0 : dt * a.speed)) - this.travelAt(a, a.t);
@@ -775,7 +685,7 @@ export class Player {
     this.body.setNextKinematicTranslation(next);
     this.collider.setTranslation(next); // keep queries in sync before the world steps
     // Walls redirect velocity (slide) instead of it piling up against them.
-    if (dt > 0 && !(a && (a.def.roll || a.usingClip || a.def.move))) {
+    if (dt > 0 && !(a && (a.def.roll || a.usingClip || a.def.move || a.def.boost))) {
       this.vel.x = (m.x - this.push.x) / dt;
       this.vel.z = (m.z - this.push.z) / dt;
     }
@@ -962,19 +872,6 @@ export class Player {
     this.rig.apply(pose);
     if ((this.mounted && this.mountStats) || this.vehicle || this.dismountFrom) this.ridePose(this.vehicle ? 1 : rideW);
 
-    if (this.boundaryRing && this.boundaryOuterRing) {
-      const visible = this.boundaryActive && this.activeCombatStyle === 'boundary' && !this.dead;
-      this.boundaryRing.visible = visible;
-      this.boundaryOuterRing.visible = visible;
-      if (visible) {
-        for (const ring of [this.boundaryRing, this.boundaryOuterRing]) {
-          ring.position.set(this.pos.x, this.pos.y + 0.03, this.pos.z);
-          ring.scale.setScalar(Math.max(0.1, this.boundaryRadius));
-        }
-        (this.boundaryRing.material as THREE.MeshBasicMaterial).opacity = 0.45 + this.focus / 220;
-      }
-    }
-
     // Blade hit detection against the pose we just drew.
     if (a && at !== this.lastPresentT) this.detectHits(a, at);
     this.lastPresentT = at;
@@ -1074,26 +971,17 @@ export class Player {
         const [ha, hb] = hurtSegment(tg);
         if (segmentSegmentDistance(b, t, ha, hb) < tg.radius + 0.06) {
           a.hitSet.add(tg.id);
-          const crit = tg.stunned;
+          const extra = this.meleeBonus?.(tg);
+          const crit = tg.stunned || !!extra?.crit || Math.random() < this.mods.crit;
           const charge = 1 + a.charge * 0.6;
-          const bonus = (1 + this.equip.bonus('damagePct')) * this.paths.meleePower(weapon?.def.stats.speed ?? 1);
-          const styleBonus = this.galeDamageMultiplier * this.crossDamageMultiplier;
-          const dmg = Math.round(base * h.dmg * charge * bonus * styleBonus * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
+          const light = a.def.id.startsWith('slash') || a.def.id.startsWith('offslash') ? this.mods.lightAttack : 1;
+          const bonus = (1 + this.equip.bonus('damagePct')) * this.paths.meleePower(weapon?.def.stats.speed ?? 1) * this.mods.melee * light * a.mult * (extra?.mult ?? 1);
+          const dmg = Math.round(base * h.dmg * charge * bonus * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
           const dir = tg.position.clone().sub(this.pos).setY(0).normalize();
           const at2 = tg.center.clone().addScaledVector(dir, -tg.radius * 0.8);
-          const poise = h.poise * charge * this.paths.poisePower * this.crossPoiseMultiplier * (this.boundaryCounterReady ? 1.35 : 1);
-          tg.takeHit({ damage: dmg, poise, dir, at: at2, crit, source: 'melee' });
+          tg.takeHit({ damage: dmg, poise: h.poise * charge * this.paths.poisePower * this.mods.poise, dir, at: at2, crit, source: 'melee' });
           events.emit('enemyHit', { at: at2, amount: dmg, crit, enemyId: tg.id });
-          if (this.activeCombatStyle === 'gale') this.addMomentum(13 + Math.min(8, h.dmg * 4));
-          if (this.activeCombatStyle === 'cross' && this.crossOpening > 0) {
-            this.prog.addMastery('cross', 1);
-            this.prog.combat.addCombatEvent('openingConvert', 2);
-            this.crossOpening = 0;
-          }
-          if (this.boundaryCounterReady) this.boundaryCounterReady = false;
-          if (a.def.id === 'galeFinish' && this.activeCombatStyle === 'gale') this.momentum = 0;
-          // Long-term discipline tracks (levels, mastery, specializations) grow from real hits.
-          if (this.activeCombatStyle) this.prog.combat.addCombatEvent('attackHit', 2);
+          events.emit('meleeHit', { target: tg, amount: dmg, crit, action: a.def.id });
           const heavy = a.def.id === 'heavy' || a.def.id === 'airAttack';
           this.onHitStop?.(crit ? 0.16 : heavy ? 0.12 : 0.07);
           this.onShake?.(crit ? 0.4 : heavy ? 0.3 : 0.16);
@@ -1109,35 +997,20 @@ export class Player {
     if (this.inIframes()) return 'dodged';
     const toAtt = att.from.clone().sub(this.pos).setY(0).normalize();
     const facing = toAtt.dot(this.forward);
+    const hooked = this.defend?.(att, facing);
+    if (hooked) return hooked;
     const a = this.act;
-    const attackPoint = att.at ?? att.from;
-    if (this.boundaryActive && this.activeCombatStyle === 'boundary' && att.parryable && this.center.distanceTo(attackPoint) <= this.boundaryRadius) {
+    const pw = a?.def.parry ? a.def.parry[0] + (a.def.parry[1] - a.def.parry[0]) * this.mods.parryWindow : 0;
+    if (a?.def.parry && a.t >= a.def.parry[0] && a.t <= pw && att.parryable && facing > 0.1) {
       att.onParried?.();
-      this.prog.addMastery('boundary', 1);
-      this.prog.combat.addCombatEvent('boundaryIntercept', 2);
-      this.boundaryCounterReady = this.hasStyleSkill('boundary', 'boundary-counter');
-      if (this.hasStyleSkill('boundary', 'boundary-pulse')) this.boundaryPulse();
-      events.emit('parrySuccess', { at: attackPoint.clone() });
-      return 'parried';
-    }
-    if (a?.def.parry && a.t >= a.def.parry[0] && a.t <= a.def.parry[1] && att.parryable && facing > 0.1) {
-      att.onParried?.();
-      const perfect = a.t <= a.def.parry[0] + 0.08;
-      if (this.activeCombatStyle) this.prog.combat.addCombatEvent(perfect ? 'perfectParry' : 'parry', 2);
-      if (this.activeCombatStyle === 'cross') {
-        const duration = this.hasStyleSkill('cross', 'cross-master') ? 2.2 : this.hasStyleSkill('cross', 'cross-parry') ? 1.65 : 1.05;
-        this.crossOpening = duration;
-        this.prog.addMastery('cross', 1);
-      }
       events.emit('parrySuccess', { at: this.center.addScaledVector(toAtt, 0.6) });
-      events.emit('disciplineChanged', { discipline: this.prog.combat.primary, momentum: this.momentum, focus: this.focus, openings: this.crossOpening > 0 ? 1 : 0 });
       this.onHitStop?.(0.18);
       this.onShake?.(0.25);
       return 'parried';
     }
     if (this.blocking && this.equip.hasShield && facing > 0.3 && this.blockW > 0.5) {
       const st = this.equip.offItem!.def.stats;
-      const cost = att.damage * (1 - (st.stability ?? 0.4)) * 1.7 + 6;
+      const cost = (att.damage * (1 - (st.stability ?? 0.4)) * 1.7 + 6) * this.mods.blockCost;
       this.stamina -= cost;
       this.staminaDelay = 0.8;
       this.blockHitT = 0;
@@ -1159,11 +1032,9 @@ export class Player {
     }
     const armor = this.equip.armorValue;
     const dmg = att.damage * (100 / (100 + armor * 5));
-    this.breakMomentum(38);
-    if (this.boundaryActive) this.breakBoundary();
     this.applyDamage(dmg);
     if (att.burn) {
-      const burnScale = this.prog.combat.origin === 'dragon' ? 0.35 : 1;
+      const burnScale = this.prog.origin === 'dragon' ? 0.35 : 1;
       this.burn = { dps: att.burn * burnScale, left: 3 };
     }
     // Hyper-armour through the middle of heavy swings.
@@ -1178,7 +1049,14 @@ export class Player {
 
   private applyDamage(d: number) {
     if (d <= 0 || this.invulnerable) return;
+    d *= this.mods.dmgTaken;
+    if (this.absorb) d = this.absorb(d);
+    if (d <= 0) return;
     this.hp = Math.max(this.damageFloor, this.hp - d);
+    if (this.hp <= 0 && this.cheatDeath?.()) {
+      events.emit('playerDamaged', { amount: d, blocked: false });
+      return;
+    }
     events.emit('playerDamaged', { amount: d, blocked: false });
     if (this.hp <= 0 && !this.dead) {
       this.dead = true;
@@ -1202,11 +1080,6 @@ export class Player {
     this.burn.left = 0;
     this.hot.left = 0;
     this.act = null;
-    this.momentum = 0;
-    this.focus = 100;
-    this.crossOpening = 0;
-    this.boundaryActive = false;
-    this.boundaryRadius = 0;
     this.teleport(at);
     events.emit('playerRespawned', {});
   }
@@ -1214,9 +1087,9 @@ export class Player {
   private updateStats(dt: number) {
     this.originCooldown = Math.max(0, this.originCooldown - dt);
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
-    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen) * dt);
-    this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen) * dt);
-    if (this.prog.combat.origin === 'demon' && !this.dead) this.hp = Math.min(this.maxHp, this.hp + 0.8 * dt);
+    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen + this.mods.staminaRegen) * dt);
+    this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen + this.mods.manaRegen) * dt);
+    if (this.prog.origin === 'demon' && !this.dead) this.hp = Math.min(this.maxHp, this.hp + 0.8 * dt);
     this.hp = Math.min(this.hp, this.maxHp);
     if (this.hot.left > 0 && !this.dead) {
       this.hot.left -= dt;
@@ -1240,18 +1113,8 @@ export class Player {
     this.onSpell?.(st.heal ? 'potionHeal' : 'potionMana', this.center, this.forward, null);
   }
 
-  /** Use either a spell item uid or a learned combat move reference. */
-  useMove(ref: number | string) {
-    if (typeof ref === 'string') {
-      const [prefix, style, nodeId] = ref.split(':');
-      if (prefix !== 'skill' || !style || !nodeId || this.dead) return;
-      const active = this.prog.activeStyle;
-      if (!active || active !== style) return;
-      const node = this.prog.skillMove(active, nodeId);
-      if (!node || !node.actionId) return;
-      this.startAction(node.actionId);
-      return;
-    }
+  /** Cast a spell item from the moves bar (class skills go through the skill runtime). */
+  useMove(ref: number) {
     const it = this.equip.get(ref);
     if (!it || it.def.kind !== 'spell' || this.dead) return;
     this.equip.activeSpell = ref;
@@ -1259,14 +1122,9 @@ export class Player {
   }
 
 
-  /** Would a projectile at (x, z) enter the active Boundary field? */
-  canIntercept(x: number, z: number) {
-    return this.boundaryActive && this.activeCombatStyle === 'boundary' && !this.dead && Math.hypot(x - this.pos.x, z - this.pos.z) <= this.boundaryRadius;
-  }
-
   private useOriginAbility() {
     if (this.originCooldown > 0 || this.dead) return;
-    const origin = this.prog.combat.origin;
+    const origin = this.prog.origin;
     if (origin === 'dragon') {
       const f = this.forward;
       const center = this.center;
@@ -1276,7 +1134,7 @@ export class Player {
         const d = to.length();
         if (d > 6.5 || d < 0.01) continue;
         if (to.normalize().dot(f) < 0.62) continue;
-        const dmg = Math.round(26 + this.prog.combat.heroic.level * 2.5);
+        const dmg = Math.round(26 + this.prog.level * 2.5);
         t.takeHit({ damage: dmg, poise: 35, dir: f.clone(), at: t.center.clone(), crit: false, source: 'melee' });
         events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: false, enemyId: t.id });
       }
@@ -1293,6 +1151,46 @@ export class Player {
       this.originCooldown = 6;
       events.emit('originAbility', { origin, ability: 'Heroic Adaptation' });
     }
+  }
+
+  /**
+   * Start a skill's action (see combat/skillActions.ts). Works from idle or
+   * once the current action can be cancelled, like a dodge.
+   */
+  startSkill(id: string, mult = 1, needGround = true): boolean {
+    if (this.dead || (needGround && !this.grounded)) return false;
+    const a = this.act;
+    if (a && a.t < a.def.cancel) return false;
+    if (!this.startAction(id)) return false;
+    this.act!.mult = mult;
+    return true;
+  }
+
+  /** Is the player free to start a skill right now? */
+  get canAct() {
+    return !this.dead && (!this.act || this.act.t >= this.act.def.cancel);
+  }
+
+  /** Pay stamina for a skill; regen pauses like it does after an attack. */
+  spendStamina(n: number) {
+    if (n <= 0) return;
+    this.stamina = Math.max(0, this.stamina - n);
+    this.staminaDelay = Math.max(this.staminaDelay, 0.65);
+  }
+
+  heal(amount: number) {
+    if (this.dead) return;
+    this.hp = Math.min(this.maxHp, this.hp + amount * this.mods.heal * this.paths.healPower);
+  }
+
+  /** Heal over time (replaces a weaker one). */
+  healOverTime(total: number, seconds: number) {
+    const rate = (total * this.mods.heal * this.paths.healPower) / seconds;
+    if (rate * seconds >= this.hot.rate * this.hot.left) this.hot = { rate, left: seconds };
+  }
+
+  cleanse() {
+    this.burn.left = 0;
   }
 
   /** Debug: show action `id` frozen at time t. */

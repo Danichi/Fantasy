@@ -4,7 +4,7 @@ import type { ItemInstance } from '../items/equipment';
 import { events } from '../core/events';
 import { iconFor, wideIconFor } from './icons';
 import type { CharPreview } from './charPreview';
-import { COMBAT_STYLES } from '../progression/styles';
+import { DISC } from '../paths/data';
 
 // Inventory & equipment screen (I).
 //   left:   armour slots          centre: live 3D character + weapons + summary
@@ -160,7 +160,7 @@ export class InventoryUI {
       <span><b>${eq.poise}</b>Poise</span>
       <span><b>${block}</b>Block</span>
       <span><b>${Math.ceil(p.hp)}/${p.maxHp}</b>Health</span>
-      <span><b>${p.prog.activeStyle ? COMBAT_STYLES[p.prog.activeStyle].name : 'Untrained'}</b>Style</span>`;
+      <span><b>${DISC[p.paths.active]?.name ?? 'Untrained'}</b>Class</span>`;
 
     this.tabs.innerHTML = '';
     for (const [id, label] of [['items', 'ITEMS'], ['stats', 'STATS']] as [Tab, string][]) {
@@ -289,7 +289,7 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon' | n
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</span><span><kbd>Mouse</kbd> Look</span>
       <span><kbd>Shift</kbd> Sprint · attack while sprinting to lunge</span><span><kbd>Space</kbd> Dodge roll</span>
       <span><kbd>LMB</kbd> Attack · hold for heavy</span><span><kbd>RMB</kbd> Block / off-hand attack</span>
-      <span><kbd>F</kbd> Parry · hold while standing still for Boundary stance</span><span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on</span>
+      <span><kbd>F</kbd> Parry</span><span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on</span>
       <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span><span><kbd>V</kbd> Origin ability</span>
       <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory · <kbd>K</kbd> Skills</span>
       <span><kbd>E</kbd> Interact (doors, chests, gates)</span><span><kbd>M</kbd> World map · draw the map in dungeons</span>

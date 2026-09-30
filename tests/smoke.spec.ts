@@ -9,13 +9,23 @@ const SLOW = Number(process.env.PW_SLOW ?? '1');
 async function boot(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  // A missing /favicon.ico is reported as an error with no URL; ignore only that.
+  page.on('console', (m) => m.type() === 'error' && !m.text().startsWith('Failed to load resource') && errors.push(m.text()));
+  page.on('response', (r) => r.status() >= 400 && !r.url().endsWith('/favicon.ico') && errors.push(`${r.status()} ${r.url()}`));
   await page.goto('/?test');
   await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
+  // In-page helper: wait for game time (simulation steps at 60 Hz), not
+  // wall-clock time, so slow machines don't cut actions short.
+  await page.evaluate(() => {
+    (window as any).W = async (n: number) => {
+      const g = (window as any).__game, s0 = g.steps;
+      while (g.steps < s0 + n) await new Promise((r) => setTimeout(r, 15));
+    };
+  });
   return errors;
 }
 
-const wait = (page: Page, ms: number) => page.waitForTimeout(ms);
+const wait = (page: Page, ms: number) => page.evaluate((n) => (window as any).W(n), Math.round((ms / 1000) * 60));
 
 test('player moves with WASD', async ({ page }) => {
   const errors = await boot(page);
@@ -40,13 +50,12 @@ test('sword swing damages a beast', async ({ page }) => {
     s.update = () => {};
     s.center.set(s.position.x, s.position.y + 0.9, s.position.z);
     p.yaw = Math.PI;
-    await new Promise((r) => setTimeout(r, 300));
+    await (window as any).W(18);
     const before = s.hp;
     g.input.press('Mouse0');
-    await new Promise((r) => setTimeout(r, 50));
+    await (window as any).W(3);
     g.input.release('Mouse0');
-    // The swing lands within a second of game time; allow for slow frames.
-    for (let k = 0; k < 30 && s.hp === before; k++) await new Promise((r) => setTimeout(r, 100));
+    await (window as any).W(54);
     return { before, after: s.hp };
   });
   expect(hp.after).toBeLessThan(hp.before);
@@ -111,17 +120,17 @@ test('fireball spends mana and hits', async ({ page }) => {
     s.center.set(s.position.x, s.position.y + 0.6, s.position.z);
     p.yaw = Math.PI;
     g.cam.yaw = Math.PI;
-    await new Promise((r) => setTimeout(r, 200));
+    await (window as any).W(12);
     // Offensive spells need a lock-on target.
     g.input.press('Mouse1');
-    await new Promise((r) => setTimeout(r, 40));
+    await (window as any).W(2);
     g.input.release('Mouse1');
-    await new Promise((r) => setTimeout(r, 100));
+    await (window as any).W(6);
     const m0 = p.mana, hp0 = s.hp;
     g.input.press('KeyR');
-    await new Promise((r) => setTimeout(r, 40));
+    await (window as any).W(2);
     g.input.release('KeyR');
-    await new Promise((r) => setTimeout(r, 1800));
+    await (window as any).W(108);
     return { dMana: m0 - p.mana, hit: s.hp < hp0 || !s.alive };
   });
   expect(res.dMana).toBeGreaterThan(10);

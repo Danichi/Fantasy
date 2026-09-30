@@ -42,12 +42,11 @@ export interface SaveData {
   seed: number;
   /** xp is the unspent pool; level is informational (derived from disciplines) */
   prog: {
-    level: number; xp: number; gold: number; sp?: number; total?: number;
-    /** long-term discipline tracks (levels, mastery, specializations, origin) */
-    combat?: ReturnType<Player['prog']['combat']['toJSON']> | null;
-    /** trained combat schools (the school runtime: momentum, focus, openings) */
-    primaryStyle?: string | null; secondaryStyle?: string | null; activeStyle?: string | null;
-    styleIntroductions?: string[]; learnedSkills?: Record<string, string[]>; styleMastery?: Record<string, number>;
+    level: number; xp: number; gold: number; total?: number;
+    /** the origin picked at a new game */
+    origin?: string;
+    /** saves from before the class skills: only the origin is carried over */
+    combat?: { origin?: string } | null;
   };
   /** disciplines and attributes; missing in saves from before XP was a currency */
   paths?: PathsSave;
@@ -93,14 +92,7 @@ export function loadSave(): SaveData | null {
         level: old.level ?? 1,
         xp: old.xp ?? 0,
         gold: old.gold ?? 0,
-        sp: old.sp ?? 0,
         combat: old.combat ?? null,
-        primaryStyle: old.primaryStyle ?? null,
-        secondaryStyle: old.secondaryStyle ?? null,
-        activeStyle: old.activeStyle ?? null,
-        styleIntroductions: old.styleIntroductions ?? [],
-        learnedSkills: old.learnedSkills ?? { gale: [], boundary: [], cross: [] },
-        styleMastery: old.styleMastery ?? { gale: 0, boundary: 0, cross: 0 },
       },
       moves: (d.moves ?? []).map((m: unknown) => (typeof m === 'number' ? m : null)),
       guild: d.guild ?? defaultGuild,
@@ -132,10 +124,7 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     v: 6,
     seed,
     prog: {
-      level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, total: player.prog.totalXp, sp: player.prog.skillPoints,
-      combat: player.prog.combat.toJSON(),
-      primaryStyle: player.prog.primaryStyle, secondaryStyle: player.prog.secondaryStyle, activeStyle: player.prog.activeStyle,
-      styleIntroductions: [...player.prog.styleIntroductions], learnedSkills: structuredClone(player.prog.learnedSkills), styleMastery: structuredClone(player.prog.styleMastery),
+      level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, total: player.prog.totalXp, origin: player.prog.origin,
     },
     paths: player.paths.serialize(),
     items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty })),
@@ -171,14 +160,8 @@ export function applySave(player: Player, d: SaveData) {
     p.totalXp = refund;
     player.paths.reset();
   }
-  p.skillPoints = d.prog.sp ?? 0;
-  if (d.prog.combat) p.combat.fromJSON(d.prog.combat);
-  p.primaryStyle = (d.prog.primaryStyle === 'gale' || d.prog.primaryStyle === 'boundary' || d.prog.primaryStyle === 'cross') ? d.prog.primaryStyle : null;
-  p.secondaryStyle = (d.prog.secondaryStyle === 'gale' || d.prog.secondaryStyle === 'boundary' || d.prog.secondaryStyle === 'cross') ? d.prog.secondaryStyle : null;
-  p.activeStyle = (d.prog.activeStyle === 'gale' || d.prog.activeStyle === 'boundary' || d.prog.activeStyle === 'cross') ? d.prog.activeStyle : p.primaryStyle;
-  p.styleIntroductions = (d.prog.styleIntroductions ?? []).filter((id): id is 'gale' | 'boundary' | 'cross' => id === 'gale' || id === 'boundary' || id === 'cross');
-  p.learnedSkills = { gale: [], boundary: [], cross: [], ...(d.prog.learnedSkills ?? {}) };
-  p.styleMastery = { gale: 0, boundary: 0, cross: 0, ...(d.prog.styleMastery ?? {}) };
+  const origin = d.prog.origin ?? d.prog.combat?.origin;
+  p.origin = origin === 'dragon' || origin === 'demon' ? origin : 'human';
   eq.items = [];
   const uids: number[] = [];
   for (const it of d.items) {

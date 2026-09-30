@@ -11,8 +11,7 @@ import type { Player } from '../player/player';
 import { events } from '../core/events';
 import { ITEMS } from '../items/itemDefs';
 import { AdventurerGuild } from '../guild/adventurerGuild';
-import { COMBAT_STYLES } from '../progression/styles';
-import { trainingOption, starterChoiceOptions, magicOptions, shopOptions } from './services';
+import { shopOptions } from './services';
 
 // The townsfolk: who they are, where they stand, and what they teach or sell.
 
@@ -25,11 +24,10 @@ export const NPCS: NpcSpec[] = [
     bones: { upperArmL: 'b_MF_UpperArm_L_023', upperArmR: 'b_MF_UpperArm_R_045', spine: ['b_MF_Spine_01_011', 'B_MF_Spine_02_012', 'b_MF_Spine_03_013'], head: 'b_MF_Head_015' },
     greeting: 'Feet apart. Shoulders loose. You hold that blade like it owes you money.',
     lines: [
-      { q: 'Who are you?', a: 'Kaela Voss. I teach Gale: speed, chaining and the discipline of keeping momentum alive instead of trading blows.' },
-      { q: 'Teach me about Gale.', a: 'Gale rewards precise aggressive play. Every clean chain feeds Momentum, and Momentum makes your attacks faster and harder. Miss, hesitate, or get hit and the wind dies.' },
+      { q: 'Who are you?', a: 'Kaela Voss. I trained the town watch, and now I teach Gale Style to anyone who can keep up.' },
+      { q: 'Tell me about Gale.', a: 'Move like weather. Land your hits, dodge and parry, and your Flow builds for the techniques. The first lesson is free. The rest you buy with the XP you bring back (Skills, K).' },
       { q: 'Any advice?', a: "Slimes crouch before they leap. Parry the leap, and they're yours for the taking. Big ones take longer to wind up. Be patient." },
     ],
-    trainerStyle: 'gale',
   },
   {
     id: 'froest', name: 'Master Fröst', title: 'Smith & Merchant', file: 'froest.glb', height: 1.78, pos: [27, 19], yaw: face(27, 19, 0, 0),
@@ -45,22 +43,19 @@ export const NPCS: NpcSpec[] = [
     kind: 'statue',
     greeting: 'The ley lines are restless tonight. This town was built where three old roads of magic meet.',
     lines: [
-      { q: 'Teach me magic.', a: 'Magic is separate from martial styles. Choose one of my spell lessons to learn it, then equip the spell on your MOVES bar.' },
+      { q: 'Tell me about magic.', a: 'Fire and wind are mine to teach, and frost once the wind answers you. Ask for a school and I will start you; the study is yours (Skills, K).' },
       { q: 'The glowing sigil on the crypt?', a: 'A warding seal. It kept the dead in for three hundred years. Someone broke it, and from the inside.' },
       { q: 'Any advice?', a: 'Fire does not care about armour. Lock your eyes on your foe before you cast.' },
     ],
-    magicTrainer: true,
   },
   {
-    id: 'veyr', name: 'Master Veyr', title: 'Cross Mentor', file: 'urukStatue.glb', height: 1.82, pos: [17, 13], yaw: face(17, 13),
+    id: 'veyr', name: 'Master Veyr', title: 'Old Duelist', file: 'urukStatue.glb', height: 1.82, pos: [17, 13], yaw: face(17, 13),
     kind: 'statue',
-    greeting: 'A fighter who only knows how to attack is predictable. Cross is the art of creating the opening and being ready before it appears.',
+    greeting: 'A fighter who only knows how to attack is predictable. I was not. Once.',
     lines: [
-      { q: 'Who are you?', a: 'Master Veyr. I teach Cross: deflect with one line, punish along another, and turn a successful parry into a real advantage.' },
-      { q: 'Teach me about Cross.', a: 'A successful parry creates a Cross Opening. Your next damaging strike exploits that opening for extra damage and stagger. Different weapons express the principle differently, but the timing is universal.' },
-      { q: 'Can I dual wield?', a: 'Cross works naturally with two weapons, but the school is a combat philosophy rather than a requirement. Spears, greatweapons, daggers and shields can all express the same counter principle.' },
+      { q: 'Who are you?', a: 'Master Veyr. I fought with two blades for thirty years. My knees gave up before my hands did.' },
+      { q: 'Can you teach me Cross Style?', a: 'Not any more. Ilse, the travelling fencer, teaches it now: two blades, one rhythm. Find her on the roads, and keep the beat.' },
     ],
-    trainerStyle: 'cross',
   },
   {
     id: 'corvin', name: 'Ser Corvin', title: 'Boundary Mentor', file: 'corvin.glb', height: 1.98, pos: [5.5, -69], yaw: face(5.5, -69, 5.5, 0),
@@ -68,10 +63,9 @@ export const NPCS: NpcSpec[] = [
     greeting: 'You have the look of someone headed north. This town is the last safe roof before the hills.',
     lines: [
       { q: 'Why the black armour?', a: 'I swore an oath to guard this road, and failed it once. The armour remembers, even when the town forgets.' },
-      { q: 'Teach me about Boundary.', a: 'Boundary is commitment. Plant your feet, manage Focus, and turn the space around you into a defensive zone where incoming attacks can be intercepted without frame-perfect timing.' },
+      { q: 'Tell me about Boundary.', a: 'A shield is a promise that you will still be standing. Block, parry, take the hits, and Resolve builds. Ask, and I will teach you the first of it.' },
       { q: 'About the Warlord...', a: 'Grukk swings a blade taller than you and reaches for a bow when you back away. Watch the steel redden before his heavy cut. That is your moment to parry.' },
     ],
-    trainerStyle: 'boundary',
   },
   {
     id: 'innkeeper', name: 'Mara Bell', title: 'Innkeeper of the Wayfarer', file: 'kaela.glb', height: 1.75, pos: [-24, 8], yaw: face(-24, 8, -10, 0),
@@ -345,20 +339,8 @@ export class Town {
       }
     }
     if (this.talkShop(s)) return;
-    if (s.trainerStyle && text === s.greeting && !this.player.prog.styleIntroductions.includes(s.trainerStyle)) {
-      this.player.prog.markStyleIntroduction(s.trainerStyle);
-      const style = COMBAT_STYLES[s.trainerStyle];
-      text = `${s.greeting} ${style.name} is the art of ${style.mechanic.charAt(0).toLowerCase() + style.mechanic.slice(1)}`;
-    }
     const opts: DialogueOption[] = s.lines.map((l) => ({ label: l.q, run: () => this.talk(s, l.a) }));
     opts.push(...(this.mentorOptions?.(s, (t) => this.talk(s, t)) ?? []));
-    if (s.trainerStyle) {
-      const train = trainingOption(this.player, s.trainerStyle, (next) => this.talk(s, next));
-      opts.unshift(...starterChoiceOptions(this.player, (next) => this.talk(s, next)), train);
-    }
-    if (s.magicTrainer) {
-      opts.unshift(...magicOptions(this.player, (next) => this.talk(s, next)));
-    }
     if (s.id === 'froest') {
       opts.unshift({ label: "Browse Fröst's wares", run: () => this.shop() });
     }
