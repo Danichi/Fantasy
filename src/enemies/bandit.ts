@@ -360,7 +360,11 @@ export class Bandit implements Target {
     this.center.set(this.position.x, this.position.y + 1.0, this.position.z);
   }
 
+  private disposed = false;
+  /** Safe to call twice (a road encounter and the spawner can both let go of a beast). */
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     targets.delete(this);
     this.scene.remove(this.group);
     if (this.alive) physics.world.removeCollider(this.col, false);

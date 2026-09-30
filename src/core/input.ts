@@ -113,6 +113,12 @@ export class Input {
     }
   }
 
+  /** Let go of every held key and button. */
+  releaseAll() {
+    for (const c of [...this.down]) this.release(c);
+    this.pressed.clear();
+  }
+
   release(code: string) {
     if (this.down.delete(code)) this.released.add(code);
   }

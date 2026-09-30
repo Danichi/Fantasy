@@ -1,21 +1,12 @@
-import { test, expect, type Page } from '@playwright/test';
-
-// CI renders in software on a shared runner: PW_SLOW stretches waits and timeouts.
-const SLOW = Number(process.env.PW_SLOW ?? '1');
+import { test, expect, boot, SLOW } from './fixtures';
+import type { Page } from '@playwright/test';
 
 // World Expansion phase 4: the King's Road network, encounters, caravans,
 // horses, foraging and the road quests.
 
-async function boot(page: Page, query = '?test') {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('/' + query);
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
-  return errors;
-}
-
-test('the King\'s Road is painted, signed and reaches Port Aurelle; closed roads are barred', async ({ page }) => {
-  const errors = await boot(page);
+test('the King\'s Road is painted, signed and reaches Port Aurelle; closed roads are barred', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const N = await import('/src/world/roadNetwork.ts' as string);
@@ -37,9 +28,10 @@ test('the King\'s Road is painted, signed and reaches Port Aurelle; closed roads
   expect(errors).toEqual([]);
 });
 
-test('encounters spawn beside the road and are dropped far behind; caravans appear near the player', async ({ page }) => {
+test('encounters spawn beside the road and are dropped far behind; caravans appear near the player', async ({ game }) => {
   test.setTimeout(240_000 * SLOW);
-  const errors = await boot(page);
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const T = g.THREE;
@@ -80,8 +72,9 @@ test('encounters spawn beside the road and are dropped far behind; caravans appe
   expect(errors).toEqual([]);
 });
 
-test('foraged herbs regrow on the world clock', async ({ page }) => {
-  const errors = await boot(page);
+test('foraged herbs regrow on the world clock', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const T = g.THREE;
@@ -145,9 +138,10 @@ test('a bought horse is ridden at its breed\'s speed and is still owned after a 
   expect(owned).toEqual([['Comet', 'runner']]);
 });
 
-test('the Hollow Ridge bandits fight back and the quest completes when they fall', async ({ page }) => {
+test('the Hollow Ridge bandits fight back and the quest completes when they fall', async ({ game }) => {
   test.setTimeout(240_000 * SLOW);
-  const errors = await boot(page);
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const T = g.THREE;
@@ -157,7 +151,8 @@ test('the Hollow Ridge bandits fight back and the quest completes when they fall
     g.player.teleport(new T.Vector3(1952, heightAt(1952, -170) + 0.5, -170));
     for (let i = 0; i < 30 && !q.isActive('hollow-ridge', 1); i++) await new Promise((r) => setTimeout(r, 300));
     const bandits = g.encounters.bandits.length;
-    await new Promise((r) => setTimeout(r, 4000));
+    // Give them up to 12 s of game time to land a blow or a bolt.
+    for (let i = 0; i < 24 && g.player.hp >= g.player.maxHp; i++) await (window as any).W(30);
     const hpAfterFight = g.player.hp;
     g.player.hp = g.player.maxHp;
     for (const b of [...g.encounters.bandits]) {

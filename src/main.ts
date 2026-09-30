@@ -88,7 +88,7 @@ import { Realm } from './dungeon/realm';
 import { Town, NPCS } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
 import { loadArmourKit } from './enemies/armourKit';
-import { loadSave, writeSave, applySave, hasSave, clearSave } from './save';
+import { loadSave, writeSave, buildSave, applySave, hasSave, clearSave } from './save';
 
 const STEP = 1 / 60;
 
@@ -1108,7 +1108,41 @@ async function boot() {
   buildIcons(r.renderer, r.scene.environment, player.equip.items.map((i) => i.def.id));
 
   if (DEBUG || TEST_MODE) {
+    // Tests share one booted game per worker; resetForTest puts it back to how
+    // it was at boot: player, inventory and XP, quests, flags, time, weather.
+    const fresh = buildSave(player, realm.seed, {}, structuredClone(realm.progress), town.guild.toJSON(), { flags: {} });
+    const startHour = time.hour, startDay = time.day;
+    const resetForTest = async () => {
+      input.releaseAll();
+      dialogue.close();
+      if (inv.open) inv.toggle(false);
+      if (skills.open) skills.toggle(false);
+      if (worldMap.open) worldMap.toggle(false);
+      if (mapUI.open) mapUI.toggle(false);
+      if (questUI.open) questUI.toggle(false);
+      duel.stop();
+      fishing.stop();
+      if (player.mounted) horses.dismount();
+      player.vehicle = null;
+      if (realm.mode === 'dungeon') await realm.leave();
+      slimes.clear();
+      encounters.clear();
+      quests.state = {};
+      quests.tracked = null;
+      for (const k of Object.keys(worldFlags)) delete worldFlags[k];
+      realm.progress = structuredClone(fresh.dungeon);
+      realm.maps = {};
+      town.guild.fromJSON(fresh.guild);
+      applySave(player, structuredClone(fresh));
+      player.respawn(spawn.clone());
+      time.day = startDay;
+      time.skipTo(startHour);
+      weather.forced = null;
+      events.emit('equipmentChanged', {});
+      events.emit('progressChanged', {});
+    };
     (window as any).__game = {
+      resetForTest,
       THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
       perf,
       pause: (p: boolean) => (paused = p),

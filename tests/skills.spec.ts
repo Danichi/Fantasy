@@ -1,22 +1,12 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, boot, SLOW } from './fixtures';
+import type { Page } from '@playwright/test';
 
 // Disciplines, XP investing and attributes, through the Skills screen (K)
 // and the window.__game debug hook.
 
-async function boot(page: Page, query = '?test') {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  // A missing /favicon.ico is reported as a console error with no URL; check
-  // failed requests by URL instead so real missing assets still fail the test.
-  page.on('console', (m) => m.type() === 'error' && !m.text().startsWith('Failed to load resource') && errors.push(m.text()));
-  page.on('response', (r) => r.status() >= 400 && !r.url().endsWith('/favicon.ico') && errors.push(`${r.status()} ${r.url()}`));
-  await page.goto('/' + query);
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
-  return errors;
-}
-
-test('XP is spent on disciplines and raises the character level', async ({ page }) => {
-  const errors = await boot(page);
+test('XP is spent on disciplines and raises the character level', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(() => {
     const g = (window as any).__game, P = g.player.paths, pr = g.player.prog;
     const start = { xp: pr.xp, lv: pr.level, gale: P.level('gale'), active: P.active };
@@ -32,19 +22,22 @@ test('XP is spent on disciplines and raises the character level', async ({ page 
     const broke = P.invest('gale');
     return { start, afterPickup, ok, afterInvest, locked, broke, charLevel: P.charLevel };
   });
-  expect(res.start).toEqual({ xp: 0, lv: 2, gale: 1, active: 'gale' }); // gale, pyromancer, lightbinder at 1
-  expect(res.afterPickup).toEqual({ xp: 5000, lv: 2 });
+  // (The world may already have paid a little XP: the River Mill is discovered from the spawn point.)
+  const xp0 = res.start.xp;
+  expect(res.start).toEqual({ xp: xp0, lv: 2, gale: 1, active: 'gale' }); // gale, pyromancer, lightbinder at 1
+  expect(res.afterPickup).toEqual({ xp: xp0 + 5000, lv: 2 });
   expect(res.ok).toBe(true);
   expect(res.afterInvest.gale).toBe(2);
   expect(res.afterInvest.cost).toBe(100);
-  expect(res.afterInvest.xp).toBe(4900);
+  expect(res.afterInvest.xp).toBe(xp0 + 4900);
   expect(res.locked).toBe(false);
   expect(res.broke).toBe(false);
   expect(errors).toEqual([]);
 });
 
-test('attributes change the player\'s real stats', async ({ page }) => {
-  const errors = await boot(page);
+test('attributes change the player\'s real stats', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(() => {
     const g = (window as any).__game, P = g.player.paths, p = g.player;
     p.prog.addXp(20000);
@@ -73,8 +66,9 @@ test('attributes change the player\'s real stats', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('the Skills screen opens with K, invests XP and learns tree nodes', async ({ page }) => {
-  const errors = await boot(page);
+test('the Skills screen opens with K, invests XP and learns tree nodes', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   await page.evaluate(() => (window as any).__game.player.prog.addXp(3000));
   await page.evaluate(() => (window as any).__game.input.press('KeyK'));
   await page.waitForTimeout(200);
@@ -152,8 +146,9 @@ test('disciplines and attributes survive a save and reload', async ({ page }) =>
   expect(after.s.nodes.gale['0-0-0']).toBeTruthy();
 });
 
-test('mentors teach, switch the active class and respec', async ({ page }) => {
-  const errors = await boot(page);
+test('mentors teach, switch the active class and respec', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(() => {
     const g = (window as any).__game, P = g.player.paths;
     const corvin = g.town.npcs.find((n: any) => n.spec.id === 'corvin').spec;

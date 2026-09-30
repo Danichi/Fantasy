@@ -103,7 +103,8 @@ export function loadSave(): SaveData | null {
   }
 }
 
-export function writeSave(player: Player, seed: number, maps: Record<string, MapData>, dungeon: DungeonProgress, guild: GuildSaveData, world: WorldSave = { flags: {} }) {
+/** The save data for the current game (without writing it). */
+export function buildSave(player: Player, seed: number, maps: Record<string, MapData>, dungeon: DungeonProgress, guild: GuildSaveData, world: WorldSave = { flags: {} }): SaveData {
   const eq = player.equip;
   const idx = (uid: number | null | undefined) => (uid == null ? null : eq.items.findIndex((i) => i.uid === uid));
   const equipped: SaveData['equipped'] = {};
@@ -137,6 +138,11 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     guild,
     world,
   };
+  return data;
+}
+
+export function writeSave(player: Player, seed: number, maps: Record<string, MapData>, dungeon: DungeonProgress, guild: GuildSaveData, world: WorldSave = { flags: {} }) {
+  const data = buildSave(player, seed, maps, dungeon, guild, world);
   try {
     localStorage.setItem(KEY, JSON.stringify(data));
   } catch {}

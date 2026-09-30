@@ -337,7 +337,11 @@ export class Beast implements Target {
     return !this.alive && this.state === 'dying' && this.deadT > 0.9;
   }
 
+  private disposed = false;
+  /** Safe to call twice (a road encounter and the spawner can both let go of a beast). */
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     targets.delete(this);
     this.scene.remove(this.group);
     physics.world.removeCollider(this.col, false);

@@ -10,3 +10,4 @@ release/
 
 # drawcall market install staging (copied into public/assets/vendor)
 public/model/
+.pw-cache/

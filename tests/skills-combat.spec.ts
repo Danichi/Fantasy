@@ -1,25 +1,10 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, boot, SLOW } from './fixtures';
+import type { Page } from '@playwright/test';
 
 // Tree nodes in combat: passives change the player's modifiers (only while
 // their class is active), and skills on the moves bar cost resources, play
 // their action and hurt enemies. Waits are counted in simulation steps, not
 // wall-clock time, so a slow machine can't cut an animation short.
-
-async function boot(page: Page, query = '?test') {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => m.type() === 'error' && !m.text().startsWith('Failed to load resource') && errors.push(m.text()));
-  page.on('response', (r) => r.status() >= 400 && !r.url().endsWith('/favicon.ico') && errors.push(`${r.status()} ${r.url()}`));
-  await page.goto('/' + query);
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
-  await page.evaluate(() => {
-    (window as any).waitSteps = async (n: number) => {
-      const g = (window as any).__game, s0 = g.steps;
-      while (g.steps < s0 + n) await new Promise((r) => setTimeout(r, 20));
-    };
-  });
-  return errors;
-}
 
 /** Learn a node by name (raising the discipline high enough for its tier). */
 const LEARN = `(disc, name, rank = 1) => {
@@ -41,8 +26,9 @@ async function setup(page: Page) {
   });
 }
 
-test('passives change combat stats, and only while their class is active', async ({ page }) => {
-  const errors = await boot(page);
+test('passives change combat stats, and only while their class is active', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   await setup(page);
   const res = await page.evaluate(async (learnSrc) => {
     const learn = eval(learnSrc);
@@ -70,8 +56,9 @@ test('passives change combat stats, and only while their class is active', async
   expect(errors).toEqual([]);
 });
 
-test('skills on the moves bar cost resources, animate and hurt enemies', async ({ page }) => {
-  const errors = await boot(page);
+test('skills on the moves bar cost resources, animate and hurt enemies', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   await setup(page);
   const res = await page.evaluate(async (learnSrc) => {
     const learn = eval(learnSrc);

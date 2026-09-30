@@ -1,22 +1,13 @@
-import { test, expect, type Page } from '@playwright/test';
-
-// CI renders in software on a shared runner: PW_SLOW stretches waits and timeouts.
-const SLOW = Number(process.env.PW_SLOW ?? '1');
+import { test, expect, boot, SLOW } from './fixtures';
+import type { Page } from '@playwright/test';
 
 // World Expansion phase 5: Port Aurelle, fishing, swimming, the Knight's
 // Academy trials and the dwarven expedition.
 
-async function boot(page: Page, query = '?test') {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('/' + query);
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
-  return errors;
-}
-
-test('Port Aurelle stands on its peninsula, populated, within the draw-call budget', async ({ page }) => {
+test('Port Aurelle stands on its peninsula, populated, within the draw-call budget', async ({ game }) => {
   test.setTimeout(240_000 * SLOW);
-  const errors = await boot(page);
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const T = g.THREE;
@@ -40,9 +31,10 @@ test('Port Aurelle stands on its peninsula, populated, within the draw-call budg
   expect(errors).toEqual([]);
 });
 
-test('fishing: cast, strike, reel, sell the catch by weight', async ({ page }) => {
+test('fishing: cast, strike, reel, sell the catch by weight', async ({ game }) => {
   test.setTimeout(240_000 * SLOW);
-  const errors = await boot(page);
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const T = g.THREE;
@@ -81,9 +73,10 @@ test('fishing: cast, strike, reel, sell the catch by weight', async ({ page }) =
   expect(errors).toEqual([]);
 });
 
-test('the Academy entrance trial is a real, non-lethal duel that can be won', async ({ page }) => {
+test('the Academy entrance trial is a real, non-lethal duel that can be won', async ({ game }) => {
   test.setTimeout(240_000 * SLOW);
-  const errors = await boot(page);
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const T = g.THREE;
@@ -111,9 +104,10 @@ test('the Academy entrance trial is a real, non-lethal duel that can be won', as
   expect(errors).toEqual([]);
 });
 
-test('swimming: deep water floats you and drains stamina', async ({ page }) => {
+test('swimming: deep water floats you and drains stamina', async ({ game }) => {
   test.setTimeout(240_000 * SLOW);
-  const errors = await boot(page);
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const T = g.THREE;

@@ -1,34 +1,14 @@
-import { test, expect, type Page } from '@playwright/test';
-
-// CI renders in software on a shared runner: PW_SLOW stretches waits and timeouts.
-const SLOW = Number(process.env.PW_SLOW ?? '1');
+import { test, expect, boot, SLOW } from './fixtures';
+import type { Page } from '@playwright/test';
 
 // End-to-end checks driven through the window.__game debug hook (?test mode:
 // no title overlay, no slime spawner, pointer lock not required).
 
-async function boot(page: Page) {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  // A missing /favicon.ico is reported as an error with no URL; ignore only that.
-  page.on('console', (m) => m.type() === 'error' && !m.text().startsWith('Failed to load resource') && errors.push(m.text()));
-  page.on('response', (r) => r.status() >= 400 && !r.url().endsWith('/favicon.ico') && errors.push(`${r.status()} ${r.url()}`));
-  await page.goto('/?test');
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
-  // In-page helper: wait for game time (simulation steps at 60 Hz), not
-  // wall-clock time, so slow machines don't cut actions short.
-  await page.evaluate(() => {
-    (window as any).W = async (n: number) => {
-      const g = (window as any).__game, s0 = g.steps;
-      while (g.steps < s0 + n) await new Promise((r) => setTimeout(r, 15));
-    };
-  });
-  return errors;
-}
-
 const wait = (page: Page, ms: number) => page.evaluate((n) => (window as any).W(n), Math.round((ms / 1000) * 60));
 
-test('player moves with WASD', async ({ page }) => {
-  const errors = await boot(page);
+test('player moves with WASD', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   const start = await page.evaluate(() => (window as any).__game.player.pos.toArray());
   await page.evaluate(() => (window as any).__game.input.press('KeyW'));
   await wait(page, 1500);
@@ -39,8 +19,8 @@ test('player moves with WASD', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('sword swing damages a beast', async ({ page }) => {
-  await boot(page);
+test('sword swing damages a beast', async ({ game }) => {
+  const { page } = game;
   const hp = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
@@ -61,8 +41,8 @@ test('sword swing damages a beast', async ({ page }) => {
   expect(hp.after).toBeLessThan(hp.before);
 });
 
-test('parry staggers an attacking beast', async ({ page }) => {
-  await boot(page);
+test('parry staggers an attacking beast', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
@@ -89,8 +69,8 @@ test('parry staggers an attacking beast', async ({ page }) => {
   expect(res.hp).toBe(res.max);
 });
 
-test('blocking drains stamina instead of health', async ({ page }) => {
-  await boot(page);
+test('blocking drains stamina instead of health', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
@@ -107,8 +87,8 @@ test('blocking drains stamina instead of health', async ({ page }) => {
   expect(res.dHp).toBeLessThan(5);
 });
 
-test('fireball spends mana and hits', async ({ page }) => {
-  await boot(page);
+test('fireball spends mana and hits', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;
@@ -137,8 +117,8 @@ test('fireball spends mana and hits', async ({ page }) => {
   expect(res.hit).toBe(true);
 });
 
-test('equipping swaps the weapon model in the hand, and accessories apply bonuses', async ({ page }) => {
-  await boot(page);
+test('equipping swaps the weapon model in the hand, and accessories apply bonuses', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const eq = g.player.equip;
@@ -156,8 +136,8 @@ test('equipping swaps the weapon model in the hand, and accessories apply bonuse
   expect(res.dMaxHp).toBe(25);
 });
 
-test('rocks block the player', async ({ page }) => {
-  await boot(page);
+test('rocks block the player', async ({ game }) => {
+  const { page } = game;
   const z = await page.evaluate(async () => {
     const g = (window as any).__game;
     // Stand south of the boulder at (-40, 112) and run north into it.
@@ -174,8 +154,8 @@ test('rocks block the player', async ({ page }) => {
   expect(z).toBeGreaterThan(112);
 });
 
-test('dual wield: off-hand attack and equip armour', async ({ page }) => {
-  await boot(page);
+test('dual wield: off-hand attack and equip armour', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const eq = g.player.equip;
@@ -196,8 +176,8 @@ test('dual wield: off-hand attack and equip armour', async ({ page }) => {
   expect(res.armor).toBeGreaterThan(15);
 });
 
-test('offensive spells refuse to cast without a lock-on', async ({ page }) => {
-  await boot(page);
+test('offensive spells refuse to cast without a lock-on', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const p = g.player;

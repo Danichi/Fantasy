@@ -1,20 +1,11 @@
-import { test, expect, type Page } from '@playwright/test';
-
-// CI renders in software on a shared runner: PW_SLOW stretches waits and timeouts.
-const SLOW = Number(process.env.PW_SLOW ?? '1');
+import { test, expect, boot, SLOW } from './fixtures';
+import type { Page } from '@playwright/test';
 
 // World Expansion phase 1: the streamed continent, exploration and saves.
 
-async function boot(page: Page, query = '?test') {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('/' + query);
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
-  return errors;
-}
-
-test('Elder Glen keeps its authored ground and the world is deterministic', async ({ page }) => {
-  const errors = await boot(page);
+test('Elder Glen keeps its authored ground and the world is deterministic', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(async () => {
     const T = await import('/src/world/terrainHeight.ts' as string);
     // Town centre, plaza edge, crypt shelf and river bank: authored heights.
@@ -37,6 +28,7 @@ test('Elder Glen keeps its authored ground and the world is deterministic', asyn
   expect(errors).toEqual([]);
 });
 
+// A memory test: it needs a game with no history, so it boots its own.
 test('terrain and trees stream in and out without leaking', async ({ page }) => {
   test.setTimeout(240_000 * SLOW);
   const errors = await boot(page);
@@ -51,19 +43,24 @@ test('terrain and trees stream in and out without leaking', async ({ page }) => 
       tiles: g.terrain.tileCount,
       veg: g.stylizedNature.tileCount,
     });
-    // Baseline once the home tiles have finished streaming in.
     await settle(1500);
     for (let k = 0; k < 20 && g.terrain.tileCount < 81; k++) await settle(250);
-    const base = snap();
-    // Travel 3 km east and north, then come home.
+    // Travel 3 km east and north, then come home. The first trip uploads what is
+    // built once and kept (Port Aurelle, the pooled townsfolk), so the baseline is
+    // taken after it; a leak is whatever the second, identical trip adds.
     const trip = [[1500, 150], [3000, 150], [2200, -1400], [600, -2600], [0, 10]];
     const along: ReturnType<typeof snap>[] = [];
-    for (const [x, z] of trip) {
-      g.player.teleport(new T.Vector3(x, heightAt(x, z) + 0.5, z));
-      await settle(2500);
-      along.push(snap());
-    }
-    await settle(3000);
+    const travel = async () => {
+      for (const [x, z] of trip) {
+        g.player.teleport(new T.Vector3(x, heightAt(x, z) + 0.5, z));
+        await settle(2500);
+        along.push(snap());
+      }
+      await settle(3000);
+    };
+    await travel();
+    const base = snap();
+    await travel();
     const end = snap();
     // Standing on streamed ground far from town.
     g.player.teleport(new T.Vector3(1800, heightAt(1800, 150) + 1, 150));
@@ -79,15 +76,16 @@ test('terrain and trees stream in and out without leaking', async ({ page }) => 
   }
   // Back home, counts return close to where they started.
   expect(res.end.tiles).toBeLessThanOrEqual(res.base.tiles + 12);
-  expect(res.end.geo).toBeLessThan(res.base.geo * 1.25 + 60);
+  expect(res.end.geo).toBeLessThan(res.base.geo * 1.08 + 30);
   expect(res.end.bodies).toBeLessThan(res.base.bodies + 80);
   expect(res.groundedFar).toBe(true);
   expect(res.dy).toBeLessThan(0.6);
   expect(errors).toEqual([]);
 });
 
-test('exploring reveals the world map and names regions', async ({ page }) => {
-  const errors = await boot(page);
+test('exploring reveals the world map and names regions', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const T = g.THREE;

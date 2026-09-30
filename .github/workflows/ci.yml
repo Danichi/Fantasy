@@ -17,14 +17,16 @@ jobs:
   build-and-test:
     strategy:
       fail-fast: false
+      # The suite is split across four machines that run at once (each boots the
+      # game once per worker and reuses it; see tests/fixtures.ts).
       matrix:
-        workers: [2, 8]
+        shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
     timeout-minutes: 60 # the suite covers the whole world now (40+ browser tests)
     env:
-      PLAYWRIGHT_WORKERS: ${{ matrix.workers }}
+      PLAYWRIGHT_WORKERS: 2
       # Software-rendered browsers sharing the runner's cores: stretch boot waits and timeouts.
-      PW_SLOW: ${{ matrix.workers == 8 && '3' || '1.5' }}
+      PW_SLOW: 1.5
 
     steps:
       - name: Checkout
@@ -46,4 +48,4 @@ jobs:
         run: npm run build
 
       - name: Playwright smoke tests
-        run: npm test
+        run: npx playwright test --shard=${{ matrix.shard }}/4

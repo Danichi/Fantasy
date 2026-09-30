@@ -1,20 +1,11 @@
-import { test, expect, type Page } from '@playwright/test';
-
-// CI renders in software on a shared runner: PW_SLOW stretches waits and timeouts.
-const SLOW = Number(process.env.PW_SLOW ?? '1');
+import { test, expect, boot, SLOW } from './fixtures';
+import type { Page } from '@playwright/test';
 
 // Phase 2: the crypt instance, the labyrinth, hand-drawn maps, XP and saving.
 
-async function boot(page: Page, query = '?test') {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('/' + query);
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
-  return errors;
-}
-
-test('enter the crypt from the overworld and leave again', async ({ page }) => {
-  const errors = await boot(page);
+test('enter the crypt from the overworld and leave again', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     // Walk up to the crypt door and use it.
@@ -41,8 +32,8 @@ test('enter the crypt from the overworld and leave again', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('the labyrinth is connected and the gate guards the stairs', async ({ page }) => {
-  await boot(page);
+test('the labyrinth is connected and the gate guards the stairs', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     await g.realm.enter(1, 'entrance');
@@ -69,8 +60,8 @@ test('the labyrinth is connected and the gate guards the stairs', async ({ page 
   expect(res.gateOpen).toBe(true);
 });
 
-test('killing an enemy awards XP and gold that fly to the player', async ({ page }) => {
-  await boot(page);
+test('killing an enemy awards XP and gold that fly to the player', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const W = async (n: number) => { const s0 = g.steps; while (g.steps < s0 + n) await new Promise((r) => setTimeout(r, 15)); };
@@ -86,8 +77,8 @@ test('killing an enemy awards XP and gold that fly to the player', async ({ page
   expect(res.dGold).toBeGreaterThanOrEqual(6);
 });
 
-test('crypt orcs attack and can be killed', async ({ page }) => {
-  await boot(page);
+test('crypt orcs attack and can be killed', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     await g.realm.enter(1, 'entrance');
@@ -135,8 +126,8 @@ test('hand-drawn maps and progress survive a reload', async ({ page }) => {
   expect(res.gold).toBe(123);
 });
 
-test('the Orc Warlord fights with blade and bow, and drops his loot', async ({ page }) => {
-  await boot(page);
+test('the Orc Warlord fights with blade and bow, and drops his loot', async ({ game }) => {
+  const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const T = g.THREE;
