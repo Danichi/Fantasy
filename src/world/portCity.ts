@@ -69,7 +69,13 @@ export function cityHeight(x: number, z: number): [number, number] | null {
   const w = mole ? 1 : sm(14, 0, out);
   let h = 1.6;
   // The north terrace: the Academy, the noble district and the citadel.
-  h += 5 * sm(NORTH_TERRACE_Z + 6, NORTH_TERRACE_Z - 6, z);
+  let terrace = 5 * sm(NORTH_TERRACE_Z + 6, NORTH_TERRACE_Z - 6, z);
+  // The street up to the Academy gate climbs it as a long, easy ramp (about
+  // 12%) instead of the terrace's steep 12 m bank.
+  const streetX = 2795 + ((132 - z) * 5) / 28;
+  const onRamp = sm(9, 5, Math.abs(x - streetX)) * sm(150, 140, z) * sm(94, 100, z);
+  if (onRamp > 0) terrace = terrace + (5 * sm(144, 102, z) - terrace) * onRamp;
+  h += terrace;
   h += 7 * sm(34, 14, Math.hypot(x - CITADEL[0], z - CITADEL[1]));
   // Quays step down to the water on the east side.
   if (x > QUAY_X - 2) h = Math.min(h, 1.0);

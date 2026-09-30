@@ -25,7 +25,7 @@ export const PORT_QUESTS: QuestDef[] = [
     rewards: { gold: 50, xp: 150 },
   },
   {
-    id: 'academy-trial', title: 'The Entrance Trial', giver: 'marrow', region: 'portAurelle', main: true, requires: ['road-to-port'],
+    id: 'academy-trial', title: 'The Entrance Trial', giver: 'marrow', region: 'portAurelle', main: true,
     summary: 'To enter the Knight\'s Academy you must hold your own in a sparring bout with Ser Hadrik Vane.',
     offer: 'The entrance trial is simple: step into the ring with Ser Hadrik and last. Beat him and you are a cadet. No one dies in my ring — the instructors call the bout before that — but pride has been known to.',
     acceptLabel: 'I\'m ready.',

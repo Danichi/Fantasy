@@ -109,11 +109,37 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
     physics.addBox(new THREE.Vector3(x, gy + half.y, z), half, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rot, 0)));
     return { gy, half };
   };
+  /**
+   * A painted sign on a wooden board. Without `y` it stands on two posts and
+   * reads from both sides; with `y` it is mounted on a wall (backing board only).
+   */
   const sign = (text: string, sub: string, x: number, z: number, yaw: number, w = 4, y?: number) => {
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4), signMat(text, sub));
-    p.position.set(x, y ?? heightAt(x, z) + 3.2, z);
-    p.rotation.y = yaw;
-    scene.add(p);
+    const h = w / 4;
+    const cy = y ?? heightAt(x, z) + 3.2;
+    const mat = signMat(text, sub);
+    const board = new THREE.Group();
+    board.position.set(x, cy, z);
+    board.rotation.y = yaw;
+    const back = new THREE.Mesh(new THREE.BoxGeometry(w + 0.18, h + 0.18, 0.08), m.timber);
+    back.castShadow = true;
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    front.position.z = 0.045;
+    board.add(back, front);
+    if (y === undefined) {
+      const rear = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+      rear.position.z = -0.045;
+      rear.rotation.y = Math.PI;
+      board.add(rear);
+      // Two posts down to the ground, one each side of the board.
+      const ground = heightAt(x, z);
+      for (const s of [-1, 1]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, cy - ground + h / 2 + 0.1, 0.16), m.timber);
+        post.position.set(s * (w / 2 + 0.05), (ground - cy + h / 2 + 0.1) / 2 - 0.02, 0);
+        post.castShadow = true;
+        board.add(post);
+      }
+    }
+    scene.add(board);
   };
   const banner = (x: number, y: number, z: number, yaw: number, field = 0x2f5f9a, emblem = 0xe0b040) => {
     const b = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 2.8), bannerMat(field, emblem));

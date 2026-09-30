@@ -370,6 +370,7 @@ async function boot() {
     action() {
       const n = this.npc;
       if (!n) return;
+      npcs.engaged = n; // stops and faces you until the conversation ends
       const title = n.rec.title ?? n.rec.job.charAt(0).toUpperCase() + n.rec.job.slice(1) + ' of Elder Glen';
       const back = () => folkTalk.action();
       const show = (t: string, opts: { label: string; run: () => void }[]) => dialogue.show(n.rec.name, title, t, opts);
@@ -646,6 +647,7 @@ async function boot() {
   const resume = saveData?.world?.pos;
   if (resume && !TEST_MODE) player.teleport(new THREE.Vector3(resume[0], Math.max(resume[1], heightAt(resume[0], resume[2])) + 0.2, resume[2]));
   dialogue.onToggle = (open) => {
+    if (!open) npcs.engaged = null;
     input.uiMode = open || inv.open || skills.open || mapUI.open;
     if (open) input.exitLock();
     else input.requestLock();
@@ -906,6 +908,7 @@ async function boot() {
 
   let acc = 0;
   let last = performance.now();
+  let asleep = false;
   // Test runs on a software rasteriser (headless CI) can stall for seconds while
   // the GPU process draws, and the tests measure the world in real seconds.
   // There, draw only a few frames a second and let the simulation catch up
@@ -968,6 +971,11 @@ async function boot() {
     // Ask for the next frame first: an exception in one system is reported but
     // does not stop the game loop.
     requestAnimationFrame(frame);
+    // Tests park an idle game (it would otherwise keep rendering in the background).
+    if (asleep) {
+      last = now;
+      return;
+    }
     const t0 = performance.now();
     // rAF timestamps can precede `last` after a long stall (shader compiles), so
     // clamp at 0 as well as capping big gaps.
@@ -1143,6 +1151,7 @@ async function boot() {
     };
     (window as any).__game = {
       resetForTest,
+      sleep: (on: boolean) => (asleep = on),
       THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
       perf,
       pause: (p: boolean) => (paused = p),

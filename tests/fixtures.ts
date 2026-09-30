@@ -52,6 +52,9 @@ export async function boot(page: Page, query = '?test') {
   return errors;
 }
 
+/** This worker's shared game, once booted (parked while a test uses its own page). */
+let sharedGame: Game | null = null;
+
 export const test = base.extend<{ game: Game }, { persistent: BrowserContext; shared: Game }>({
   persistent: [
     async ({}, use, workerInfo) => {
@@ -73,6 +76,8 @@ export const test = base.extend<{ game: Game }, { persistent: BrowserContext; sh
     await use(persistent);
   },
   page: async ({ persistent }, use) => {
+    // Two games rendering at once in one worker starve each other: park the shared one.
+    await sharedGame?.page.evaluate(() => (window as any).__game.sleep(true)).catch(() => {});
     const page = await persistent.newPage();
     // A fresh page starts from a clean save slot.
     await page.addInitScript(() => {
@@ -82,12 +87,15 @@ export const test = base.extend<{ game: Game }, { persistent: BrowserContext; sh
     });
     await use(page);
     await page.close();
+    await sharedGame?.page.evaluate(() => (window as any).__game.sleep(false)).catch(() => {});
   },
   shared: [
     async ({ persistent }, use) => {
       const page = await persistent.newPage();
       const errors = await boot(page);
-      await use({ page, errors });
+      sharedGame = { page, errors };
+      await use(sharedGame);
+      sharedGame = null;
       await page.close();
     },
     { scope: 'worker', timeout: 240_000 * SLOW },

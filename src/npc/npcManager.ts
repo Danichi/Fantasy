@@ -49,6 +49,8 @@ export interface Place {
   yaw?: number;
   /** a building interior: NPCs here are hidden (inside) */
   indoors?: boolean;
+  /** benches or chairs at the spots: only here does 'sit' actually sit down */
+  seated?: boolean;
 }
 
 export interface Settlement {
@@ -100,7 +102,8 @@ const ACTIVE_R = 32; // metres: actors spawn inside this radius
 const LIVE_R = 80; // settlements are simulated (schedules snap) within this of their edge
 const FAR_R = 170; // sprite impostors between ACTIVE_R and this
 const SPRITE_CAP = 240;
-const CELL_W = 64, CELL_H = 128, ATLAS_COLS = 16, ATLAS_ROWS = 8;
+// 256 baked looks: Elder Glen, the road and Port Aurelle have more than 128 residents.
+const CELL_W = 64, CELL_H = 128, ATLAS_COLS = 16, ATLAS_ROWS = 16;
 const DESPAWN_R = 40; // released beyond this (hysteresis over ACTIVE_R)
 const MAX_ACTORS = 18;
 const WALK_SPEED = 1.35;
@@ -129,6 +132,8 @@ export class NpcManager {
   private tick = 0;
   /** settlements currently simulated (level 1/2); entering snaps everyone to their schedule */
   private live = new Set<string>();
+  /** the NPC the player is talking to (held still, facing them) */
+  engaged: NpcState | null = null;
   // Far LOD: one sprite per look, baked from the real character in an idle pose.
   private atlas: THREE.WebGLRenderTarget;
   private cells = new Map<string, number>();
@@ -279,10 +284,11 @@ export class NpcManager {
     const p = s.places.get(placeId);
     if (!p || !p.spots.length) return { spot: s.center.clone(), indoors: false, yaw: 0 };
     const spot = p.spots[st.seed % p.spots.length].clone();
-    // Small personal offset so people sharing a place don't stack.
+    // A personal offset so people sharing a place stand apart instead of piling up.
     const a = ((st.seed >> 8) % 360) * (Math.PI / 180);
-    spot.x += Math.cos(a) * 0.8;
-    spot.z += Math.sin(a) * 0.8;
+    const r = p.seated ? 0.4 : 0.9 + (((st.seed >> 3) % 97) / 97) * 1.6;
+    spot.x += Math.cos(a) * r;
+    spot.z += Math.sin(a) * r;
     spot.y = heightAt(spot.x, spot.z);
     return { spot, indoors: !!p.indoors, yaw: p.yaw ?? a };
   }
@@ -401,16 +407,19 @@ export class NpcManager {
     let nSprites = 0;
     const wanting: NpcState[] = [];
     let farLook: Look | null = null;
+    let farDist = Infinity;
     const m = new THREE.Matrix4();
     if (camera) this.spriteUniforms.uCam.value.copy(camera);
     this.spriteUniforms.uNight.value = night * 0.6;
     for (const s of this.settlements.values()) {
-      const inRange = s.center.distanceTo(player) < s.radius + LIVE_R;
-      if (inRange && !this.live.has(s.id)) {
+      // Enter and leave at different distances: flickering at the edge snapped
+      // everyone to their schedule over and over (NPCs teleporting).
+      const d = s.center.distanceTo(player);
+      if (d < s.radius + LIVE_R && !this.live.has(s.id)) {
         // Level 3 -> 2: nobody was simulated, so put everyone where the clock says.
         this.live.add(s.id);
         for (const st of this.npcs) if (st.rec.settlement === s.id) this.placeBySchedule(st, true);
-      } else if (!inRange) this.live.delete(s.id);
+      } else if (d > s.radius + LIVE_R + 60) this.live.delete(s.id);
     }
     for (const st of this.npcs) {
       const s = this.settlements.get(st.rec.settlement)!;
@@ -428,8 +437,11 @@ export class NpcManager {
         st.moving = true;
         st.hidden = false; // visible while walking there
       }
+      // Someone talking with the player stops and turns to face them.
+      const held = st === this.engaged || st.talkT > 0;
+      if (held) st.yaw = dampAngle(st.yaw, Math.atan2(player.x - st.pos.x, player.z - st.pos.z), 6, dt);
       // Walk along the path (level 1 and 2 alike, so positions stay consistent).
-      if (st.moving) {
+      if (st.moving && !held) {
         const target = st.path[0];
         if (!target) st.moving = false;
         else {
@@ -477,13 +489,21 @@ export class NpcManager {
         // (Also near ones still waiting for an actor, so nobody blinks out.)
         if (!st.hidden && dist < FAR_R && nSprites < SPRITE_CAP) {
           const key = lookKey(st.rec.look);
-          const cell = this.cells.get(key);
+          const own = this.cells.get(key);
+          // Until this look is baked, stand in with the first baked one: an
+          // unbaked crowd used to be simply invisible (Port Aurelle's market).
+          const cell = own ?? (this.cells.size ? 0 : undefined);
           if (cell !== undefined) {
             m.makeTranslation(st.pos.x, st.pos.y, st.pos.z);
             this.sprites.setMatrixAt(nSprites, m);
             this.spriteData.setXY(nSprites, cell, st.rec.look.height ?? 1.75);
             nSprites++;
-          } else if (slow && !farLook && !this.pool.has(key) && dist > ACTIVE_R) farLook = st.rec.look;
+          }
+          // Queue the nearest unbaked look (near ones too: at the actor cap they stay sprites).
+          if (own === undefined && slow && !this.pool.has(key) && !this.building.has(key) && (!farLook || dist < farDist)) {
+            farLook = st.rec.look;
+            farDist = dist;
+          }
         }
         continue;
       }
@@ -498,8 +518,10 @@ export class NpcManager {
       let clip = e.activity === 'work' ? WORK_CLIP[st.rec.job] ?? 'fix' : ACTIVITY_CLIP[e.activity];
       if (e.activity === 'farm' && alt) clip = 'water';
       if (e.activity === 'play' && alt) clip = 'cheer';
-      if (st.moving) clip = 'walk';
-      else if (st.talkT > 0) clip = 'talk';
+      // 'sit' is a chair sit: without a seat it sank people into the ground.
+      if (e.activity === 'sit' && !this.settlements.get(st.rec.settlement)!.places.get(e.place)?.seated) clip = st.seed % 3 === 0 ? 'talk' : 'idle';
+      if (st === this.engaged || st.talkT > 0) clip = 'talk';
+      else if (st.moving) clip = 'walk';
       this.play(a, clip);
       // Far actors animate at a lower rate.
       a.built.mixer.update(dist > 45 ? (slow ? 0.25 : 0) : dt);
@@ -519,12 +541,20 @@ export class NpcManager {
         if (!a) continue;
         st.actor = a;
         this.active++;
+        // Place it before it shows, or it flashes where it last stood.
+        a.built.root.position.copy(st.pos);
+        a.built.root.rotation.y = st.yaw;
         a.built.root.visible = true;
       }
     }
     // Only when nobody nearby is waiting does a distant look get built (for its sprite).
     // (Headless software-GL test runs skip far sprites: they cost seconds a bake and nobody sees them.)
-    if (farLook && !LEAN_TEST && !wanting.some((w) => !w.actor) && this.building.size === 0) void this.buildActor(lookKey(farLook), farLook);
+    // At the actor cap nobody waiting will get one anyway, so baking goes ahead.
+    const waiting = wanting.some((w) => !w.actor) && this.active < MAX_ACTORS;
+    if (farLook && !LEAN_TEST && !waiting && this.building.size === 0 && performance.now() - this.lastBuild > 250) {
+      this.lastBuild = performance.now();
+      void this.buildActor(lookKey(farLook), farLook);
+    }
   }
 
   private finishSprites(n: number) {

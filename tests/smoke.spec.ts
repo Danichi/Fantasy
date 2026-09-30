@@ -193,3 +193,33 @@ test('offensive spells refuse to cast without a lock-on', async ({ game }) => {
   expect(res.dMana).toBeLessThan(1);
   expect(res.toast).toContain('Lock on');
 });
+
+test('walking uphill keeps its pace, and standing on a slope does not slide', async ({ game }) => {
+  const { page } = game;
+  const errors = game.errors;
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, T = g.THREE, W = (window as any).W;
+    const { heightAt } = await import('/src/world/terrainHeight.ts' as string);
+    // The crypt road climbs north at a 30-40% grade around here.
+    g.player.teleport(new T.Vector3(-7, heightAt(-7, -222) + 0.3, -222));
+    g.cam.yaw = Math.PI; // looking north: W walks uphill
+    await W(40);
+    g.input.press('KeyW');
+    await W(30); // up to speed
+    const b = g.player.pos.clone();
+    await W(60);
+    const c = g.player.pos.clone();
+    g.input.release('KeyW');
+    // Standing still on the slope.
+    g.player.teleport(new T.Vector3(-6, heightAt(-6, -240) + 0.3, -240));
+    await W(60);
+    const s0 = g.player.pos.clone();
+    await W(120);
+    return { speed: Math.hypot(c.x - b.x, c.z - b.z), rise: c.y - b.y, drift: Math.hypot(g.player.pos.x - s0.x, g.player.pos.z - s0.z), grounded: g.player.grounded };
+  });
+  expect(res.rise).toBeGreaterThan(0.8); // it really was uphill
+  expect(res.speed).toBeGreaterThan(3.5); // walking pace is 4.2 m/s on the flat
+  expect(res.drift).toBeLessThan(0.05);
+  expect(res.grounded).toBe(true);
+  expect(errors).toEqual([]);
+});

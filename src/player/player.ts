@@ -54,6 +54,8 @@ interface ActiveAction {
  */
 /** How far the rider's root sits above the ground (horse back height minus leg length). */
 const RIDE_HEIGHT = 0.5;
+/** mana per second before bonuses: slow, so spells are a resource to plan around */
+const MANA_REGEN = 0.7;
 const MOUNT_TIME = 0.5;
 
 export class Player {
@@ -235,6 +237,13 @@ export class Player {
   private drownT = 0;
   /** hp never drops below this (sparring duels) */
   damageFloor = 0;
+  /** Height of the walkable surface (terrain, bridges, floors) under (x, z) near the player's feet. */
+  private probeGround(x: number, z: number) {
+    const top = this.pos.y + 1.3;
+    const t = physics.castRay(new THREE.Vector3(x, top, z), new THREE.Vector3(0, -1, 0), 3, STATIC_ONLY);
+    return t === null ? null : top - t;
+  }
+
   private groundBelow() {
     return heightAtGround(this.pos.x, this.pos.z);
   }
@@ -659,7 +668,7 @@ export class Player {
       this.vel.y = (surface - 1.25 - this.pos.y) * 5;
     } else {
       this.vel.y -= GRAVITY * dt;
-      if (this.grounded && this.vel.y < 0) this.vel.y = -1.5;
+      if (this.grounded && this.vel.y < 0) this.vel.y = 0;
     }
     this.vel.x = hv.x;
     this.vel.z = hv.z;
@@ -678,6 +687,22 @@ export class Player {
     }
 
     const desired = { x: this.vel.x * dt + this.push.x, y: this.vel.y * dt, z: this.vel.z * dt + this.push.z };
+    // Ground following: on foot, the step rises and falls with the ground itself.
+    // A flat step pushed into a slope lost speed going uphill, and the constant
+    // downward push made you creep downhill while standing still.
+    if (this.grounded && this.vel.y <= 0 && !this.swimming) {
+      const h0 = this.probeGround(this.pos.x, this.pos.z);
+      const h1 = this.probeGround(this.pos.x + desired.x, this.pos.z + desired.z);
+      const run = Math.hypot(desired.x, desired.z);
+      if (run < 1e-4) {
+        desired.y = -0.001; // standing: just keep contact, nothing to slide on
+      } else if (h0 !== null && h1 !== null && h1 - h0 > -Math.max(0.3, run * 1.5)) {
+        desired.y = Math.min(h1 - h0, run * 1.25 + 0.02) - 0.005;
+      } else {
+        // Stepping off an edge: let gravity take over.
+        desired.y = -GRAVITY * dt * dt;
+      }
+    }
     this.kcc.computeColliderMovement(this.collider, desired, physics.R.QueryFilterFlags.EXCLUDE_SENSORS, STATIC_ONLY);
     const m = this.kcc.computedMovement();
     const cur = this.body.translation();
@@ -685,9 +710,15 @@ export class Player {
     this.body.setNextKinematicTranslation(next);
     this.collider.setTranslation(next); // keep queries in sync before the world steps
     // Walls redirect velocity (slide) instead of it piling up against them.
+    // Only when the step was actually cut short: taking every computed step as
+    // the new velocity turned tiny slope slides into a steady downhill creep.
     if (dt > 0 && !(a && (a.def.roll || a.usingClip || a.def.move || a.def.boost))) {
-      this.vel.x = (m.x - this.push.x) / dt;
-      this.vel.z = (m.z - this.push.z) / dt;
+      const mx = m.x - this.push.x, mz = m.z - this.push.z;
+      const want = Math.hypot(this.vel.x, this.vel.z) * dt;
+      if (Math.hypot(mx, mz) < want * 0.97) {
+        this.vel.x = mx / dt;
+        this.vel.z = mz / dt;
+      }
     }
     const wasGrounded = this.grounded;
     this.grounded = this.kcc.computedGrounded() && this.vel.y <= 0.1;
@@ -1088,7 +1119,7 @@ export class Player {
     this.originCooldown = Math.max(0, this.originCooldown - dt);
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
     else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen + this.mods.staminaRegen) * dt);
-    this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen + this.mods.manaRegen) * dt);
+    this.mana = Math.min(this.maxMana, this.mana + MANA_REGEN * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen + this.mods.manaRegen) * dt);
     if (this.prog.origin === 'demon' && !this.dead) this.hp = Math.min(this.maxHp, this.hp + 0.8 * dt);
     this.hp = Math.min(this.hp, this.maxHp);
     if (this.hot.left > 0 && !this.dead) {
