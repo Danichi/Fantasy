@@ -884,7 +884,7 @@ async function boot() {
   const lowerCity = setupLowerCity({
     quests, player, flags: worldFlags,
     door: trapdoor,
-    enter: () => void realm.enterInterior(denDoor, 'undercity', world.mats, spells),
+    enter: () => void realm.enterInterior(denDoor, 'undercity', world.mats, spells, (label: string, text: string) => dialogue.show('Elder Glen', label, text, [{ label: 'Back.', run: () => dialogue.close() }])),
     talk: (who, title, text, opts) => dialogue.show(who, title, text, opts), close: () => dialogue.close(),
     shop: (who, title, intro, stock) => town.showShop(who, title, intro, stock),
     sell: (back) => town.sellOptions('nix', 'Nix the Fence', 'Black Market of the Quiet Hands', back),
