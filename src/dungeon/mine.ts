@@ -243,11 +243,11 @@ export class MineInstance {
     this.room({ x: 0, z: 0, w: 14, d: 14 }, m, { south: true });
     this.corridor(0, -9, 7, 10, m);
 
-    this.room({ x: -7, z: -22, w: 20, d: 18 }, m, { north: true, south: true });
-    this.corridor(-7, -35, 6, 8, m);
+    this.room({ x: -4, z: -22, w: 20, d: 18 }, m, { north: true, south: true });
+    this.corridor(-3.5, -35, 4.5, 8, m);
 
     this.room({ x: 0, z: -47, w: 12, d: 20 }, m, { north: true, south: true, east: true });
-    this.corridor(2, -59, 8, 6, m);
+    this.corridor(5, -59, 8, 6, m);
 
     this.room({ x: 8, z: -72, w: 28, d: 22 }, m, { north: true, south: true, west: true });
     this.corridor(-9, -72, 6, 6, m);
@@ -317,7 +317,7 @@ export class MineInstance {
   }
 
   private buildForemanCamp(m: ReturnType<typeof makeMaterials>) {
-    const base = new THREE.Vector3(MINE_ORIGIN.x - 7, 0, MINE_ORIGIN.z - 22);
+    const base = new THREE.Vector3(MINE_ORIGIN.x - 4, 0, MINE_ORIGIN.z - 22);
 
     // Work table, crates and a rough bunk.
     meshBox(this.group, base.clone().add(new THREE.Vector3(-3, 1.0, -2)), new THREE.Vector3(4.2, 0.25, 1.5), m.planks);
