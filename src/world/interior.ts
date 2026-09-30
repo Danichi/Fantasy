@@ -98,9 +98,10 @@ export class Interior {
       this.furnish();
     }
     this.lightUp();
-    // The way out.
+    // The way out is always first so doorway interactions remain reliable even when
+    // a furnished room has nearby inspection hotspots.
     const exit = kind === 'undercity' ? this.at(0, this.D / 2 - 4.2) : this.at(0, this.D / 2 - 0.5);
-    this.interactables.push({
+    this.interactables.unshift({
       pos: exit, radius: 1.6,
       label: () => (kind === 'undercity' ? 'Climb back up to the alley' : `Leave ${door.name ?? 'the house'}`),
       enabled: () => true,
