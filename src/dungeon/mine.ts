@@ -313,6 +313,17 @@ export class MineInstance {
     });
   }
 
+  private openGate(lever: THREE.Group) {
+    if (this.progress.gateOpen) return;
+    this.progress.gateOpen = true;
+    const arm = lever.children[1];
+    if (arm) arm.rotation.z = 0.45;
+    this.gateT = 0;
+    this.hooks.toast('The winch groans. The blast gate rises.');
+    this.hooks.save();
+  }
+
+
   update(dt: number, player: Player) {
     if (this.disposed) return;
     this.time += dt;
