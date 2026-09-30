@@ -187,28 +187,31 @@ export class MineInstance {
     const opening = 4.6;
     const sideW = (r.w - opening) / 2;
     const sideD = (r.d - opening) / 2;
+    const cx = MINE_ORIGIN.x + r.x;
+    const cz = MINE_ORIGIN.z + r.z;
 
-    this.wall(lx, MINE_ORIGIN.z + r.z, t, h, r.d, m.stoneDark);
-    this.wall(rx, MINE_ORIGIN.z + r.z, t, h, r.d, m.stoneDark);
-    this.wall(MINE_ORIGIN.x + r.x, nz, r.w, h, t, m.stoneDark);
-    this.wall(MINE_ORIGIN.x + r.x, sz, r.w, h, t, m.stoneDark);
+    const horizontalWall = (z: number, open: boolean) => {
+      if (!open) {
+        this.wall(cx, z, r.w, h, t, m.stoneDark);
+        return;
+      }
+      this.wall(lx + t / 2 + sideW / 2, z, sideW, h, t, m.stoneDark);
+      this.wall(rx - t / 2 - sideW / 2, z, sideW, h, t, m.stoneDark);
+    };
 
-    if (openings.north) {
-      this.cutWallOpening(lx + t, nz, sideW, h, t, m.stoneDark, -1, 0);
-      this.cutWallOpening(rx - t, nz, sideW, h, t, m.stoneDark, 1, 0);
-    }
-    if (openings.south) {
-      this.cutWallOpening(lx + t, sz, sideW, h, t, m.stoneDark, -1, 0);
-      this.cutWallOpening(rx - t, sz, sideW, h, t, m.stoneDark, 1, 0);
-    }
-    if (openings.east) {
-      this.cutSideOpening(nz + t, sideD, h, t, m.stoneDark, rx, 1);
-      this.cutSideOpening(sz - t, sideD, h, t, m.stoneDark, rx, 1);
-    }
-    if (openings.west) {
-      this.cutSideOpening(nz + t, sideD, h, t, m.stoneDark, lx, -1);
-      this.cutSideOpening(sz - t, sideD, h, t, m.stoneDark, lx, -1);
-    }
+    const verticalWall = (x: number, open: boolean) => {
+      if (!open) {
+        this.wall(x, cz, t, h, r.d, m.stoneDark);
+        return;
+      }
+      this.wall(x, nz + t / 2 + sideD / 2, t, h, sideD, m.stoneDark);
+      this.wall(x, sz - t / 2 - sideD / 2, t, h, sideD, m.stoneDark);
+    };
+
+    verticalWall(lx, openings.west ?? false);
+    verticalWall(rx, openings.east ?? false);
+    horizontalWall(nz, openings.north ?? false);
+    horizontalWall(sz, openings.south ?? false);
 
     meshBox(
       this.group,
@@ -216,33 +219,6 @@ export class MineInstance {
       new THREE.Vector3(r.w + 1.2, 0.38, r.d + 1.2),
       m.stoneDark,
     );
-  }
-
-  private cutWallOpening(
-    x: number,
-    z: number,
-    w: number,
-    h: number,
-    d: number,
-    mat: THREE.Material,
-    side: number,
-    _axis: number,
-  ) {
-    const center = x + side * (w / 2);
-    this.wall(center, z, w, h, d, mat);
-  }
-
-  private cutSideOpening(
-    z: number,
-    d: number,
-    h: number,
-    t: number,
-    mat: THREE.Material,
-    x: number,
-    side: number,
-  ) {
-    const center = z + side * (d / 2);
-    this.wall(x, center, t, h, d, mat);
   }
 
   private corridor(
@@ -267,21 +243,22 @@ export class MineInstance {
     this.room({ x: 0, z: 0, w: 14, d: 14 }, m, { south: true });
     this.corridor(0, -9, 7, 10, m);
 
-    this.room({ x: -7, z: -22, w: 20, d: 18 }, m, { east: true, south: true });
-    this.corridor(5, -35, 10, 9, m);
+    this.room({ x: -7, z: -22, w: 20, d: 18 }, m, { north: true, south: true });
+    this.corridor(-7, -35, 6, 8, m);
 
-    this.room({ x: 0, z: -47, w: 12, d: 20 }, m, { north: true, south: true, west: true });
-    this.corridor(0, -61, 7, 8, m);
+    this.room({ x: 0, z: -47, w: 12, d: 20 }, m, { north: true, south: true, east: true });
+    this.corridor(2, -59, 8, 6, m);
 
-    this.room({ x: 8, z: -72, w: 28, d: 22 }, m, { west: true, south: true });
-    this.corridor(0, -89, 10, 8, m);
+    this.room({ x: 8, z: -72, w: 28, d: 22 }, m, { north: true, south: true, west: true });
+    this.corridor(-9, -72, 6, 6, m);
+    this.corridor(10, -49, 9, 6, m);
 
-    this.room({ x: 0, z: -103, w: 30, d: 24 }, m, { north: true, south: true, east: true });
-    this.corridor(0, -122, 9, 12, m);
+    this.room({ x: 0, z: -103, w: 30, d: 24 }, m, { north: true, south: true });
+    this.corridor(4, -87, 8, 8, m);
 
     this.room({ x: 0, z: -140, w: 24, d: 20 }, m, { north: true });
 
-    // Small side galleries make the silhouette match the concept's branching cutaway.
+    // Side chambers echo the concept art's offset cutaway silhouette.
     this.room({ x: -18, z: -72, w: 12, d: 14 }, m, { east: true });
     this.room({ x: 20, z: -49, w: 11, d: 13 }, m, { west: true });
 
