@@ -1,12 +1,15 @@
 import { test, expect, type Page } from '@playwright/test';
 
+// CI renders in software on a shared runner: PW_SLOW stretches waits and timeouts.
+const SLOW = Number(process.env.PW_SLOW ?? '1');
+
 // Phase 2: the crypt instance, the labyrinth, hand-drawn maps, XP and saving.
 
 async function boot(page: Page, query = '?test') {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/' + query);
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
   return errors;
 }
 
@@ -117,7 +120,7 @@ test('hand-drawn maps and progress survive a reload', async ({ page }) => {
     g.save();
   });
   await page.reload();
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
   const res = await page.evaluate(() => {
     const g = (window as any).__game;
     const m = g.realm.maps[g.realm.mapKey(1)];

@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 
+// CI renders in software on a shared runner: PW_SLOW stretches waits and timeouts.
+const SLOW = Number(process.env.PW_SLOW ?? '1');
+
 // World Expansion phase 5, the rest of Port Aurelle: the Academy's ranks,
 // sparring ladder, lore examination and dormitory, and the Quiet Hands' den
 // with its black market.
@@ -8,12 +11,12 @@ async function boot(page: Page, query = '?test') {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/' + query);
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
   return errors;
 }
 
 test('a Squire climbs the ladder, passes Mell\'s examination and rises to Knight-Aspirant', async ({ page }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(300_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
@@ -84,7 +87,7 @@ test('a Squire climbs the ladder, passes Mell\'s examination and rises to Knight
 });
 
 test('the Quiet Hands: a hidden trapdoor, Aldric\'s debt, and the black market', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;

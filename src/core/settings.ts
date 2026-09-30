@@ -14,6 +14,8 @@ export interface QualitySettings {
   grassBlades: number;
   maxDynamicLights: number;
   particleScale: number;
+  /** sun shadows (off only for software-rendered test runs) */
+  shadows?: boolean;
 }
 
 export const PRESETS: Record<Quality, QualitySettings> = {
@@ -65,6 +67,10 @@ const explicitQuality = params.has('quality') || (() => {
 })();
 export const SOFTWARE_GL = !explicitQuality && detectSoftwareGL();
 export const quality: Quality = SOFTWARE_GL ? 'low' : readQuality();
-export const Q: QualitySettings = SOFTWARE_GL
-  ? { ...PRESETS.low, pixelRatio: 0.5, shadowMapSize: 1024, grassCount: 3000, grassBlades: 12000, particleScale: 0.4 }
-  : PRESETS[quality];
+const LEAN: QualitySettings = { ...PRESETS.low, pixelRatio: 0.5, shadowMapSize: 1024, grassCount: 3000, grassBlades: 12000, particleScale: 0.4 };
+// Automated tests on a software rasteriser check the world, not the picture:
+// draw it as cheaply as possible so the simulation keeps real time.
+const TEST_LEAN: QualitySettings = { ...LEAN, pixelRatio: 0.25, shadows: false, grassCount: 600, grassBlades: 2000, particleScale: 0.2 };
+export const Q: QualitySettings = SOFTWARE_GL ? (TEST_MODE ? TEST_LEAN : LEAN) : PRESETS[quality];
+/** an automated test run on a software rasteriser (headless CI) */
+export const LEAN_TEST = SOFTWARE_GL && TEST_MODE;

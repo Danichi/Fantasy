@@ -1,3 +1,4 @@
+import { LEAN_TEST } from '../core/settings';
 import * as THREE from 'three';
 import { buildCharacter, type Look, type BuiltCharacter } from './charBuilder';
 import { heightAt } from '../world/terrainHeight';
@@ -508,7 +509,8 @@ export class NpcManager {
       }
     }
     // Only when nobody nearby is waiting does a distant look get built (for its sprite).
-    if (farLook && !wanting.some((w) => !w.actor) && this.building.size === 0) void this.buildActor(lookKey(farLook), farLook);
+    // (Headless software-GL test runs skip far sprites: they cost seconds a bake and nobody sees them.)
+    if (farLook && !LEAN_TEST && !wanting.some((w) => !w.actor) && this.building.size === 0) void this.buildActor(lookKey(farLook), farLook);
   }
 
   private finishSprites(n: number) {

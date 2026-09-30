@@ -1,12 +1,15 @@
 import { test, expect, type Page } from '@playwright/test';
 
+// CI renders in software on a shared runner: PW_SLOW stretches waits and timeouts.
+const SLOW = Number(process.env.PW_SLOW ?? '1');
+
 // World Expansion phase 3: Elder Glen's farm life, quests and livestock.
 
 async function boot(page: Page, query = '?test') {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/' + query);
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
   return errors;
 }
 
@@ -49,7 +52,7 @@ test('the player plot tills, plants, waters, grows on the clock and harvests', a
 });
 
 test('side quests run from offer to reward: herbs, crows and the scarecrow, granary rats', async ({ page }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(180_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
@@ -116,7 +119,7 @@ test('side quests run from offer to reward: herbs, crows and the scarecrow, gran
 });
 
 test('quests, the plot and ore nodes persist across a reload', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   await page.addInitScript(() => {
     if (sessionStorage.getItem('seeded')) return;
     sessionStorage.setItem('seeded', '1');
@@ -132,7 +135,7 @@ test('quests, the plot and ore nodes persist across a reload', async ({ page }) 
     g.save();
   });
   await page.reload();
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
   const res = await page.evaluate(() => {
     const g = (window as any).__game;
     const planks = g.player.equip.items.filter((i: any) => i.def.id === 'planks').reduce((n: number, i: any) => n + i.qty, 0);
@@ -146,7 +149,7 @@ test('quests, the plot and ore nodes persist across a reload', async ({ page }) 
 });
 
 test('livestock is pooled near the player, and Clover follows the player home', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;

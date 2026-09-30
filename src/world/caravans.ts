@@ -197,6 +197,7 @@ export class Caravans {
         this.wagons.delete(c.id);
         for (const r of this.riders.get(c.id) ?? []) r.dispose();
         this.riders.delete(c.id);
+        w = undefined;
       }
       if (!w) continue;
       // Caravans pause when the player stands right in front of them.

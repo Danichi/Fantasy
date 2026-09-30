@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 60 # the suite covers the whole world now (40+ browser tests)
     env:
       PLAYWRIGHT_WORKERS: ${{ matrix.workers }}
+      # Software-rendered browsers sharing the runner's cores: stretch boot waits and timeouts.
+      PW_SLOW: ${{ matrix.workers == 8 && '3' || '1.5' }}
 
     steps:
       - name: Checkout

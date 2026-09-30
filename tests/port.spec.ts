@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 
+// CI renders in software on a shared runner: PW_SLOW stretches waits and timeouts.
+const SLOW = Number(process.env.PW_SLOW ?? '1');
+
 // World Expansion phase 5: Port Aurelle, fishing, swimming, the Knight's
 // Academy trials and the dwarven expedition.
 
@@ -7,12 +10,12 @@ async function boot(page: Page, query = '?test') {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/' + query);
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
   return errors;
 }
 
 test('Port Aurelle stands on its peninsula, populated, within the draw-call budget', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
@@ -38,7 +41,7 @@ test('Port Aurelle stands on its peninsula, populated, within the draw-call budg
 });
 
 test('fishing: cast, strike, reel, sell the catch by weight', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
@@ -53,16 +56,17 @@ test('fishing: cast, strike, reel, sell the catch by weight', async ({ page }) =
     await new Promise((r) => setTimeout(r, 900));
     key('KeyE'); // cast
     const castPhase = f.phase;
-    for (let i = 0; i < 80 && f.phase !== 'bite'; i++) await new Promise((r) => setTimeout(r, 200));
+    // Drive the minigame on its own clock (a synchronous loop: no frames run in
+    // between), so it plays the same however slowly the page renders.
+    for (let i = 0; i < 4000 && f.phase !== 'bite'; i++) f.update(0.05);
     const bit = f.phase === 'bite';
     key('KeyE'); // strike
     // Reel in bursts, easing off when the line strains.
-    for (let i = 0; i < 200 && f.phase === 'reel'; i++) {
-      const strained = f['tension'] > 0.6;
-      key('KeyE', strained ? 'keyup' : 'keydown');
-      await new Promise((r) => setTimeout(r, 100));
+    for (let i = 0; i < 4000 && f.phase === 'reel'; i++) {
+      f['reeling'] = f['tension'] < 0.6;
+      f.update(0.05);
     }
-    key('KeyE', 'keyup');
+    f['reeling'] = false;
     const landed = f.phase === 'done';
     const held = Object.values(f.held as Record<string, number>).reduce((a, b) => a + b, 0);
     const gold0 = g.player.prog.gold;
@@ -78,7 +82,7 @@ test('fishing: cast, strike, reel, sell the catch by weight', async ({ page }) =
 });
 
 test('the Academy entrance trial is a real, non-lethal duel that can be won', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
@@ -108,7 +112,7 @@ test('the Academy entrance trial is a real, non-lethal duel that can be won', as
 });
 
 test('swimming: deep water floats you and drains stamina', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
@@ -129,7 +133,7 @@ test('swimming: deep water floats you and drains stamina', async ({ page }) => {
 });
 
 test('the dwarven expedition sails on its day and the quest survives a reload', async ({ page }) => {
-  test.setTimeout(420_000);
+  test.setTimeout(420_000 * SLOW);
   await page.addInitScript(() => {
     if (sessionStorage.getItem('seeded')) return;
     sessionStorage.setItem('seeded', '1');
@@ -153,7 +157,7 @@ test('the dwarven expedition sails on its day and the quest survives a reload', 
   expect(before.stage).toBe(1);
   expect(before.day).toBeGreaterThanOrEqual(before.today + 3);
   await page.reload();
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
   const after = await page.evaluate(async () => {
     const g = (window as any).__game;
     const T = g.THREE;

@@ -31,7 +31,7 @@ export class Renderer {
     // Checking every shader compile blocks on the GPU driver (seconds at boot and
     // a hitch whenever a new material appears); only do it when debugging.
     r.debug.checkShaderErrors = new URLSearchParams(location.search).has('debug');
-    r.shadowMap.enabled = true;
+    r.shadowMap.enabled = Q.shadows !== false;
     r.shadowMap.type = THREE.PCFShadowMap;
     // Shadows refresh every other frame (see render()); at 60fps that's invisible.
     r.shadowMap.autoUpdate = false;

@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 
+// CI renders in software on a shared runner: PW_SLOW stretches waits and timeouts.
+const SLOW = Number(process.env.PW_SLOW ?? '1');
+
 // End-to-end checks driven through the window.__game debug hook (?test mode:
 // no title overlay, no slime spawner, pointer lock not required).
 
@@ -8,7 +11,7 @@ async function boot(page: Page) {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   await page.goto('/?test');
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
   return errors;
 }
 
@@ -61,14 +64,15 @@ test('parry staggers an attacking beast', async ({ page }) => {
     void warm;
     const s = g.slimes.spawn('green', p.pos.x, p.pos.z - 2.5);
     p.yaw = Math.PI;
-    // Wait for the wolf to start its bite (it lands 0.33 s in), then parry.
-    for (let i = 0; i < 300 && s.state !== 'attack'; i++) await new Promise((r) => setTimeout(r, 10));
-    // Its bite lands 0.33 s into the attack; parry just before, on the beast's own clock.
-    for (let i = 0; i < 100 && s.t < 0.2; i++) await new Promise((r) => requestAnimationFrame(r));
+    // Step the simulation by hand so the parry lands on the beast's own clock
+    // however slowly frames are drawn (CI renders in software).
+    for (let i = 0; i < 600 && s.state !== 'attack'; i++) g.stepSim();
+    // Its bite lands 0.33 s into the attack; parry just before.
+    for (let i = 0; i < 60 && s.t < 0.2; i++) g.stepSim();
     g.input.press('KeyF');
-    await new Promise((r) => setTimeout(r, 30));
+    g.stepSim(2);
     g.input.release('KeyF');
-    for (let i = 0; i < 60 && s.state === 'attack'; i++) await new Promise((r) => setTimeout(r, 10));
+    for (let i = 0; i < 60 && s.state === 'attack'; i++) g.stepSim();
     return { state: s.state, stunned: s.stunned, hp: p.hp, max: p.maxHp };
   });
   expect(res.state).toBe('hurt');

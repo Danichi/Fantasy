@@ -14,7 +14,7 @@ import { loadWorldMap } from './world/worldMap';
 import { Input } from './core/input';
 import { Player } from './player/player';
 import { ThirdPersonCamera } from './player/camera';
-import { DEBUG, TEST_MODE } from './core/settings';
+import { DEBUG, TEST_MODE, LEAN_TEST } from './core/settings';
 import { setupLoadout } from './items/loadout';
 import { FX } from './fx/particles';
 import { BeastSpawner } from './enemies/beastSpawner';
@@ -849,16 +849,70 @@ async function boot() {
 
   let acc = 0;
   let last = performance.now();
+  // Test runs on a software rasteriser (headless CI) can stall for seconds while
+  // the GPU process draws, and the tests measure the world in real seconds.
+  // There, draw only a few frames a second and let the simulation catch up
+  // across long frames instead of slowing down.
+  const CATCH_UP = LEAN_TEST;
+  const MAX_FRAME_MS = CATCH_UP ? 8000 : 100;
+  const MAX_STEPS = CATCH_UP ? 480 : 5;
+  let lastDraw = -1e9;
   let fpsAcc = 0, fpsFrames = 0;
   const renderPos = new THREE.Vector3();
   const slotActions = ['slot1', 'slot2', 'slot3', 'slot4', 'slot5', 'slot6', 'slot7', 'slot8'] as const;
 
+  /** One fixed simulation step (tests can also drive it directly: __game.stepSim). */
+  const simStep = () => {
+    simSteps++;
+    if (input.wasPressed('inventory')) inv.toggle();
+    if (input.wasPressed('help')) overlays.toggleHelp();
+    if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
+    if (input.wasPressed('map')) {
+      if (realm.mode === 'dungeon') mapUI.toggle();
+      else worldMap.toggle();
+    }
+    slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
+    player.update(STEP, input, cam);
+    if (realm.mode === 'overworld') {
+      slimes.update(STEP, player);
+      frontier.update(STEP);
+      encounters.update(STEP, time.hour, weather.p.rain);
+      duel.update(STEP);
+    }
+    realm.update(STEP);
+    rewards.update(STEP, player.center);
+    // Interaction: nearest enabled thing in reach.
+    let best: (typeof realm.interactables)[number] | null = null;
+    let bestD = Infinity;
+    if (!player.dead && !player.act) {
+      for (const it of realm.interactables) {
+        if (!it.enabled()) continue;
+        const d = it.pos.distanceTo(player.pos.clone().setY(it.pos.y));
+        if (d < it.radius && d < bestD) {
+          bestD = d;
+          best = it;
+        }
+      }
+    }
+    hud.prompt(best ? best.label() : null);
+    if (dialogue.open) hud.prompt(null);
+    else if (best && input.wasPressed('interact')) best.action();
+    spells.update(STEP);
+    world.update(STEP);
+    river.update(STEP);
+    fx.update(STEP, r.renderer.domElement.height, r.camera.fov);
+    physics.step(STEP);
+    input.endStep();
+  };
   const perf = { sim: 0, render: 0, frame: 0 };
   const frame = (now: number) => {
+    // Ask for the next frame first: an exception in one system is reported but
+    // does not stop the game loop.
+    requestAnimationFrame(frame);
     const t0 = performance.now();
     // rAF timestamps can precede `last` after a long stall (shader compiles), so
     // clamp at 0 as well as capping big gaps.
-    const dtMs = Math.max(0, Math.min(100, now - last));
+    const dtMs = Math.max(0, Math.min(MAX_FRAME_MS, now - last));
     last = now;
     const dt = dtMs / 1000;
     music.setZone(realm.mode === 'dungeon' ? 'crypt' : 'village');
@@ -872,51 +926,12 @@ async function boot() {
     acc += simDt;
     let steps = 0;
     if (paused || overlayUp || mapUI.open || worldMap.open) acc = 0;
-    while (acc >= STEP && steps < 5) {
+    while (acc >= STEP && steps < MAX_STEPS) {
       acc -= STEP;
       steps++;
-      simSteps++;
-      if (input.wasPressed('inventory')) inv.toggle();
-      if (input.wasPressed('help')) overlays.toggleHelp();
-      if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
-      if (input.wasPressed('map')) {
-        if (realm.mode === 'dungeon') mapUI.toggle();
-        else worldMap.toggle();
-      }
-      slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
-      player.update(STEP, input, cam);
-      if (realm.mode === 'overworld') {
-        slimes.update(STEP, player);
-        frontier.update(STEP);
-        encounters.update(STEP, time.hour, weather.p.rain);
-        duel.update(STEP);
-      }
-      realm.update(STEP);
-      rewards.update(STEP, player.center);
-      // Interaction: nearest enabled thing in reach.
-      let best: (typeof realm.interactables)[number] | null = null;
-      let bestD = Infinity;
-      if (!player.dead && !player.act) {
-        for (const it of realm.interactables) {
-          if (!it.enabled()) continue;
-          const d = it.pos.distanceTo(player.pos.clone().setY(it.pos.y));
-          if (d < it.radius && d < bestD) {
-            bestD = d;
-            best = it;
-          }
-        }
-      }
-      hud.prompt(best ? best.label() : null);
-      if (dialogue.open) hud.prompt(null);
-      else if (best && input.wasPressed('interact')) best.action();
-      spells.update(STEP);
-      world.update(STEP);
-      river.update(STEP);
-      fx.update(STEP, r.renderer.domElement.height, r.camera.fov);
-      physics.step(STEP);
-      input.endStep();
+      simStep();
     }
-    if (steps >= 5) acc = 0;
+    if (steps >= MAX_STEPS) acc = 0;
     const t1 = performance.now();
 
     const alpha = acc / STEP;
@@ -993,8 +1008,11 @@ async function boot() {
     if (realm.mode === 'overworld') town.update(dt, player.pos);
     physDebug?.update();
     r.followShadow(renderPos);
-    r.render(dt);
-    pumpIcons(inv.open ? 12 : 3);
+    if (!CATCH_UP || now - lastDraw > 250) {
+      lastDraw = now;
+      r.render(dt);
+      pumpIcons(inv.open ? 12 : 3);
+    }
     perfOverlay?.update(dtMs);
     if (inv.open) preview.render();
     const t2 = performance.now();
@@ -1010,7 +1028,6 @@ async function boot() {
       fpsAcc = 0;
       fpsFrames = 0;
     }
-    requestAnimationFrame(frame);
   };
   await Promise.all([town.ready, loadArmourKit()]);
   mark('npcs');
@@ -1033,7 +1050,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

@@ -1,12 +1,15 @@
 import { test, expect, type Page } from '@playwright/test';
 
+// CI renders in software on a shared runner: PW_SLOW stretches waits and timeouts.
+const SLOW = Number(process.env.PW_SLOW ?? '1');
+
 // World Expansion phase 1: the streamed continent, exploration and saves.
 
 async function boot(page: Page, query = '?test') {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/' + query);
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
   return errors;
 }
 
@@ -35,7 +38,7 @@ test('Elder Glen keeps its authored ground and the world is deterministic', asyn
 });
 
 test('terrain and trees stream in and out without leaking', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
@@ -145,7 +148,7 @@ test('a v5 save migrates to v6 and exploration persists across a reload', async 
   expect(migrated.hasWorld).toBe(true);
   expect(migrated.port).toBe('visited');
   await page.reload();
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
   const reloaded = await page.evaluate(() => (window as any).__game.discovery.places.get('portAurelle'));
   expect(reloaded).toBe('visited');
 });
@@ -155,9 +158,12 @@ test('the clock moves the sun, night lights the town, and weather changes the sk
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    // Count drawn frames, not milliseconds: a software-rendered frame can take seconds.
+    const frames = async (n: number) => { for (let i = 0; i < n; i++) await new Promise((r) => requestAnimationFrame(r)); };
     const noon = { y: g.time.state.sunDir.y, sun: g.r.sun.intensity, night: g.time.state.night };
     g.time.skipTo(23);
     await settle(400);
+    await frames(4);
     const night = { y: g.time.state.sunDir.y, sun: g.r.sun.intensity, night: g.time.state.night, glass: g.world.mats.glass.emissiveIntensity };
     g.time.skipTo(10);
     g.weather.forced = 'storm';
@@ -178,7 +184,7 @@ test('the clock moves the sun, night lights the town, and weather changes the sk
 });
 
 test('townsfolk follow their schedules, appear near the player and can be talked to', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   const errors = await boot(page, '?test&hour=12.4');
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
@@ -206,7 +212,9 @@ test('townsfolk follow their schedules, appear near the player and can be talked
     g.time.skipTo(2);
     g.player.teleport(new T.Vector3(0, heightAt(0, 4) + 0.3, 4));
     await settle(1500);
-    const hiddenAtNight = g.npcs.npcs.filter((n: any) => n.hidden).length / g.npcs.npcs.length;
+    // (Elder Glen's own residents: other towns are only simulated while you are there.)
+    const glen = g.npcs.npcs.filter((n: any) => n.rec.settlement === 'elderGlen');
+    const hiddenAtNight = glen.filter((n: any) => n.hidden).length / glen.length;
     return { nearPlaza, active, spoke, activeFar, hiddenAtNight, total: g.npcs.npcs.length };
   });
   expect(res.total).toBeGreaterThan(50);

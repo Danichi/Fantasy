@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 
+// CI renders in software on a shared runner: PW_SLOW stretches waits and timeouts.
+const SLOW = Number(process.env.PW_SLOW ?? '1');
+
 // Rough edges of phases 3-5: Millbrook Brook and its bridge, the waystones,
 // boat hire in the harbour, and small river life (ducks).
 
@@ -7,12 +10,12 @@ async function boot(page: Page, query = '?test') {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/' + query);
-  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 });
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, { timeout: 180_000 * SLOW });
   return errors;
 }
 
 test('Millbrook Brook runs in a carved bed under a bridge you can walk over', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
@@ -34,7 +37,7 @@ test('Millbrook Brook runs in a carved bed under a bridge you can walk over', as
 });
 
 test('waystones attune by touch and carry you once the Sunwheel is understood', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
@@ -66,7 +69,7 @@ test('waystones attune by touch and carry you once the Sunwheel is understood', 
 });
 
 test('boat hire: row out of the wharf, then step ashore', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
@@ -101,7 +104,7 @@ test('boat hire: row out of the wharf, then step ashore', async ({ page }) => {
 });
 
 test('ducks paddle the Elder Glen river and keep to the water', async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(240_000 * SLOW);
   const errors = await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
