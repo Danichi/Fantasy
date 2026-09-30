@@ -30,7 +30,7 @@ export const ELDER_GLEN_QUESTS: QuestDef[] = [
     stages: [
       { note: 'Find Clover in the western woods.', hook: 'heifer:lost', objectives: [{ type: 'reach', at: [HEIFER_AT.x, HEIFER_AT.z], radius: 9, text: 'Find Clover in the western woods' }] },
       { note: 'Lead Clover back to Tom\'s pasture.', hook: 'heifer:follow', objectives: [{ type: 'signal', id: 'heifer-home', text: 'Lead Clover back into the cow pasture', at: [-150, 60] }] },
-      { note: 'Tell Tom that Clover is home.', objectives: [{ type: 'talk', npc: 'hale', text: 'Tell Tom Hale that Clover is home', say: 'There she is! Not a scratch on her, the silly thing. You\'ve a way with animals, friend.' }] },
+      { note: 'Tell Tom that Clover is home.', hook: 'heifer:home', objectives: [{ type: 'talk', npc: 'hale', text: 'Tell Tom Hale that Clover is home', say: 'There she is! Not a scratch on her, the silly thing. You\'ve a way with animals, friend.' }] },
     ],
     done: 'Here — fresh milk from her mother, and coin besides. If you ever want to help on the farm, the cows could use milking every morning.',
     rewards: { gold: 60, xp: 80, items: [['milk', 2]], guildRep: 10 },
@@ -204,6 +204,16 @@ export function setupElderGlenQuests(w: GlenQuestWorld) {
     if (!heifer) heifer = w.fauna.addOne('cow', vec(HEIFER_AT.x, HEIFER_AT.z), { center: vec(HEIFER_AT.x, HEIFER_AT.z), radius: 6 }, 0.82);
     heifer.follow = w.player.pos;
     w.toast('Clover lows and starts to follow you.');
+  });
+  // Home: she stops following and grazes with the herd from now on.
+  const settle = () => {
+    if (!heifer) heifer = w.fauna.addOne('cow', vec(w.cowRange.center.x, w.cowRange.center.z), w.cowRange, 0.82);
+    heifer.follow = null;
+    heifer.range = w.cowRange;
+  };
+  q.hooks.set('heifer:home', () => {
+    settle();
+    w.toast('Clover wanders off to graze with the herd.');
   });
   q.hooks.set('missing-heifer:done', () => {
     if (heifer) {
