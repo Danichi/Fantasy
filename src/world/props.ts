@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { registerDoor, type Door } from './doors';
+import { paintedMaterials } from '../render/painted';
+import { buildVillage, type PlacedHouse, type Village } from './village';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { heightAt, PALISADE_R, PLAZA_CENTER, PLAZA_R, GATES } from './terrain';
@@ -163,26 +166,24 @@ export interface World {
   crypt: ReturnType<typeof buildCrypt>;
   mineEntrance: ReturnType<typeof buildMineEntrance>;
   mineDoor: THREE.Vector3;
+  village: Village;
+  /** the painted material set, shared with other settlements */
+  mats: WorldMats;
   update(dt: number): void;
 }
 
-export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRenderer, fx: FX): Promise<World> {
-  const L = new THREE.TextureLoader();
+/** keepClear: points the village must leave open (NPCs, guild, interactables). */
+export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRenderer, fx: FX, keepClear: THREE.Vector2[] = []): Promise<World> {
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  // Painted surfaces (docs/ART-DIRECTION.md): no photographic textures in town.
   const m: WorldMats = {
-    stone: pbr(L, 'castle_brick_07', { color: 0xb0aaa0 }, aniso),
-    bridgeStone: pbr(L, 'rock_face_03', { color: 0xb4b2ac }, aniso, 0.85),
-    plaster: pbr(L, 'white_plaster_rough_01', { color: 0xe8dcc4 }, aniso),
-    timber: pbr(L, 'weathered_peeling_timber', { color: 0x5a4636 }, aniso),
-    slate: pbr(L, 'roof_slates_02', { color: 0x8a8a92 }, aniso),
-    thatch: pbr(L, 'thatch_roof_angled', { color: 0xc9b58a }, aniso),
-    planks: pbr(L, 'wood_planks_grey', { color: 0x8a6a4a }, aniso),
-    glass: new THREE.MeshStandardMaterial({ color: 0x3a2a10, emissive: 0xffa040, emissiveIntensity: 1.6, roughness: 0.3 }),
-    bark: pbr(L, 'bark_brown_02', { color: 0x9a8a78 }, aniso),
+    ...paintedMaterials(aniso),
+    // Windows read dark by day with only a faint warm glow.
+    glass: new THREE.MeshStandardMaterial({ color: 0x2c3440, emissive: 0xffa040, emissiveIntensity: 0.28, roughness: 0.25, metalness: 0.2 }),
   };
 
   // ---- houses along the northern street -----------------------------------
-  const houses: { x: number; z: number; spec: Parameters<typeof buildHouse>[0]; rot: number }[] = [
+  const houses: { x: number; z: number; spec: Parameters<typeof buildHouse>[0]; rot: number; door?: Partial<Door> }[] = [
     { x: -26, z: -38, rot: 0.08, spec: { w: 7, d: 6, floors: 2, roof: 'slate', seed: 1 } },
     { x: -15, z: -40, rot: -0.03, spec: { w: 6, d: 6.5, floors: 1, roof: 'thatch', seed: 2 } },
     { x: -5, z: -41, rot: 0.02, spec: { w: 8, d: 6, floors: 2, roof: 'slate', seed: 3 } },
@@ -190,15 +191,45 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     { x: 19, z: -39, rot: 0.05, spec: { w: 7, d: 6.5, floors: 1, roof: 'slate', seed: 5 } },
     { x: 30, z: -35, rot: -0.35, spec: { w: 7.5, d: 6, floors: 2, roof: 'slate', seed: 6 } },
     { x: -35, z: -30, rot: 0.5, spec: { w: 6, d: 5.5, floors: 1, roof: 'thatch', seed: 7 } },
+    { x: -72, z: -72, rot: 0.25, spec: { w: 8, d: 7, floors: 2, roof: 'slate', seed: 21 } },
+    { x: -54, z: -74, rot: -0.1, spec: { w: 7, d: 6, floors: 1, roof: 'thatch', seed: 22 } },
+    { x: -30, z: -72, rot: 0.05, spec: { w: 9, d: 7, floors: 2, roof: 'slate', seed: 23 } },
+    { x: 5, z: -72, rot: -0.05, spec: { w: 7, d: 6.5, floors: 1, roof: 'thatch', seed: 24 } },
+    { x: 48, z: -68, rot: 0.18, spec: { w: 8, d: 7, floors: 2, roof: 'slate', seed: 25 } },
+    { x: 70, z: -52, rot: -0.18, spec: { w: 7, d: 6, floors: 1, roof: 'thatch', seed: 26 } },
+    { x: -72, z: -28, rot: 0.28, spec: { w: 7, d: 6, floors: 1, roof: 'thatch', seed: 27 } },
+    { x: 72, z: -25, rot: -0.22, spec: { w: 8, d: 6.5, floors: 2, roof: 'slate', seed: 28 } },
+    { x: -74, z: 5, rot: 0.02, spec: { w: 9, d: 7, floors: 2, roof: 'slate', seed: 29 } },
+    { x: 68, z: 10, rot: -0.12, spec: { w: 7, d: 6, floors: 1, roof: 'thatch', seed: 30 } },
+    { x: -70, z: 44, rot: 0.14, spec: { w: 7, d: 6, floors: 2, roof: 'slate', seed: 31 } },
+    { x: -45, z: 58, rot: -0.08, spec: { w: 8, d: 7, floors: 1, roof: 'thatch', seed: 32 } },
+    { x: -5, z: 62, rot: 0.08, spec: { w: 9, d: 7, floors: 2, roof: 'slate', seed: 33 } },
+    { x: 35, z: 62, rot: -0.12, spec: { w: 8, d: 6.5, floors: 1, roof: 'thatch', seed: 34 } },
+    { x: 67, z: 52, rot: 0.22, spec: { w: 7, d: 6, floors: 2, roof: 'slate', seed: 35 } },
+    // Commerce district / civic buildings.
+    { x: 22, z: -12, rot: 0, spec: { w: 16, d: 12, floors: 2, roof: 'slate', seed: 90 }, door: { kind: 'guild', name: 'the guild hall' } },
+    { x: -24, z: 14, rot: 0.06, spec: { w: 12, d: 9, floors: 2, roof: 'slate', seed: 91 }, door: { kind: 'tavern', name: 'the Wayfarer Inn', keeper: 'innkeeper' } },
+    { x: -5, z: 29, rot: -0.04, spec: { w: 11, d: 8, floors: 1, roof: 'thatch', seed: 92 }, door: { kind: 'shop', keeper: 'baker' } },
+    { x: 27, z: 25, rot: 0.05, spec: { w: 11, d: 8, floors: 1, roof: 'slate', seed: 93 }, door: { kind: 'smithy', name: 'Fröst Forge', keeper: 'froest' } },
+    { x: 48, z: 4, rot: -0.06, spec: { w: 10, d: 8, floors: 1, roof: 'thatch', seed: 94 }, door: { kind: 'shop', keeper: 'apothecary' } },
+    { x: -48, z: 4, rot: 0.08, spec: { w: 10, d: 8, floors: 1, roof: 'thatch', seed: 95 }, door: { kind: 'shop', keeper: 'tailor' } },
+    { x: -44, z: 25, rot: -0.04, spec: { w: 10, d: 8, floors: 2, roof: 'slate', seed: 96 }, door: { kind: 'shop', keeper: 'carpenter' } },
+    { x: 48, z: 30, rot: 0.07, spec: { w: 10, d: 8, floors: 1, roof: 'thatch', seed: 97 }, door: { kind: 'shop', keeper: 'arcanist' } },
+    { x: 48, z: -35, rot: -0.1, spec: { w: 9, d: 7, floors: 1, roof: 'slate', seed: 98 }, door: { name: 'the stable house' } },
   ];
+  const placed: PlacedHouse[] = [];
   for (const h of houses) {
-    const { group, half } = buildHouse(h.spec, m);
+    // Roofs: mostly terracotta, some slate-blue, thatch where specified.
+    if (h.spec.roof === 'slate' && h.spec.seed % 3 !== 0) h.spec.roof = 'tile';
+    const { group, half, chimney, door } = buildHouse(h.spec, m);
+    placed.push({ x: h.x, z: h.z, rot: h.rot, half, chimney });
     // Sit on the lowest corner so the plinth never floats.
     let gy = Infinity;
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) gy = Math.min(gy, heightAt(h.x + sx * half.x, h.z + sz * half.z));
     group.position.set(h.x, gy, h.z);
     group.rotation.y = h.rot;
     scene.add(group);
+    registerDoor(group, door, h.spec, h.door);
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, h.rot, 0));
     physics.addBox(new THREE.Vector3(h.x, gy + half.y, h.z), half, q);
   }
@@ -206,6 +237,34 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
   buildBridge(scene, m);
   const crypt = buildCrypt(scene, m, fx);
   const mineEntrance = buildMineEntrance(scene, m, fx);
+  const village = buildVillage(scene, m, fx, placed, keepClear);
+
+  // Large civic square and shopfront signs. These buildings make the starting
+  // area read as a proper frontier town rather than a training camp.
+  const sign = (text: string, x: number, z: number, color: string, w = 4.2) => {
+    const c = document.createElement('canvas');
+    c.width = 320; c.height = 72;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#f5e8c9'; g.fillRect(0, 0, c.width, c.height);
+    g.strokeStyle = '#8b6336'; g.lineWidth = 8; g.strokeRect(4, 4, c.width - 8, c.height - 8);
+    g.fillStyle = color; g.font = '700 26px Cinzel, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, c.width / 2, c.height / 2);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, 1.0), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 }));
+    mesh.position.set(x, heightAt(x, z) + 2.7, z);
+    mesh.rotation.y = Math.PI;
+    mesh.castShadow = true;
+    scene.add(mesh);
+  };
+  sign("ADVENTURER'S GUILD", 22, -18, '#704d1f', 6.8);
+  sign('THE WAYFARER INN', -24, 8, '#6b4b3b', 5.2);
+  sign('FRÖST FORGE', 27, 19, '#5d6870', 4.4);
+  sign('MOONGLASS APOTHECARY', 48, -2, '#2f7462', 5.8);
+  sign('SUNLIT BAKERY', -5, 23, '#8a5b27', 4.8);
+  sign('THREAD & HIDE', -48, 1, '#6f4777', 4.4);
+  sign('ARCANE EMPORIUM', 48, 26, '#4e5f8f', 4.9);
+  sign('WESTERN CARPENTRY', -44, 21, '#6b5033', 5.0);
+  sign('TRAVELER STABLES', 48, -40, '#5e5135', 5.2);
 
   // ---- palisade with three open gates -------------------------------------------
   const logGeo = (() => {
@@ -393,9 +452,12 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     crypt,
     mineEntrance,
     mineDoor: mineEntrance.door,
+    village,
+    mats: m,
     update(dt: number) {
       crypt.update(dt);
       mineEntrance.update(dt);
+      village.update(dt);
       for (const d of dummies) d.update(dt);
       fireT += dt;
       if (fireT > 0.03) {
