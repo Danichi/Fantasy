@@ -199,6 +199,7 @@ export function buildRoadFurniture(scene: THREE.Scene, m: WorldMats, talk: (who:
     [1874, 150, [['HOLLOW RIDGE (DANGER)', -0.1], ['PORT AURELLE', Math.PI / 2]]],
     [2204, 160, [['GULL RIDGE OVERLOOK', -0.3]]],
     [636, 104, [['CHAPEL OF THE DAWN', 0.2]]],
+    [-238, 90, [['THE GRAVEWOOD (DANGER)', -0.34], ['ELDER GLEN', Math.PI / 2 - 0.2]]],
   ];
   for (const [x, z, arms] of signs) {
     const y = heightAt(x, z);

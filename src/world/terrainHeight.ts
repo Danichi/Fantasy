@@ -33,6 +33,19 @@ export const RIVER_LEVEL = -0.6;
 export const CRYPT = new THREE.Vector2(0, -318); // entrance in the hillside
 /** The old quarry: a pit cut into the northern hills (floor level in metres). */
 export const QUARRY_PIT = { x: -180, z: -262, floor: 11.5 };
+/**
+ * The Gravewood: a dead, fog-bound wood south-west of Elder Glen with a walled
+ * graveyard at its heart (world/gravewood.ts). GRAVEYARD holds the interior
+ * half extents; the gate is in the north wall, where the trail arrives.
+ */
+export const GRAVEWOOD = new THREE.Vector2(-340, 330);
+export const GRAVEWOOD_R = 115;
+export const GRAVEYARD = { hx: 20, hz: 16 };
+/** Signed distance (m) from the graveyard's inner wall line: negative inside. */
+export function graveyardDist(x: number, z: number) {
+  return Math.max(Math.abs(x - GRAVEWOOD.x) - GRAVEYARD.hx, Math.abs(z - GRAVEWOOD.y) - GRAVEYARD.hz);
+}
+let graveyardH: number | null = null;
 export const BRIDGE = new THREE.Vector2(0, 6); // x filled in from the river below
 /** Port Aurelle (formerly Tremison): the great port city on the eastern coast. */
 export const PORT_AURELLE = new THREE.Vector2(2760, 150);
@@ -128,6 +141,14 @@ function localHeight(x: number, z: number) {
   const cd = Math.hypot(x - CRYPT.x, (z - CRYPT.y) * 0.8);
   // Rises behind the facade (which sits at CRYPT.y + 3), level in front of it.
   h += smoothstep(CRYPT.y + 0.5, CRYPT.y - 5, z) * smoothstep(26, 7, cd) * 9;
+  // The graveyard stands on a level pad (its walls and graves need flat ground).
+  {
+    const pad = smoothstep(16, 5, graveyardDist(x, z));
+    if (pad > 0) {
+      graveyardH ??= lowlandAt(GRAVEWOOD.x, GRAVEWOOD.y);
+      h = h * (1 - pad) + (graveyardH + (fbm(x / 9, z / 9, 2) - 0.5) * 0.35) * pad;
+    }
+  }
   // The old quarry: a flat-floored pit cut back into the hillside.
   {
     const qd = Math.hypot(x - QUARRY_PIT.x, (z - QUARRY_PIT.z) * 1.15);
@@ -321,6 +342,10 @@ export function splatAt(x: number, z: number): [number, number, number] {
   // River banks: mud and gravel.
   const dr = Math.abs(x - riverX(z));
   dirt = Math.max(dirt, smoothstep(17, 11, dr + (n - 0.5) * 4) * (1 - smoothstep(360, 420, Math.abs(z))));
+  // The graveyard's trodden earth, and bare patches under the dead wood.
+  dirt = Math.max(dirt, smoothstep(1.5, -1.5, graveyardDist(x, z) + (n - 0.5) * 3) * 0.85);
+  const gw = Math.hypot(x - GRAVEWOOD.x, z - GRAVEWOOD.y);
+  dirt = Math.max(dirt, smoothstep(GRAVEWOOD_R, GRAVEWOOD_R - 35, gw) * smoothstep(0.42, 0.58, fbm(x * 0.07 + 11, z * 0.07 - 4, 3)) * 0.9);
   // Worn patches scattered in the grass.
   dirt = Math.max(dirt, smoothstep(0.68, 0.76, fbm(x * 0.045 - 3, z * 0.045 + 5, 3)) * 0.8);
   dirt = clamp(dirt * (1 - stone), 0, 1);

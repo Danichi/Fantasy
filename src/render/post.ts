@@ -37,7 +37,7 @@ const FINAL_FRAG = /* glsl */ `
   uniform sampler2D tColor, tDepth, tBloom, tNoise;
   uniform mat4 uProjInv, uCamWorld;
   uniform vec3 uCamPos, uSunDir, uSunColor, uHazeColor;
-  uniform float uNear, uFar, uTime, uExposure, uBloom, uHaze, uClouds;
+  uniform float uNear, uFar, uTime, uExposure, uBloom, uHaze, uClouds, uMist;
   varying vec2 vUv;
 
   vec3 aces(vec3 x) {
@@ -86,11 +86,13 @@ const FINAL_FRAG = /* glsl */ `
       // Distant land also loses saturation into the haze (aerial perspective).
       float farL = dot(col, vec3(0.3, 0.55, 0.15));
       col = mix(col, vec3(farL), smoothstep(80.0, 900.0, dist) * 0.35);
-      col = mix(col, haze, clamp(f, 0.0, 0.92));
+      // uMist (the Gravewood's cursed fog) lets the haze swallow everything.
+      col = mix(col, haze, clamp(f, 0.0, mix(0.92, 0.995, uMist)));
     } else {
       // Soft horizon haze on the sky itself.
       float horizon = 1.0 - smoothstep(0.0, 0.22, ray.y);
       col = mix(col, haze * 1.05, horizon * 0.55);
+      col = mix(col, haze, uMist);
     }
 
     col += texture2D(tBloom, vUv).rgb * uBloom;
@@ -171,7 +173,7 @@ export class Post {
         uCamPos: { value: new THREE.Vector3() }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
         uSunColor: { value: new THREE.Color(1.0, 0.93, 0.78) }, uHazeColor: { value: new THREE.Color(0.72, 0.86, 0.96) },
         uNear: { value: 0.1 }, uFar: { value: 900 }, uTime: { value: 0 },
-        uExposure: { value: 1.0 }, uBloom: { value: 0.28 }, uHaze: { value: 0.00072 }, uClouds: { value: 0.85 },
+        uExposure: { value: 1.0 }, uBloom: { value: 0.28 }, uHaze: { value: 0.00072 }, uClouds: { value: 0.85 }, uMist: { value: 0 },
       },
       depthTest: false,
       depthWrite: false,

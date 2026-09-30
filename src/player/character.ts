@@ -57,9 +57,9 @@ export const shortBoneName = (n: string) => n.replace(BONE_PREFIX, '');
 
 /** Another body on the hero's skeleton (tools/rig-orcs.mjs), playing the hero's clips. */
 export interface BodyOptions {
-  /** absolute URL of a model skinned to the hero skeleton */
-  model: string;
-  /** standing height to normalise the model's bind pose to (metres) */
+  /** absolute URL of a model skinned to the hero skeleton (default: the hero's own) */
+  model?: string;
+  /** standing height to normalise the model's bind pose to (metres); 0 keeps the file's size */
   height?: number;
   /** load only these clips (keys from the manifest) */
   clips?: string[];
@@ -117,7 +117,7 @@ export class Character {
       for (const k of ['idle', 'walk', 'run']) clips[k] = pick(k) ? { file: override, name: pick(k), loop: true } : FALLBACK.clips[k];
       manifest = { ...FALLBACK, model: override, clips };
     }
-    if (body) manifest = { ...manifest, model: body.model, height: body.height ?? manifest.height, placeholderStyle: false };
+    if (body) manifest = { ...manifest, model: body.model ?? manifest.model, height: body.height ?? manifest.height, placeholderStyle: false };
     this.manifest = manifest;
 
     const get = (f: string) => loadShared(f.startsWith('/') ? f : base + f);
@@ -161,15 +161,19 @@ export class Character {
     this.rigFamily = detectRigFamily(this.bones.keys());
     this.rigProfile = RIG_PROFILES[this.rigFamily];
 
-    // Normalise height so gameplay distances are in real metres.
-    this.model.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(this.model);
-    const h = box.max.y - box.min.y;
-    const target = manifest.height ?? 1.8;
-    if (h > 0.01) this.model.scale.multiplyScalar(target / h);
-    this.model.updateMatrixWorld(true);
-    const box2 = new THREE.Box3().setFromObject(this.model);
-    this.model.position.y -= box2.min.y;
+    // Normalise height so gameplay distances are in real metres. A body
+    // rebound onto the hero's skeleton is already in hero metres (height 0):
+    // its rest pose may be a crouch, so its bounds say nothing about its size.
+    if (body?.height !== 0) {
+      this.model.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(this.model);
+      const h = box.max.y - box.min.y;
+      const target = manifest.height ?? 1.8;
+      if (h > 0.01) this.model.scale.multiplyScalar(target / h);
+      this.model.updateMatrixWorld(true);
+      const box2 = new THREE.Box3().setFromObject(this.model);
+      this.model.position.y -= box2.min.y;
+    }
 
     this.visual.add(this.model);
     this.root.add(this.visual);

@@ -7,13 +7,18 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { weld, simplify, dedup, prune, metalRough, textureCompress, flatten, join, compactPrimitive } from '@gltf-transform/functions';
-import { MeshoptSimplifier } from 'meshoptimizer';
+import { weld, simplify, dedup, prune, metalRough, textureCompress, flatten, join, compactPrimitive, meshopt } from '@gltf-transform/functions';
+import { MeshoptSimplifier, MeshoptEncoder } from 'meshoptimizer';
 
 const SRC = 'assets-src/incoming';
 const OUT = 'public/assets/npc';
 // name -> [source folder or .glb, triangle budget (0 = keep), texture size, keep skin?, simplify error, sloppy?, options]
-// options: out (output folder), keepFlat (don't strip flat ground planes)
+// Sources are under assets-src/incoming unless given as an absolute path.
+// options: out (output folder), keepFlat (don't strip flat ground planes),
+//   pieces (keep each mesh as its own named node: a kit of props),
+//   cleanBones (strip Sketchfab's "_12" suffixes so Mixamo bone names match the hero's),
+//   meshopt (compress geometry; load with core/gltf's compressedGltf)
+const DL = process.env.DOWNLOADS ?? path.join(process.env.USERPROFILE ?? '', 'Downloads');
 const JOBS = {
   froest: ['mr._frost__vgdc', 0, 1024, true],
   kaela: ['female_npc', 0, 1024, true],
@@ -24,10 +29,20 @@ const JOBS = {
   orcWarrior: ['orc_warrior.glb', 0, 1024, false, 0.03, false, { out: 'assets-src/prepped', keepFlat: true }],
   orcWarchief: ['orc_warchief_with_iron_crown_and_cleaver.glb', 60000, 2048, false, 0.02, false, { out: 'assets-src/prepped', keepFlat: true }],
   orcHouse: ['orc_house.glb', 50000, 1024, false, 0.02, false, { out: 'public/assets/models', keepFlat: true }],
+  // The Gravewood (graveyard dungeon in the south-western woods).
+  gwZombie: [path.join(DL, 'zombie.glb'), 24000, 1024, true, 0.02, false, { out: 'assets-src/prepped', cleanBones: true }],
+  gwAbomination: [path.join(DL, 'stitched_patchwork_abomination_creature.glb'), 70000, 2048, false, 0.02, true, { out: 'assets-src/prepped', keepFlat: true }],
+  gwGate: [path.join(DL, 'tully_graveyard_gate_and_stile.glb'), 60000, 2048, false, 0.05, false, { out: 'public/assets/gravewood', keepFlat: true, meshopt: true }],
+  gwShrine: [path.join(DL, 'tomfinlough_church_door_cl042-083001-.glb'), 70000, 2048, false, 0.05, false, { out: 'public/assets/gravewood', keepFlat: true, meshopt: true }],
+  gwKit: [path.join(DL, 'asset_graveyard_the_darkest_red.glb'), 0, 1024, false, 0.02, false, { out: 'public/assets/gravewood', keepFlat: true, pieces: true, meshopt: true }],
 };
 
 // Sketchfab .glb downloads have no license.txt beside them; rebuild one from
 // the credit Sketchfab embeds in asset.extras.
+const terms = (license) =>
+  /NC/.test(license) ? 'Author must be credited. Non-commercial use only.'
+  : /Standard/i.test(license) ? 'Sketchfab Standard licence: may be used in projects, but not redistributed as a standalone asset.'
+  : 'Author must be credited. Commercial use is allowed.';
 const licenseText = ({ title, source, author, license }) => `Model Information:
 * title:\t${title}
 * source:\t${source}
@@ -35,14 +50,15 @@ const licenseText = ({ title, source, author, license }) => `Model Information:
 
 Model License:
 * license type:\t${license}
-* requirements:\tAuthor must be credited. Commercial use is allowed.
+* requirements:\t${terms(license)}
 
 If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
 This work is based on "${title}" (${source}) by ${author} licensed under ${license}
 `;
 
 await MeshoptSimplifier.ready;
-const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+await MeshoptEncoder.ready;
+const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
 fs.mkdirSync(OUT, { recursive: true });
 const tris = (doc) => {
   let t = 0;
@@ -52,7 +68,9 @@ const tris = (doc) => {
 for (const [name, [dir, budget, texSize, skinned, err = 0.03, sloppy = false, opts = {}]] of Object.entries(JOBS)) {
   if (process.argv[2] && process.argv[2] !== name) continue;
   const isGlb = dir.endsWith('.glb');
-  const doc = await io.read(isGlb ? path.join(SRC, dir) : path.join(SRC, dir, 'scene.gltf'));
+  const base = path.isAbsolute(dir) ? dir : path.join(SRC, dir);
+  const doc = await io.read(isGlb ? base : path.join(base, 'scene.gltf'));
+  if (opts.cleanBones) for (const n of doc.getRoot().listNodes()) n.setName(n.getName().replace(/_\d+$/, ''));
   const credit = doc.getRoot().getAsset().extras;
   const before = tris(doc);
   if (!skinned) {
@@ -78,7 +96,7 @@ for (const [name, [dir, budget, texSize, skinned, err = 0.03, sloppy = false, op
     if (ext[0] < ext[2] * 0.08) node.setMesh(null);
   }
   const steps = [dedup(), metalRough()];
-  if (!skinned) steps.push(flatten(), join());
+  if (!skinned && !opts.pieces) steps.push(flatten(), join());
   steps.push(weld());
   if (budget && before > budget && !sloppy) steps.push(simplify({ simplifier: MeshoptSimplifier, ratio: budget / before, error: err, lockBorder: false }));
   if (budget && before > budget && sloppy) {
@@ -101,6 +119,7 @@ for (const [name, [dir, budget, texSize, skinned, err = 0.03, sloppy = false, op
   // WebP keeps alpha and is far smaller than PNG; three.js loads it natively.
   steps.push(textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [texSize, texSize], quality: 85 }));
   steps.push(prune());
+  if (opts.meshopt) steps.push(meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
   await doc.transform(...steps);
   const outDir = opts.out ?? OUT;
   fs.mkdirSync(outDir, { recursive: true });
@@ -108,6 +127,6 @@ for (const [name, [dir, budget, texSize, skinned, err = 0.03, sloppy = false, op
   await io.write(out, doc);
   const lic = path.join(outDir, `${name}.license.txt`);
   if (isGlb) fs.writeFileSync(lic, licenseText(credit));
-  else fs.copyFileSync(path.join(SRC, dir, 'license.txt'), lic);
+  else fs.copyFileSync(path.join(base, 'license.txt'), lic);
   console.log(`${name.padEnd(12)} ${before} -> ${tris(doc)} tris, ${(fs.statSync(out).size / 1e6).toFixed(1)} MB`);
 }

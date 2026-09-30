@@ -1,0 +1,11 @@
+Model Information:
+* title:	Asset Graveyard (The Darkest Red)
+* source:	https://sketchfab.com/3d-models/asset-graveyard-the-darkest-red-d9e14354303147849d6ef59644436692
+* author:	KIFIR (https://sketchfab.com/kifir)
+
+Model License:
+* license type:	CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)
+* requirements:	Author must be credited. Non-commercial use only.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Asset Graveyard (The Darkest Red)" (https://sketchfab.com/3d-models/asset-graveyard-the-darkest-red-d9e14354303147849d6ef59644436692) by KIFIR (https://sketchfab.com/kifir) licensed under CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)

@@ -30,10 +30,35 @@ import type { FX } from '../fx/particles';
 
 export const ORC_SCALE = 1.42;
 const WARCHIEF_URL = '/assets/npc/orcWarchief.glb';
+
+/** Who the boss is: Grukk by default; the Gravewood's abomination reuses his fighting. */
+export interface BossSpec {
+  name: string;
+  /** a body skinned to the hero's skeleton (tools/rig-orcs.mjs) */
+  model: string;
+  /** Character height option: 0 keeps a rebound model's own size */
+  height?: number;
+  hp: number;
+  scale: number;
+  /** XP table entry (progression XP_FOR_KIND) */
+  kind: string;
+  /** has the war bow for range (otherwise it closes in and leaps) */
+  bow: boolean;
+  /** multiplier on every hit it lands */
+  damage: number;
+  /** claws its way out of the ground when woken, instead of standing there already */
+  emerge?: boolean;
+  /** how close the player must come to wake it */
+  wake?: number;
+}
+export const GRUKK: BossSpec = { name: 'Grukk, the Orc Warlord', model: WARCHIEF_URL, hp: 900, scale: ORC_SCALE, kind: 'orc', bow: true, damage: 1 };
+/** Seconds to climb out of the ground (emerging bosses). */
+export const EMERGE_TIME = 3.2;
+/** How deep an emerging boss starts, in metres below the ground. */
+const EMERGE_DEPTH = 3.4;
 /** Bone scales that turn the slim rig into a hulking orc (upper body inherits down the arms). */
 const BULK: Record<string, number> = { Spine1: 1.24, Head: 0.8, RightUpLeg: 1.12, LeftUpLeg: 1.12 };
 const UPPER = 1.24;
-const HP = 900;
 const WALK = 2.2;
 const RUN = 4.6;
 
@@ -56,7 +81,7 @@ const MOVES: Record<string, Move> = {
   bow: { clip: '', speed: 1, hits: [], track: 1.3, bow: true },
 };
 
-type State = 'dormant' | 'roar' | 'chase' | 'attack' | 'recover' | 'stagger' | 'dying';
+type State = 'dormant' | 'emerging' | 'roar' | 'chase' | 'attack' | 'recover' | 'stagger' | 'dying';
 
 interface Arrow {
   mesh: THREE.Object3D;
@@ -82,18 +107,22 @@ function tintBody(char: Character) {
 
 export class OrcWarlord implements Target {
   id = newTargetId();
-  kind = 'orc';
-  name = 'Grukk, the Orc Warlord';
+  kind: string;
+  name: string;
   alive = true;
   lockable = true;
   stunned = false;
-  hp = HP;
-  maxHp = HP;
+  hp: number;
+  maxHp: number;
   radius = 0.75;
   halfHeight = 0.85;
   position = new THREE.Vector3();
   center = new THREE.Vector3();
   onDeath?: (o: OrcWarlord) => void;
+  /** called as the roar begins (the Gravewood plays the bellow) */
+  onRoar?: (o: OrcWarlord) => void;
+  /** depth below the ground while emerging (0 once out) */
+  private emergeY = 0;
 
   private char = new Character();
   /** wearing the rigged warchief model (otherwise the dressed-up hero rig) */
@@ -134,10 +163,14 @@ export class OrcWarlord implements Target {
   private prevPos = new THREE.Vector3();
   private prevYaw = 0;
 
-  private constructor(private scene: THREE.Scene, private fx: FX) {}
+  private constructor(private scene: THREE.Scene, private fx: FX, readonly spec: BossSpec) {
+    this.kind = spec.kind;
+    this.name = spec.name;
+    this.hp = this.maxHp = spec.hp;
+  }
 
-  static async create(at: THREE.Vector3, yaw: number, scene: THREE.Scene, fx: FX) {
-    const o = new OrcWarlord(scene, fx);
+  static async create(at: THREE.Vector3, yaw: number, scene: THREE.Scene, fx: FX, spec: BossSpec = GRUKK) {
+    const o = new OrcWarlord(scene, fx, spec);
     await o.init(at, yaw);
     return o;
   }
@@ -148,14 +181,14 @@ export class OrcWarlord implements Target {
     // load he falls back to the hero rig dressed up as an orc.
     let c = this.char;
     try {
-      await c.load('/assets/character/', { model: WARCHIEF_URL });
+      await c.load('/assets/character/', { model: this.spec.model, height: this.spec.height });
       this.skinned = true;
     } catch (e) {
       console.warn('orc warchief model failed to load; dressing the hero rig instead', e);
       c = this.char = new Character();
       await c.load();
     }
-    c.root.scale.setScalar(ORC_SCALE);
+    c.root.scale.setScalar(this.spec.scale);
     if (!this.skinned) for (const [b, k] of Object.entries(BULK)) c.bone(b)?.scale.setScalar(k);
     c.root.updateMatrixWorld(true);
     this.scene.add(c.root);
@@ -171,7 +204,7 @@ export class OrcWarlord implements Target {
     }
 
     // Weapons: odachi in the right hand, bow and a sheath on the back.
-    const k = 1 / ORC_SCALE; // sockets inherit the root's scale
+    const k = 1 / this.spec.scale; // sockets inherit the root's scale
     this.odachiHand = buildOdachi(k * UPPER);
     this.rig.hands.Right.socket.add(this.odachiHand);
     this.bowHand = buildBow(k * UPPER);
@@ -191,6 +224,7 @@ export class OrcWarlord implements Target {
     this.bowBack.position.set(-0.02, 0.05, -0.2);
     this.bowBack.rotation.set(0, Math.PI / 2, -0.5);
     back.add(this.odachiBack, this.bowBack);
+    this.bowBack.visible = this.spec.bow;
     if (this.skinned) {
       // The warchief's own axe is part of his mesh: the odachi only marks the
       // blade for hit checks, and the helm, tusks and armour are already there.
@@ -205,7 +239,11 @@ export class OrcWarlord implements Target {
     this.rb = physics.world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(at.x, at.y + 1.45, at.z));
     this.col = physics.world.createCollider(R.ColliderDesc.capsule(0.75, 0.62).setCollisionGroups(groups(G_ENEMY, 0)), this.rb);
     this.kcc = physics.createCharacterController(0.03);
-    targets.add(this);
+    // An emerging boss waits underground, out of sight and reach, until woken.
+    if (this.spec.emerge) {
+      this.lockable = false;
+      c.root.visible = false;
+    } else targets.add(this);
     this.present(1, 0);
   }
 
@@ -274,8 +312,21 @@ export class OrcWarlord implements Target {
   get dead() {
     return this.state === 'dying' && this.deathT > 6;
   }
+
+  /** Wake from dormancy: climb out of the ground first if this boss emerges. */
+  wake() {
+    if (this.state !== 'dormant') return;
+    if (this.spec.emerge) {
+      this.emergeY = -EMERGE_DEPTH;
+      this.char.root.visible = true;
+      this.setState('emerging');
+    } else {
+      this.setState('roar');
+      this.onRoar?.(this);
+    }
+  }
   get enraged() {
-    return this.hp < HP * 0.5;
+    return this.hp < this.maxHp * 0.5;
   }
   get awake() {
     return this.state !== 'dormant';
@@ -284,7 +335,7 @@ export class OrcWarlord implements Target {
   // ---- damage ------------------------------------------------------------------
   takeHit(h: HitInfo) {
     if (!this.alive) return;
-    if (this.state === 'dormant') this.setState('roar');
+    if (this.state === 'dormant') this.wake();
     this.hp -= h.damage;
     this.flash = 1;
     this.fx.add.spawn({ pos: h.at, spread: 3, count: 10, life: [0.2, 0.5], size: [0.06, 0.01], color: 0x9a1a10, color2: 0x3a0804, gravity: 9 });
@@ -327,7 +378,7 @@ export class OrcWarlord implements Target {
     this.odachiHand.visible = !bow;
     this.odachiBack.visible = bow;
     this.bowHand.visible = bow;
-    this.bowBack.visible = !bow;
+    this.bowBack.visible = !bow && this.spec.bow;
   }
 
   dispose() {
@@ -342,8 +393,9 @@ export class OrcWarlord implements Target {
   // ---- brain -------------------------------------------------------------------------
   private chooseMove(dist: number): string {
     const opts: [string, number][] = [];
-    if (dist > 9) opts.push(['bow', 3], ['slam', 2]);
-    else if (dist > 4.5) opts.push(['slam', 2], ['bow', 1], ['combo', 1]);
+    const bow = this.spec.bow ? 1 : 0;
+    if (dist > 9) opts.push(['bow', 3 * bow], ['slam', 2 + 2 * (1 - bow)]);
+    else if (dist > 4.5) opts.push(['slam', 2], ['bow', bow], ['combo', 1]);
     else opts.push(['cleave', 3], ['sweep', 2], ['combo', 2], ['kick', dist < 2.6 ? 2 : 0]);
     const w = opts.map(([n, v]) => [n, n === this.lastMove ? v * 0.3 : v] as [string, number]);
     let r = Math.random() * w.reduce((a, [, v]) => a + v, 0);
@@ -393,8 +445,28 @@ export class OrcWarlord implements Target {
     switch (this.state) {
       case 'dormant':
         turn = false;
-        if (!player.dead && dist < 16) this.setState('roar');
+        if (!player.dead && dist < (this.spec.wake ?? 16)) this.wake();
         break;
+      case 'emerging': {
+        // Claw up out of the ground: rise, shaking the earth and spraying soil.
+        turn = false;
+        const k = smoothstep(0, EMERGE_TIME, this.st);
+        this.emergeY = -EMERGE_DEPTH * (1 - k);
+        if (Math.random() < dt * 14) {
+          const at = this.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, 0.1, (Math.random() - 0.5) * 3));
+          this.fx.add.spawn({ pos: at, spread: 3.5, count: 6, life: [0.5, 1.1], size: [0.16, 0.05], color: 0x3a2c1e, color2: 0x1a130c, gravity: 9, upBias: 1.4, alpha: 0.9 });
+        }
+        if (Math.random() < dt * 2.5) events.emit('bossSlam', { at: this.position.clone() });
+        if (this.st >= EMERGE_TIME) {
+          this.emergeY = 0;
+          this.lockable = true;
+          targets.add(this);
+          this.fx.dust(this.position.clone(), 5);
+          this.setState('roar');
+          this.onRoar?.(this);
+        }
+        break;
+      }
       case 'roar':
         if (this.st > 2.1 / 1.1) {
           this.cooldown = 0.4;
@@ -482,7 +554,7 @@ export class OrcWarlord implements Target {
       events.emit('bossSlam', { at: p.clone() });
       const d = player.pos.distanceTo(p);
       if (d < 4.6 && player.pos.y - p.y < 1.2) {
-        player.receiveAttack({ damage: Math.round(40 * (1 - d / 9)), from: p.clone(), parryable: false, poise: 150 });
+        player.receiveAttack({ damage: Math.round(40 * (1 - d / 9) * this.spec.damage), from: p.clone(), parryable: false, poise: 150 });
       }
     }
   }
@@ -573,7 +645,7 @@ export class OrcWarlord implements Target {
       if (!hit) return;
       this.hitDone.add(i);
       const res = player.receiveAttack({
-        damage: h.dmg,
+        damage: Math.round(h.dmg * this.spec.damage),
         from: this.position.clone(),
         parryable: h.parryable,
         poise: h.poise,
@@ -591,6 +663,7 @@ export class OrcWarlord implements Target {
   present(alpha: number, dt: number, player?: Player) {
     const root = this.char.root;
     root.position.lerpVectors(this.prevPos, this.position, alpha);
+    root.position.y += this.emergeY;
     root.rotation.y = this.prevYaw + wrapAngle(this.yaw - this.prevYaw) * alpha;
     const s = this.state;
     const anim = this.anim;
@@ -599,6 +672,7 @@ export class OrcWarlord implements Target {
     const sp = (this.enraged ? 1.15 : 1) * 0.6; // a big body moves in slower cycles
     local = { x: local.x * sp, z: local.z * sp };
     if (s === 'dying') anim.setFull('death', this.deathT * 0.8, 0.2);
+    else if (s === 'emerging') anim.setFull('cast_big', Math.min(this.st * 0.55, 1.4), 0.2);
     else if (s === 'roar') anim.setFull('cast_heal', this.st * 1.1, 0.2);
     else if (s === 'stagger') anim.setFull(this.stunned ? 'guard_break' : 'hit_react', clamp(this.st + 1.2, 0, 2) * 0.7, 0.1);
     else if (s === 'attack' && this.move && !this.move.bow) anim.setFull(this.move.clip, this.mt, 0.15, 0.25);
@@ -640,7 +714,7 @@ export class OrcWarlord implements Target {
     for (const e of this.eyes) e.scale.setScalar(this.enraged ? 1.6 : 1);
     if (player) this.checkBlade(player);
     // Windup telegraph: a red glint runs down the blade before heavy swings.
-    if (this.move && s === 'attack' && this.move.hits[0] && this.mt > this.move.hits[0].from - 0.35 && this.mt < this.move.hits[0].from && Math.random() < 0.5) {
+    if (this.spec.bow && this.move && s === 'attack' && this.move.hits[0] && this.mt > this.move.hits[0].from - 0.35 && this.mt < this.move.hits[0].from && Math.random() < 0.5) {
       const b = this.odachiHand;
       const p = b.localToWorld(new THREE.Vector3(0, b.userData.bladeBase + Math.random() * (b.userData.bladeTip - b.userData.bladeBase), 0));
       this.fx.add.spawn({ pos: p, spread: 0.2, count: 1, life: [0.2, 0.35], size: [0.12, 0.02], color: 0xffd0a0, color2: 0xff3010 });

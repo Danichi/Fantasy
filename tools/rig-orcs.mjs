@@ -27,6 +27,21 @@ const HERO = 'public/assets/character/character.glb';
 
 // Measured joints (see header). HandTip is where the fingers point.
 const JOBS = {
+  // The Gravewood's boss: a hunched, long-armed patchwork brute (no weapon).
+  gwAbomination: {
+    out: 'public/assets/gravewood',
+    grip: [9, 9, 9],
+    joints: {
+      Hips: [0.0, 0.78, -0.13], Spine: [0.0, 0.9, -0.13], Spine1: [0.0, 1.05, -0.13], Spine2: [0.0, 1.22, -0.11],
+      Neck: [0.0, 1.36, -0.02], Head: [0.0, 1.42, 0.15], HeadTop_End: [0.0, 1.7, 0.38],
+      LeftShoulder: [0.12, 1.38, -0.08], LeftArm: [0.46, 1.45, -0.05], LeftForeArm: [0.67, 1.03, -0.28], LeftHand: [0.75, 0.72, -0.15], LeftHandTip: [0.73, 0.4, -0.03],
+      RightShoulder: [-0.12, 1.38, -0.08], RightArm: [-0.46, 1.45, -0.03], RightForeArm: [-0.66, 1.03, -0.14], RightHand: [-0.72, 0.75, 0.0], RightHandTip: [-0.67, 0.42, 0.13],
+      LeftUpLeg: [0.2, 0.76, -0.12], LeftLeg: [0.25, 0.47, 0.0], LeftFoot: [0.22, 0.18, -0.26], LeftToeBase: [0.3, 0.05, -0.05], LeftToe_End: [0.32, 0.03, 0.06],
+      RightUpLeg: [-0.2, 0.76, -0.14], RightLeg: [-0.28, 0.5, -0.12], RightFoot: [-0.26, 0.19, -0.36], RightToeBase: [-0.31, 0.05, -0.15], RightToe_End: [-0.33, 0.03, -0.06],
+    },
+  },
+  // Already rigged to its own Mixamo skeleton: carried onto the hero's.
+  gwZombie: { rebind: true, out: 'public/assets/gravewood' },
   orcWarrior: {
     grip: [-0.51, 0.86, 0.0],
     joints: {
@@ -105,8 +120,9 @@ async function heroSkeleton() {
 }
 
 // ---- pose the hero skeleton onto measured joints -------------------------------------------
-function fitSkeleton(sk, T) {
+function fitSkeleton(sk, T, extraBranch = []) {
   const { byShort } = sk;
+  const branch = new Set([...BRANCH, ...extraBranch]);
   const wp = (o) => o.getWorldPosition(new THREE.Vector3());
   const setWorldPos = (o, p) => {
     o.parent.updateMatrixWorld(true);
@@ -133,7 +149,7 @@ function fitSkeleton(sk, T) {
   const visit = (b) => {
     const name = short(b.name);
     const kids = b.children.filter((c) => T[short(c.name)]);
-    if (BRANCH.has(name)) for (const c of kids) setWorldPos(c, T[short(c.name)]);
+    if (branch.has(name)) for (const c of kids) setWorldPos(c, T[short(c.name)]);
     else if (kids.length === 1) aim(b, kids[0], T[short(kids[0].name)]);
     else if (name.endsWith('Hand') && T[name + 'Tip']) {
       const mid = b.children.find((c) => /HandMiddle1$/.test(c.name));
@@ -394,29 +410,7 @@ async function rig(name, job) {
   // Joint indices in the skin, by short name.
   const jointIndex = new Map(sk.joints.map((o, i) => [short(o.name), i]));
 
-  // ---- write the skinned document -----------------------------------------------------------
-  const buffer = root.listBuffers()[0];
-  // Skeleton nodes mirroring the hero's (names, fitted pose).
-  const rootNode = doc.createNode(sk.rootObj.name);
-  const nodeOf = new Map();
-  const build = (o, parent) => {
-    const n = doc.createNode(o.name).setTranslation(o.position.toArray()).setRotation(o.quaternion.toArray()).setScale(o.scale.toArray());
-    parent.addChild(n);
-    nodeOf.set(o, n);
-    for (const c of o.children) build(c, n);
-  };
-  for (const c of sk.rootObj.children) build(c, rootNode);
-  const ibm = new Float32Array(sk.joints.length * 16);
-  sk.joints.forEach((o, i) => new THREE.Matrix4().copy(o.matrixWorld).invert().toArray(ibm, i * 16));
-  const skin = doc.createSkin(`${name}Skin`)
-    .setSkeleton(nodeOf.get(sk.byShort.get('Hips')))
-    .setInverseBindMatrices(doc.createAccessor().setType('MAT4').setArray(ibm).setBuffer(buffer));
-  for (const o of sk.joints) skin.addJoint(nodeOf.get(o));
-
-  // Detach mesh nodes from their old hierarchy; each becomes a skinned node under RootNode.
-  for (const s of root.listScenes()) for (const c of s.listChildren()) s.removeChild(c);
-  scene.addChild(rootNode);
-  const meshNodes = new Set();
+  // ---- skin weights -------------------------------------------------------------------------
   const offsetsNear = new Float32Array(boneNames.length);
   let droppedTotal = 0;
   prims.forEach((p, pi) => {
@@ -506,31 +500,163 @@ async function rig(name, job) {
       else kept.push(p.index[t], p.index[t + 1], p.index[t + 2]);
     }
     if (dropped) {
-      const ia = p.prim.getIndices();
-      const arr = n > 65535 ? new Uint32Array(kept) : new Uint16Array(kept);
-      p.prim.setIndices(doc.createAccessor().setType('SCALAR').setArray(arr).setBuffer(buffer));
-      if (ia && ia.listParents().length <= 1) ia.dispose();
+      p.index = kept;
       droppedTotal += dropped;
     }
+    p.J = J;
+    p.W = W;
+  });
+  const out = await writeRigged(doc, sk, name, prims, job.out ?? OUT);
+  console.log(`${name.padEnd(12)} scale ${s.toFixed(3)}, joints within ${(worst * 100).toFixed(1)} cm, ${G.count} body voxels, weapon ${weaponVerts} verts, ${droppedTotal} bridging tris dropped, ${(fs.statSync(out).size / 1e6).toFixed(1)} MB`);
+}
+
+/**
+ * Write the hero skeleton (in its fitted pose) into `doc` and skin every baked
+ * primitive to it: prims carry pos/nor in the rig frame, J/W per vertex and
+ * their (possibly trimmed) index list.
+ */
+async function writeRigged(doc, sk, name, prims, outDir) {
+  const root = doc.getRoot();
+  const scene = root.listScenes()[0];
+  const buffer = root.listBuffers()[0];
+  // Skeleton nodes mirroring the hero's (names, fitted pose).
+  const rootNode = doc.createNode(sk.rootObj.name);
+  const nodeOf = new Map();
+  const build = (o, parent) => {
+    const n = doc.createNode(o.name).setTranslation(o.position.toArray()).setRotation(o.quaternion.toArray()).setScale(o.scale.toArray());
+    parent.addChild(n);
+    nodeOf.set(o, n);
+    for (const c of o.children) build(c, n);
+  };
+  for (const c of sk.rootObj.children) build(c, rootNode);
+  const ibm = new Float32Array(sk.joints.length * 16);
+  sk.joints.forEach((o, i) => new THREE.Matrix4().copy(o.matrixWorld).invert().toArray(ibm, i * 16));
+  const skin = doc.createSkin(`${name}Skin`)
+    .setSkeleton(nodeOf.get(sk.byShort.get('Hips')))
+    .setInverseBindMatrices(doc.createAccessor().setType('MAT4').setArray(ibm).setBuffer(buffer));
+  for (const o of sk.joints) skin.addJoint(nodeOf.get(o));
+
+  // Detach mesh nodes from their old hierarchy; each becomes a skinned node under RootNode.
+  for (const s of root.listScenes()) for (const c of s.listChildren()) s.removeChild(c);
+  scene.addChild(rootNode);
+  const meshNodes = new Set();
+  for (const p of prims) {
+    const n = p.pos.length / 3;
+    const arr = n > 65535 ? new Uint32Array(p.index) : new Uint16Array(p.index);
+    p.prim.setIndices(doc.createAccessor().setType('SCALAR').setArray(arr).setBuffer(buffer));
     p.prim.setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(p.pos).setBuffer(buffer));
     if (p.nor) p.prim.setAttribute('NORMAL', doc.createAccessor().setType('VEC3').setArray(p.nor).setBuffer(buffer));
-    p.prim.setAttribute('JOINTS_0', doc.createAccessor().setType('VEC4').setArray(J).setBuffer(buffer));
-    p.prim.setAttribute('WEIGHTS_0', doc.createAccessor().setType('VEC4').setArray(W).setBuffer(buffer));
+    p.prim.setAttribute('JOINTS_0', doc.createAccessor().setType('VEC4').setArray(p.J).setBuffer(buffer));
+    p.prim.setAttribute('WEIGHTS_0', doc.createAccessor().setType('VEC4').setArray(p.W).setBuffer(buffer));
     meshNodes.add(p.node);
-  });
+  }
   for (const n of meshNodes) {
     for (const par of root.listNodes()) if (par.listChildren().includes(n)) par.removeChild(n);
     n.setTranslation([0, 0, 0]).setRotation([0, 0, 0, 1]).setScale([1, 1, 1]).setSkin(skin);
     rootNode.addChild(n);
   }
+  // Old skins (a model that came rigged) and their joints go with the old hierarchy.
+  for (const s of root.listSkins()) if (s !== skin) s.dispose();
+  for (const a of root.listAnimations()) a.dispose();
   await doc.transform(prune({ keepLeaves: true }));
-  const out = path.join(OUT, `${name}.glb`);
+  fs.mkdirSync(outDir, { recursive: true });
+  const out = path.join(outDir, `${name}.glb`);
   await io.write(out, doc);
-  fs.copyFileSync(path.join(SRC, `${name}.license.txt`), path.join(OUT, `${name}.license.txt`));
-  console.log(`${name.padEnd(12)} scale ${s.toFixed(3)}, joints within ${(worst * 100).toFixed(1)} cm, ${G.count} body voxels, weapon ${weaponVerts} verts, ${droppedTotal} bridging tris dropped, ${(fs.statSync(out).size / 1e6).toFixed(1)} MB`);
+  fs.copyFileSync(path.join(SRC, `${name}.license.txt`), path.join(outDir, `${name}.license.txt`));
+  return out;
+}
+
+/**
+ * A model already rigged to a Mixamo skeleton of its own (other units, axes
+ * and bone rolls): pose the hero skeleton onto its joints and carry its own
+ * skin weights across by bone name, so the hero's clips drive it cleanly.
+ */
+async function rebind(name, job) {
+  const doc = await io.read(path.join(SRC, `${name}.glb`));
+  const root = doc.getRoot();
+  const srcSkin = root.listSkins()[0];
+  const srcJoints = srcSkin.listJoints();
+  const ibmAcc = srcSkin.getInverseBindMatrices();
+  const jointWorld = srcJoints.map((j) => new THREE.Matrix4().fromArray(j.getWorldMatrix()));
+  const skinMats = srcJoints.map((j, i) => jointWorld[i].clone().multiply(new THREE.Matrix4().fromArray(ibmAcc.getElement(i, []))));
+
+  // The rest pose as the viewer shows it: skin every vertex with the file's own pose.
+  const prims = [];
+  const box = new THREE.Box3();
+  for (const node of root.listNodes()) {
+    const mesh = node.getMesh();
+    if (!mesh || !node.getSkin()) continue;
+    const M = new THREE.Matrix4().fromArray(node.getWorldMatrix());
+    for (const prim of mesh.listPrimitives()) {
+      const pa = prim.getAttribute('POSITION'), na = prim.getAttribute('NORMAL');
+      const ja = prim.getAttribute('JOINTS_0'), wa = prim.getAttribute('WEIGHTS_0');
+      const n = pa.getCount();
+      const pos = new Float32Array(n * 3), nor = na ? new Float32Array(n * 3) : null;
+      const srcJ = new Uint16Array(n * 4), srcW = new Float32Array(n * 4);
+      const v = new THREE.Vector3(), acc = new THREE.Vector3(), nacc = new THREE.Vector3(), t = new THREE.Vector3();
+      const m = new THREE.Matrix4(), m3 = new THREE.Matrix3();
+      for (let i = 0; i < n; i++) {
+        const js = ja.getElement(i, []), ws = wa.getElement(i, []);
+        acc.set(0, 0, 0);
+        nacc.set(0, 0, 0);
+        for (let k = 0; k < 4; k++) {
+          if (!ws[k]) continue;
+          m.copy(M).multiply(skinMats[js[k]]); // three.js applies the mesh node after skinning
+          acc.addScaledVector(t.fromArray(pa.getElement(i, [])).applyMatrix4(m), ws[k]);
+          if (na) nacc.addScaledVector(t.fromArray(na.getElement(i, [])).applyMatrix3(m3.getNormalMatrix(m)), ws[k]);
+          srcJ[i * 4 + k] = js[k];
+          srcW[i * 4 + k] = ws[k];
+        }
+        acc.toArray(pos, i * 3);
+        if (nor) nacc.normalize().toArray(nor, i * 3);
+        box.expandByPoint(acc);
+      }
+      const ia = prim.getIndices();
+      prims.push({ node, prim, pos, nor, srcJ, srcW, index: ia ? Array.from(ia.getArray()) : Array.from({ length: n }, (_, i) => i) });
+    }
+  }
+  // Measured frame (as rig() uses): 1.8 m tall, centred, feet at 0.
+  const k = 1.8 / (box.max.y - box.min.y);
+  const cx = (box.max.x + box.min.x) / 2, cz = (box.max.z + box.min.z) / 2;
+  const measure = (p) => new THREE.Vector3((p.x - cx) * k, (p.y - box.min.y) * k, (p.z - cz) * k);
+  const joints = {};
+  // Seen through three.js's skinning, each joint acts from (mesh node) x (joint world).
+  const meshNode = root.listNodes().find((n) => n.getMesh() && n.getSkin());
+  const MM = new THREE.Matrix4().fromArray(meshNode.getWorldMatrix());
+  srcJoints.forEach((j, i) => (joints[short(j.getName())] = measure(new THREE.Vector3().setFromMatrixPosition(MM.clone().multiply(jointWorld[i])))));
+  for (const side of ['Left', 'Right']) if (joints[side + 'HandMiddle1']) joints[side + 'HandTip'] = joints[side + 'HandMiddle1'];
+
+  const sk = await heroSkeleton();
+  const heroHips = sk.byShort.get('Hips').getWorldPosition(new THREE.Vector3());
+  const H = joints.Hips;
+  // Scale by leg length, not hips height: the model's rest pose may be a crouch.
+  const legOf = (get) => ['Left', 'Right'].reduce((t, side) => t + get(side + 'UpLeg').distanceTo(get(side + 'Leg')) + get(side + 'Leg').distanceTo(get(side + 'Foot')), 0);
+  const heroPos = (n) => sk.byShort.get(n).getWorldPosition(new THREE.Vector3());
+  const s = legOf(heroPos) / legOf((n) => joints[n]);
+  const toRig = (v) => new THREE.Vector3((v.x - H.x) * s + heroHips.x, v.y * s, (v.z - H.z) * s + heroHips.z);
+  const T = Object.fromEntries(Object.entries(joints).map(([n, v]) => [n, toRig(v)]));
+  // Hands branch here: every finger root is placed on the model's own finger.
+  const worst = fitSkeleton(sk, T, ['LeftHand', 'RightHand']);
+
+  // Carry the weights across by bone name (bones the hero lacks fall to their nearest named ancestor).
+  const jointIndex = new Map(sk.joints.map((o, i) => [short(o.name), i]));
+  const parentOf = new Map();
+  for (const n of root.listNodes()) for (const c of n.listChildren()) parentOf.set(c, n);
+  const mapJoint = srcJoints.map((j) => {
+    for (let n = j; n; n = parentOf.get(n)) if (jointIndex.has(short(n.getName()))) return jointIndex.get(short(n.getName()));
+    return jointIndex.get('Hips');
+  });
+  const v = new THREE.Vector3();
+  for (const p of prims) {
+    for (let i = 0; i < p.pos.length / 3; i++) toRig(measure(v.fromArray(p.pos, i * 3))).toArray(p.pos, i * 3);
+    p.J = p.srcJ.map((j, i) => (p.srcW[i] ? mapJoint[j] : 0));
+    p.W = p.srcW;
+  }
+  const out = await writeRigged(doc, sk, name, prims, job.out ?? OUT);
+  console.log(`${name.padEnd(12)} rebound: scale ${(s * k).toFixed(4)}, joints within ${(worst * 100).toFixed(1)} cm, ${(fs.statSync(out).size / 1e6).toFixed(1)} MB`);
 }
 
 for (const [name, job] of Object.entries(JOBS)) {
   if (process.argv[2] && process.argv[2] !== name) continue;
-  await rig(name, job);
+  await (job.rebind ? rebind(name, job) : rig(name, job));
 }

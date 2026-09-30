@@ -70,6 +70,8 @@ export class WorldMapUI {
   private miniCtx: CanvasRenderingContext2D;
   private miniLabel: HTMLDivElement;
   miniVisible = true;
+  /** 0..1: a cursed fog (the Gravewood) blots out both maps around the player */
+  obscured = 0;
 
   constructor(private discovery: Discovery) {
     const root = document.getElementById('ui')!;
@@ -350,6 +352,7 @@ export class WorldMapUI {
         g.fillText(m.label, p.x, p.y + 30);
       }
     }
+    if (this.obscured > 0.01) this.drawMist(g, W, H, 'The fog hides everything beyond the graveyard walls');
     // The player.
     const pp = worldToPx(this.player.x, this.player.z);
     const ps = this.mapToScreen(pp.x, pp.y);
@@ -365,6 +368,32 @@ export class WorldMapUI {
     g.stroke();
     g.restore();
     this.drawCompass(g, W - 90, H - 100, 52);
+  }
+
+  /** Rolling grey fog over a map canvas, drifting with time. */
+  private drawMist(g: CanvasRenderingContext2D, W: number, H: number, label?: string) {
+    const a = this.obscured;
+    const t = performance.now() / 1000;
+    g.save();
+    g.fillStyle = `rgba(58,64,62,${0.94 * a})`;
+    g.fillRect(0, 0, W, H);
+    for (let k = 0; k < 14; k++) {
+      const x = ((Math.sin(k * 12.9 + t * 0.05 * (1 + (k % 3))) * 0.5 + 0.5) * W) | 0;
+      const y = ((Math.cos(k * 7.3 + t * 0.04 * (1 + (k % 2))) * 0.5 + 0.5) * H) | 0;
+      const r = Math.max(W, H) * (0.18 + (k % 4) * 0.06);
+      const grd = g.createRadialGradient(x, y, 0, x, y, r);
+      grd.addColorStop(0, `rgba(150,158,152,${0.22 * a})`);
+      grd.addColorStop(1, 'rgba(150,158,152,0)');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, W, H);
+    }
+    if (label) {
+      g.font = '600 18px Cinzel, serif';
+      g.textAlign = 'center';
+      g.fillStyle = `rgba(226,230,222,${0.85 * a})`;
+      g.fillText(label, W / 2, H * 0.18);
+    }
+    g.restore();
   }
 
   private drawCompass(g: CanvasRenderingContext2D, x: number, y: number, r: number) {
@@ -464,6 +493,7 @@ export class WorldMapUI {
       g.strokeText(st.glyph, sx, sy + 5);
       g.fillText(st.glyph, sx, sy + 5);
     }
+    if (this.obscured > 0.01) this.drawMist(g, S, S);
     // Player arrow.
     g.translate(S / 2, S / 2);
     g.rotate(-this.playerYaw + Math.PI);

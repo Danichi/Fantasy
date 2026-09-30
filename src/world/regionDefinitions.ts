@@ -63,7 +63,7 @@ export const REGIONS: Record<string, RegionDef> = {
     id: 'elderGlen', name: 'Elder Glen', subtitle: 'The Breadbasket of Cresha', levels: [1, 5],
     weather: { clear: 5, cloudy: 3, rain: 2, fog: 1, storm: 0.3 }, ambience: 'meadow', music: 'village', encounters: 'elderGlen', faction: 'cresha',
     resources: ['grain', 'vegetables', 'livestock', 'wool', 'milk', 'eggs', 'sungrass', 'wild mint'], exports: ['grain', 'vegetables', 'livestock'], imports: ['tools', 'salt', 'cloth'],
-    landmarks: [place('elderGlen', 'Elder Glen', 'town'), at('crypt', 'The Old Crypt', 'dungeon', 0, -318), at('mill', 'The River Mill', 'landmark', 154, -36), at('quarry', 'The Old Quarry', 'landmark', -180, -262), at('standingStones', 'The Sunwheel Stones', 'ruin', -300, -350)],
+    landmarks: [place('elderGlen', 'Elder Glen', 'town'), at('crypt', 'The Old Crypt', 'dungeon', 0, -318), at('mill', 'The River Mill', 'landmark', 154, -36), at('quarry', 'The Old Quarry', 'landmark', -180, -262), at('standingStones', 'The Sunwheel Stones', 'ruin', -300, -350), at('gravewood', 'The Gravewood', 'dungeon', -340, 330)],
     surface: ['farms and fields', 'the plaza and training yard', 'guild D-rank contracts', 'the river mills'],
     hidden: ['the standing stone in the north hills', 'the granary cellar tunnels', 'the crypt’s sealed glyph door'],
     deep: ['the lower crypt', 'the Orc Warlord'],
