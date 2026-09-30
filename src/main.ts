@@ -94,6 +94,7 @@ import { Town, NPCS } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
 import { loadArmourKit } from './enemies/armourKit';
 import { loadSave, writeSave, buildSave, applySave, hasSave, clearSave } from './save';
+import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 
 const STEP = 1 / 60;
@@ -284,6 +285,7 @@ async function boot() {
   skills.runtime = skillRt;
   const mapUI = new DungeonMapUI();
   let frontier!: FrontierRegion;
+  let microDiscoveries!: MicroDiscoveries;
   const realm = new Realm(r, player, cam, fx, hud, mapUI, {
     hide: (h) => {
       terrain.group.visible = !h;
@@ -304,6 +306,7 @@ async function boot() {
       foliage?.setVisible(!h);
       stylizedNature.setVisible(!h && stylizedNature.loaded);
       gravewood.setVisible(!h);
+      microDiscoveries?.setVisible(!h);
       town.setVisible(!h);
     },
     clearEnemies: () => { slimes.clear(); frontier?.dispose(); encounters?.clear(); },
@@ -643,7 +646,7 @@ async function boot() {
       pos: d.pos, radius: 1.5,
       label: () => `Enter ${info.name}`,
       enabled: () => realm.mode === 'overworld' && !player.mounted,
-      action: () => void realm.enterInterior({ ...d, kind: info.kind, name: info.name, keeper: info.keeper }, info.kind, world.mats, spells),
+      action: () => void realm.enterInterior({ ...d, kind: info.kind, name: info.name, keeper: info.keeper }, info.kind, world.mats, spells, (label: string, text: string) => dialogue.show('Elder Glen', label, text, [{ label: 'Back.', run: () => dialogue.close() }])),
     });
   }
   // People inside: a borrowed town NPC (moved in, put back on the way out) or
@@ -824,6 +827,16 @@ async function boot() {
     return out;
   };
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
+  microDiscoveries = new MicroDiscoveries(
+    r.scene,
+    world.mats,
+    worldFlags,
+    giveItem,
+    (n) => player.prog.addGold(n),
+    (n) => player.prog.addXp(n),
+    (m) => hud.toast(m),
+  );
+  realm.overworldInteractables.push(...microDiscoveries.interactables);
   // Waystones: touching one attunes it; once Magus Orren has explained the Sunwheel
   // (The Sunwheel quest), attuned stones carry you between each other.
   realm.overworldInteractables.push(...WAYSTONES.map((w) => ({
@@ -926,6 +939,7 @@ async function boot() {
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   realm.onSave = save;
+  microDiscoveries.onSave = save;
   town.guild.onSave = save;
   town.guild.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open || dialogue.open;
@@ -1343,6 +1357,7 @@ async function boot() {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
       THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      microDiscoveries,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {
