@@ -353,7 +353,8 @@ export class Interior {
     const pos = this.at(x, z, 0.4);
     this.interactables.push({
       pos,
-      radius: 1.4,
+      // Keep doorway prompts dominant when a furnishing sits nearby.
+      radius: 0.9,
       label: () => label,
       enabled: () => true,
       action: () => this.onInspect?.(label, text),
