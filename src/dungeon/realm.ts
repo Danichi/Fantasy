@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { DungeonInstance, DUNGEON_ORIGIN, CELL, type DungeonProgress, type Interactable } from './instance';
+import { MineInstance, type MineProgress } from './mine';
 import { setGroundOverride, heightAt } from '../world/terrain';
 import { Q } from '../core/settings';
 import { emptyMap, type DungeonMapUI, type MapData } from '../ui/dungeonMap';
@@ -42,7 +43,10 @@ export class Realm {
   mode: 'overworld' | 'dungeon' = 'overworld';
   floor: 1 | 2 = 1;
   instance: DungeonInstance | null = null;
+  mineInstance: MineInstance | null = null;
+  active: 'crypt' | 'mine' | null = null;
   progress: DungeonProgress = { gateOpen: false, bossDead: false, chests: [] };
+  mineProgress: MineProgress = { gateOpen: false, guardianDead: false };
   maps: Record<string, MapData> = {};
   readonly seed = 1337;
   private saved: Saved | null = null;
@@ -61,6 +65,7 @@ export class Realm {
     private overworld: OverworldVisuals,
     private rewards: Rewards,
     readonly cryptDoor: THREE.Vector3,
+    readonly mineDoor: THREE.Vector3,
   ) {
     this.overworldInteractables.push({
       pos: cryptDoor,
@@ -69,15 +74,25 @@ export class Realm {
       enabled: () => true,
       action: () => void this.enter(1, 'entrance'),
     });
+    this.overworldInteractables.push({
+      pos: mineDoor,
+      radius: 3.4,
+      label: () => "Enter the Old King's Road Mine",
+      enabled: () => true,
+      action: () => void this.enterMine(),
+    });
   }
 
   get interactables() {
-    return this.mode === 'dungeon' && this.instance ? this.instance.interactables : this.overworldInteractables;
+    if (this.active === 'crypt' && this.instance) return this.instance.interactables;
+    if (this.active === 'mine' && this.mineInstance) return this.mineInstance.interactables;
+    return this.overworldInteractables;
   }
 
   /** Where to respawn after dying. */
   get respawnPoint() {
-    if (this.instance) return this.instance.spawnPoint;
+    if (this.active === 'crypt' && this.instance) return this.instance.spawnPoint;
+    if (this.active === 'mine' && this.mineInstance) return this.mineInstance.spawnPoint;
     return new THREE.Vector3(0, heightAt(0, 10), 10);
   }
 
@@ -155,6 +170,8 @@ export class Realm {
     this.busy = true;
     await this.hud.fade(true);
     this.instance?.dispose();
+    this.mineInstance?.dispose();
+    this.mineInstance = null;
     if (this.mode === 'overworld') {
       this.overworld.clearEnemies();
       this.overworld.enemiesEnabled(false);
@@ -162,6 +179,7 @@ export class Realm {
       this.atmosphere(true);
     }
     this.mode = 'dungeon';
+    this.active = 'crypt';
     this.floor = floor;
     this.instance = new DungeonInstance(this.seed, floor, this.r.scene, this.fx, this.progress, this.hooks());
     setGroundOverride(this.instance.groundAt);
@@ -184,20 +202,67 @@ export class Realm {
     this.busy = false;
   }
 
+  async enterMine() {
+    if (this.busy || this.mode === 'dungeon') return;
+    this.busy = true;
+    await this.hud.fade(true);
+    this.instance?.dispose();
+    this.instance = null;
+    this.mineInstance?.dispose();
+    this.overworld.clearEnemies();
+    this.overworld.enemiesEnabled(false);
+    this.overworld.hide(true);
+    this.atmosphere(true);
+    this.mode = 'dungeon';
+    this.active = 'mine';
+    this.mineInstance = new MineInstance(this.r.scene, this.fx, this.mineProgress, {
+      toast: (m) => this.hud.toast(m),
+      giveGold: (at, n) => this.rewards.spawn(at, 0, n),
+      giveItem: (id) => {
+        const name = ITEMS[id]?.name ?? id;
+        this.player.equip.add(id);
+        this.hud.markHotbarDirty();
+        return name;
+      },
+      leave: () => void this.leave(),
+      bossBar: (t, name) => this.hud.bossBar(t, name),
+      save: () => this.onSave?.(),
+    });
+    setGroundOverride(this.mineInstance.groundAt);
+    await this.mineInstance.ready;
+    this.maps['mine:1'] ??= this.mineInstance.map;
+    this.mapUI.setFloor(this.maps['mine:1'], "KING'S ROAD MINE");
+    this.player.teleport(this.mineInstance.spawnPoint.clone());
+    this.player.yaw = this.mineInstance.entranceYaw;
+    this.player.lock = null;
+    this.cam.yaw = this.mineInstance.entranceYaw;
+    this.cam.distance = 3.2;
+    this.cam.snapTo(this.player.pos);
+    this.onSave?.();
+    await new Promise((r) => setTimeout(r, 120));
+    this.hud.toast("The Old King's Road Mine. The deeper you go, the older it gets.");
+    await this.hud.fade(false);
+    this.busy = false;
+  }
+
   async leave() {
     if (this.busy || this.mode !== 'dungeon') return;
     this.busy = true;
     await this.hud.fade(true);
     this.instance?.dispose();
     this.instance = null;
+    this.mineInstance?.dispose();
+    this.mineInstance = null;
     setGroundOverride(null);
     this.mode = 'overworld';
+    this.active = null;
     this.mapUI.setFloor(null);
     this.overworld.hide(false);
     this.overworld.enemiesEnabled(true);
     this.atmosphere(false);
-    // Back out in front of the crypt door, facing down the valley.
-    const p = this.cryptDoor.clone().add(new THREE.Vector3(0, 0, 7));
+    // Return to the entrance used by whichever dungeon was active.
+    const door = this.active === 'mine' ? this.mineDoor : this.cryptDoor;
+    const p = door.clone().add(this.active === 'mine' ? new THREE.Vector3(0, 0, 5) : new THREE.Vector3(0, 0, 7));
     p.y = heightAt(p.x, p.z);
     this.player.teleport(p.setY(p.y + 0.3));
     this.player.yaw = 0;
@@ -214,6 +279,12 @@ export class Realm {
   }
 
   update(dt: number) {
+    if (this.active === 'mine' && this.mineInstance) {
+      this.mineInstance.update(dt, this.player);
+      const [cx, cy] = this.mineInstance.cellAt(this.player.pos);
+      this.mapUI.setPlayer(cx, cy, Math.PI - this.player.yaw);
+      return;
+    }
     const inst = this.instance;
     if (!inst) return;
     inst.update(dt, this.player);
