@@ -249,6 +249,7 @@ export class Realm {
     if (this.busy || this.mode !== 'dungeon') return;
     this.busy = true;
     await this.hud.fade(true);
+    const leavingMine = this.active === 'mine';
     this.instance?.dispose();
     this.instance = null;
     this.mineInstance?.dispose();
@@ -261,8 +262,8 @@ export class Realm {
     this.overworld.enemiesEnabled(true);
     this.atmosphere(false);
     // Return to the entrance used by whichever dungeon was active.
-    const door = this.active === 'mine' ? this.mineDoor : this.cryptDoor;
-    const p = door.clone().add(this.active === 'mine' ? new THREE.Vector3(0, 0, 5) : new THREE.Vector3(0, 0, 7));
+    const door = leavingMine ? this.mineDoor : this.cryptDoor;
+    const p = door.clone().add(leavingMine ? new THREE.Vector3(0, 0, 5) : new THREE.Vector3(0, 0, 7));
     p.y = heightAt(p.x, p.z);
     this.player.teleport(p.setY(p.y + 0.3));
     this.player.yaw = 0;
