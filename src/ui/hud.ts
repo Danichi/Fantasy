@@ -56,6 +56,11 @@ export class HUD {
   private boss: { hp: number; maxHp: number; alive: boolean } | null = null;
   private bossTrail = 1;
   onSlotDrop?: (mode: 'items' | 'moves', slot: number, uid: number) => void;
+  /** class skills on the moves bar: how to draw one, and its live cooldown (0..1) */
+  skillSlot?: (ref: string) => { svg: string; name: string; cost: string; cd: number; ready: boolean } | null;
+  /** the active class's resource (Flow pips, Resolve bar) */
+  resource?: () => { name: string; value: number; max: number; kind: 'pips' | 'bar'; color: string } | null;
+  private resEl!: HTMLElement;
 
   constructor(private player: Player, private camera: THREE.Camera) {
     this.root = document.getElementById('ui')!;
@@ -78,6 +83,7 @@ export class HUD {
     this.goldEl = xpRow.querySelector('.gold')!;
     this.xpVal = xpRow.querySelector('.xpv')!;
     this.xpBar = xpRow.querySelector('.xpbar')!;
+    this.resEl = el('div', 'resrow', vit);
 
     const wrap = el('div', 'loadout-wrap', this.root);
     const handRow = el('div', 'hands', wrap);
@@ -231,6 +237,14 @@ export class HUD {
       s.className = 'slot interactive' + (moves ? ' move' : '') + (i >= list.length ? ' hidden' : '');
       s.innerHTML = `<span class="key">${i + 1}</span><i class="cd"></i>`;
       s.title = '';
+      if (typeof uid === 'string') {
+        const sk = this.skillSlot?.(uid);
+        if (!sk) return;
+        s.classList.add('skill');
+        s.innerHTML += `${sk.svg}<span class="cost">${sk.cost}</span>`;
+        s.title = sk.name;
+        return;
+      }
       const it = eq.get(uid);
       if (!it) return;
       s.innerHTML += `<img src="${iconFor(it.def.id)}" alt="">`;
@@ -265,6 +279,31 @@ export class HUD {
     if (this.hotbarDirty) {
       this.hotbarDirty = false;
       this.renderHotbar();
+    }
+    // Skill cooldowns sweep round their slots.
+    if (this.mode === 'moves') {
+      p.equip.moves.forEach((ref, i) => {
+        if (typeof ref !== 'string') return;
+        const sk = this.skillSlot?.(ref);
+        const s = this.slots[i];
+        const cd = s?.querySelector<HTMLElement>('.cd');
+        if (!sk || !cd) return;
+        cd.style.background = sk.cd > 0 ? `conic-gradient(rgba(0,0,0,0.72) ${sk.cd * 360}deg, transparent 0)` : '';
+        s.classList.toggle('dim', !sk.ready);
+      });
+    }
+    const res = this.resource?.();
+    if (!res) this.resEl.style.display = 'none';
+    else {
+      this.resEl.style.display = '';
+      const key = `${res.name}|${res.kind}|${res.max}`;
+      if (this.resEl.dataset.k !== key) {
+        this.resEl.dataset.k = key;
+        this.resEl.innerHTML = `<span class="rn">${res.name}</span>` + (res.kind === 'pips' ? Array.from({ length: res.max }, () => '<i class="pip"></i>').join('') : '<span class="rbar"><i></i></span>');
+        this.resEl.style.setProperty('--rc', res.color);
+      }
+      if (res.kind === 'pips') this.resEl.querySelectorAll('.pip').forEach((e, i) => e.classList.toggle('on', i < Math.floor(res.value + 1e-6)));
+      else (this.resEl.querySelector('.rbar i') as HTMLElement).style.transform = `scaleX(${res.value / res.max})`;
     }
     const pr = p.prog;
     // XP is spent, not auto-levelled: the bar fills towards the active class's next level.

@@ -192,6 +192,15 @@ html, body {
 .slot.move { border-color: rgba(111, 168, 255, 0.45); }
 .slot .cost { position: absolute; left: 4px; bottom: 3px; font: 700 9px/1 var(--sans); color: #9cc4ff; text-shadow: 0 1px 2px #000; }
 .slot .cd { position: absolute; inset: 0; pointer-events: none; }
+.slot.skill svg { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); }
+.slot.skill.dim svg { opacity: 0.45; }
+.slot.skill .cd { border-radius: 2px; z-index: 2; }
+.resrow { display: flex; align-items: center; gap: 5px; margin-top: 4px; --rc: #6fd6c6; }
+.resrow .rn { font: 600 9px/1 var(--sans); letter-spacing: 0.16em; color: var(--rc); text-shadow: 0 1px 2px #000; margin-right: 3px; }
+.resrow .pip { width: 10px; height: 10px; transform: rotate(45deg); border: 1px solid var(--rc); background: rgba(0, 0, 0, 0.5); transition: background 0.15s, box-shadow 0.15s; }
+.resrow .pip.on { background: var(--rc); box-shadow: 0 0 8px var(--rc); }
+.resrow .rbar { position: relative; width: 150px; height: 6px; background: rgba(8, 7, 6, 0.75); border: 1px solid var(--rc); }
+.resrow .rbar i { position: absolute; inset: 0; background: var(--rc); transform-origin: left center; transform: scaleX(0); transition: transform 0.2s; }
 .slot.pulse { animation: slotpulse 0.3s ease-out; }
 @keyframes slotpulse { 0% { transform: scale(1.12); } 100% { transform: scale(1); } }
 .slot.dragover { outline: 2px solid var(--gold-bright); }

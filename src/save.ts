@@ -22,7 +22,7 @@ export interface SaveData {
   items: { id: string; qty: number }[];
   equipped: Partial<Record<Slot, number>>; // slot -> index into items
   quick: (number | null)[];
-  moves: (number | null)[];
+  moves: (number | string | null)[];
   activeSpell: number | null;
   maps: Record<string, MapData>;
   dungeon: DungeonProgress;
@@ -73,7 +73,7 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty })),
     equipped,
     quick: clean(eq.quick),
-    moves: clean(eq.moves),
+    moves: eq.moves.map((u) => (typeof u === 'string' ? u : clean([u])[0])),
     activeSpell: idx(eq.activeSpell),
     maps,
     dungeon,
@@ -118,7 +118,7 @@ export function applySave(player: Player, d: SaveData) {
     if (u != null) eq.equip(u, slot as Slot);
   }
   eq.quick = d.quick.map(uid);
-  eq.moves = d.moves.map(uid);
+  eq.moves = d.moves.map((k) => (typeof k === 'string' ? k : uid(k)));
   const sp = uid(d.activeSpell);
   if (sp != null) eq.equip(sp);
   player.hp = player.maxHp;

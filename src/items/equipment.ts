@@ -28,8 +28,8 @@ export class Equipment implements LimbFit {
   equipped: Partial<Record<Slot, number>> = {};
   /** quick items (potions etc.) on keys 1-4 */
   quick: (number | null)[] = [null, null, null, null];
-  /** moveset bar (Tab): spells now, class skills later; keys 1-6 */
-  moves: (number | null)[] = [null, null, null, null, null, null];
+  /** moveset bar (Tab), keys 1-6: spell item uids, or class skills as "skill:<discipline>:<node>" */
+  moves: (number | string | null)[] = [null, null, null, null, null, null];
   /** the spell R casts */
   activeSpell: number | null = null;
   showArmor = true;
@@ -92,7 +92,8 @@ export class Equipment implements LimbFit {
     return inst;
   }
 
-  get(uid: number | null | undefined) {
+  get(uid: number | string | null | undefined) {
+    if (typeof uid === 'string') return undefined;
     return uid == null ? undefined : this.items.find((i) => i.uid === uid);
   }
 

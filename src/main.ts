@@ -22,6 +22,8 @@ import { InventoryUI, buildOverlays } from './ui/inventory';
 import { SkillsUI } from './ui/skills';
 import { DISC } from './paths/data';
 import { mentorOptions } from './paths/mentors';
+import { SkillRuntime } from './paths/skills';
+import { skillIcon } from './ui/skillTree';
 import { CharPreview } from './ui/charPreview';
 import { events } from './core/events';
 import { buildWorld } from './world/props';
@@ -79,6 +81,7 @@ async function boot() {
   const slimes = new SlimeSpawner(r.scene, fx);
   if (TEST_MODE) slimes.enabled = false;
   const spells = new Spells(r.scene, fx, player);
+  const skillRt = new SkillRuntime(r.scene, player, fx, spells);
   const world = await buildWorld(r.scene, r.renderer, fx);
   mark('world');
   const grass = new Grass(r.scene, terrain.splat);
@@ -114,9 +117,27 @@ async function boot() {
 
   // ---- UI ------------------------------------------------------------------
   const hud = new HUD(player, r.camera);
+  hud.resource = () => skillRt.resource();
+  hud.skillSlot = (ref) => {
+    const sk = SkillRuntime.parse(ref);
+    if (!sk?.def) return null;
+    const v = player.paths.node(sk.d.id, sk.n.id);
+    const def = sk.def;
+    const cost = def.mana ? `${skillRt.manaCost(def)}` : def.flow ? `${def.flow}F` : def.stamina ? `${def.stamina}` : '';
+    const why = skillRt.blocked(ref);
+    return {
+      svg: skillIcon(sk.d.id, sk.d.color, sk.n.name, v?.r ?? 0),
+      name: `${sk.n.name} (${sk.d.name})`,
+      cost,
+      cd: def.cd > 0 ? skillRt.cooldown(sk.key) / def.cd : 0,
+      ready: !why || why === 'busy',
+    };
+  };
+  events.on('pathsChanged', () => hud.markHotbarDirty());
   const preview = new CharPreview(r.renderer, r.scene, player, [r.sun, r.hemi]);
   const inv = new InventoryUI(player, preview);
   const skills = new SkillsUI(player);
+  skills.runtime = skillRt;
   const mapUI = new DungeonMapUI();
   const realm = new Realm(r, player, cam, fx, hud, mapUI, {
     hide: (h) => {
@@ -241,7 +262,14 @@ async function boot() {
       if (it.def.kind === 'consumable') player.useConsumable(it.uid);
       hud.markHotbarDirty();
     } else {
-      const it = eq.get(eq.moves[i]);
+      const ref = eq.moves[i];
+      if (typeof ref === 'string') {
+        const why = skillRt.use(ref);
+        if (why && why !== 'busy') hud.toast(why);
+        else if (!why) hud.pulseSlot(i);
+        return;
+      }
+      const it = eq.get(ref);
       if (!it) return;
       hud.pulseSlot(i);
       player.castMove(it.uid);
@@ -308,6 +336,7 @@ async function boot() {
       }
       slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
       player.update(STEP, input, cam);
+      skillRt.update(STEP);
       if (realm.mode === 'overworld') slimes.update(STEP, player);
       realm.update(STEP);
       rewards.update(STEP, player.center);
@@ -392,7 +421,7 @@ async function boot() {
 
   if (DEBUG || TEST_MODE) {
     (window as any).__game = {
-      THREE, r, input, player, cam, physics, fx, slimes, spells, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

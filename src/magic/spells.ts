@@ -87,6 +87,7 @@ interface Fireball {
   target: Target | null;
   light: THREE.PointLight | null;
   damage: number;
+  splash: number;
 }
 
 interface Flash {
@@ -123,7 +124,7 @@ export class Spells {
     };
   }
 
-  castFireball(from: THREE.Vector3, dir: THREE.Vector3, target: Target | null) {
+  castFireball(from: THREE.Vector3, dir: THREE.Vector3, target: Target | null, damage?: number, scale = 1, splash = 2.6) {
     const group = new THREE.Group();
     const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 3), this.fireMat);
     const glow = new THREE.Sprite(this.glowMat);
@@ -137,7 +138,8 @@ export class Spells {
       light.intensity = 18;
       light.distance = 9;
     }
-    this.balls.push({ phase: Math.random() * 6, group, vel: dir.clone().normalize().multiplyScalar(17), life: 3, target, light, damage: (ITEMS.fireball.stats.damage ?? 40) * this.player.paths.spellPower });
+    this.balls.push({ phase: Math.random() * 6, group, vel: dir.clone().normalize().multiplyScalar(17), life: 3, target, light, splash, damage: damage ?? (ITEMS.fireball.stats.damage ?? 40) * this.player.paths.spellPower });
+    group.scale.setScalar(scale);
     this.fx.add.spawn({ pos: from, spread: 3, count: 18, life: [0.15, 0.35], size: [0.15, 0.02], color: 0xffe0a0, color2: 0xff4000 });
   }
 
@@ -148,7 +150,7 @@ export class Spells {
     for (const t of targets) {
       if (!t.alive) continue;
       const d = t.center.distanceTo(at);
-      const splash = 2.6;
+      const splash = fb.splash;
       if (t !== direct && d > splash + t.radius) continue;
       const k = t === direct ? 1 : Math.max(0.25, 1 - d / (splash + t.radius));
       const dmg = Math.round(fb.damage * k * (0.9 + Math.random() * 0.2) * (t.stunned ? 2 : 1));

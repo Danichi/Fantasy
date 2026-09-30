@@ -6,7 +6,8 @@ import {
   ATTRS, MASTERY_DISCOUNT, MASTERY_NAMES, MASTERY_XP, MAX_LEVEL, MAX_RANK, NODE_COST, levelCost, masteryRank, treeOf,
   type TreeNode,
 } from '../paths/paths';
-import { ICONS, TreeView, drawSealed, hash } from './skillTree';
+import { ICONS, TreeView, drawSealed } from './skillTree';
+import { SkillRuntime } from '../paths/skills';
 
 // The Skills screen (K). Tabs: Disciplines (the atlas of classes and
 // callings; click one to open its tree), Attributes, Mastery.
@@ -16,11 +17,6 @@ import { ICONS, TreeView, drawSealed, hash } from './skillTree';
 type Tab = 'disc' | 'attr' | 'mast';
 const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
 const TYPE_LABEL: Record<TreeNode['type'], string> = { center: 'Foundation', minor: 'Minor', notable: 'Notable', active: 'Skill', keystone: 'Keystone', choice: 'Choice', cap: 'Capstone' };
-const MINOR: Record<Family, string[]> = {
-  combat: ['+4% class damage', '+5 max stamina', '+3% attack speed', '+6% resource gain', '+5% poise damage', '+3% crit chance'],
-  magic: ['+5% spell damage', '+8 max mana', '-4% mana cost', '+6% cast speed', '+6% effect duration', '+4% area'],
-  calling: ['+10% yield', '+8% effect strength', '-10% gathering time', '+1 recipe slot', '+6% duration', '+5% rare find chance'],
-};
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const fmt = (n: number) => n.toLocaleString();
 
@@ -39,6 +35,8 @@ export class SkillsUI {
   private selected = 'c';
   open = false;
   onToggle?: (open: boolean) => void;
+  /** the skill runtime, for live skill descriptions (costs, learned modifiers) */
+  runtime?: SkillRuntime;
 
   constructor(private player: Player) {
     const root = document.getElementById('ui')!;
@@ -333,6 +331,7 @@ export class SkillsUI {
     panel.querySelector<HTMLElement>('[data-learn]')?.addEventListener('click', (e) => this.learn(Number((e.currentTarget as HTMLElement).dataset.learn)));
     panel.querySelector<HTMLElement>('[data-learn-b]')?.addEventListener('click', () => this.learn(1));
     panel.querySelector<HTMLElement>('[data-rank]')?.addEventListener('click', () => this.rankUp());
+    panel.querySelectorAll<HTMLElement>('[data-bar]').forEach((b) => b.addEventListener('click', () => this.toBar(Number(b.dataset.bar))));
     this.view?.redraw();
   }
 
@@ -347,18 +346,21 @@ export class SkillsUI {
     return shapes.map(([l, s]) => `<span><svg width="14" height="14" viewBox="-8 -8 16 16">${s}</svg>${l}</span>`).join('');
   }
 
+  /** Plain text of what a node does (skills: at its current or first rank). */
   private nodeDesc(d: DisciplineDef, n: TreeNode) {
     if (n.type === 'center') return `Foundation of ${d.name}.${d.res ? ` Grants the ${d.res} resource.` : ''} Tiers open at level 1, 5, 10, 15 and 20. Capstones at 25; you may own only one.`;
-    if (NODE_TEXT[n.name]) return NODE_TEXT[n.name];
+    const skill = SkillRuntime.skill(d.id, n.name);
+    const rank = this.paths.node(d.id, n.id)?.r ?? 1;
+    if (skill) return skill.text(rank, this.runtime!) + '.';
+    if (n.type === 'active') return `${NODE_TEXT[n.name] ?? 'A technique for your bar.'} (Not in the game yet.)`;
     if (n.type === 'choice') {
+      const v = this.paths.node(d.id, n.id);
+      if (v) return SkillRuntime.effect(d.id, n, v.pick).text + '.';
       const [a, b] = n.name.split('|');
-      return `Pick one: ${a} or ${b}. The other stays locked until you respec.`;
+      return `Pick one. ${a}: ${SkillRuntime.effect(d.id, n, 0).text}. ${b}: ${SkillRuntime.effect(d.id, n, 1).text}. The other stays locked until you respec.`;
     }
-    if (n.type === 'minor') return MINOR[d.fam][Math.floor(hash(d.id + n.id) * 6)] + '.';
-    if (n.type === 'notable') return `A passive that changes how ${d.branches![n.branch].name} plays.`;
-    if (n.type === 'active') return `A ${d.fam === 'calling' ? 'recipe' : d.fam === 'magic' ? 'spell' : 'technique'} for your bar. Rank it up with tree points, up to V. Rank III unlocks a Form.`;
-    if (n.type === 'keystone') return 'Build-defining: a big upside with a real drawback.';
-    return 'The crown of this branch. Only one capstone per tree.';
+    const e = SkillRuntime.effect(d.id, n);
+    return e.text + '.' + (e.craft ? ' (A crafting bonus: it takes effect when crafting arrives.)' : '');
   }
 
   private nodeCard(d: DisciplineDef, n: TreeNode) {
@@ -373,6 +375,13 @@ export class SkillsUI {
     else if (has) {
       h += `<span class="status">Learned${inactive ? ' · no effect while inactive' : ''}</span>`;
       if (n.type === 'active' && v!.r < MAX_RANK) h += `<div class="sk-actions"><button class="sk-btn primary" type="button" data-rank ${P.canRankUp(d.id, n) ? '' : 'disabled'}>Rank up to ${ROMAN[v!.r]} · 1 pt</button></div>`;
+      const skill = SkillRuntime.skill(d.id, n.name);
+      if (skill) {
+        const ref = `skill:${d.id}:${n.id}`;
+        const at = this.player.equip.moves.indexOf(ref);
+        h += `<div class="sk-kv">${skill.mana !== undefined ? `<span>Mana</span><span>${this.runtime?.manaCost(skill) ?? skill.mana}</span>` : ''}${skill.stamina ? `<span>Stamina</span><span>${skill.stamina}</span>` : ''}${skill.flow ? `<span>Flow</span><span>${skill.flow}</span>` : ''}${skill.cd ? `<span>Cooldown</span><span>${skill.cd}s</span>` : ''}</div>`;
+        h += `<div class="sk-bar"><span>On your moves bar (Tab, keys 1-6):</span><div>${[0, 1, 2, 3, 4, 5].map((i) => `<button class="sk-slot${at === i ? ' on' : ''}" type="button" data-bar="${i}">${i + 1}</button>`).join('')}</div></div>`;
+      }
     } else {
       const why = P.whyNot(d.id, n), ok = P.canLearn(d.id, n);
       if (why) h += `<span class="status no">${esc(why)}</span>`;
@@ -382,6 +391,20 @@ export class SkillsUI {
       } else h += `<div class="sk-actions"><button class="sk-btn primary" type="button" data-learn="0" ${ok ? '' : 'disabled'}>Learn · ${cost} pt${cost > 1 ? 's' : ''}</button></div>`;
     }
     return h + '</div>';
+  }
+
+  /** Put the selected skill on the moves bar (moving it if it's already there). */
+  private toBar(slot: number) {
+    const d = DISC[this.openId!], n = treeOf(d)?.map[this.selected];
+    if (!n) return;
+    const ref = `skill:${d.id}:${n.id}`;
+    const eq = this.player.equip;
+    const was = eq.moves[slot] === ref;
+    eq.moves = eq.moves.map((m) => (m === ref ? null : m));
+    if (!was) eq.moves[slot] = ref;
+    events.emit('equipmentChanged', {});
+    this.toast(was ? `${n.name} removed from the bar` : `${n.name} is on key ${slot + 1} of the moves bar (Tab)`);
+    this.renderPanel();
   }
 
   private learn(pick: number) {

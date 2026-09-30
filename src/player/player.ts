@@ -15,6 +15,7 @@ import { surfaceAt } from '../world/terrain';
 import { waterDepthAt } from '../world/water';
 import { Progression } from '../progression/progression';
 import { Paths } from '../paths/paths';
+import { baseMods, type CombatMods } from '../combat/mods';
 
 const CAPSULE_HALF = 0.55;
 const CAPSULE_R = 0.32;
@@ -37,6 +38,10 @@ interface ActiveAction {
   fired: boolean;
   usingClip: boolean;
   landed: boolean;
+  /** skill damage multiplier on this action's blade hits */
+  mult: number;
+  /** index of the next entry in def.events */
+  ev: number;
 }
 
 /**
@@ -71,14 +76,16 @@ export class Player {
   readonly prog = new Progression();
   /** disciplines, attributes and the active combat class */
   readonly paths = new Paths(this.prog);
+  /** combat modifiers from skill passives and buffs, rewritten every step by the skill runtime */
+  mods: CombatMods = baseMods();
   get maxHp() {
-    return 120 + this.paths.bonusHp + (this.equip?.bonus('maxHp') ?? 0);
+    return Math.round(120 + this.paths.bonusHp + this.mods.hp + (this.equip?.bonus('maxHp') ?? 0));
   }
   get maxStamina() {
-    return 100 + this.paths.bonusStamina + (this.equip?.bonus('maxStamina') ?? 0);
+    return Math.round(100 + this.paths.bonusStamina + this.mods.stamina + (this.equip?.bonus('maxStamina') ?? 0));
   }
   get maxMana() {
-    return 80 + this.paths.bonusMana + (this.equip?.bonus('maxMana') ?? 0);
+    return Math.round(80 + this.paths.bonusMana + this.mods.mana + (this.equip?.bonus('maxMana') ?? 0));
   }
   private staminaDelay = 0;
   private hot = { rate: 0, left: 0 };
@@ -115,6 +122,16 @@ export class Player {
   onShake?: (amt: number) => void;
   onSpell?: (spell: string, from: THREE.Vector3, dir: THREE.Vector3, target: Target | null) => void;
   onPlungeLand?: (at: THREE.Vector3) => void;
+  /** a skill action reached one of its named events */
+  onSkillEvent?: (name: string) => void;
+  /** skill defence hook (auto-parry stances, reflecting walls): return a result to override */
+  defend?: (att: IncomingAttack, facing: number) => DefenceResult | null;
+  /** damage shields: returns what's left after absorbing */
+  absorb?: (dmg: number) => number;
+  /** return true to survive a killing blow (the hook sets health) */
+  cheatDeath?: () => boolean;
+  /** per-target bonus for blade hits (brands, forced crits) */
+  meleeBonus?: (t: Target) => { mult: number; crit: boolean };
 
   async init(scene: THREE.Scene, spawn: THREE.Vector3) {
     await this.char.load();
@@ -213,7 +230,7 @@ export class Player {
     if (input.wasPressed('parry')) buf('parry');
     if (input.wasPressed('dodge')) buf('dodge');
     if (input.wasPressed('cast')) buf('cast');
-    this.blocking = input.held('offhand') && this.equip.hasShield && (!this.act || this.act.def.id === 'parryShield');
+    this.blocking = input.held('offhand') && this.equip.hasShield && this.mods.canBlock && (!this.act || this.act.def.id === 'parryShield');
     if (input.wasPressed('jump') && this.grounded && !this.act) {
       this.vel.y = JUMP_V;
       this.grounded = false;
@@ -229,17 +246,19 @@ export class Player {
     if (!raw) return false;
     const usingClip = !!raw.clip && this.char.has(raw.clip);
     const def = resolveAction(raw, usingClip);
-    if (def.stamina > 0 && this.stamina <= 0) {
+    const m = this.mods;
+    const stam = def.stamina * m.staminaCost * (def.roll ? m.dodgeCost : 1);
+    if (stam > 0 && this.stamina <= 0) {
       events.emit('notEnough', { stat: 'stamina' });
       return false;
     }
-    this.stamina = Math.max(0, this.stamina - def.stamina);
-    if (def.stamina > 0) this.staminaDelay = 0.65;
+    this.stamina = Math.max(0, this.stamina - stam);
+    if (stam > 0) this.staminaDelay = 0.65;
     const w = def.hit?.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
-    const speed = (def.weaponSpeed ? w?.def.stats.speed ?? 1 : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1);
+    const speed = (def.weaponSpeed ? (w?.def.stats.speed ?? 1) * m.attackSpeed : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1) * (id.startsWith('cast') ? m.castSpeed : 1);
     this.poseFrom = this.lastPose;
     this.poseFade = 0;
-    this.act = { def, t: t0 ?? def.startAt ?? 0, speed, hitSet: new Set(), charge: 0, charging: false, fired: false, usingClip, landed: false };
+    this.act = { def, t: t0 ?? def.startAt ?? 0, speed, hitSet: new Set(), charge: 0, charging: false, fired: false, usingClip, landed: false, mult: 1, ev: 0 };
     this.bladePrev.main = this.bladePrev.off = null;
     this.lastPresentT = -1;
 
@@ -339,13 +358,18 @@ export class Player {
       a.fired = true;
       this.fireEvent(d.event.name);
     }
+    while (d.events && a.ev < d.events.length && a.t >= d.events[a.ev].at) this.onSkillEvent?.(d.events[a.ev++].name);
     if (a.t >= d.dur) {
       this.endAction();
       this.consumeBuffer();
     }
   }
 
-  private fireEvent(name: 'fireball' | 'heal') {
+  private fireEvent(name: string) {
+    if (name !== 'fireball' && name !== 'heal') {
+      this.onSkillEvent?.(name);
+      return;
+    }
     if (name === 'fireball') {
       const main = this.equip.model('main');
       const from = new THREE.Vector3();
@@ -431,6 +455,12 @@ export class Player {
   /** Forward distance an action has travelled by time t (root motion). */
   private travelAt(a: ActiveAction, t: number): number {
     const def = a.def;
+    const boost = def.boost ? smoothstep(def.boost.from, def.boost.to, t) * def.boost.dist : 0;
+    return boost + this.baseTravelAt(a, t);
+  }
+
+  private baseTravelAt(a: ActiveAction, t: number): number {
+    const def = a.def;
     const info = a.usingClip ? this.char.clipInfo.get(def.clip!) : undefined;
     if (info?.rootCurve && info.rootCurve.length > 1) {
       const f = clamp(t, 0, (info.rootCurve.length - 1) / 30) * 30;
@@ -453,7 +483,7 @@ export class Player {
     const intent = this.moveIntent;
     let targetSpeed = 0;
     if (!a && intent.lengthSq() > 0) {
-      targetSpeed = this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2;
+      targetSpeed = (this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
       // Wading slows you down.
       const wade = waterDepthAt(this.pos.x, this.pos.z);
@@ -465,7 +495,7 @@ export class Player {
     }
 
     const hv = new THREE.Vector3(this.vel.x, 0, this.vel.z);
-    if (a && (a.def.roll || a.def.move || a.usingClip)) {
+    if (a && (a.def.roll || a.def.move || a.def.boost || a.usingClip)) {
       // Root motion: follow the action's travel curve along its direction.
       const dir = a.rollDir ?? this.forward;
       let d = this.travelAt(a, a.t + (a.charging ? 0 : dt * a.speed)) - this.travelAt(a, a.t);
@@ -528,7 +558,7 @@ export class Player {
     this.body.setNextKinematicTranslation(next);
     this.collider.setTranslation(next); // keep queries in sync before the world steps
     // Walls redirect velocity (slide) instead of it piling up against them.
-    if (dt > 0 && !(a && (a.def.roll || a.usingClip || a.def.move))) {
+    if (dt > 0 && !(a && (a.def.roll || a.usingClip || a.def.move || a.def.boost))) {
       this.vel.x = (m.x - this.push.x) / dt;
       this.vel.z = (m.z - this.push.z) / dt;
     }
@@ -747,14 +777,17 @@ export class Player {
         const [ha, hb] = hurtSegment(tg);
         if (segmentSegmentDistance(b, t, ha, hb) < tg.radius + 0.06) {
           a.hitSet.add(tg.id);
-          const crit = tg.stunned;
+          const extra = this.meleeBonus?.(tg);
+          const crit = tg.stunned || !!extra?.crit || Math.random() < this.mods.crit;
           const charge = 1 + a.charge * 0.6;
-          const bonus = (1 + this.equip.bonus('damagePct')) * this.paths.meleePower(weapon?.def.stats.speed ?? 1);
+          const light = a.def.id.startsWith('slash') || a.def.id.startsWith('offslash') ? this.mods.lightAttack : 1;
+          const bonus = (1 + this.equip.bonus('damagePct')) * this.paths.meleePower(weapon?.def.stats.speed ?? 1) * this.mods.melee * light * a.mult * (extra?.mult ?? 1);
           const dmg = Math.round(base * h.dmg * charge * bonus * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
           const dir = tg.position.clone().sub(this.pos).setY(0).normalize();
           const at2 = tg.center.clone().addScaledVector(dir, -tg.radius * 0.8);
-          tg.takeHit({ damage: dmg, poise: h.poise * charge * this.paths.poisePower, dir, at: at2, crit, source: 'melee' });
+          tg.takeHit({ damage: dmg, poise: h.poise * charge * this.paths.poisePower * this.mods.poise, dir, at: at2, crit, source: 'melee' });
           events.emit('enemyHit', { at: at2, amount: dmg, crit, enemyId: tg.id });
+          events.emit('meleeHit', { target: tg, amount: dmg, crit, action: a.def.id });
           const heavy = a.def.id === 'heavy' || a.def.id === 'airAttack';
           this.onHitStop?.(crit ? 0.16 : heavy ? 0.12 : 0.07);
           this.onShake?.(crit ? 0.4 : heavy ? 0.3 : 0.16);
@@ -770,8 +803,11 @@ export class Player {
     if (this.inIframes()) return 'dodged';
     const toAtt = att.from.clone().sub(this.pos).setY(0).normalize();
     const facing = toAtt.dot(this.forward);
+    const hooked = this.defend?.(att, facing);
+    if (hooked) return hooked;
     const a = this.act;
-    if (a?.def.parry && a.t >= a.def.parry[0] && a.t <= a.def.parry[1] && att.parryable && facing > 0.1) {
+    const pw = a?.def.parry ? a.def.parry[0] + (a.def.parry[1] - a.def.parry[0]) * this.mods.parryWindow : 0;
+    if (a?.def.parry && a.t >= a.def.parry[0] && a.t <= pw && att.parryable && facing > 0.1) {
       att.onParried?.();
       events.emit('parrySuccess', { at: this.center.addScaledVector(toAtt, 0.6) });
       this.onHitStop?.(0.18);
@@ -780,7 +816,7 @@ export class Player {
     }
     if (this.blocking && this.equip.hasShield && facing > 0.3 && this.blockW > 0.5) {
       const st = this.equip.offItem!.def.stats;
-      const cost = att.damage * (1 - (st.stability ?? 0.4)) * 1.7 + 6;
+      const cost = (att.damage * (1 - (st.stability ?? 0.4)) * 1.7 + 6) * this.mods.blockCost;
       this.stamina -= cost;
       this.staminaDelay = 0.8;
       this.blockHitT = 0;
@@ -816,7 +852,14 @@ export class Player {
 
   private applyDamage(d: number) {
     if (d <= 0 || this.invulnerable) return;
+    d *= this.mods.dmgTaken;
+    if (this.absorb) d = this.absorb(d);
+    if (d <= 0) return;
     this.hp = Math.max(0, this.hp - d);
+    if (this.hp <= 0 && this.cheatDeath?.()) {
+      events.emit('playerDamaged', { amount: d, blocked: false });
+      return;
+    }
     events.emit('playerDamaged', { amount: d, blocked: false });
     if (this.hp <= 0 && !this.dead) {
       this.dead = true;
@@ -842,8 +885,8 @@ export class Player {
 
   private updateStats(dt: number) {
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
-    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen) * dt);
-    this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen) * dt);
+    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen + this.mods.staminaRegen) * dt);
+    this.mana = Math.min(this.maxMana, this.mana + 2.2 * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen + this.mods.manaRegen) * dt);
     this.hp = Math.min(this.hp, this.maxHp);
     if (this.hot.left > 0 && !this.dead) {
       this.hot.left -= dt;
@@ -872,6 +915,39 @@ export class Player {
     if (!it || it.def.kind !== 'spell' || this.dead) return;
     this.equip.activeSpell = uid;
     this.buffer = { a: 'cast', t: performance.now() / 1000 };
+  }
+
+  /**
+   * Start a skill's action (see combat/skillActions.ts). Works from idle or
+   * once the current action can be cancelled, like a dodge.
+   */
+  startSkill(id: string, mult = 1, needGround = true): boolean {
+    if (this.dead || (needGround && !this.grounded)) return false;
+    const a = this.act;
+    if (a && a.t < a.def.cancel) return false;
+    if (!this.startAction(id)) return false;
+    this.act!.mult = mult;
+    return true;
+  }
+
+  /** Is the player free to start a skill right now? */
+  get canAct() {
+    return !this.dead && (!this.act || this.act.t >= this.act.def.cancel);
+  }
+
+  heal(amount: number) {
+    if (this.dead) return;
+    this.hp = Math.min(this.maxHp, this.hp + amount * this.mods.heal * this.paths.healPower);
+  }
+
+  /** Heal over time (replaces a weaker one). */
+  healOverTime(total: number, seconds: number) {
+    const rate = (total * this.mods.heal * this.paths.healPower) / seconds;
+    if (rate * seconds >= this.hot.rate * this.hot.left) this.hot = { rate, left: seconds };
+  }
+
+  cleanse() {
+    this.burn.left = 0;
   }
 
   /** Debug: show action `id` frozen at time t. */

@@ -8,6 +8,8 @@ export interface GameEvents {
   parrySuccess: { at: Vector3 };
   blockImpact: { at: Vector3; guardBroken: boolean };
   enemyHit: { at: Vector3; amount: number; crit: boolean; enemyId: number };
+  /** the player's blade connected (after enemyHit) */
+  meleeHit: { target: import('../combat/targets').Target; amount: number; crit: boolean; action: string };
   enemyDied: { at: Vector3; enemyId: number; kind: string };
   swing: { heavy: boolean };
   spellCast: { spell: string };

@@ -3,9 +3,11 @@ import * as THREE from 'three';
 // Procedural magic circles (runes drawn on a canvas) and expanding shockwave
 // rings. Both are additive, emissive-bright planes that fade over their life.
 
-type Style = 'fire' | 'light';
+export type Style = 'fire' | 'light' | 'gale' | 'wind' | 'frost' | 'steel' | 'shadow' | 'blood';
+/** which rune figure each style draws: hexagram (fire) or eight-point star (light) */
+const FIGURE: Record<Style, 'fire' | 'light'> = { fire: 'fire', blood: 'fire', light: 'light', gale: 'light', wind: 'light', frost: 'light', steel: 'fire', shadow: 'fire' };
 
-function drawCircle(style: Style) {
+function drawCircle(style: 'fire' | 'light') {
   const S = 512;
   const c = document.createElement('canvas');
   c.width = c.height = S;
@@ -89,10 +91,16 @@ interface Live {
 const COLORS: Record<Style, THREE.Color> = {
   fire: new THREE.Color(3.2, 1.3, 0.35),
   light: new THREE.Color(2.8, 2.3, 1.2),
+  gale: new THREE.Color(0.7, 2.6, 2.2),
+  wind: new THREE.Color(1.4, 2.6, 0.9),
+  frost: new THREE.Color(1.2, 1.9, 3.2),
+  steel: new THREE.Color(1.9, 2.0, 2.4),
+  shadow: new THREE.Color(1.6, 0.8, 2.8),
+  blood: new THREE.Color(3.0, 0.5, 0.35),
 };
 
 export class MagicCircles {
-  private tex: Record<Style, THREE.Texture>;
+  private tex: Record<'fire' | 'light', THREE.Texture>;
   private ringTex = drawRing();
   private live: Live[] = [];
   private geo = new THREE.PlaneGeometry(1, 1);
@@ -107,7 +115,7 @@ export class MagicCircles {
 
   /** Circle lying on the ground at `pos`. */
   ground(pos: THREE.Vector3, style: Style, size: number, life: number) {
-    const m = new THREE.Mesh(this.geo, this.material(this.tex[style], COLORS[style]));
+    const m = new THREE.Mesh(this.geo, this.material(this.tex[FIGURE[style]], COLORS[style]));
     m.rotation.x = -Math.PI / 2;
     m.position.copy(pos).setY(pos.y + 0.05);
     m.renderOrder = 5;
@@ -117,7 +125,7 @@ export class MagicCircles {
 
   /** Circle standing upright, facing `dir`, that tracks a moving anchor. */
   facing(follow: () => { pos: THREE.Vector3; quat: THREE.Quaternion }, style: Style, size: number, life: number) {
-    const m = new THREE.Mesh(this.geo, this.material(this.tex[style], COLORS[style]));
+    const m = new THREE.Mesh(this.geo, this.material(this.tex[FIGURE[style]], COLORS[style]));
     m.renderOrder = 5;
     this.scene.add(m);
     this.live.push({ mesh: m, t: 0, life, kind: 'circle', size, follow, spin: -1.6 });
