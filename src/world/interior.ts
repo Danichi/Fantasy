@@ -358,7 +358,7 @@ export class Interior {
       enabled: () => true,
       action: () => this.onInspect?.(label, text),
     });
-    pos.userData = { inspection: text };
+    // Inspection text is routed through the dialogue callback; no UI state is stored on the Vector3.
   }
 
   private smallProp(mat: THREE.Material, x: number, y: number, z: number, s = 0.18) {
