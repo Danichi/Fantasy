@@ -206,6 +206,8 @@ export class SkillRuntime {
       if (o.skip?.has(t.id)) continue;
       const to = t.position.clone().sub(center).setY(0);
       if (o.cone && to.lengthSq() > 0.04 && to.clone().normalize().dot(o.cone.dir) < o.cone.cos) continue;
+      // Walls shelter what's behind them.
+      if (!physics.lineOfSight(center.clone().setY(Math.max(center.y, this.player.pos.y + 0.9)), t.center, t.radius * 0.5)) continue;
       const dir = o.pull ? to.clone().negate().normalize() : to.lengthSq() > 1e-4 ? to.normalize() : this.player.forward;
       this.hit(t, amount, { ...o, dir });
       o.skip?.add(t.id);
