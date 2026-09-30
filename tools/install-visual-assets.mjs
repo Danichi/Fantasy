@@ -19,9 +19,6 @@ const assets = [
   ['fern-1', 'Fern_1.glb'],
   ['flower-3-group', 'Flower_3_Group.glb'],
   ['mushroom-common', 'Mushroom_Common.glb'],
-  ['grass-common-short', 'Grass_Common_Short.glb'],
-  ['grass-common-tall', 'Grass_Common_Tall.glb'],
-  ['grass-wispy-tall', 'Grass_Wispy_Tall.glb'],
 ];
 
 mkdirSync(targetDir, { recursive: true });

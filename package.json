@@ -11,7 +11,8 @@
     "import:mixamo": "node tools/import-mixamo.mjs",
     "test": "playwright test",
     "desktop": "vite build && node electron/run.cjs",
-    "dist": "vite build && electron-builder --win"
+    "dist": "vite build && electron-builder --win dir",
+    "dist:installer": "vite build && electron-builder --win"
   },
   "type": "module",
   "dependencies": {},
