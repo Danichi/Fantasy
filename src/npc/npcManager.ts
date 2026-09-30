@@ -106,7 +106,10 @@ const SPRITE_CAP = 240;
 const CELL_W = 64, CELL_H = 128, ATLAS_COLS = 16, ATLAS_ROWS = 16;
 const DESPAWN_R = 40; // released beyond this (hysteresis over ACTIVE_R)
 const MAX_ACTORS = 18;
-const WALK_SPEED = 1.35;
+/** Walking pace for a 1.8 m person (m/s); taller people stride further. */
+const WALK_SPEED = 1.15;
+/** How far the walk clip carries a 1.8 m body per second at normal playback (measured from its planted feet). */
+const WALK_CLIP_SPEED = 0.82;
 
 const lookKey = (l: Look) => JSON.stringify(l);
 const hash = (s: string) => {
@@ -275,7 +278,8 @@ export class NpcManager {
     }
     const leisure = e.activity === 'sit' || e.activity === 'play' || e.activity === 'idle' || e.activity === 'talk';
     const outdoors = !(this.settlements.get(st.rec.settlement)!.places.get(e.place)?.indoors);
-    if (this.raining && leisure && outdoors) {
+    // Named residents (quest givers) keep their posts in the rain: players come looking for them.
+    if (this.raining && leisure && outdoors && !(st.rec.named && e.place.startsWith('post:'))) {
       if (st.rec.job === 'child') {
         const home = st.rec.schedule.find((x) => x.activity === 'sleep')?.place ?? e.place;
         return { activity: 'idle' as Activity, place: home };
@@ -285,14 +289,43 @@ export class NpcManager {
     return e;
   }
 
+  /** Who holds which spot: "settlement:place" -> spot index -> resident. */
+  private claims = new Map<string, Map<number, NpcState>>();
+  private claimed = new Map<NpcState, { key: string; i: number }>();
+
+  /**
+   * A free spot at a place: start from the resident's own favourite and take
+   * the next one nobody holds, so a crowd spreads across every spot there.
+   * Once they're all taken, people share, standing further apart.
+   */
+  private claimSpot(st: NpcState, placeId: string, n: number) {
+    const key = st.rec.settlement + ':' + placeId;
+    const old = this.claimed.get(st);
+    if (old && old.key === key) return { i: old.i, crowded: false };
+    if (old) this.claims.get(old.key)?.delete(old.i);
+    const held = this.claims.get(key) ?? new Map<number, NpcState>();
+    this.claims.set(key, held);
+    const start = st.seed % n;
+    for (let k = 0; k < n; k++) {
+      const i = (start + k) % n;
+      if (held.has(i)) continue;
+      held.set(i, st);
+      this.claimed.set(st, { key, i });
+      return { i, crowded: false };
+    }
+    this.claimed.delete(st);
+    return { i: start, crowded: true };
+  }
+
   private spotFor(st: NpcState, placeId: string) {
     const s = this.settlements.get(st.rec.settlement)!;
     const p = s.places.get(placeId);
     if (!p || !p.spots.length) return { spot: s.center.clone(), indoors: false, yaw: 0 };
-    const spot = p.spots[st.seed % p.spots.length].clone();
+    const { i, crowded } = this.claimSpot(st, placeId, p.spots.length);
+    const spot = p.spots[i].clone();
     // A personal offset so people sharing a place stand apart instead of piling up.
     const a = ((st.seed >> 8) % 360) * (Math.PI / 180);
-    const r = p.seated ? 0.4 : 0.9 + (((st.seed >> 3) % 97) / 97) * 1.6;
+    const r = p.seated ? 0.4 : (crowded ? 2.2 : 0.4) + (((st.seed >> 3) % 97) / 97) * (crowded ? 2.4 : 1.0);
     spot.x += Math.cos(a) * r;
     spot.z += Math.sin(a) * r;
     spot.y = heightAt(spot.x, spot.z);
@@ -439,7 +472,9 @@ export class NpcManager {
       }
       // Schedule changes: head to the new place along the waypoint graph.
       const idx = this.entryIndex(st.rec);
-      if (idx !== st.entry || this.effective(st).place !== st.placeKey) {
+      // A quest giver doesn't walk off while the player is still with them.
+      const stay = st.rec.named && !st.moving && st.pos.distanceTo(player) < 12;
+      if (!stay && (idx !== st.entry || this.effective(st).place !== st.placeKey)) {
         this.placeBySchedule(st, false);
         st.path = this.route(s, st.pos, st.spot);
         st.moving = true;
@@ -455,7 +490,7 @@ export class NpcManager {
         else {
           const dx = target.x - st.pos.x, dz = target.z - st.pos.z;
           const d = Math.hypot(dx, dz);
-          const step = WALK_SPEED * dt;
+          const step = WALK_SPEED * ((st.rec.look.height ?? 1.75) / 1.8) * dt;
           if (d <= step) {
             st.pos.set(target.x, 0, target.z);
             st.path.shift();
@@ -485,11 +520,12 @@ export class NpcManager {
           st.actor.built.root.traverse((o) => ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = cast)));
         }
       }
-      // At the cap, the farthest actor gives way to someone clearly nearer.
+      // At the cap, the farthest actor gives way to someone clearly nearer, or to
+      // a named resident (quest givers are always animated when close).
       if (!st.actor && wantActor && slow && this.active >= MAX_ACTORS) {
         let far: NpcState | null = null;
-        for (const o of this.npcs) if (o.actor && (!far || (o.dist ?? 0) > (far.dist ?? 0))) far = o;
-        if (far && (far.dist ?? 0) > dist + 12) this.release(far);
+        for (const o of this.npcs) if (o.actor && !o.rec.named && (!far || (o.dist ?? 0) > (far.dist ?? 0))) far = o;
+        if (far && ((far.dist ?? 0) > dist + 12 || st.rec.named)) this.release(far);
       }
       if (!st.actor && wantActor && slow) wanting.push(st);
       if (!st.actor) {
@@ -531,6 +567,9 @@ export class NpcManager {
       if (st === this.engaged || st.talkT > 0) clip = 'talk';
       else if (st.moving) clip = 'walk';
       this.play(a, clip);
+      // Legs keep pace with the ground: the walk plays fast enough that planted feet don't slide.
+      const walkAct = a.actions.walk;
+      if (walkAct) walkAct.timeScale = WALK_SPEED / WALK_CLIP_SPEED;
       // Far actors animate at a lower rate.
       a.built.mixer.update(dist > 45 ? (slow ? 0.25 : 0) : dt);
       // Turn the head toward the player when close and idle.
@@ -542,7 +581,8 @@ export class NpcManager {
     this.finishSprites(nSprites);
     // Hand out actors nearest-first; the nearest without a built look gets built next.
     if (wanting.length) {
-      wanting.sort((a, b) => (a.dist ?? 0) - (b.dist ?? 0));
+      // Named residents first, then nearest.
+      wanting.sort((a, b) => Number(!!b.rec.named) - Number(!!a.rec.named) || (a.dist ?? 0) - (b.dist ?? 0));
       for (const st of wanting) {
         if (this.active >= MAX_ACTORS) break;
         const a = this.take(st);

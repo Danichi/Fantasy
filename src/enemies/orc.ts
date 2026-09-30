@@ -313,6 +313,40 @@ export class OrcWarlord implements Target {
     return this.state === 'dying' && this.deathT > 6;
   }
 
+  /**
+   * Back to where he started, at full health and asleep (the player died and
+   * came back): the fight starts over from the top.
+   */
+  reset(at: THREE.Vector3, yaw: number) {
+    if (!this.alive) return;
+    this.hp = this.maxHp;
+    this.stunned = false;
+    this.poiseAcc = 0;
+    this.flash = 0;
+    this.move = null;
+    this.moveName = '';
+    this.cooldown = 0;
+    this.vel.set(0, 0, 0);
+    this.yawVel = 0;
+    for (const a of this.arrows) this.scene.remove(a.mesh);
+    this.arrows = [];
+    this.arrowNocked.visible = false;
+    this.sheathe(false);
+    this.position.copy(at);
+    this.prevPos.copy(at);
+    this.yaw = this.prevYaw = yaw;
+    const c = { x: at.x, y: at.y + 1.45, z: at.z };
+    this.rb.setTranslation(c, true);
+    this.rb.setNextKinematicTranslation(c);
+    this.col.setTranslation(c);
+    this.setState('dormant');
+    if (this.spec.emerge) {
+      this.lockable = false;
+      targets.delete(this);
+      this.char.root.visible = false;
+    }
+  }
+
   /** Wake from dormancy: climb out of the ground first if this boss emerges. */
   wake() {
     if (this.state !== 'dormant') return;
@@ -381,9 +415,55 @@ export class OrcWarlord implements Target {
     this.bowBack.visible = !bow && this.spec.bow;
   }
 
+  private bodyReleased = false;
+  /**
+   * Keep the body where it fell: collision and targeting go, the model stays
+   * in its final death pose (the Gravewood leaves its abomination lying there).
+   */
+  releaseBody() {
+    if (this.bodyReleased) return;
+    this.bodyReleased = true;
+    this.deathT = Math.max(this.deathT, 30); // hold the last frame of the death: lying flat
+    targets.delete(this);
+    for (const a of this.arrows) this.scene.remove(a.mesh);
+    this.arrows = [];
+    physics.world.removeCollider(this.col, false);
+    physics.world.removeRigidBody(this.rb);
+    physics.world.removeCharacterController(this.kcc);
+  }
+
+  /** Lying dead from the start (a cleared Gravewood on load): no death throes, no rewards. */
+  lieDead() {
+    this.alive = false;
+    this.lockable = false;
+    this.emergeY = 0;
+    this.char.root.visible = true;
+    this.setState('dying');
+    this.deathT = 30;
+    targets.delete(this);
+    this.releaseBody();
+  }
+
+  /** Which way he faces (radians). */
+  get facing() {
+    return this.yaw;
+  }
+
+  /** Where the body's bones are now (flowers grow from them). */
+  bonePoints() {
+    this.char.root.updateMatrixWorld(true);
+    const out: THREE.Vector3[] = [];
+    for (const n of ['Hips', 'Spine1', 'Spine2', 'Neck', 'Head', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm', 'LeftHand', 'RightHand', 'LeftUpLeg', 'RightUpLeg', 'LeftLeg', 'RightLeg', 'LeftFoot', 'RightFoot']) {
+      const b = this.char.bone(n);
+      if (b) out.push(b.getWorldPosition(new THREE.Vector3()));
+    }
+    return out;
+  }
+
   dispose() {
     targets.delete(this);
     this.scene.remove(this.char.root);
+    if (this.bodyReleased) return;
     for (const a of this.arrows) this.scene.remove(a.mesh);
     physics.world.removeCollider(this.col, false);
     physics.world.removeRigidBody(this.rb);

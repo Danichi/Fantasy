@@ -93,13 +93,16 @@ test('three waves rise from the graves, the abomination climbs out, and victory 
   const end = await page.evaluate(() => {
     const g = (window as any).__game, gw = g.gravewood, T = g.THREE, at = (window as any).__at;
     return {
-      curse: gw.curse, flag: g.worldFlags.gravewoodCleared, rise: gw.shrineRise, mobs: gw.mobs.length,
+      curse: gw.curse, flag: g.worldFlags.gravewoodCleared, rise: gw.pedestalRise, mobs: gw.mobs.length,
+      body: !!gw.corpse && !gw.corpse.alive && !!g.worldFlags.gravewoodBody, flowers: gw.flowers?.n ?? 0,
       gateOpen: g.physics.castRay(at(0, -22).setY(at(0, -22).y + 1.2), new T.Vector3(0, 0, 1), 12) === null,
     };
   });
   expect(end.curse).toBe(0);
   expect(end.flag).toBe(true);
   expect(end.rise).toBe(1);
+  expect(end.body).toBe(true); // the abomination's body stays where it fell
+  expect(end.flowers).toBeGreaterThan(500); // and the graveyard blooms
   expect(end.mobs).toBe(0);
   expect(end.gateOpen).toBe(true);
   // Walking back in no longer springs the trap.

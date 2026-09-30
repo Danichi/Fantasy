@@ -72,7 +72,7 @@ South-west of Elder Glen, a dead, fog-bound wood: take the Logging Road west out
 - About 20 seconds later the dead start clawing out of their graves: zombies and skeleton warriors, in three waves. A cold light heals you a little between waves.
 - In the third wave the Stitched Abomination climbs out of the pit in the middle and roars. It fights like Grukk without the bow: cleaves, sweeps, combos, leaps and kicks.
 - Die and you wake at the gate with everything reset; walk back in to try again.
-- Win and a beam of light breaks the curse: the fog clears, the gate opens and an old stone doorway rises out of the ground (it does nothing yet). The graveyard stays cleared.
+- Win and a beam of light breaks out of the pit the abomination climbed from: the fog clears, the gate opens, flowers grow out of its body (which stays where it fell) and spread across the graveyard, and a stone pedestal carved with the Sunwheel rises out of the pit (it does nothing yet). The graveyard stays cleared, body and flowers included.
 
 Code: `src/world/gravewood.ts` (the place and the trap), `src/enemies/undead.ts` (zombies and skeletons), `src/audio/sfx.ts` (synthesised roar, gate slam, rumbles, groans). Aimed at about level 2–4.
 

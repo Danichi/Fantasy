@@ -32,8 +32,6 @@ const JOBS = {
   // The Gravewood (graveyard dungeon in the south-western woods).
   gwZombie: [path.join(DL, 'zombie.glb'), 24000, 1024, true, 0.02, false, { out: 'assets-src/prepped', cleanBones: true }],
   gwAbomination: [path.join(DL, 'stitched_patchwork_abomination_creature.glb'), 70000, 2048, false, 0.02, true, { out: 'assets-src/prepped', keepFlat: true }],
-  gwGate: [path.join(DL, 'tully_graveyard_gate_and_stile.glb'), 60000, 2048, false, 0.05, false, { out: 'public/assets/gravewood', keepFlat: true, meshopt: true }],
-  gwShrine: [path.join(DL, 'tomfinlough_church_door_cl042-083001-.glb'), 70000, 2048, false, 0.05, false, { out: 'public/assets/gravewood', keepFlat: true, meshopt: true }],
   gwKit: [path.join(DL, 'asset_graveyard_the_darkest_red.glb'), 0, 1024, false, 0.02, false, { out: 'public/assets/gravewood', keepFlat: true, pieces: true, meshopt: true }],
 };
 

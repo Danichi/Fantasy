@@ -70,7 +70,27 @@ function buildPlaces(houses: HouseInfo[]) {
   const v = (x: number, z: number) => new THREE.Vector3(x, heightAt(x, z), z);
   const ring = (cx: number, cz: number, r: number, n: number) => Array.from({ length: n }, (_, i) => v(cx + Math.cos((i / n) * Math.PI * 2) * r, cz + Math.sin((i / n) * Math.PI * 2) * r));
   const P = PLAZA_CENTER;
-  places.set('plaza', { id: 'plaza', spots: ring(P.x, P.y, 9.5, 14) });
+  // The plaza: an outer and an inner ring, so a crowd fills the square instead of lining its rim.
+  places.set('plaza', { id: 'plaza', spots: [...ring(P.x, P.y, 9.5, 14), ...ring(P.x + 1, P.y - 1, 5.5, 7)] });
+  // The lanes: loitering spots along every street, a couple of metres off the
+  // road, so the town's idle hours spread through it rather than piling onto the plaza.
+  {
+    const lanes: THREE.Vector3[] = [];
+    for (const line of STREET_LINES) {
+      for (let i = 0; i < line.length - 1; i++) {
+        const [ax, az] = line[i], [bx, bz] = line[i + 1];
+        const len = Math.hypot(bx - ax, bz - az);
+        const dx = (bx - ax) / len, dz = (bz - az) / len;
+        for (let s = 6; s < len - 4; s += 11) {
+          const x = ax + dx * s, z = az + dz * s;
+          if (Math.hypot(x - P.x, z - P.y) < 16) continue; // the plaza has its own
+          const side = lanes.length % 2 ? 1 : -1;
+          lanes.push(v(x - dz * 3.2 * side, z + dx * 3.2 * side));
+        }
+      }
+    }
+    places.set('lanes', { id: 'lanes', spots: lanes });
+  }
   places.set('market', { id: 'market', spots: [v(-8, 6), v(-3, 8), v(3, 8), v(8, 6), v(12, 1), v(-12, 1)], yaw: Math.PI });
   places.set('tavern', { id: 'tavern', spots: [v(-20, 21), v(-22, 22.5), v(-25, 22), v(-27, 20.5), v(-19, 19)] }); // outside the Wayfarer Inn
   places.set('forge', { id: 'forge', spots: [v(24, 17), v(29, 16)] });
@@ -148,12 +168,14 @@ function buildGraph(places: Map<string, Place>) {
 
 function schedule(job: Job, home: string, rnd: () => number): ScheduleEntry[] {
   const j = (h: number) => h + (rnd() - 0.5) * 0.6; // everyone keeps slightly different hours
+  // Free hours: some on the plaza, most out along the lanes (one choice per person).
+  const square = rnd() < 0.4 ? 'plaza' : 'lanes';
   switch (job) {
     case 'farmer': return [
       { from: 0, activity: 'sleep', place: home }, { from: j(5.4), activity: 'idle', place: home.replace('home', 'yard') }, { from: j(6.2), activity: 'farm', place: 'fields' },
-      { from: j(12), activity: 'sit', place: 'plaza' }, { from: j(13), activity: 'farm', place: 'fields' }, { from: j(18.6), activity: 'drink', place: 'tavern' }, { from: j(21.4), activity: 'sleep', place: home }];
+      { from: j(12), activity: 'idle', place: square }, { from: j(13), activity: 'farm', place: 'fields' }, { from: j(18.6), activity: 'drink', place: 'tavern' }, { from: j(21.4), activity: 'sleep', place: home }];
     case 'merchant': return [
-      { from: 0, activity: 'sleep', place: home }, { from: j(6.8), activity: 'shop', place: 'market' }, { from: j(12.5), activity: 'idle', place: 'plaza' },
+      { from: 0, activity: 'sleep', place: home }, { from: j(6.8), activity: 'shop', place: 'market' }, { from: j(12.5), activity: 'idle', place: square },
       { from: j(13.5), activity: 'shop', place: 'market' }, { from: j(19), activity: 'drink', place: 'tavern' }, { from: j(22), activity: 'sleep', place: home }];
     case 'guard': {
       const posts = ['northGate', 'eastGate', 'plaza', 'southGate', 'westGate', 'plaza'];
@@ -167,13 +189,13 @@ function schedule(job: Job, home: string, rnd: () => number): ScheduleEntry[] {
       return s.sort((a, b) => a.from - b.from);
     }
     case 'child': return [
-      { from: 0, activity: 'sleep', place: home }, { from: j(7.5), activity: 'play', place: 'plaza' }, { from: j(11), activity: 'play', place: 'training' },
-      { from: j(12.2), activity: 'idle', place: home.replace('home', 'yard') }, { from: j(13.5), activity: 'play', place: 'plaza' }, { from: j(18), activity: 'idle', place: home.replace('home', 'yard') }, { from: j(20), activity: 'sleep', place: home }];
+      { from: 0, activity: 'sleep', place: home }, { from: j(7.5), activity: 'play', place: square }, { from: j(11), activity: 'play', place: 'training' },
+      { from: j(12.2), activity: 'idle', place: home.replace('home', 'yard') }, { from: j(13.5), activity: 'play', place: square }, { from: j(18), activity: 'idle', place: home.replace('home', 'yard') }, { from: j(20), activity: 'sleep', place: home }];
     case 'elder': return [
-      { from: 0, activity: 'sleep', place: home }, { from: j(8), activity: 'sit', place: 'plaza' }, { from: j(12), activity: 'idle', place: home.replace('home', 'yard') },
-      { from: j(14), activity: 'sit', place: 'plaza' }, { from: j(17.5), activity: 'drink', place: 'tavern' }, { from: j(21), activity: 'sleep', place: home }];
+      { from: 0, activity: 'sleep', place: home }, { from: j(8), activity: 'idle', place: square }, { from: j(12), activity: 'idle', place: home.replace('home', 'yard') },
+      { from: j(14), activity: 'idle', place: square }, { from: j(17.5), activity: 'drink', place: 'tavern' }, { from: j(21), activity: 'sleep', place: home }];
     case 'miller': return [{ from: 0, activity: 'sleep', place: home }, { from: j(6), activity: 'work', place: 'mill' }, { from: j(18), activity: 'drink', place: 'tavern' }, { from: j(21.5), activity: 'sleep', place: home }];
-    case 'smith': return [{ from: 0, activity: 'sleep', place: home }, { from: j(7), activity: 'work', place: 'forge' }, { from: j(12.5), activity: 'sit', place: 'plaza' }, { from: j(13.5), activity: 'work', place: 'forge' }, { from: j(19), activity: 'drink', place: 'tavern' }, { from: j(22), activity: 'sleep', place: home }];
+    case 'smith': return [{ from: 0, activity: 'sleep', place: home }, { from: j(7), activity: 'work', place: 'forge' }, { from: j(12.5), activity: 'idle', place: square }, { from: j(13.5), activity: 'work', place: 'forge' }, { from: j(19), activity: 'drink', place: 'tavern' }, { from: j(22), activity: 'sleep', place: home }];
     case 'innfolk': return [{ from: 0, activity: 'sleep', place: home }, { from: j(9), activity: 'work', place: 'tavern' }, { from: j(15), activity: 'shop', place: 'market' }, { from: j(16.5), activity: 'work', place: 'tavern' }, { from: j(23.5), activity: 'sleep', place: home }];
     case 'shepherd': return [{ from: 0, activity: 'sleep', place: home }, { from: j(5.8), activity: 'work', place: 'pasture' }, { from: j(17.5), activity: 'idle', place: 'northGate' }, { from: j(18.5), activity: 'drink', place: 'tavern' }, { from: j(21), activity: 'sleep', place: home }];
     case 'weaver': return [{ from: 0, activity: 'sleep', place: home }, { from: j(7.5), activity: 'work', place: 'looms' }, { from: j(12.5), activity: 'talk', place: 'market' }, { from: j(13.5), activity: 'work', place: 'looms' }, { from: j(19), activity: 'drink', place: 'tavern' }, { from: j(22), activity: 'sleep', place: home }];

@@ -14,6 +14,7 @@ import type { WorldMats } from './buildings';
 import type { FX } from '../fx/particles';
 import type { Player } from '../player/player';
 import type { Renderer } from '../render/renderer';
+import { sunwheelTexture } from './glenLandmarks';
 
 // ---------------------------------------------------------------------------
 // The Gravewood: a dead, fog-bound wood a long walk south-west of Elder Glen
@@ -22,7 +23,8 @@ import type { Renderer } from '../render/renderer';
 // rises, the maps fog over, and after a while the dead claw up out of their
 // graves in three waves, the last led by the Stitched Abomination. Die and you
 // wake at the gate with everything reset; win and a beam of light breaks the
-// curse, the fog lifts and an old stone doorway rises out of the earth.
+// curse, the fog lifts, flowers bloom out of the body and across the graves,
+// and a Sunwheel pedestal rises out of the pit it climbed from.
 // ---------------------------------------------------------------------------
 
 const C = GRAVEWOOD; // x, z (Vector2: .y is world z)
@@ -40,10 +42,12 @@ export const ABOMINATION: BossSpec = {
   name: 'The Stitched Abomination', model: '/assets/gravewood/gwAbomination.glb', hp: 500, scale: 1.3,
   kind: 'abomination', bow: false, damage: 0.5, emerge: true, wake: -1,
 };
-/** Local (x, z) of the boss's grave and of the stone doorway that rises on victory. */
+/** Local (x, z) of the boss's pit: where it rises, where the light breaks, where the pedestal stands. */
 const BOSS_AT = new THREE.Vector2(0, 1.5);
-const SHRINE_AT = new THREE.Vector2(0, HZ - 6.2);
-const SHRINE_DEPTH = 9;
+/** How far below ground the pedestal waits before it rises out of the boss's pit. */
+const PEDESTAL_DEPTH = 4;
+const FLOWERS_ON_BODY = 70;
+const FLOWERS_IN_YARD = 900;
 
 type State = 'dormant' | 'sealed' | 'wave' | 'lull' | 'victory' | 'cleared';
 
@@ -192,11 +196,18 @@ export class Gravewood {
   private mistMat!: THREE.MeshBasicMaterial;
   private wall!: THREE.Mesh;
   private wallMat!: THREE.ShaderMaterial;
-  private shrine: THREE.Object3D | null = null;
-  private shrineRise = 0; // 0 buried .. 1 risen
+  /** the pedestal that rises from the boss's pit when the curse breaks */
+  private pedestal: THREE.Group | null = null;
+  private pedestalRise = 0; // 0 buried .. 1 risen
+  private pedestalCollider: RAPIER.Collider | null = null;
+  private pedestalGlow: THREE.Mesh | null = null;
   private beam: THREE.Group | null = null;
   private beamT = 0;
-  private victoryAt = new THREE.Vector3();
+  /** the abomination's body, left where it fell */
+  private corpse: OrcWarlord | null = null;
+  /** flowers: instance data [x, y, z, delay, scale, yaw] and how long they've been growing */
+  private flowers: { stems: THREE.InstancedMesh; heads: THREE.InstancedMesh; data: Float32Array; n: number } | null = null;
+  private flowerT = -1;
   private time = 0;
 
   constructor(private scene: THREE.Scene, private mats: WorldMats, private fx: FX, private hooks: GravewoodHooks) {
@@ -231,23 +242,23 @@ export class Gravewood {
   }
 
   /**
-   * Upload the buried doorway's textures and compile its shaders now, so it
+   * Upload the buried pedestal's textures and compile its shaders now, so it
    * doesn't stall the frame it first rises into view.
    */
   private gpu: { renderer: THREE.WebGLRenderer; camera: THREE.Camera; scene: THREE.Scene } | undefined;
   async warm(renderer: THREE.WebGLRenderer, camera: THREE.Camera) {
     this.gpu = { renderer, camera, scene: this.scene };
     await this.ready;
-    if (!this.shrine) return;
-    this.shrine.traverse((o) => {
+    if (!this.pedestal) return;
+    this.pedestal.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
       if (!m) return;
       for (const t of [m.map, m.normalMap, m.roughnessMap, m.metalnessMap, m.aoMap]) if (t) renderer.initTexture(t);
     });
-    const was = this.shrine.visible;
-    this.shrine.visible = true;
-    await renderer.compileAsync(this.shrine, camera, this.scene);
-    this.shrine.visible = was;
+    const was = this.pedestal.visible;
+    this.pedestal.visible = true;
+    await renderer.compileAsync(this.pedestal, camera, this.scene);
+    this.pedestal.visible = was;
   }
 
   // ---- building ----------------------------------------------------------------------------
@@ -260,14 +271,14 @@ export class Gravewood {
     const protos = [0, 1, 2, 3].map((k) => deadTreeGeometry(7001 + k * 131));
     const spots: [number, number, number, number, number][] = []; // x, z, yaw, scale, proto
     const taken: THREE.Vector2[] = [];
-    for (let i = 0; i < 1600 && spots.length < 190; i++) {
+    for (let i = 0; i < 4000 && spots.length < 430; i++) {
       const a = rnd() * Math.PI * 2, r = 20 + Math.sqrt(rnd()) * (GRAVEWOOD_R - 20);
       const x = C.x + Math.cos(a) * r, z = C.y + Math.sin(a) * r;
       if (graveyardDist(x, z) < 7 || roadDist(x, z) < 5) continue;
       // Thinner toward the edge of the wood.
-      if (rnd() > 1 - smoothstep(GRAVEWOOD_R * 0.7, GRAVEWOOD_R, r) * 0.7) continue;
+      if (rnd() > 1 - smoothstep(GRAVEWOOD_R * 0.8, GRAVEWOOD_R, r) * 0.55) continue;
       const p = new THREE.Vector2(x, z);
-      if (taken.some((q) => q.distanceToSquared(p) < 30)) continue;
+      if (taken.some((q) => q.distanceToSquared(p) < 13)) continue; // a close, tangled wood
       taken.push(p);
       spots.push([x, z, rnd() * Math.PI * 2, 0.75 + rnd() * 0.55, Math.floor(rnd() * protos.length)]);
     }
@@ -384,11 +395,7 @@ export class Gravewood {
   }
 
   private async buildGraveyard() {
-    const [kitG, gateG, shrineG] = await Promise.all([
-      compressedGltf.loadAsync('/assets/gravewood/gwKit.glb'),
-      compressedGltf.loadAsync('/assets/gravewood/gwGate.glb'),
-      compressedGltf.loadAsync('/assets/gravewood/gwShrine.glb'),
-    ]);
+    const kitG = await compressedGltf.loadAsync('/assets/gravewood/gwKit.glb');
     // Kit pieces: centred on their footprint, bottom at y = 0, in metres (the pack is in centimetres).
     kitG.scene.updateMatrixWorld(true);
     kitG.scene.traverse((o) => {
@@ -487,19 +494,7 @@ export class Gravewood {
     this.gateCollider.setEnabled(false);
     this.poseGate();
 
-    // ---- the old ruined wall and stile beside the trail (the Tully scan) ----
-    {
-      const ruin = gateG.scene;
-      ruin.scale.setScalar(0.19);
-      ruin.rotation.y = Math.PI; // its gateway faces up the trail, toward whoever is coming
-      ruin.updateMatrixWorld(true);
-      const bb = new THREE.Box3().setFromObject(ruin);
-      const at = world(-17, -HZ - 30);
-      // The scan carries a sloping bank of its own ground: bury that, stonework on the terrain.
-      ruin.position.set(at.x - (bb.min.x + bb.max.x) / 2, at.y - bb.min.y - 2.4, at.z - (bb.min.z + bb.max.z) / 2);
-      ruin.traverse((o) => ((o as THREE.Mesh).isMesh && (((o as THREE.Mesh).castShadow = true), ((o as THREE.Mesh).receiveShadow = true))));
-      this.group.add(ruin);
-    }
+    this.buildRuins();
 
     // ---- graves: rows either side of the path, the centre left open for the fight ----
     const rnd = mulberry32(666);
@@ -508,7 +503,6 @@ export class Gravewood {
       for (let gx = -17; gx <= 17; gx += 3.4) {
         if (Math.abs(gx) < 3.2) continue; // the path
         if (Math.hypot(gx - BOSS_AT.x, gz - BOSS_AT.y) < 8.5) continue; // the open ground
-        if (Math.hypot(gx - SHRINE_AT.x, gz - SHRINE_AT.y) < 7) continue;
         const jx = gx + (rnd() - 0.5) * 0.5, jz = gz + (rnd() - 0.5) * 0.4;
         const tilt = (rnd() - 0.5) * 0.18;
         const r = rnd();
@@ -547,25 +541,18 @@ export class Gravewood {
       this.group.add(inst);
     }
 
-    // ---- the buried doorway (the church door scan), rising on victory ----
-    {
-      const s = shrineG.scene;
-      s.scale.setScalar(0.1);
-      s.rotation.y = Math.PI; // the doorway faces the gate
-      s.updateMatrixWorld(true);
-      const bb = new THREE.Box3().setFromObject(s);
-      const at = world(SHRINE_AT.x, SHRINE_AT.y);
-      s.position.set(at.x - (bb.min.x + bb.max.x) / 2, at.y - bb.min.y - 0.3, at.z - (bb.min.z + bb.max.z) / 2);
-      s.traverse((o) => ((o as THREE.Mesh).isMesh && (((o as THREE.Mesh).castShadow = true), ((o as THREE.Mesh).receiveShadow = true))));
-      const holder = new THREE.Group();
-      holder.add(s);
-      holder.userData.restY = 0;
-      this.shrine = holder;
-      this.group.add(holder);
+    this.pedestal = this.buildPedestal();
+    this.group.add(this.pedestal);
+    this.flowers = this.buildFlowers();
+    if (this.cleared) {
+      // Already won: the pedestal stands, the flowers bloom, the body lies where it fell.
+      this.state = 'cleared';
+      this.pedestalRise = 1;
+      this.settlePedestal();
+      this.flowerT = 1e3;
+      void this.restoreCorpse();
     }
-    this.shrineRise = this.cleared ? 1 : 0;
-    if (this.cleared) this.state = 'cleared';
-    this.poseShrine(0);
+    this.posePedestal(0);
   }
 
   private poseGate() {
@@ -574,11 +561,220 @@ export class Gravewood {
     for (const h of this.gateLeaves) h.rotation.y = -h.userData.side * 1.75 * k;
   }
 
-  private poseShrine(shake: number) {
-    if (!this.shrine) return;
-    const t = this.shrineRise;
-    this.shrine.visible = t > 0.001;
-    this.shrine.position.set((Math.random() - 0.5) * shake, -SHRINE_DEPTH * (1 - t), (Math.random() - 0.5) * shake);
+  private posePedestal(shake: number) {
+    if (!this.pedestal) return;
+    const t = this.pedestalRise;
+    this.pedestal.visible = t > 0.001;
+    const base = world(BOSS_AT.x, BOSS_AT.y);
+    this.pedestal.position.set(base.x + (Math.random() - 0.5) * shake, base.y - PEDESTAL_DEPTH * (1 - t), base.z + (Math.random() - 0.5) * shake);
+  }
+
+  /** Once risen: something solid to walk around, and its light stays lit. */
+  private settlePedestal() {
+    if (this.pedestalCollider) return;
+    const base = world(BOSS_AT.x, BOSS_AT.y);
+    this.pedestalCollider = physics.addBox(base.clone().setY(base.y + 1.4), new THREE.Vector3(1.3, 1.4, 1.3));
+  }
+
+  // ---- ruins ---------------------------------------------------------------------------------
+
+  /**
+   * Broken walls and fallen pillars through the dead wood, every stone set on
+   * the ground where it stands (so none of it floats on a slope).
+   */
+  private buildRuins() {
+    const rnd = mulberry32(31337);
+    const parts: THREE.BufferGeometry[] = [];
+    const block = (x: number, z: number, w: number, h: number, d: number, yaw: number, tilt = 0, lift = 0) => {
+      const g = new THREE.BoxGeometry(w, h, d);
+      g.translate(0, h / 2, 0);
+      g.rotateZ(tilt);
+      g.rotateY(yaw);
+      // Sit on the lowest ground under the block's footprint, sunk a little.
+      const r = Math.max(w, d) / 2;
+      let y = Infinity;
+      for (const [ox, oz] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) y = Math.min(y, heightAt(x + ox, z + oz));
+      g.translate(x, y - 0.18 + lift, z);
+      parts.push(g.toNonIndexed());
+    };
+    const wall = (lx: number, lz: number, yaw: number, n: number) => {
+      const x0 = C.x + lx, z0 = C.y + lz;
+      const dx = Math.cos(yaw), dz = -Math.sin(yaw);
+      for (let i = 0; i < n; i++) {
+        // A jagged top: tallest near one end, crumbling away toward the other.
+        const k = i / Math.max(1, n - 1);
+        const h = 0.5 + (1 - Math.abs(k - 0.3) * 1.4) * 2.2 * (0.6 + rnd() * 0.5);
+        const x = x0 + dx * i * 1.15, z = z0 + dz * i * 1.15;
+        block(x, z, 1.1, Math.max(0.35, h), 0.65, yaw, (rnd() - 0.5) * 0.06);
+        if (h > 1.3 && rnd() < 0.5) block(x + (rnd() - 0.5) * 0.3, z + (rnd() - 0.5) * 0.3, 0.9, 0.4, 0.55, yaw + (rnd() - 0.5) * 0.3, 0, Math.max(0.35, h) - 0.05);
+        // Fallen stones at its foot.
+        if (rnd() < 0.45) block(x + dz * (0.9 + rnd()), z - dx * (0.9 + rnd()), 0.6, 0.35, 0.45, rnd() * Math.PI, (rnd() - 0.5) * 0.4);
+      }
+      physics.addBox(new THREE.Vector3(x0 + dx * (n - 1) * 0.575, heightAt(x0, z0) + 1, z0 + dz * (n - 1) * 0.575), new THREE.Vector3(n * 0.575, 1.1, 0.4), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw));
+    };
+    const pillar = (lx: number, lz: number, standing: boolean) => {
+      const x = C.x + lx, z = C.y + lz;
+      block(x, z, 1.1, 0.4, 1.1, 0);
+      if (standing) {
+        const h = 1.4 + rnd() * 1.8;
+        const g = new THREE.CylinderGeometry(0.38, 0.42, h, 10);
+        g.translate(x, heightAt(x, z) + 0.22 + h / 2, z);
+        parts.push(g.toNonIndexed());
+        physics.addCylinder(new THREE.Vector3(x, heightAt(x, z) + h / 2, z), h / 2, 0.45);
+      } else {
+        // Toppled: lying in two pieces beside its base.
+        const a = rnd() * Math.PI * 2;
+        for (const [off, len] of [[1.5, 1.8], [3.4, 1.4]]) {
+          const g = new THREE.CylinderGeometry(0.38, 0.38, len, 10);
+          g.rotateZ(Math.PI / 2);
+          g.rotateY(a);
+          const px = x + Math.cos(a) * off, pz = z - Math.sin(a) * off;
+          g.translate(px, heightAt(px, pz) + 0.2, pz);
+          parts.push(g.toNonIndexed());
+        }
+      }
+    };
+    // Along the trail in, and scattered through the wood.
+    wall(-18, -46, 0.35, 7);
+    pillar(-11, -52, true);
+    pillar(-24, -39, false);
+    wall(26, -30, -0.9, 5);
+    wall(-40, 8, 1.4, 6);
+    pillar(-36, 18, true);
+    wall(34, 22, 0.2, 4);
+    pillar(30, 30, false);
+    wall(-8, 42, -0.3, 5);
+    pillar(14, -52, true);
+    const clean = parts.map((g) => {
+      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+      return g;
+    });
+    const mat = (this.mats.stone as THREE.MeshStandardMaterial).clone();
+    mat.color.multiplyScalar(0.72); // old, damp stone
+    const mesh = new THREE.Mesh(mergeGeometries(clean)!, mat);
+    mesh.castShadow = mesh.receiveShadow = true;
+    this.group.add(mesh);
+  }
+
+  // ---- the pedestal ----------------------------------------------------------------------------
+
+  /** Stepped octagonal plinth, a carved column bearing the Sunwheel, and a glowing capstone. */
+  private buildPedestal() {
+    const g = new THREE.Group();
+    const stone = (this.mats.stone as THREE.MeshStandardMaterial).clone();
+    stone.color.multiplyScalar(0.85);
+    const add = (geo: THREE.BufferGeometry, y: number, mat: THREE.Material = stone) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.y = y;
+      m.castShadow = m.receiveShadow = true;
+      g.add(m);
+      return m;
+    };
+    add(new THREE.CylinderGeometry(2.1, 2.3, 0.4, 8), 0.2);
+    add(new THREE.CylinderGeometry(1.6, 1.8, 0.35, 8), 0.575);
+    add(new THREE.CylinderGeometry(1.2, 1.35, 0.3, 8), 0.9);
+    add(new THREE.BoxGeometry(0.95, 1.7, 0.95), 1.9);
+    add(new THREE.CylinderGeometry(0.95, 0.75, 0.3, 8), 2.9);
+    // The Sunwheel carved into all four faces, glowing faintly.
+    const glyph = new THREE.MeshBasicMaterial({ map: sunwheelTexture('rgba(255, 226, 150, 1)'), transparent: true, depthWrite: false, color: new THREE.Color(1.6, 1.45, 1.1), fog: false });
+    for (let i = 0; i < 4; i++) {
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.8), glyph);
+      const a = (i / 4) * Math.PI * 2;
+      p.position.set(Math.sin(a) * 0.49, 1.95, Math.cos(a) * 0.49);
+      p.rotation.y = a;
+      g.add(p);
+    }
+    // A cradle of light on the capstone.
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.32, 20, 14), new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 2.9, 2.1), fog: false }));
+    glow.position.y = 3.35;
+    g.add(glow);
+    this.pedestalGlow = glow;
+    return g;
+  }
+
+  // ---- flowers ---------------------------------------------------------------------------------
+
+  /** Stems and blossoms as two instanced meshes; each flower waits its turn, then grows. */
+  private buildFlowers() {
+    const n = FLOWERS_ON_BODY + FLOWERS_IN_YARD;
+    const stemGeo = new THREE.CylinderGeometry(0.012, 0.018, 0.34, 4);
+    stemGeo.translate(0, 0.17, 0);
+    const headGeo = new THREE.IcosahedronGeometry(0.075, 0);
+    headGeo.scale(1.3, 0.55, 1.3);
+    headGeo.translate(0, 0.36, 0);
+    const stems = new THREE.InstancedMesh(stemGeo, new THREE.MeshStandardMaterial({ color: 0x4f8a3a, roughness: 0.9 }), n);
+    const heads = new THREE.InstancedMesh(headGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, emissive: 0x221a10 }), n);
+    const palette = [0xf2e8ff, 0xffd6e8, 0xfff1a8, 0xcfe6ff, 0xffb3c1, 0xe8d4ff, 0xffffff];
+    const rnd = mulberry32(2024);
+    for (let i = 0; i < n; i++) heads.setColorAt(i, new THREE.Color(palette[Math.floor(rnd() * palette.length)]));
+    stems.count = heads.count = 0;
+    stems.frustumCulled = heads.frustumCulled = false;
+    stems.castShadow = false;
+    this.group.add(stems, heads);
+    return { stems, heads, data: new Float32Array(n * 6), n };
+  }
+
+  /**
+   * Plant the flowers: first out of the body itself (its bones), then across
+   * the whole graveyard, spreading outward from where it lies.
+   */
+  private plantFlowers(body: THREE.Vector3[], origin: THREE.Vector3) {
+    const f = this.flowers;
+    if (!f) return;
+    const rnd = mulberry32(Math.floor(origin.x * 13 + origin.z * 7) >>> 0);
+    let i = 0;
+    const put = (x: number, y: number, z: number, delay: number, scale: number) => {
+      f.data.set([x, y, z, delay, scale, rnd() * Math.PI * 2], i * 6);
+      i++;
+    };
+    for (let k = 0; k < FLOWERS_ON_BODY && body.length; k++) {
+      const b = body[k % body.length];
+      put(b.x + (rnd() - 0.5) * 0.45, b.y + 0.05 + rnd() * 0.12, b.z + (rnd() - 0.5) * 0.45, 0.2 + rnd() * 2.2, 0.9 + rnd() * 0.8);
+    }
+    for (let k = 0; k < FLOWERS_IN_YARD; k++) {
+      const x = C.x + (rnd() * 2 - 1) * (HX - 0.8), z = C.y + (rnd() * 2 - 1) * (HZ - 0.8);
+      const d = Math.hypot(x - origin.x, z - origin.z);
+      // A wave of bloom rolling outward at ~2.5 m/s, with some stragglers.
+      put(x, heightAt(x, z) - 0.02, z, 2.5 + d / 2.5 + rnd() * 2.5, 0.7 + rnd() * 0.9);
+    }
+    f.n = i;
+    f.stems.count = f.heads.count = i;
+    this.flowerT = 0;
+  }
+
+  private growFlowers(dt: number) {
+    const f = this.flowers;
+    if (!f || this.flowerT < 0) return;
+    const done = this.flowerT > 40;
+    if (done && f.stems.userData.final) return;
+    this.flowerT += dt;
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < f.n; i++) {
+      const o = i * 6;
+      const k = smoothstep(f.data[o + 3], f.data[o + 3] + 1.6, this.flowerT);
+      // A little overshoot as each one opens.
+      const g = k * (1 + 0.15 * Math.sin(k * Math.PI));
+      q.setFromAxisAngle(up, f.data[o + 5]);
+      m.compose(p.set(f.data[o], f.data[o + 1], f.data[o + 2]), q, s.setScalar(Math.max(1e-4, g * f.data[o + 4])));
+      f.stems.setMatrixAt(i, m);
+      f.heads.setMatrixAt(i, m);
+    }
+    f.stems.instanceMatrix.needsUpdate = f.heads.instanceMatrix.needsUpdate = true;
+    if (f.heads.instanceColor) f.heads.instanceColor.needsUpdate = true;
+    if (done) f.stems.userData.final = true;
+  }
+
+  /** A cleared Gravewood on load: the body where it fell, flowers already grown. */
+  private async restoreCorpse() {
+    const saved = String(this.hooks.flags.gravewoodBody ?? '');
+    const [lx, lz, yaw] = saved ? saved.split(',').map(Number) : [BOSS_AT.x + 3.4, BOSS_AT.y + 1.5, 0.6];
+    const at = world(lx, lz);
+    const b = await OrcWarlord.create(at, yaw, this.scene, this.fx, { ...ABOMINATION, emerge: false });
+    b.lieDead();
+    b.present(1, 0.01);
+    this.corpse = b;
+    this.plantFlowers(b.bonePoints(), at);
+    this.flowerT = 1e3;
   }
 
   // ---- the trap ------------------------------------------------------------------------------
@@ -630,23 +826,23 @@ export class Gravewood {
         events.emit('bossSlam', { at: player.pos.clone() });
         this.hooks.card('The Stitched Abomination', 'Guardian of the Gravewood');
       };
-      b.onDeath = (dead) => this.victory(dead.center.clone());
+      b.onDeath = () => this.victory();
       sfx.rumble(3.4, 1);
       this.hooks.toast('The earth splits open…');
       b.wake();
     });
   }
 
-  private victory(at: THREE.Vector3) {
+  private victory() {
     this.state = 'victory';
     this.t = 0;
-    this.victoryAt.copy(at);
+    const at = world(BOSS_AT.x, BOSS_AT.y);
     this.hooks.bossBar(null);
     // Its minions crumble with it.
     for (const m of this.mobs) m.sink();
     this.gateTarget = 1;
     this.gateCollider?.setEnabled(false);
-    // A beam of light out of its body into the sky.
+    // A beam of light out of the pit it climbed from, straight into the sky.
     const beam = new THREE.Group();
     const outer = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 2.0, 1.3), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
     const core = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 16, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 3.8, 3), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
@@ -684,7 +880,7 @@ export class Gravewood {
   update(dt: number, player: Player) {
     this.time += dt;
     this.t += dt;
-    if (!this.shrine) return; // still loading
+    if (!this.pedestal) return; // still loading
     const inside = graveyardDist(player.pos.x, player.pos.z) < -1.2;
 
     if ((this.trapped || this.state === 'victory') && player.dead) this.pendingReset = this.trapped;
@@ -720,24 +916,51 @@ export class Gravewood {
       case 'lull':
         if (this.t >= LULL) this.startWave(this.wave + 1);
         break;
-      case 'victory':
-        if (this.t > 2 && this.shrineRise < 1) {
-          const before = this.shrineRise;
-          this.shrineRise = Math.min(1, this.shrineRise + dt / 6);
+      case 'victory': {
+        // The body: once the death throes are over it stays, and blooms.
+        const b = this.boss;
+        if (b && !this.corpse && this.t > 2.6) {
+          this.corpse = b;
+          this.boss = null;
+          b.releaseBody();
+          const bones = b.bonePoints();
+          this.plantFlowers(bones, b.position.clone());
+          const local = b.position.clone().sub(new THREE.Vector3(C.x, 0, C.y));
+          this.hooks.flags.gravewoodBody = `${local.x.toFixed(2)},${local.z.toFixed(2)},${b.facing.toFixed(2)}`;
+          this.hooks.toast('Flowers push up through the stitched hide…');
+        }
+        // The pedestal rises out of the pit, inside the light.
+        if (this.t > 3.5 && this.pedestalRise < 1) {
+          const before = this.pedestalRise;
+          this.pedestalRise = Math.min(1, this.pedestalRise + dt / 6);
           if (before === 0) sfx.rumble(6.5, 1);
           if (Math.random() < dt * 3) events.emit('bossSlam', { at: player.pos.clone().add(new THREE.Vector3(0, 0, 6)) });
           if (Math.random() < dt * 18) {
-            const p = world(SHRINE_AT.x + (Math.random() - 0.5) * 9, SHRINE_AT.y + (Math.random() - 0.5) * 7, 0.1);
+            const p = world(BOSS_AT.x + (Math.random() - 0.5) * 5, BOSS_AT.y + (Math.random() - 0.5) * 5, 0.1);
             this.fx.add.spawn({ pos: p, spread: 2.5, count: 4, life: [0.6, 1.4], size: [0.25, 0.08], color: 0x6a5a48, color2: 0x2a221a, gravity: 3, upBias: 1, alpha: 0.7 });
           }
-          this.poseShrine(this.shrineRise < 1 ? 0.06 : 0);
+          // A body lying over the pit is shouldered aside by the stone.
+          const c = this.corpse;
+          if (c) {
+            const pit = world(BOSS_AT.x, BOSS_AT.y);
+            const off = c.position.clone().sub(pit).setY(0);
+            if (off.length() < 3.4) {
+              if (off.lengthSq() < 1e-3) off.set(1, 0, 0);
+              c.position.copy(pit).addScaledVector(off.normalize(), Math.min(3.4, off.length() + dt * 1.2));
+              c.position.y = heightAt(c.position.x, c.position.z);
+              c.present(1, 0);
+            }
+          }
+          this.posePedestal(this.pedestalRise < 1 ? 0.06 : 0);
+          if (this.pedestalRise >= 1) this.settlePedestal();
         }
-        if (this.t > 9 && this.shrineRise >= 1 && !this.mobs.length && !this.boss) {
+        if (this.t > 11 && this.pedestalRise >= 1 && !this.mobs.length) {
           this.state = 'cleared';
           this.hooks.flags.gravewoodCleared = true;
           this.hooks.save();
         }
         break;
+      }
     }
 
     // The dead.
@@ -747,7 +970,7 @@ export class Gravewood {
     if (this.boss) {
       this.boss.update(dt, player);
       if (this.boss.alive && this.boss.awake && this.boss.lockable) this.hooks.bossBar(this.boss, this.boss.name);
-      if (this.boss.dead) {
+      if (this.boss.dead && this.state !== 'victory') {
         this.boss.dispose();
         this.boss = null;
       }
@@ -770,6 +993,9 @@ export class Gravewood {
   /** Per rendered frame: the boss's pose, the mist and the beam. */
   present(alpha: number, dt: number, player: Player, camera: THREE.Camera) {
     this.boss?.present(alpha, dt, player);
+    this.corpse?.present(1, dt, player);
+    this.growFlowers(dt);
+    if (this.pedestalGlow) this.pedestalGlow.scale.setScalar(0.9 + Math.sin(this.time * 2.2) * 0.1);
     this.wallMat.uniforms.uTime.value = this.time;
     this.wallMat.uniforms.uAmount.value = this.curse;
     // Mist billboards face the camera and drift; thicker as the curse rises, gone once cleared.
@@ -794,7 +1020,7 @@ export class Gravewood {
     if (this.beam) {
       this.beamT += dt;
       const t = this.beamT;
-      const k = smoothstep(0, 0.6, t) * (1 - smoothstep(5, 8, t));
+      const k = smoothstep(0, 0.6, t) * (1 - smoothstep(10, 14, t));
       const [outer, core] = this.beam.children as THREE.Mesh[];
       const h = 260;
       outer.scale.set(1.6 + Math.sin(t * 7) * 0.08, h, 1.6 + Math.sin(t * 7) * 0.08);
@@ -803,9 +1029,9 @@ export class Gravewood {
       (outer.material as THREE.MeshBasicMaterial).opacity = 0.35 * k;
       (core.material as THREE.MeshBasicMaterial).opacity = 0.9 * k;
       if (k > 0.1 && Math.random() < dt * 40) {
-        this.fx.add.spawn({ pos: this.victoryAt.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 4, (Math.random() - 0.5) * 2)), vel: new THREE.Vector3(0, 9, 0), spread: 1, count: 2, life: [1, 2], size: [0.14, 0.02], color: 0xfff4d0, color2: 0xffc060, drag: 0.2 });
+        this.fx.add.spawn({ pos: world(BOSS_AT.x, BOSS_AT.y).add(new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 4, (Math.random() - 0.5) * 2)), vel: new THREE.Vector3(0, 9, 0), spread: 1, count: 2, life: [1, 2], size: [0.14, 0.02], color: 0xfff4d0, color2: 0xffc060, drag: 0.2 });
       }
-      if (t > 8.5) {
+      if (t > 14.5) {
         this.scene.remove(this.beam);
         this.beam = null;
       }
