@@ -118,7 +118,6 @@ export class MineInstance {
   private disposed = false;
   private decorLights: Array<{ light: THREE.PointLight; base: number; phase: number }> = [];
   private glowMaterials: THREE.MeshStandardMaterial[] = [];
-  private mistSources: THREE.Vector3[] = [];
   private decorativeRoots: THREE.Object3D[] = [];
 
   readonly ready: Promise<void>;
