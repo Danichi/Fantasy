@@ -70,12 +70,13 @@ test('killing an enemy awards XP and gold that fly to the player', async ({ page
   await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
+    const W = async (n: number) => { const s0 = g.steps; while (g.steps < s0 + n) await new Promise((r) => setTimeout(r, 15)); };
     const p = g.player;
     const s = g.slimes.spawn('blue', p.pos.x, p.pos.z - 3);
-    await new Promise((r) => setTimeout(r, 200));
+    await W(12);
     const xp0 = p.prog.xp, gold0 = p.prog.gold;
     s.takeHit({ damage: 999, poise: 0, dir: new g.THREE.Vector3(0, 0, -1), at: s.center.clone(), crit: false, source: 'melee' });
-    await new Promise((r) => setTimeout(r, 2500));
+    await W(150);
     return { dXp: p.prog.xp - xp0, dGold: p.prog.gold - gold0 };
   });
   expect(res.dXp).toBeGreaterThanOrEqual(26);
