@@ -22,7 +22,10 @@ export const PALETTE: Record<Style, { hot: number; cool: number; body: THREE.Col
 };
 
 const glow = (color: THREE.Color, opacity = 1) =>
-  new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(1.6), transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+/** A normally blended core, so effects still read against bright daylight ground (additive alone washes out). */
+const solid = (hex: number, opacity = 0.6) =>
+  new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
 
 export type ProjShape = 'blade' | 'spear' | 'tornado' | 'orb';
 
@@ -86,8 +89,8 @@ export class SkillFx {
   zones: Zone[] = [];
   private timed: Timed[] = [];
   private geo = {
-    blade: new THREE.RingGeometry(0.62, 0.9, 32, 1, -1.0, 2.0).rotateX(-Math.PI / 2),
-    bladeCore: new THREE.RingGeometry(0.72, 0.82, 32, 1, -0.9, 1.8).rotateX(-Math.PI / 2),
+    blade: new THREE.RingGeometry(0.55, 1.05, 40, 1, -1.1, 2.2).rotateX(-Math.PI / 2),
+    bladeCore: new THREE.RingGeometry(0.74, 0.9, 40, 1, -0.95, 1.9).rotateX(-Math.PI / 2),
     spear: new THREE.CylinderGeometry(0.035, 0.07, 1.6, 8, 1).rotateX(Math.PI / 2),
     spearTip: new THREE.ConeGeometry(0.1, 0.4, 8).rotateX(Math.PI / 2).translate(0, 0, 0.95),
     tornado: new THREE.CylinderGeometry(1.0, 0.18, 2.6, 24, 6, true).translate(0, 1.3, 0),
@@ -109,20 +112,25 @@ export class SkillFx {
   }
 
   /** A flat sweep of light around `pos` facing `yaw`: sword arcs and crescents. */
-  slash(pos: THREE.Vector3, yaw: number, radius: number, style: Style, spread = 1, tilt = 0) {
-    const m = new THREE.Mesh(this.geo.arc, glow(PALETTE[style].body, 0.9));
+  slash(pos: THREE.Vector3, yaw: number, radius: number, style: Style, spread = 1, tilt = 0.55) {
+    const m = new THREE.Group();
+    const outer = new THREE.Mesh(this.geo.arc, glow(PALETTE[style].body, 0.9));
+    const core = new THREE.Mesh(this.geo.bladeCore, solid(PALETTE[style].hot, 0.75));
+    core.scale.setScalar(1.1);
+    m.add(outer, core);
     m.position.copy(pos);
     m.rotation.set(tilt, yaw - Math.PI / 2, 0, 'YXZ');
     m.scale.set(radius, 1, radius * spread);
-    this.addTimed(m, 0.32, (o, u) => {
+    this.addTimed(m, 0.36, (o, u) => {
       o.scale.set(radius * (0.8 + u * 0.5), 1, radius * spread * (0.8 + u * 0.5));
-      ((o as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - u);
+      (outer.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - u);
+      (core.material as THREE.MeshBasicMaterial).opacity = 0.75 * (1 - u) * (1 - u);
     });
   }
 
   /** Full-circle sweep (spins, novas). */
   spinSlash(pos: THREE.Vector3, radius: number, style: Style) {
-    for (let i = 0; i < 3; i++) this.slash(pos.clone().setY(pos.y + 0.9 + i * 0.12), (i * Math.PI * 2) / 3 + Math.random(), radius, style, 1);
+    for (let i = 0; i < 3; i++) this.slash(pos.clone().setY(pos.y + 0.9 + i * 0.12), (i * Math.PI * 2) / 3 + Math.random(), radius, style, 1, (Math.random() - 0.5) * 0.6);
     this.fx.add.spawn({ pos: pos.clone().setY(pos.y + 1), spread: radius * 3, count: 40, life: [0.2, 0.45], size: [0.12, 0.01], color: PALETTE[style].hot, color2: PALETTE[style].cool, drag: 4, jitter: 0.3 });
   }
 
@@ -136,18 +144,23 @@ export class SkillFx {
 
   burst(pos: THREE.Vector3, style: Style, amount = 1, spread = 5) {
     const c = PALETTE[style];
-    this.fx.add.spawn({ pos, spread, count: Math.round(40 * amount), life: [0.25, 0.6], size: [0.35, 0.04], color: c.hot, color2: c.cool, drag: 3, jitter: 0.3 });
+    this.fx.add.spawn({ pos, spread, count: Math.round(55 * amount), life: [0.3, 0.7], size: [0.5, 0.05], color: c.hot, color2: c.cool, drag: 3, jitter: 0.3 });
     this.fx.add.spawn({ pos, spread: spread * 1.4, count: Math.round(20 * amount), life: [0.4, 0.9], size: [0.06, 0.01], color: c.hot, color2: c.cool, gravity: 6, drag: 1, upBias: 0.4 });
   }
 
   /** Column of light (smites, judgments). */
   pillar(pos: THREE.Vector3, style: Style, radius: number, height = 9) {
-    const m = new THREE.Mesh(this.geo.pillar, glow(PALETTE[style].body, 0.85));
+    const m = new THREE.Group();
+    const outer = new THREE.Mesh(this.geo.pillar, glow(PALETTE[style].body, 0.85));
+    const core = new THREE.Mesh(this.geo.pillar, solid(PALETTE[style].hot, 0.7));
+    core.scale.set(0.45, 1, 0.45);
+    m.add(outer, core);
     m.position.copy(pos);
-    this.addTimed(m, 0.7, (o, u) => {
+    this.addTimed(m, 0.75, (o, u) => {
       const w = radius * (u < 0.15 ? u / 0.15 : 1 - (u - 0.15) * 0.8);
       o.scale.set(Math.max(0.01, w), height, Math.max(0.01, w));
-      ((o as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - u);
+      (outer.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - u);
+      (core.material as THREE.MeshBasicMaterial).opacity = 0.7 * (1 - u);
     });
     this.fx.add.spawn({ pos: pos.clone().setY(pos.y + 0.3), spread: radius * 3, count: 50, life: [0.3, 0.8], size: [0.2, 0.02], color: PALETTE[style].hot, color2: PALETTE[style].cool, upBias: 2.5, drag: 2, jitter: radius * 0.5 });
     this.ring(pos, style, radius * 4);
@@ -171,7 +184,7 @@ export class SkillFx {
   /** A falling star that calls `land` when it hits the ground at `to`. */
   meteor(to: THREE.Vector3, style: Style, size: number, fall: number, land: () => void) {
     const g = new THREE.Group();
-    const core = new THREE.Mesh(this.geo.orb, glow(PALETTE[style].body, 1));
+    const core = new THREE.Mesh(this.geo.orb, solid(PALETTE[style].hot, 1));
     const halo = new THREE.Mesh(this.geo.sphere, glow(PALETTE[style].body.clone().multiplyScalar(0.4), 0.35));
     halo.scale.setScalar(1.3);
     g.add(core, halo);
@@ -227,19 +240,31 @@ export class SkillFx {
     const body = PALETTE[o.style].body;
     if (o.shape === 'blade') {
       const g = new THREE.Group();
-      g.add(new THREE.Mesh(this.geo.blade, glow(body.clone().multiplyScalar(0.6), 0.6)), new THREE.Mesh(this.geo.bladeCore, glow(body, 1)));
+      g.add(new THREE.Mesh(this.geo.blade, glow(body.clone().multiplyScalar(0.7), 0.7)), new THREE.Mesh(this.geo.bladeCore, solid(PALETTE[o.style].hot, 0.85)));
       mesh = g;
     } else if (o.shape === 'spear') {
       const g = new THREE.Group();
-      g.add(new THREE.Mesh(this.geo.spear, glow(body, 1)), new THREE.Mesh(this.geo.spearTip, glow(body, 1)));
+      g.add(new THREE.Mesh(this.geo.spear, solid(PALETTE[o.style].hot, 0.9)), new THREE.Mesh(this.geo.spearTip, solid(PALETTE[o.style].hot, 0.9)));
+      const aura = new THREE.Mesh(this.geo.spear, glow(body, 0.8));
+      aura.scale.set(3, 3, 1.1);
+      g.add(aura);
       mesh = g;
     } else if (o.shape === 'tornado') {
-      mesh = new THREE.Mesh(this.geo.tornado, glow(body.clone().multiplyScalar(0.5), 0.45));
-    } else mesh = new THREE.Mesh(this.geo.orb, glow(body, 1));
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(this.geo.tornado, glow(body.clone().multiplyScalar(0.6), 0.55)), new THREE.Mesh(this.geo.tornado, solid(PALETTE[o.style].hot, 0.28)));
+      g.children[1].scale.set(0.8, 1, 0.8);
+      mesh = g;
+    } else {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(this.geo.orb, solid(PALETTE[o.style].hot, 0.95)), new THREE.Mesh(this.geo.sphere, glow(body, 0.5)));
+      g.children[1].scale.setScalar(0.8);
+      mesh = g;
+    }
     mesh.scale.setScalar(size);
     const dir = o.dir.clone().normalize();
     mesh.position.copy(o.from);
-    if (o.shape === 'blade') mesh.rotation.y = Math.atan2(-dir.z, dir.x);
+    // Tilt the crescent diagonally so it reads from a camera behind the shoulder, not edge-on.
+    if (o.shape === 'blade') mesh.rotation.set(0.95, Math.atan2(-dir.z, dir.x), 0, 'YXZ');
     else if (o.shape === 'spear') mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
     this.scene.add(mesh);
     this.projs.push({ ...o, dir, mesh, pos: o.from.clone(), travelled: 0, hits: new Map(), t: 0, done: false });
@@ -289,7 +314,7 @@ export class SkillFx {
         this.fx.add.spawn({ pos: p.pos.clone().setY(p.pos.y + Math.random() * 2.4), spread: 2, count: 3, life: [0.2, 0.5], size: [0.12, 0.01], color: c.hot, color2: c.cool, jitter: 0.6 });
         this.fx.alpha.spawn({ pos: p.pos, spread: 1.5, count: 1, life: [0.5, 0.9], size: [0.4, 1.0], color: 0x8a8070, alpha: 0.2, drag: 3, upBias: 0.8 });
       } else {
-        this.fx.add.spawn({ pos: p.pos, spread: 0.6, count: p.shape === 'blade' ? 3 : 2, life: [0.12, 0.3], size: [0.14 * (p.size ?? 1), 0.01], color: c.hot, color2: c.cool, jitter: 0.25 * (p.size ?? 1) });
+        this.fx.add.spawn({ pos: p.pos, spread: 0.6, count: p.shape === 'blade' ? 3 : 2, life: [0.12, 0.3], size: [0.22 * (p.size ?? 1), 0.02], color: c.hot, color2: c.cool, jitter: 0.3 * (p.size ?? 1) });
       }
       const r = p.radius ?? 0.8;
       for (const t of targets) {
