@@ -277,6 +277,7 @@ export class Realm {
 
   present(alpha: number, dt: number) {
     this.instance?.present(alpha, dt, this.player);
+    this.mineInstance?.present(alpha, dt, this.player);
   }
 
   update(dt: number) {
