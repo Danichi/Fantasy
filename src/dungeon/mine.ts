@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Player } from '../player/player';
 import type { FX } from '../fx/particles';
 import { physics } from '../physics/physics';
@@ -61,10 +62,21 @@ function makeMaterials() {
   const rune = new THREE.MeshStandardMaterial({
     color: 0x5a3e69,
     emissive: 0x351f46,
-    emissiveIntensity: 0.4,
+    emissiveIntensity: 0.5,
     roughness: 0.6,
   });
-  return { stone, stoneDark, wood, planks, metal, brass, rail, crystal, rune };
+  const wetStone = new THREE.MeshStandardMaterial({
+    color: 0x2e3035,
+    metalness: 0.08,
+    roughness: 0.24,
+  });
+  const ember = new THREE.MeshStandardMaterial({
+    color: 0xffa052,
+    emissive: 0xb83f0b,
+    emissiveIntensity: 1.8,
+    roughness: 0.32,
+  });
+  return { stone, stoneDark, wood, planks, metal, brass, rail, crystal, rune, wetStone, ember };
 }
 
 function meshBox(group: THREE.Group, pos: THREE.Vector3, size: THREE.Vector3, mat: THREE.Material) {
@@ -104,8 +116,12 @@ export class MineInstance {
   private gateT = 0;
   private time = 0;
   private disposed = false;
+  private decorLights: Array<{ light: THREE.PointLight; base: number; phase: number }> = [];
+  private glowMaterials: THREE.MeshStandardMaterial[] = [];
+  private mistSources: THREE.Vector3[] = [];
+  private decorativeRoots: THREE.Object3D[] = [];
 
-  readonly ready = Promise.resolve();
+  readonly ready: Promise<void>;
 
   constructor(
     private scene: THREE.Scene,
@@ -127,8 +143,12 @@ export class MineInstance {
     this.buildDeepMine(m);
     this.buildBossArena(m);
     this.buildMineCart(m);
+    this.buildAtmosphere(m);
+    this.buildDecor(m);
     this.spawnEnemies();
     this.buildExit(m);
+
+    this.ready = this.loadDecorModels();
   }
 
   get spawnPoint() {
@@ -276,6 +296,196 @@ export class MineInstance {
         new THREE.Vector3(w, 0.42, d),
         m.stoneDark,
       );
+    }
+  }
+
+  private addRockRim(
+    center: THREE.Vector3,
+    width: number,
+    depth: number,
+    count: number,
+    mat: THREE.Material,
+    seedOffset = 0,
+  ) {
+    for (let i = 0; i < count; i++) {
+      const a = ((i + seedOffset) / count) * Math.PI * 2;
+      const edge = i % 2 === 0 ? 1 : 0.78;
+      const x = center.x + Math.cos(a) * width * 0.5 * edge;
+      const z = center.z + Math.sin(a) * depth * 0.5 * edge;
+      const s = 0.55 + ((i * 37) % 7) * 0.075;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 1), mat);
+      rock.scale.y = 0.65 + (i % 3) * 0.16;
+      rock.position.set(x, 0.45 + (i % 4) * 0.08, z);
+      rock.rotation.set((i * 0.37) % 1.0, a + 0.6, (i * 0.23) % 0.8);
+      rock.castShadow = rock.receiveShadow = true;
+      this.group.add(rock);
+    }
+  }
+
+  private addLanternLight(pos: THREE.Vector3, color = 0xff9b4a, intensity = 2.2, distance = 13) {
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), new THREE.MeshStandardMaterial({
+      color: 0xffb66c,
+      emissive: color,
+      emissiveIntensity: 2.4,
+      roughness: 0.25,
+    }));
+    bulb.position.copy(pos).setY(pos.y + 2.75);
+    bulb.castShadow = false;
+    this.group.add(bulb);
+
+    const light = new THREE.PointLight(color, intensity, distance, 2);
+    light.position.copy(bulb.position);
+    light.castShadow = false;
+    this.group.add(light);
+    this.decorLights.push({ light, base: intensity, phase: this.decorLights.length * 0.83 });
+  }
+
+  private addCrystalCluster(center: THREE.Vector3, radius: number, count: number, scale = 1) {
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + (i % 2) * 0.22;
+      const d = radius * (0.35 + (i % 3) * 0.24);
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.65 + (i % 3) * 0.16, 1), shared!.crystal);
+      crystal.scale.set(0.8 * scale, (1.8 + (i % 3) * 0.55) * scale, 0.8 * scale);
+      crystal.position.set(
+        center.x + Math.cos(a) * d,
+        0.42 + (i % 4) * 0.18,
+        center.z + Math.sin(a) * d,
+      );
+      crystal.rotation.set(0.15 + i * 0.05, a, -0.1 + i * 0.03);
+      crystal.castShadow = crystal.receiveShadow = true;
+      this.group.add(crystal);
+    }
+  }
+
+  private buildAtmosphere(m: ReturnType<typeof makeMaterials>) {
+    // Warm amber pools guide the player through the worked mine; cold blue ore
+    // takes over deeper in, reproducing the concept's warm-to-cool descent.
+    const lights: Array<[number, number, number, number]> = [
+      [-0.0, 3.0, 1.5, 2.7],
+      [-9.0, 3.0, -22, 2.4],
+      [7.0, 3.0, -47, 1.9],
+      [10.0, 3.0, -72, 2.6],
+      [-3.0, 3.3, -102, 1.8],
+      [3.0, 3.6, -139, 1.3],
+    ];
+    for (const [x, y, z, intensity] of lights) {
+      this.addLanternLight(new THREE.Vector3(MINE_ORIGIN.x + x, y, MINE_ORIGIN.z + z), 0xff8c46, intensity, 14);
+    }
+
+    const cold = new THREE.PointLight(0x4b9ed9, 3.1, 23, 2);
+    cold.position.set(MINE_ORIGIN.x, 3.8, MINE_ORIGIN.z - 112);
+    this.group.add(cold);
+
+    const cold2 = new THREE.PointLight(0x5a8ee8, 2.0, 18, 2);
+    cold2.position.set(MINE_ORIGIN.x + 11, 2.9, MINE_ORIGIN.z - 124);
+    this.group.add(cold2);
+
+    this.glowMaterials.push(shared!.crystal, shared!.rune);
+    this.addCrystalCluster(new THREE.Vector3(MINE_ORIGIN.x - 10, 0, MINE_ORIGIN.z - 103), 3.2, 7, 1.0);
+    this.addCrystalCluster(new THREE.Vector3(MINE_ORIGIN.x + 11, 0, MINE_ORIGIN.z - 109), 3.0, 6, 0.9);
+    this.addCrystalCluster(new THREE.Vector3(MINE_ORIGIN.x - 11, 0, MINE_ORIGIN.z - 119), 2.5, 5, 0.82);
+
+    // Low hanging embers in the worked sections.
+    for (const z of [-24, -47, -72]) {
+      const ember = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), m.ember);
+      ember.position.set(MINE_ORIGIN.x + 1.5, 3.2, MINE_ORIGIN.z + z);
+      this.group.add(ember);
+    }
+  }
+
+  private buildDecor(m: ReturnType<typeof makeMaterials>) {
+    this.addRockRim(new THREE.Vector3(MINE_ORIGIN.x - 7, 0, MINE_ORIGIN.z - 22), 18, 15, 18, m.wetStone, 2);
+    this.addRockRim(new THREE.Vector3(MINE_ORIGIN.x + 8, 0, MINE_ORIGIN.z - 72), 28, 22, 28, m.wetStone, 3);
+    this.addRockRim(new THREE.Vector3(MINE_ORIGIN.x, 0, MINE_ORIGIN.z - 103), 29, 23, 30, m.wetStone, 4);
+    this.addRockRim(new THREE.Vector3(MINE_ORIGIN.x, 0, MINE_ORIGIN.z - 140), 24, 19, 24, m.wetStone, 6);
+
+    // Small puddles break up the repeated stone floor.
+    for (const [x, z, s] of [
+      [-4, -18, 1.4], [6, -52, 1.1], [15, -75, 1.8], [-13, -106, 1.5], [7, -134, 1.2],
+    ] as const) {
+      const puddle = new THREE.Mesh(
+        new THREE.CircleGeometry(s, 24),
+        new THREE.MeshStandardMaterial({ color: 0x1a2430, metalness: 0.25, roughness: 0.08, transparent: true, opacity: 0.78 }),
+      );
+      puddle.rotation.x = -Math.PI / 2;
+      puddle.position.set(MINE_ORIGIN.x + x, 0.032, MINE_ORIGIN.z + z);
+      puddle.receiveShadow = true;
+      this.group.add(puddle);
+    }
+
+    // Timber braces get diagonal struts in the biggest chambers, closer to
+    // a hand-built mine than a grid of upright posts.
+    for (const [x, z, span] of [
+      [-4, -22, 5.5], [8, -72, 9], [0, -103, 10], [0, -140, 8],
+    ] as const) {
+      for (const side of [-1, 1]) {
+        const beam = meshBox(
+          this.group,
+          new THREE.Vector3(MINE_ORIGIN.x + x + side * span * 0.36, 2.5, MINE_ORIGIN.z + z + 0.7),
+          new THREE.Vector3(0.28, 4.8, 0.28),
+          m.wood,
+        );
+        beam.rotation.z = side * 0.34;
+      }
+    }
+  }
+
+  private async loadDecorModels() {
+    const loader = new GLTFLoader();
+    const load = async (id: string) => {
+      try {
+        const g = await loader.loadAsync('/assets/models/' + id + '.glb');
+        g.scene.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (mesh.isMesh) {
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+          }
+        });
+        return g.scene;
+      } catch {
+        return null;
+      }
+    };
+
+    const [rocks, crates, barrels, lantern] = await Promise.all([
+      load('rock_moss_set_01'),
+      load('wooden_crate_01'),
+      load('wooden_barrels_01'),
+      load('wooden_lantern_01'),
+    ]);
+
+    const addModel = (src: THREE.Object3D | null, pos: THREE.Vector3, scale = 1, rotY = 0) => {
+      if (!src) return;
+      const o = src.clone();
+      o.position.copy(pos);
+      o.rotation.y = rotY;
+      o.scale.setScalar(scale);
+      o.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (mesh.isMesh) {
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+        }
+      });
+      this.group.add(o);
+      this.decorativeRoots.push(o);
+    };
+
+    addModel(crates, new THREE.Vector3(MINE_ORIGIN.x - 11, 0, MINE_ORIGIN.z - 17), 0.9, 0.15);
+    addModel(crates, new THREE.Vector3(MINE_ORIGIN.x - 8.7, 0, MINE_ORIGIN.z - 18.2), 0.72, -0.35);
+    addModel(barrels, new THREE.Vector3(MINE_ORIGIN.x + 5.8, 0, MINE_ORIGIN.z - 19), 0.9, 0.25);
+    addModel(barrels, new THREE.Vector3(MINE_ORIGIN.x + 6.7, 0, MINE_ORIGIN.z - 20.2), 0.65, 1.1);
+
+    for (const [x, z, s, r] of [
+      [-12, -71, 1.3, 0.2], [-15, -76, 1.0, 0.9], [15, -70, 1.1, 1.5],
+      [-14, -103, 1.25, 0.3], [14, -106, 1.35, 1.8], [-13, -118, 1.1, 0.8],
+    ] as const) {
+      addModel(rocks, new THREE.Vector3(MINE_ORIGIN.x + x, 0, MINE_ORIGIN.z + z), s, r);
+    }
+
+    for (const [x, z] of [[-10, -22], [7, -73], [-6, -103], [7, -139]] as const) {
+      addModel(lantern, new THREE.Vector3(MINE_ORIGIN.x + x, 2.6, MINE_ORIGIN.z + z), 0.8, 0);
     }
   }
 
@@ -704,6 +914,14 @@ export class MineInstance {
   update(dt: number, player: Player) {
     if (this.disposed) return;
     this.time += dt;
+
+    for (const item of this.decorLights) {
+      const flicker = 1 + Math.sin(this.time * 8 + item.phase) * 0.045 + Math.sin(this.time * 17 + item.phase * 1.7) * 0.025;
+      item.light.intensity = item.base * flicker;
+    }
+    for (const mat of this.glowMaterials) {
+      mat.emissiveIntensity = 0.42 + Math.sin(this.time * 1.8) * 0.05;
+    }
 
     if (this.progress.gateOpen && this.gateBars && this.gateT < 1) {
       this.gateT = Math.min(1, this.gateT + dt * 0.8);
