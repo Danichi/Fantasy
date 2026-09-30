@@ -3,6 +3,7 @@ import type { Slot } from './items/itemDefs';
 import { ITEMS } from './items/itemDefs';
 import type { MapData } from './ui/dungeonMap';
 import type { DungeonProgress } from './dungeon/instance';
+import type { MineProgress } from './dungeon/mine';
 import { xpToNext } from './progression/progression';
 import type { PathsSave } from './paths/paths';
 
@@ -26,6 +27,7 @@ export interface SaveData {
   activeSpell: number | null;
   maps: Record<string, MapData>;
   dungeon: DungeonProgress;
+  mine?: MineProgress;
 }
 
 export function hasSave() {
@@ -53,7 +55,7 @@ export function loadSave(): SaveData | null {
   }
 }
 
-export function writeSave(player: Player, seed: number, maps: Record<string, MapData>, dungeon: DungeonProgress) {
+export function writeSave(player: Player, seed: number, maps: Record<string, MapData>, dungeon: DungeonProgress, mine?: MineProgress) {
   const eq = player.equip;
   const idx = (uid: number | null | undefined) => (uid == null ? null : eq.items.findIndex((i) => i.uid === uid));
   const equipped: SaveData['equipped'] = {};
@@ -77,6 +79,7 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
     activeSpell: idx(eq.activeSpell),
     maps,
     dungeon,
+    mine,
   };
   try {
     localStorage.setItem(KEY, JSON.stringify(data));
