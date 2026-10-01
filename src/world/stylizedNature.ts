@@ -57,19 +57,21 @@ interface Prototype {
 // with the base at y = 0 (scaled by targetHeight like the imported models).
 
 function lumpyBlob(r: number, seed: number) {
-  const g = new THREE.IcosahedronGeometry(r, 2);
+  const g = new THREE.IcosahedronGeometry(r, 3);
   const p = g.attributes.position as THREE.BufferAttribute;
   const rnd = mulberry32(seed);
   const a = rnd() * 10, b = rnd() * 10;
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const k = 1 + 0.16 * Math.sin(x * 7.1 + a) * Math.sin(z * 6.3 + b) + 0.08 * Math.sin(y * 11 + a + b);
+    // Broad lumps plus small leafy clumps on the surface.
+    const leafy = Math.sin(x * 31 + a) * Math.sin(y * 29 + b) * Math.sin(z * 33 + a);
+    const k = 1 + 0.16 * Math.sin(x * 7.1 + a) * Math.sin(z * 6.3 + b) + 0.08 * Math.sin(y * 11 + a + b) + 0.07 * leafy;
     p.setXYZ(i, x * k, y * k, z * k);
   }
   return g;
 }
 
-function bushGeometry(seed: number) {
+function bushGeometry(seed: number, hue = 0) {
   const rnd = mulberry32(seed);
   const parts: THREE.BufferGeometry[] = [];
   const n = 5 + Math.floor(rnd() * 3);
@@ -79,9 +81,12 @@ function bushGeometry(seed: number) {
     const g = lumpyBlob(r, seed * 31 + k);
     g.scale(1, 0.85, 1);
     g.translate(Math.cos(ang) * rad, r * 0.8 + (k === 0 ? 0.22 : rnd() * 0.12), Math.sin(ang) * rad);
+    g.deleteAttribute('uv');
+    g.deleteAttribute('normal');
     parts.push(g.index ? g.toNonIndexed() : g);
   }
-  const geo = mergeGeometries(parts, false)!;
+  // Welded so the blobs shade smoothly (soft leafy mounds, not facets).
+  const geo = mergeVertices(mergeGeometries(parts, false)!, 1e-4);
   geo.computeBoundingBox();
   const bb = geo.boundingBox!;
   geo.translate(0, -bb.min.y, 0);
@@ -92,11 +97,15 @@ function bushGeometry(seed: number) {
   const n2 = geo.attributes.normal as THREE.BufferAttribute;
   const col = new Float32Array(p.count * 3);
   const dark = new THREE.Color(0x1f3a12), mid = new THREE.Color(0x3f6a1e), top = new THREE.Color(0x86a83a), c = new THREE.Color();
+  // Kinds differ a little: some bushes run yellow-green, some deeper.
+  for (const k of [dark, mid, top]) k.offsetHSL(hue, 0, hue * -0.6);
   for (let i = 0; i < p.count; i++) {
     // Height and how much the face looks at the sky, plus leafy speckle.
     const t = Math.min(1, p.getY(i) * 0.9 + Math.max(0, n2.getY(i)) * 0.35);
-    const speckle = (Math.sin(p.getX(i) * 41 + p.getZ(i) * 37) * 0.5 + 0.5) * 0.12;
-    c.copy(dark).lerp(mid, Math.min(1, t * 1.6)).lerp(top, Math.max(0, t - 0.55) * 1.6).multiplyScalar(0.94 + speckle);
+    // Dappled leaves: light and shadow clumps across the crown.
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const speckle = Math.sin(x * 41 + z * 37) * Math.sin(y * 45 - x * 13) * 0.5 + 0.5;
+    c.copy(dark).lerp(mid, Math.min(1, t * 1.6)).lerp(top, Math.max(0, t - 0.55) * 1.6).multiplyScalar(0.78 + speckle * 0.36);
     col.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -135,10 +144,29 @@ function rockGeometry(seed: number) {
 /** Procedural prototypes: [spec, geometry, material, castShadow]. */
 function proceduralNature(): [AssetSpec, THREE.BufferGeometry, THREE.Material, boolean][] {
   const leaf = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 });
+  // Leaf clumps in the fragment shader: dappled light and shadow at a size no
+  // vertex colour could carry, in the bush's own space so it never swims.
+  leaf.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vLeafP;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvLeafP = position * 7.0;`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vLeafP;`)
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        {
+          vec3 q = vLeafP;
+          float n = sin(q.x * 3.1 + sin(q.y * 2.7)) * sin(q.y * 3.3 + sin(q.z * 2.9)) * sin(q.z * 2.6 + sin(q.x * 3.7));
+          float m = sin(q.x * 7.3 + q.z * 1.9) * sin(q.y * 6.1 - q.x * 2.3) * sin(q.z * 6.7 + q.y * 1.3);
+          diffuseColor.rgb *= 0.74 + 0.34 * smoothstep(-0.35, 0.55, n) + 0.1 * m;
+        }`,
+      );
+  };
   const stone = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, flatShading: true });
   return [
     [{ file: 'bush-a', kind: 'bush', targetHeight: 1.5 }, bushGeometry(11), leaf, true],
-    [{ file: 'bush-b', kind: 'bush', targetHeight: 2.2 }, bushGeometry(23), leaf, true],
+    [{ file: 'bush-b', kind: 'bush', targetHeight: 2.2 }, bushGeometry(23, -0.025), leaf, true],
     [{ file: 'rock-a', kind: 'rock', targetHeight: 1.3 }, rockGeometry(7), stone, true],
   ];
 }
@@ -500,9 +528,11 @@ export class StylizedNature {
         const [d] = this.density(px, pz);
         const slope = Math.abs(heightAt(px + 2, pz) - heightAt(px - 2, pz)) + Math.abs(heightAt(px, pz + 2) - heightAt(px, pz - 2));
         const stony = fbm(px * 0.012 + 17, pz * 0.012 - 9, 3);
-        if (this.rocks.length && ((stony > 0.64 && roll < 0.2) || (slope > 2.2 && roll < 0.1))) {
+        // Bushes gather in loose clumps (a second noise) and thicken toward groves.
+        const clump = smoothstep(0.36, 0.56, fbm(px * 0.021 + 5.3, pz * 0.021 - 2.7, 2)); // (this fbm spans ~0.1..0.65)
+        if (this.rocks.length && ((stony > 0.58 && roll < 0.18) || (slope > 2.2 && roll < 0.1) || roll < 0.012)) {
           trees.push(px, h - 0.3, pz, rot, 0.55 + sc * 1.1, this.rocks[Math.floor(pick * 991) % this.rocks.length]);
-        } else if (this.bushes.length && d > 0.03 && d < 0.5 && roll < 0.1 + d * 0.25) {
+        } else if (this.bushes.length && d < 0.5 && roll < 0.025 + clump * 0.3 + d * 0.3) {
           trees.push(px, h - 0.06, pz, rot, 0.7 + sc * 0.6, this.bushes[Math.floor(pick * 991) % this.bushes.length]);
         }
       }

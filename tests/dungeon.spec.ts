@@ -148,15 +148,16 @@ test('killing an enemy awards XP and gold that fly to the player', async ({ page
   expect(res.dGold).toBeGreaterThanOrEqual(6);
 });
 
-test('Living Armour attacks and can be killed', async ({ page }) => {
+// (The crypt is held by orcs now; the Living Armour guards the Old King's Road Mine.)
+test('a crypt orc attacks and can be killed', async ({ page }) => {
   await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     await g.realm.enter(1, 'entrance');
     const inst = g.realm.instance;
-    for (const s of inst.slimes) s.dispose();
-    inst.slimes = [];
-    const a = inst.armours[0];
+    for (const o of inst.orcs.slice(1)) o.dispose();
+    inst.orcs = inst.orcs.slice(0, 1);
+    const a = inst.orcs[0];
     const p = g.player;
     p.teleport(a.position.clone().add(new g.THREE.Vector3(0, 0.3, 2)));
     const hp0 = p.hp;
@@ -204,10 +205,8 @@ test('the Orc Warlord fights with blade and bow, and drops his loot', async ({ p
     const T = g.THREE;
     await g.realm.enter(2, 'entrance');
     const inst = g.realm.instance;
-    for (const s of inst.slimes) s.dispose();
-    inst.slimes = [];
-    for (const a of inst.armours) a.dispose();
-    inst.armours = [];
+    for (const m of inst.orcs) m.dispose();
+    inst.orcs = [];
     const o = inst.bossTarget;
     const p = g.player;
     const f = new T.Vector3(Math.sin(o.yaw), 0, Math.cos(o.yaw));
