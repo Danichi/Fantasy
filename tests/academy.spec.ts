@@ -92,7 +92,11 @@ test('the Quiet Hands: a hidden trapdoor, Aldric\'s debt, and the black market',
     const known = door.label();
     g.player.prog.addGold(200);
     const gold0 = g.player.prog.gold;
+    // The trapdoor leads down into the undercity, where Mother Sallow keeps the ledger.
     door.action();
+    for (let k = 0; k < 200 && (g.realm.mode !== 'interior' || g.realm.busy); k++) await new Promise((r) => setTimeout(r, 50));
+    const below = g.realm.mode === 'interior' && g.realm.interior?.kind === 'undercity';
+    g.lowerCity.den();
     const opts = () => g.dialogue['options'].map((o: any) => o.label);
     const first = opts();
     g.dialogue['options'].find((o: any) => /Aldric/.test(o.label)).run();
@@ -101,21 +105,24 @@ test('the Quiet Hands: a hidden trapdoor, Aldric\'s debt, and the black market',
     const stage = q.state['quiet-hands'].stage;
     q.options('corvina', () => {}, () => {})[0].run();
     const done = q.isDone('quiet-hands');
-    door.action();
+    // Nix the fence sells, once Aldric is home.
+    g.lowerCity.nix();
     const after = opts();
-    g.dialogue['options'].find((o: any) => /black market/.test(o.label)).run();
+    g.dialogue['options'].find((o: any) => /fell off the wagons/.test(o.label)).run();
     const shop = opts();
     g.dialogue.close();
-    return { hidden, known, first, paid, stage, done, after, shop };
+    await g.realm.leaveInterior();
+    return { hidden, known, below, first, paid, stage, done, after, shop };
   });
   expect(res.hidden).toBe(true);
   expect(res.known).toMatch(/Knock twice/);
+  expect(res.below).toBe(true);
   expect(res.first.some((l: string) => /Aldric/.test(l))).toBe(true);
   expect(res.first.some((l: string) => /black market/.test(l))).toBe(false);
   expect(res.paid).toBe(80);
   expect(res.stage).toBe(2);
   expect(res.done).toBe(true);
-  expect(res.after.some((l: string) => /black market/.test(l))).toBe(true);
+  expect(res.after.some((l: string) => /fell off the wagons/.test(l))).toBe(true);
   expect(res.shop.some((l: string) => /Greater Health/i.test(l))).toBe(true);
   expect(errors).toEqual([]);
 });

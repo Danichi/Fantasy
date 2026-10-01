@@ -255,6 +255,7 @@ function simplified(geo: THREE.BufferGeometry) {
 
 function characterMaterial(at: Atlas, hue: THREE.Color | null, linen: THREE.Color | null) {
   const mat = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, side: THREE.DoubleSide, vertexColors: true });
+  mat.userData.styleRim = 0.5; // characters stand out of the scenery with a brighter rim
   const u = { ...dyeUniforms(hue, linen), uAtlas: { value: at.tex } };
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);

@@ -7,8 +7,7 @@ import { captureRest, retargetClip, MIXAMO_TO_UE } from '../anim/retarget';
 
 // ---------------------------------------------------------------------------
 // Character rig: loads the skinned model plus any animation files listed in
-// /assets/character/manifest.json (written by tools/import-mixamo.mjs). With no
-// manifest it falls back to the three.js Xbot placeholder. Every Mixamo rig
+// /assets/character/manifest.json (written by tools/import-mixamo.mjs). Every Mixamo rig
 // shares the same bone names, so gameplay code addresses bones by their short
 // name ("RightHand", "Spine2") regardless of the "mixamorig1:" style prefix.
 // ---------------------------------------------------------------------------
@@ -36,21 +35,9 @@ export interface CharacterManifest {
   model: string;
   height?: number;
   clips: Record<string, ClipEntry>;
-  /** stock Mixamo mannequin: the game restyles it as a gambeson */
-  placeholderStyle?: boolean;
   /** fine tuning for items attached to bones (per character) */
   sockets?: Record<string, { pos?: [number, number, number]; rot?: [number, number, number] }>;
 }
-
-const FALLBACK: CharacterManifest = {
-  model: 'Xbot.glb',
-  height: 1.8,
-  clips: {
-    idle: { file: 'Xbot.glb', name: 'idle', loop: true },
-    walk: { file: 'Xbot.glb', name: 'walk', loop: true },
-    run: { file: 'Xbot.glb', name: 'run', loop: true },
-  },
-};
 
 const BONE_PREFIX = /^mixamorig\d*[:_]?/;
 export const shortBoneName = (n: string) => n.replace(BONE_PREFIX, '');
@@ -83,7 +70,6 @@ export class Character {
   manifest!: CharacterManifest;
   rigFamily: RigFamily = 'generic';
   rigProfile: RigProfile = RIG_PROFILES.generic;
-  usingPlaceholder = true;
   meshes: THREE.SkinnedMesh[] = [];
   /** standing hips height in metres (after height normalisation) */
   hipsHeight = 1;
@@ -98,26 +84,10 @@ export class Character {
    * registered under their Mixamo names.
    */
   async load(base = '/assets/character/', body?: BodyOptions, look?: Look) {
-    const loader = new GLTFLoader();
-    let manifest = FALLBACK;
-    // Dev preview: ?char=candidates/Soldier.glb swaps the model, keeping the fallback clips.
-    const override = new URLSearchParams(location.search).get('char');
-    try {
-      const res = await fetch(base + 'manifest.json');
-      if (res.ok && res.headers.get('content-type')?.includes('json')) {
-        manifest = await res.json();
-        this.usingPlaceholder = false;
-      }
-    } catch {}
-    if (override) {
-      // Prefer the model's own idle/walk/run when it has them.
-      const own = (await loader.loadAsync(base + override)).animations.map((a: THREE.AnimationClip) => a.name);
-      const pick = (k: string) => own.find((n: string) => n.toLowerCase() === k);
-      const clips: Record<string, ClipEntry> = {};
-      for (const k of ['idle', 'walk', 'run']) clips[k] = pick(k) ? { file: override, name: pick(k), loop: true } : FALLBACK.clips[k];
-      manifest = { ...FALLBACK, model: override, clips };
-    }
-    if (body) manifest = { ...manifest, model: body.model, height: body.height ?? manifest.height, placeholderStyle: false };
+    const res = await fetch(base + 'manifest.json');
+    if (!res.ok) throw new Error(`character manifest missing (${res.status})`);
+    let manifest: CharacterManifest = await res.json();
+    if (body) manifest = { ...manifest, model: body.model, height: body.height ?? manifest.height };
     this.manifest = manifest;
 
     const get = (f: string) => loadShared(f.startsWith('/') ? f : base + f);

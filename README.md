@@ -43,18 +43,15 @@ URL options:
 | M | In the dungeon: open the map to draw walls, floor, icons and notes |
 | H | Controls |
 
-## The stand-in character and Mixamo
+## Characters and animation
 
-Until you download the Mixamo files, the player is the grey three.js "Xbot"
-mannequin, dressed in a dark gambeson. It has only idle, walk and run
-animations. Every attack, block, parry, cast and roll is posed procedurally
-with IK in `src/combat/actions.ts` and `src/player/rigLayer.ts`.
-
-To switch to a realistic character with motion capture, follow
-**`tools/mixamo-checklist.md`** and run `npm run import:mixamo`. Any clip you
-provide replaces its procedural version automatically, and any clip you skip
-keeps the procedural one. Weapons and armour attach through hand and limb
-frames measured from the skeleton, so they fit any Mixamo character.
+The hero and every townsperson are assembled from Quaternius' CC0 character
+kits (`src/npc/charBuilder.ts`) and play motion-captured Mixamo clips,
+retargeted onto the kit's skeleton. `public/assets/character/character.glb`
+is kept only for the Mixamo rest pose the clips were recorded on (its textures
+are stripped). To add or replace clips, follow **`tools/mixamo-checklist.md`**
+and run `npm run import:mixamo`. Townsfolk merge their parts into one mesh
+(`src/npc/charMerge.ts`); `?nomerge` builds them in parts to compare.
 
 ## The crypt (first dungeon)
 
@@ -103,5 +100,5 @@ npm test             # Playwright; starts Vite if it isn't running
 ## Assets and licences
 
 - Textures, HDRI and props come from Poly Haven (CC0).
-- The placeholder character is the three.js `Xbot.glb`, which comes from Mixamo.
+- Characters: Quaternius character kits (CC0); animations from Mixamo.
 - Swords, shields, armour, slimes, houses and trees are generated in code.

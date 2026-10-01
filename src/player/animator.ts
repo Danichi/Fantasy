@@ -94,7 +94,6 @@ export class Animator {
       const speed = info?.speedRatio ? info.speedRatio * hipsH : fallbackSpeed;
       this.loco.push({ ...s, key, tier, dir: (info?.dir as [number, number]) ?? dir, speed });
     }
-    // The Xbot placeholder's walk/run have no direction or speed metadata.
     this.hasLocomotion = this.loco.some((l) => l.tier === 'run') && !!this.idle;
   }
 

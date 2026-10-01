@@ -96,12 +96,14 @@ patch(
 type Hook = (s: THREE.WebGLProgramParametersWithUniforms, r: THREE.WebGLRenderer) => void;
 type Styled = { _styleInner?: Hook; _styleHook?: Hook; userData: Record<string, unknown> };
 // A material can opt out of texture softening (already-painted textures) with
-// userData.styleSoftness = 0.
+// userData.styleSoftness = 0, and take a stronger rim (characters: a bright
+// silhouette against the world) with userData.styleRim.
 const addStyleUniforms = (sh: THREE.WebGLProgramParametersWithUniforms, mat: Styled) => {
   const own = mat.userData.styleSoftness;
   sh.uniforms.uStyleSoftness = typeof own === 'number' ? { value: own } : STYLE.textureSoftness;
   sh.uniforms.uStyleRim = STYLE.rimColor;
-  sh.uniforms.uStyleRimStrength = STYLE.rimStrength;
+  const rim = mat.userData.styleRim;
+  sh.uniforms.uStyleRimStrength = typeof rim === 'number' ? { value: rim } : STYLE.rimStrength;
 };
 Object.defineProperty(THREE.MeshStandardMaterial.prototype, 'onBeforeCompile', {
   configurable: true,

@@ -324,6 +324,7 @@ export async function buildCharacter(look: Look, clips: string[] = ['idle', 'tal
       else if (!/hair|eye/i.test(mat.name) && (hue || linen)) recolor(c, hue, linen);
       c.roughness = 0.85;
       c.metalness = 0;
+      c.userData.styleRim = 0.5; // (see charMerge: characters take a brighter rim)
       return c;
     });
     m.material = Array.isArray(m.material) ? next : next[0];

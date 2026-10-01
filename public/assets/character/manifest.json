@@ -2,10 +2,6 @@
   "model": "character.glb",
   "height": 1.8,
   "clips": {
-    "draw": {
-      "file": "draw.glb",
-      "loop": false
-    },
     "roll": {
       "file": "roll.glb",
       "loop": false,
@@ -83,14 +79,6 @@
         4.6658,
         4.6677
       ]
-    },
-    "sheath": {
-      "file": "sheath.glb",
-      "loop": false
-    },
-    "turn_180": {
-      "file": "turn_180.glb",
-      "loop": false
     },
     "attack_sprint": {
       "file": "attack_sprint.glb",
@@ -354,15 +342,6 @@
     "jump": {
       "file": "jump.glb",
       "loop": false
-    },
-    "jump_run": {
-      "file": "jump_run.glb",
-      "loop": false,
-      "speedRatio": 3.4288,
-      "dir": [
-        0,
-        1
-      ]
     },
     "kick": {
       "file": "kick.glb",
@@ -674,55 +653,6 @@
         1.1951
       ]
     },
-    "attack_low": {
-      "file": "attack_low.glb",
-      "loop": false,
-      "rootMotionRatio": 0.0183,
-      "rootCurve": [
-        0,
-        0.0052,
-        0.0102,
-        0.0163,
-        0.027,
-        0.0487,
-        0.0746,
-        0.1057,
-        0.152,
-        0.214,
-        0.283,
-        0.354,
-        0.431,
-        0.5092,
-        0.587,
-        0.6654,
-        0.7539,
-        0.8433,
-        0.9279,
-        1.002,
-        1.0602,
-        1.092,
-        1.1087,
-        1.1127,
-        1.1037,
-        1.0783,
-        1.0361,
-        0.9786,
-        0.9052,
-        0.8199,
-        0.7309,
-        0.6375,
-        0.5412,
-        0.4425,
-        0.3454,
-        0.2569,
-        0.1886,
-        0.1331,
-        0.0879,
-        0.0504,
-        0.0183,
-        0.0183
-      ]
-    },
     "attack_light_1": {
       "file": "attack_light_1.glb",
       "loop": false,
@@ -811,10 +741,6 @@
         -1,
         0.003
       ]
-    },
-    "turn": {
-      "file": "turn.glb",
-      "loop": false
     },
     "walk_back": {
       "file": "walk_back.glb",

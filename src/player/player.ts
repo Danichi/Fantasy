@@ -146,9 +146,8 @@ export class Player {
   meleeBonus?: (t: Target) => { mult: number; crit: boolean };
 
   async init(scene: THREE.Scene, spawn: THREE.Vector3) {
-    // The stylised hero (docs/ART-DIRECTION.md §7); ?paladin keeps the old Mixamo model.
-    const paladin = new URLSearchParams(location.search).has('paladin');
-    await this.char.load(undefined, undefined, paladin ? undefined : HERO);
+    // The stylised hero (docs/ART-DIRECTION.md §7), playing the Mixamo clips.
+    await this.char.load(undefined, undefined, HERO);
     scene.add(this.char.root);
     this.anim = new Animator(this.char);
     // Real clips hold the sword and shield themselves; the placeholder's
@@ -164,7 +163,6 @@ export class Player {
     for (const b of ['Head', 'Spine2', 'RightArm', 'LeftArm', 'RightForeArm', 'LeftForeArm', 'RightHand', 'LeftHand', 'RightUpLeg', 'LeftUpLeg', 'RightLeg', 'LeftLeg', 'RightFoot', 'LeftFoot']) {
       this.equip.limb(b);
     }
-    this.styleBody();
 
     const R = physics.R;
     this.body = physics.world.createRigidBody(
@@ -177,22 +175,6 @@ export class Player {
     this.kcc = physics.createCharacterController(0.02);
     this.pos.copy(spawn);
     this.prevPos.copy(spawn);
-  }
-
-  /** Stock mannequins: dress them in a dark gambeson so armour reads well. */
-  private styleBody() {
-    if (this.char.manifest.model !== 'Xbot.glb' && !this.char.manifest.placeholderStyle) return;
-    for (const m of this.char.meshes) {
-      const mats = Array.isArray(m.material) ? m.material : [m.material];
-      for (const mat of mats as THREE.MeshStandardMaterial[]) {
-        const joint = /joint/i.test(mat.name);
-        mat.map = null;
-        mat.color.set(joint ? 0x2b211a : 0x4e4436);
-        mat.roughness = joint ? 0.8 : 0.88;
-        mat.metalness = 0;
-        mat.needsUpdate = true;
-      }
-    }
   }
 
   private buildMountVisual() {

@@ -5,6 +5,7 @@ import { heightAt, hasTile, riverX, roadDist, TOWN_R, WORLD_SIZE, CRYPT, TILE, P
 import { reliefAt, regionAt, RELIEF, SEA_LEVEL } from './worldMap';
 import { fbm, mulberry32, smoothstep } from '../core/math';
 import { physics } from '../physics/physics';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // Trees and understory for the whole world (docs/ART-DIRECTION.md §5).
 //
@@ -18,7 +19,7 @@ import { physics } from '../physics/physics';
 // Beyond the streamed tiles, forests read through the terrain's forest-floor
 // colour on the far mesh.
 
-type Kind = 'tree' | 'pine' | 'fern' | 'flower' | 'mushroom';
+type Kind = 'tree' | 'pine' | 'fern' | 'flower' | 'mushroom' | 'bush' | 'rock';
 
 interface AssetSpec {
   file: string;
@@ -45,6 +46,101 @@ interface Prototype {
   span: number;
   /** impostor quad width / height */
   aspect: number;
+}
+
+// ---- procedural bushes and rocks (plains, grove edges, rocky ground) ---------------
+//
+// The stylized pack has trees and small plants but nothing in between, so
+// open country read as lawn with trees on it. Bushes are mounds of lumpy
+// blobs, shaded dark at the roots to sunlit at the crown; rocks are low-poly
+// boulders, flat-shaded, with moss on their upward faces. Both are height 1
+// with the base at y = 0 (scaled by targetHeight like the imported models).
+
+function lumpyBlob(r: number, seed: number) {
+  const g = new THREE.IcosahedronGeometry(r, 2);
+  const p = g.attributes.position as THREE.BufferAttribute;
+  const rnd = mulberry32(seed);
+  const a = rnd() * 10, b = rnd() * 10;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const k = 1 + 0.16 * Math.sin(x * 7.1 + a) * Math.sin(z * 6.3 + b) + 0.08 * Math.sin(y * 11 + a + b);
+    p.setXYZ(i, x * k, y * k, z * k);
+  }
+  return g;
+}
+
+function bushGeometry(seed: number) {
+  const rnd = mulberry32(seed);
+  const parts: THREE.BufferGeometry[] = [];
+  const n = 5 + Math.floor(rnd() * 3);
+  for (let k = 0; k < n; k++) {
+    const r = 0.28 + rnd() * 0.18;
+    const ang = rnd() * Math.PI * 2, rad = k === 0 ? 0 : 0.18 + rnd() * 0.28;
+    const g = lumpyBlob(r, seed * 31 + k);
+    g.scale(1, 0.85, 1);
+    g.translate(Math.cos(ang) * rad, r * 0.8 + (k === 0 ? 0.22 : rnd() * 0.12), Math.sin(ang) * rad);
+    parts.push(g.index ? g.toNonIndexed() : g);
+  }
+  const geo = mergeGeometries(parts, false)!;
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox!;
+  geo.translate(0, -bb.min.y, 0);
+  const h = bb.max.y - bb.min.y;
+  geo.scale(1 / h, 1 / h, 1 / h);
+  geo.computeVertexNormals();
+  const p = geo.attributes.position as THREE.BufferAttribute;
+  const n2 = geo.attributes.normal as THREE.BufferAttribute;
+  const col = new Float32Array(p.count * 3);
+  const dark = new THREE.Color(0x1f3a12), mid = new THREE.Color(0x3f6a1e), top = new THREE.Color(0x86a83a), c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    // Height and how much the face looks at the sky, plus leafy speckle.
+    const t = Math.min(1, p.getY(i) * 0.9 + Math.max(0, n2.getY(i)) * 0.35);
+    const speckle = (Math.sin(p.getX(i) * 41 + p.getZ(i) * 37) * 0.5 + 0.5) * 0.12;
+    c.copy(dark).lerp(mid, Math.min(1, t * 1.6)).lerp(top, Math.max(0, t - 0.55) * 1.6).multiplyScalar(0.94 + speckle);
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return geo;
+}
+
+function rockGeometry(seed: number) {
+  const rnd = mulberry32(seed);
+  let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, 1);
+  const p = g.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const k = 0.78 + rnd() * 0.4;
+    p.setXYZ(i, p.getX(i) * k * 1.25, Math.max(-0.35, p.getY(i)) * k * 0.72, p.getZ(i) * k);
+  }
+  g = mergeVertices(g.deleteAttribute('normal').deleteAttribute('uv'), 1e-4).toNonIndexed(); // flat faces
+  g.computeBoundingBox();
+  const bb = g.boundingBox!;
+  g.translate(0, -bb.min.y, 0);
+  const h = bb.max.y - bb.min.y;
+  g.scale(1 / h, 1 / h, 1 / h);
+  g.computeVertexNormals();
+  const n = g.attributes.normal as THREE.BufferAttribute;
+  const col = new Float32Array(n.count * 3);
+  const stone = new THREE.Color(0x8a8378), shade = new THREE.Color(0x5e5a54), moss = new THREE.Color(0x5a7a2a), c = new THREE.Color();
+  for (let i = 0; i < n.count; i += 3) {
+    // One colour per face: stone, darker underneath, moss where it faces up.
+    const ny = (n.getY(i) + n.getY(i + 1) + n.getY(i + 2)) / 3;
+    c.copy(shade).lerp(stone, Math.min(1, ny * 0.5 + 0.6)).multiplyScalar(0.92 + rnd() * 0.16);
+    if (ny > 0.72 && rnd() < 0.8) c.lerp(moss, 0.65);
+    for (let v = 0; v < 3; v++) col.set([c.r, c.g, c.b], (i + v) * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
+}
+
+/** Procedural prototypes: [spec, geometry, material, castShadow]. */
+function proceduralNature(): [AssetSpec, THREE.BufferGeometry, THREE.Material, boolean][] {
+  const leaf = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 });
+  const stone = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, flatShading: true });
+  return [
+    [{ file: 'bush-a', kind: 'bush', targetHeight: 1.5 }, bushGeometry(11), leaf, true],
+    [{ file: 'bush-b', kind: 'bush', targetHeight: 2.2 }, bushGeometry(23), leaf, true],
+    [{ file: 'rock-a', kind: 'rock', targetHeight: 1.3 }, rockGeometry(7), stone, true],
+  ];
 }
 
 const ASSETS: AssetSpec[] = [
@@ -133,6 +229,8 @@ export class StylizedNature {
   private trees: number[] = [];
   private pines: number[] = [];
   private smalls: Record<'fern' | 'flower' | 'mushroom', number[]> = { fern: [], flower: [], mushroom: [] };
+  private bushes: number[] = [];
+  private rocks: number[] = [];
 
   readonly ready: Promise<void>;
   /** extra (x, z, radius) spots kept free of trees: pastures, mills, barns */
@@ -190,7 +288,21 @@ export class StylizedNature {
       });
       if (item.spec.kind === 'tree') this.trees.push(idx);
       else if (item.spec.kind === 'pine') this.pines.push(idx);
-      else this.smalls[item.spec.kind].push(idx);
+      else if (item.spec.kind === 'fern' || item.spec.kind === 'flower' || item.spec.kind === 'mushroom') this.smalls[item.spec.kind].push(idx);
+    }
+    // Bushes and rocks: full meshes near, baked impostors far, like the trees.
+    for (const [spec, geometry, material, castShadow] of proceduralNature()) {
+      if (cell >= this.atlasCols * this.atlasRows) break;
+      const idx = this.prototypes.length;
+      geometry.computeBoundingBox();
+      const size = geometry.boundingBox!.getSize(new THREE.Vector3());
+      this.prototypes.push({
+        spec, meshes: [{ geometry, material, local: new THREE.Matrix4(), castShadow }],
+        height: Math.max(0.01, size.y), atlas: cell++,
+        trunk: spec.kind === 'rock' ? Math.max(size.x, size.z) * 0.42 : 0,
+        span: 1.04, aspect: CW / CH,
+      });
+      (spec.kind === 'rock' ? this.rocks : this.bushes).push(idx);
     }
     this.bakeImpostors();
     this.buildNearMeshes();
@@ -374,6 +486,27 @@ export class StylizedNature {
         trees.push(px, heightAt(px, pz) - 0.08, pz, rot, (0.82 + scaleR * 0.36) * giant, proto);
       }
     }
+    // Bushes along grove edges and across the plains; rocks where the ground
+    // turns stony (a slow noise) and on slopes.
+    const br = tileRng(i, j, 4);
+    const bstep = 8;
+    for (let z = z0; z < z0 + TILE; z += bstep) {
+      for (let x = x0; x < x0 + TILE; x += bstep) {
+        const px = x + br() * bstep, pz = z + br() * bstep;
+        const roll = br(), pick = br(), sc = br(), rot = br() * Math.PI * 2;
+        if (!this.clearSpot(px, pz)) continue;
+        const h = heightAt(px, pz);
+        if (h < SEA_LEVEL + 0.8) continue;
+        const [d] = this.density(px, pz);
+        const slope = Math.abs(heightAt(px + 2, pz) - heightAt(px - 2, pz)) + Math.abs(heightAt(px, pz + 2) - heightAt(px, pz - 2));
+        const stony = fbm(px * 0.012 + 17, pz * 0.012 - 9, 3);
+        if (this.rocks.length && ((stony > 0.64 && roll < 0.2) || (slope > 2.2 && roll < 0.1))) {
+          trees.push(px, h - 0.3, pz, rot, 0.55 + sc * 1.1, this.rocks[Math.floor(pick * 991) % this.rocks.length]);
+        } else if (this.bushes.length && d > 0.03 && d < 0.5 && roll < 0.1 + d * 0.25) {
+          trees.push(px, h - 0.06, pz, rot, 0.7 + sc * 0.6, this.bushes[Math.floor(pick * 991) % this.bushes.length]);
+        }
+      }
+    }
     // Understory: ferns and mushrooms in woods, flower clumps in meadows.
     const under: number[] = [];
     const ur = tileRng(i, j, 2);
@@ -535,14 +668,14 @@ export class StylizedNature {
     const visit = (arr: Float32Array, tag: string) => {
       for (let o = 0; o < arr.length; o += 6) {
         const proto = this.prototypes[arr[o + 5]];
-        if (proto.atlas < 0) continue;
+        if (proto.atlas < 0 || proto.spec.kind === 'bush') continue; // walk through bushes
         const dx = arr[o] - player.x, dz = arr[o + 2] - player.z;
         if (dx * dx + dz * dz > COLLIDE_R * COLLIDE_R) continue;
         const id = tag + ':' + o;
         keep.add(id);
         if (this.colliders.has(id)) continue;
         const r = proto.trunk * arr[o + 4] * (proto.spec.targetHeight / proto.height);
-        this.colliders.set(id, physics.addCylinder(new THREE.Vector3(arr[o], arr[o + 1] + 2, arr[o + 2]), 2, Math.max(0.22, Math.min(0.7, r))));
+        this.colliders.set(id, physics.addCylinder(new THREE.Vector3(arr[o], arr[o + 1] + 2, arr[o + 2]), 2, Math.max(0.22, Math.min(proto.spec.kind === 'rock' ? 1.1 : 0.7, r))));
       }
     };
     for (const t of this.tiles.values()) if (Math.abs(t.i - pi) <= 1 && Math.abs(t.j - pj) <= 1) visit(t.trees, `${t.i},${t.j}`);
