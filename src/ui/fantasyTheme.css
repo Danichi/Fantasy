@@ -1,0 +1,362 @@
+/* ==========================================================================
+   Old-world theme: parchment, ink, oak and brass for the pause screen, the
+   Adventurer's Guild hall, the quest tracker and the book button.
+   Selectors start with #ui so they win over styles.css whichever loads last.
+   ========================================================================== */
+
+:root {
+  --ink-dark: #2e2112;
+  --ink-mid: #5a4326;
+  --ink-red: #7a1f12;
+  --parch-hi: #f3e6c4;
+  --parch-lo: #dcc493;
+  --parch-edge: #a9874f;
+  --oak-hi: #6a4526;
+  --oak-lo: #2f1c0e;
+  --brass-hi: #f1d38a;
+  --brass-lo: #9a6f2a;
+  --fell: 'IM Fell English', 'Georgia', serif;
+  --paper-noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .36  0 0 0 0 .25  0 0 0 0 .12  0 0 0 .2 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  --wood-noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='120'><filter id='w'><feTurbulence type='fractalNoise' baseFrequency='.004 .18' numOctaves='3' seed='4'/><feColorMatrix values='0 0 0 0 .1  0 0 0 0 .05  0 0 0 0 .01  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23w)'/></svg>");
+  --cork-noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='c'><feTurbulence type='fractalNoise' baseFrequency='1.6' numOctaves='2' seed='9'/><feColorMatrix values='0 0 0 0 .22  0 0 0 0 .13  0 0 0 0 .05  0 0 0 .5 0'/></filter><rect width='100%' height='100%' filter='url(%23c)'/></svg>");
+  --flourish: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='22' viewBox='0 0 320 22'><g fill='none' stroke='%237a5a2e' stroke-width='1.4'><path d='M8 11 H128 M192 11 H312'/><path d='M128 11 c10 -9 22 -9 32 0 c10 9 22 9 32 0'/><path d='M128 11 c10 9 22 9 32 0 c10 -9 22 -9 32 0'/></g><circle cx='160' cy='11' r='3.2' fill='%237a1f12'/><circle cx='8' cy='11' r='2' fill='%237a5a2e'/><circle cx='312' cy='11' r='2' fill='%237a5a2e'/></svg>");
+  --corner: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><g fill='none' stroke='%23c99b47' stroke-width='2'><path d='M4 60 V14 Q4 4 14 4 H60'/><path d='M12 60 V22 Q12 12 22 12 H60' stroke-width='1'/><path d='M20 30 q6 -10 16 -10' stroke-width='1.2'/></g><circle cx='9' cy='9' r='4' fill='%23e9c46a' stroke='%236b4a1c'/></svg>");
+}
+
+/* ---------- shared parchment page ---------- */
+#ui .title-card,
+#ui .guild-quest,
+#ui .adventurer-card,
+#ui .guild-roster-intro {
+  color: var(--ink-dark);
+  background:
+    var(--paper-noise),
+    radial-gradient(ellipse at 30% 20%, rgba(255, 250, 230, .55), transparent 55%),
+    radial-gradient(ellipse at 80% 90%, rgba(150, 105, 50, .28), transparent 60%),
+    linear-gradient(180deg, var(--parch-hi), var(--parch-lo));
+}
+
+/* ==========================================================================
+   Title / pause screen
+   ========================================================================== */
+#ui .overlay {
+  z-index: 60;
+  background:
+    radial-gradient(ellipse at center, rgba(30, 20, 10, .35), rgba(8, 5, 2, .9) 75%);
+  backdrop-filter: blur(6px) sepia(.35);
+}
+#ui .title-card {
+  position: relative;
+  max-width: 780px;
+  padding: 46px 58px 38px;
+  border: 0;
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 2px var(--parch-edge),
+    inset 0 0 0 7px rgba(243, 230, 196, .6),
+    inset 0 0 0 8px rgba(122, 90, 46, .55),
+    inset 0 0 60px rgba(120, 80, 30, .35),
+    0 0 0 10px var(--oak-lo),
+    0 0 0 12px #8a6431,
+    0 30px 90px rgba(0, 0, 0, .8);
+}
+#ui .title-card::before,
+#ui .title-card::after {
+  content: '';
+  position: absolute; width: 64px; height: 64px; margin: 0;
+  border: 0; background: var(--corner) no-repeat;
+}
+#ui .title-card::before { left: 10px; top: 10px; }
+#ui .title-card::after { right: 10px; bottom: 10px; transform: rotate(180deg); }
+#ui .title-card h1 {
+  color: var(--ink-red);
+  font: 700 clamp(30px, 6vw, 50px)/1.05 var(--serif);
+  letter-spacing: .14em;
+  text-shadow: 0 1px 0 rgba(255, 245, 215, .7), 0 0 1px rgba(60, 20, 5, .4);
+  padding-bottom: 22px;
+  margin: 0 0 12px;
+  background: var(--flourish) no-repeat center bottom / 300px 20px;
+}
+#ui .title-card .sub {
+  color: var(--ink-mid);
+  font: italic 400 17px/1.5 var(--fell);
+  letter-spacing: .01em;
+}
+#ui .title-card .cta {
+  position: relative;
+  padding: 15px 34px;
+  color: #fbe9c4;
+  font: 700 14px/1 var(--serif);
+  letter-spacing: .34em;
+  border: 0;
+  border-radius: 6px;
+  background: radial-gradient(circle at 40% 35%, #b0331f, #6e170c 70%);
+  box-shadow: inset 0 2px 0 rgba(255, 190, 160, .35), inset 0 -3px 0 rgba(0, 0, 0, .35), 0 3px 0 #420b05, 0 8px 18px rgba(60, 10, 0, .45);
+  text-shadow: 0 1px 0 #3a0802;
+  transition: transform .12s ease, filter .12s ease;
+}
+#ui .overlay:hover .title-card .cta { filter: brightness(1.12); transform: translateY(-1px); }
+#ui .controls {
+  margin-top: 30px;
+  padding: 18px 22px 16px;
+  color: var(--ink-mid);
+  font: 400 15px/1.55 var(--fell);
+  border-top: 1px solid rgba(122, 90, 46, .45);
+  border-bottom: 1px solid rgba(122, 90, 46, .45);
+  background: rgba(255, 248, 225, .25);
+}
+#ui .controls kbd {
+  color: #3a2810;
+  border: 1px solid #8a6431;
+  border-bottom-width: 3px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--brass-hi), #c9a259);
+  font: 700 11px/1 var(--sans);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .5) inset;
+}
+#ui .desk-row button,
+#ui .title-card .newgame {
+  color: var(--ink-dark);
+  padding: 9px 16px;
+  border: 1px solid #8a6431;
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(255, 248, 225, .8), rgba(214, 190, 140, .8));
+  font: 700 11px/1 var(--serif);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  box-shadow: 0 2px 0 rgba(90, 60, 25, .5);
+}
+#ui .desk-row button:hover,
+#ui .title-card .newgame:hover { background: linear-gradient(180deg, #fff6dc, #e2c98d); border-color: var(--ink-red); }
+#ui .origin-choice {
+  color: var(--ink-dark);
+  background: rgba(255, 248, 225, .45);
+  border: 1px solid rgba(122, 90, 46, .55);
+  border-radius: 4px;
+}
+#ui .origin-choice b { color: var(--ink-red); font-family: var(--serif); letter-spacing: .14em; }
+#ui .origin-choice span { color: var(--ink-mid); font: italic 400 14px/1.3 var(--fell); }
+#ui .origin-choice.selected { background: rgba(122, 31, 18, .1); border-color: var(--ink-red); box-shadow: inset 0 0 0 1px var(--ink-red); }
+/* The pause screen: a small banner above the page and a status line. */
+#ui .overlay.paused .title-card { padding-top: 58px; }
+#ui .overlay.paused .title-card .pause-banner {
+  position: absolute; left: 50%; top: -22px; transform: translateX(-50%);
+  padding: 9px 30px 10px;
+  color: #fbe9c4;
+  font: 700 11px/1 var(--serif); letter-spacing: .4em; white-space: nowrap;
+  background: linear-gradient(180deg, #7d2214, #561107);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 190, 160, .3);
+  clip-path: polygon(0 0, 100% 0, 96% 50%, 100% 100%, 0 100%, 4% 50%);
+}
+#ui .overlay:not(.paused) .pause-banner, #ui .overlay:not(.paused) .pause-status { display: none; }
+#ui .pause-status {
+  display: flex; justify-content: center; gap: 26px; margin: -10px 0 24px;
+  color: var(--ink-mid); font: 400 15px/1 var(--fell);
+}
+#ui .pause-status b { color: var(--ink-red); font: 700 12px/1 var(--serif); letter-spacing: .12em; margin-right: 6px; }
+
+/* ==========================================================================
+   Adventurer's Guild hall: an oak frame round a cork notice board
+   ========================================================================== */
+#ui .guild-ui {
+  border: 0;
+  border-radius: 6px;
+  background: var(--wood-noise), linear-gradient(180deg, var(--oak-hi), var(--oak-lo));
+  box-shadow: inset 0 0 0 2px #1a0f06, inset 0 0 0 4px rgba(241, 211, 138, .35), inset 0 0 40px rgba(0, 0, 0, .55), 0 30px 90px rgba(0, 0, 0, .8);
+  padding: 10px;
+}
+#ui .guild-head {
+  position: relative;
+  padding: 16px 26px 14px;
+  border-bottom: 0;
+  justify-content: center;
+  text-align: center;
+}
+#ui .guild-head > div { flex: 1; }
+#ui .guild-head .eyebrow { color: rgba(241, 211, 138, .75); font: 400 15px/1 var(--fell); font-style: italic; letter-spacing: .08em; text-transform: none; }
+#ui .guild-head h1 {
+  display: inline-block;
+  margin: 8px 0 8px;
+  padding: 10px 34px 12px;
+  color: var(--brass-hi);
+  font: 700 30px/1 var(--serif);
+  letter-spacing: .16em;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, .8), 0 1px 0 rgba(255, 230, 160, .25);
+  background: var(--wood-noise), linear-gradient(180deg, #4a2d15, #2a170a);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 2px #8a6431, inset 0 0 0 4px #2a170a, inset 0 0 0 5px rgba(241, 211, 138, .4), 0 6px 14px rgba(0, 0, 0, .55);
+}
+#ui .guild-rank { color: rgba(243, 230, 196, .85); font: 400 15px/1.4 var(--fell); }
+#ui .guild-close {
+  position: absolute; right: 18px; top: 18px;
+  color: var(--ink-dark);
+  border: 1px solid #8a6431; border-radius: 4px;
+  padding: 9px 14px;
+  background: linear-gradient(180deg, var(--brass-hi), #c9a259);
+  font: 700 10px/1 var(--serif); letter-spacing: .16em;
+  box-shadow: 0 2px 0 #5a3b12;
+}
+#ui .guild-close:hover { filter: brightness(1.08); }
+#ui .guild-tabs { justify-content: center; gap: 10px; padding: 4px 0 12px; border-bottom: 0; }
+#ui .guild-tabs button {
+  padding: 10px 20px;
+  color: rgba(243, 230, 196, .75);
+  border: 1px solid rgba(0, 0, 0, .6);
+  border-radius: 4px;
+  background: var(--wood-noise), linear-gradient(180deg, #5a3a1d, #3a2310);
+  box-shadow: inset 0 1px 0 rgba(255, 220, 160, .15), 0 3px 6px rgba(0, 0, 0, .4);
+  font: 700 11px/1 var(--serif); letter-spacing: .18em;
+}
+#ui .guild-tabs button:hover { color: var(--brass-hi); }
+#ui .guild-tabs button.on {
+  color: #2e1c08;
+  background: linear-gradient(180deg, var(--brass-hi), #c09048);
+  border-color: #6b4a1c;
+}
+#ui .guild-body {
+  padding: 22px 26px;
+  border-radius: 3px;
+  background: var(--cork-noise), radial-gradient(ellipse at 50% 40%, #b98a52, #8c6234 85%);
+  box-shadow: inset 0 0 0 3px #2a170a, inset 0 6px 24px rgba(0, 0, 0, .45);
+}
+#ui .guild-section h2 {
+  display: inline-block;
+  margin: 0 0 14px;
+  padding: 7px 16px;
+  color: var(--ink-dark);
+  font: 700 12px/1 var(--serif); letter-spacing: .2em;
+  background: var(--paper-noise), linear-gradient(180deg, var(--parch-hi), var(--parch-lo));
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .35);
+  transform: rotate(-.6deg);
+}
+#ui .guild-section h2 span { color: var(--ink-red); }
+#ui .guild-grid { gap: 22px 20px; }
+/* Each contract is a note pinned to the cork. */
+#ui .guild-quest {
+  position: relative;
+  padding: 22px 16px 14px;
+  border: 0;
+  border-radius: 1px;
+  box-shadow: 0 10px 18px rgba(40, 20, 5, .45), 0 1px 0 rgba(255, 255, 255, .4) inset;
+  transform: rotate(-.8deg);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+#ui .guild-grid .guild-quest:nth-child(3n + 2) { transform: rotate(.9deg); }
+#ui .guild-grid .guild-quest:nth-child(3n) { transform: rotate(-.3deg) translateY(4px); }
+#ui .guild-quest:hover { transform: rotate(0) translateY(-3px); box-shadow: 0 16px 26px rgba(40, 20, 5, .5); z-index: 1; }
+#ui .guild-quest::before {
+  content: '';
+  position: absolute; left: 50%; top: 6px; width: 14px; height: 14px; margin-left: -7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ff8a70, #a8210f 60%, #5a0d04);
+  box-shadow: 0 3px 4px rgba(0, 0, 0, .5);
+}
+#ui .guild-quest h3 { color: var(--ink-dark); font: 700 15px/1.2 var(--serif); letter-spacing: .02em; }
+#ui .guild-quest p { color: var(--ink-mid); font: 400 15px/1.4 var(--fell); }
+#ui .quest-rank { color: var(--ink-red); font: 700 9px/1 var(--serif); letter-spacing: .16em; }
+#ui .quest-progress { color: #2f4f6a; font: italic 400 14px/1.3 var(--fell); }
+#ui .quest-reward {
+  margin-top: 8px; padding-top: 7px;
+  border-top: 1px dashed rgba(122, 90, 46, .5);
+  color: #6b4a12; font: 700 11px/1.3 var(--sans);
+}
+#ui .guild-quest button {
+  margin-top: 12px;
+  color: #fbe9c4;
+  border: 0; border-radius: 4px;
+  padding: 9px 10px;
+  background: linear-gradient(180deg, #5d3b1c, #3a2310);
+  font: 700 10px/1 var(--serif); letter-spacing: .18em;
+  box-shadow: inset 0 1px 0 rgba(255, 220, 160, .2), 0 2px 0 #1e1006;
+}
+#ui .guild-quest button:hover:not(:disabled) { background: linear-gradient(180deg, #7a1f12, #4f1007); }
+#ui .guild-quest button:disabled { opacity: .5; }
+/* Taken contracts carry the guild's wax seal. */
+#ui .guild-quest.active { background: var(--paper-noise), linear-gradient(180deg, #f6ead0, #e2cc9c); transform: rotate(-.4deg); margin-bottom: 14px; }
+#ui .guild-quest.active::after {
+  content: 'TAKEN';
+  position: absolute; right: 14px; top: 12px;
+  width: 54px; height: 54px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255, 220, 200, .9); font: 700 9px/1 var(--serif); letter-spacing: .12em;
+  background: radial-gradient(circle at 40% 35%, #b0331f, #6e170c 70%);
+  box-shadow: 0 0 0 3px rgba(110, 23, 12, .35), 0 3px 6px rgba(0, 0, 0, .4);
+  transform: rotate(-14deg);
+}
+#ui .guild-quest.active .quest-rank { visibility: hidden; }
+#ui .guild-empty { color: rgba(43, 26, 10, .9); font: italic 400 16px/1.5 var(--fell); padding: 10px 14px; background: rgba(243, 230, 196, .65); display: inline-block; box-shadow: 0 3px 8px rgba(0, 0, 0, .3); }
+#ui .guild-map { border: 0; border-radius: 2px; box-shadow: 0 0 0 6px #2a170a, 0 0 0 8px #8a6431, 0 14px 30px rgba(0, 0, 0, .55); }
+#ui .guild-roster-intro { padding: 16px 20px; box-shadow: 0 6px 14px rgba(0, 0, 0, .35); }
+#ui .guild-roster-intro h2 { color: var(--ink-red); font: 700 13px/1 var(--serif); letter-spacing: .18em; }
+#ui .guild-roster-intro p { color: var(--ink-mid); font: 400 15px/1.45 var(--fell); }
+#ui .roster-grid { gap: 12px; }
+#ui .adventurer-card { border: 0; border-radius: 1px; box-shadow: 0 6px 12px rgba(40, 20, 5, .4); padding: 12px 13px; }
+#ui .adventurer-card:nth-child(odd) { transform: rotate(-.6deg); }
+#ui .adventurer-card:nth-child(even) { transform: rotate(.5deg); }
+#ui .adventurer-card h3 { color: var(--ink-dark); font: 700 13px/1.2 var(--serif); }
+#ui .adventurer-card p { color: var(--ink-mid); font: italic 400 14px/1 var(--fell); }
+#ui .adventurer-card small { color: var(--ink-mid); font: 400 13px/1.2 var(--fell); }
+#ui .adventurer-card .adv-rank { text-shadow: 0 0 1px rgba(0, 0, 0, .5); font-family: var(--serif); }
+#ui .guild-foot { border-top: 0; padding: 10px 16px 4px; color: rgba(243, 230, 196, .7); font: italic 400 14px/1.3 var(--fell); }
+
+/* ==========================================================================
+   Quest tracker: a parchment scrap pinned to the side of the screen
+   ========================================================================== */
+#ui .quest-tracker {
+  width: 270px;
+  padding: 14px 16px 12px 18px;
+  border: 0;
+  border-radius: 2px;
+  color: var(--ink-dark);
+  background:
+    var(--paper-noise),
+    radial-gradient(ellipse at 20% 10%, rgba(255, 250, 230, .6), transparent 60%),
+    linear-gradient(180deg, rgba(243, 230, 196, .94), rgba(220, 196, 147, .94));
+  box-shadow: inset 0 0 0 1px rgba(122, 90, 46, .6), inset 0 0 22px rgba(120, 80, 30, .3), 0 8px 22px rgba(0, 0, 0, .45);
+  clip-path: polygon(0 2%, 4% 0, 30% 1.5%, 62% 0, 100% 1%, 99% 30%, 100% 62%, 98.5% 100%, 66% 98.5%, 33% 100%, 2% 98.5%, 0 66%, 1% 34%);
+}
+#ui .quest-tracker::before {
+  content: '';
+  position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px;
+  background: linear-gradient(180deg, transparent, var(--ink-red) 15%, var(--ink-red) 85%, transparent);
+  opacity: .8;
+}
+#ui .quest-tracker .q-kicker { color: var(--ink-mid); font: 700 9px/1 var(--serif); letter-spacing: .24em; }
+#ui .quest-tracker .q-kicker.q-mainq { color: var(--ink-red); }
+#ui .quest-tracker .q-kicker.q-contract { color: #2f4f6a; }
+#ui .quest-tracker .q-kicker.q-side { margin-top: 0; padding-top: 0; border-top: 0; color: #4f5a2a; }
+#ui .quest-tracker b { color: var(--ink-dark); font: 700 13px/1.25 var(--serif); letter-spacing: .06em; margin: 2px 0 3px; }
+#ui .quest-tracker small { color: var(--ink-mid); font: 400 14px/1.35 var(--fell); }
+#ui .quest-tracker small.q-done { color: rgba(79, 90, 42, .75); text-decoration-color: rgba(79, 90, 42, .5); }
+#ui .quest-tracker small.q-more { margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(122, 90, 46, .45); color: rgba(90, 67, 38, .8); font: italic 400 13px/1.3 var(--fell); }
+
+/* ==========================================================================
+   The book: a leather-bound journal in the corner, brass-cornered page tabs
+   ========================================================================== */
+#ui .book-button {
+  width: 66px; padding: 10px 0 8px;
+  color: var(--brass-hi);
+  border: 0; border-radius: 4px 8px 8px 4px;
+  background:
+    var(--paper-noise),
+    linear-gradient(90deg, #3a1d0e 0 8px, transparent 8px),
+    linear-gradient(180deg, #6b2e18, #3e180a);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6), inset 3px 0 0 rgba(241, 211, 138, .25), inset 0 0 0 4px rgba(241, 211, 138, .18), 0 10px 22px rgba(0, 0, 0, .5);
+}
+#ui .book-button span { font: 700 9px/1 var(--serif); letter-spacing: .24em; }
+#ui .book-button:hover { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6), inset 0 0 0 4px rgba(241, 211, 138, .4), 0 14px 26px rgba(0, 0, 0, .55), 0 0 18px rgba(241, 211, 138, .25); }
+#ui .book-tabs {
+  gap: 6px; padding: 6px 8px;
+  border: 0; border-radius: 4px;
+  background: var(--wood-noise), linear-gradient(180deg, #4e2a14, #2e1709);
+  box-shadow: inset 0 0 0 1px #140a03, inset 0 0 0 3px rgba(241, 211, 138, .3), 0 12px 30px rgba(0, 0, 0, .55);
+}
+#ui .book-tabs button { color: rgba(243, 230, 196, .75); border-radius: 3px; }
+#ui .book-tabs button:hover { color: var(--brass-hi); background: rgba(241, 211, 138, .08); }
+#ui .book-tabs button.on {
+  color: var(--ink-dark);
+  background: var(--paper-noise), linear-gradient(180deg, var(--parch-hi), var(--parch-lo));
+  border-color: #8a6431;
+}
+#ui .book-tabs button.on kbd { color: var(--ink-red); border-color: rgba(122, 31, 18, .4); }

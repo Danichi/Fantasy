@@ -98,20 +98,22 @@ const SHADOW_R = 20;
 
 // Full animated characters cost ~10 draw calls each (twice with shadows), so
 // they only live close to the camera; baked sprites carry the crowd beyond.
-const ACTIVE_R = 32; // metres: actors spawn inside this radius
+const ACTIVE_R = 50; // metres: actors spawn inside this radius
 const LIVE_R = 80; // settlements are simulated (schedules snap) within this of their edge
-const FAR_R = 170; // sprite impostors between ACTIVE_R and this
+const FAR_R = 190; // sprite impostors between ACTIVE_R and this (dissolving out over the last stretch)
 const SPRITE_CAP = 240;
 // 256 baked looks: Elder Glen, the road and Port Aurelle have more than 128 residents.
 const CELL_W = 64, CELL_H = 128, ATLAS_COLS = 16, ATLAS_ROWS = 16;
-const DESPAWN_R = 40; // released beyond this (hysteresis over ACTIVE_R)
-const MAX_ACTORS = 22;
+const DESPAWN_R = 58; // released beyond this (hysteresis over ACTIVE_R)
+const MAX_ACTORS = 30;
 /** Walking pace for a 1.8 m person (m/s); taller people stride further. */
 const WALK_SPEED = 1.15;
 /** How far the walk clip carries a 1.8 m body per second at normal playback (measured from its planted feet). */
 const WALK_CLIP_SPEED = 0.82;
 
 const lookKey = (l: Look) => JSON.stringify(l);
+/** A look's silhouette: what a stand-in sprite must match so a crowd doesn't turn into clones of one person. */
+const shapeKey = (l: Look) => `${l.body}|${l.outfit}|${l.hood ? 1 : 0}|${(l.height ?? 1.75) < 1.4 ? 'child' : 'adult'}`;
 const hash = (s: string) => {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
@@ -140,6 +142,8 @@ export class NpcManager {
   // Far LOD: one sprite per look, baked from the real character in an idle pose.
   private atlas: THREE.WebGLRenderTarget;
   private cells = new Map<string, number>();
+  /** baked cells by silhouette (body, outfit, hood), for stand-ins while a look is still baking */
+  private shapeCells = new Map<string, number>();
   private sprites: THREE.InstancedMesh;
   private spriteData: THREE.InstancedBufferAttribute;
   private bakeScene = new THREE.Scene();
@@ -159,27 +163,35 @@ export class NpcManager {
     this.bakeCam.lookAt(0, 0, 0);
     const quad = new THREE.PlaneGeometry(1, 1);
     quad.translate(0, 0.5, 0);
-    this.spriteData = new THREE.InstancedBufferAttribute(new Float32Array(SPRITE_CAP * 2), 2); // cell, height
+    this.spriteData = new THREE.InstancedBufferAttribute(new Float32Array(SPRITE_CAP * 4), 4); // cell, height, walk phase (-1 standing), fade
     quad.setAttribute('aSprite', this.spriteData);
     const mat = new THREE.ShaderMaterial({
       uniforms: this.spriteUniforms,
       vertexShader: /* glsl */ `
-        attribute vec2 aSprite;
+        attribute vec4 aSprite;
         uniform vec3 uCam;
-        varying vec2 vUv; varying float vCell;
+        varying vec2 vUv; varying float vCell; varying float vFade;
         void main() {
           vec3 base = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
           vec3 toCam = uCam - base; toCam.y = 0.0;
           vec3 right = normalize(vec3(toCam.z, 0.0, -toCam.x) + vec3(1e-5, 0.0, 0.0));
           float h = aSprite.y * 1.1;
           vec3 wp = base + right * position.x * h * 0.5 + vec3(0.0, position.y * h, 0.0);
-          vUv = uv; vCell = aSprite.x;
+          // Walking: a stride bob and a shoulder sway, so a far walker doesn't glide.
+          if (aSprite.z >= 0.0) {
+            float s = sin(aSprite.z);
+            wp.y += abs(s) * 0.045 * h;
+            wp += right * s * 0.035 * h * position.y;
+          }
+          vUv = uv; vCell = aSprite.x; vFade = aSprite.w;
           gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
         }`,
       fragmentShader: /* glsl */ `
         uniform sampler2D tAtlas; uniform vec2 uGrid; uniform float uNight;
-        varying vec2 vUv; varying float vCell;
+        varying vec2 vUv; varying float vCell; varying float vFade;
         void main() {
+          // Dissolve (screen-door) at the edge of sprite range instead of popping.
+          if (fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453) > vFade) discard;
           float col = mod(vCell, uGrid.x), row = floor(vCell / uGrid.x);
           vec4 c = texture2D(tAtlas, vec2((col + vUv.x) / uGrid.x, (uGrid.y - row - 1.0 + vUv.y) / uGrid.y));
           if (c.a < 0.5) discard;
@@ -235,6 +247,8 @@ export class NpcManager {
     built.root.rotation.y = rot;
     built.root.visible = vis;
     this.cells.set(key, cell);
+    const shape = shapeKey(JSON.parse(key) as Look);
+    if (!this.shapeCells.has(shape)) this.shapeCells.set(shape, cell);
   }
 
   addSettlement(s: Settlement) {
@@ -536,11 +550,12 @@ export class NpcManager {
           const own = this.cells.get(key);
           // Until this look is baked, stand in with the first baked one: an
           // unbaked crowd used to be simply invisible (Port Aurelle's market).
-          const cell = own ?? (this.cells.size ? 0 : undefined);
+          const cell = own ?? this.shapeCells.get(shapeKey(st.rec.look)) ?? (this.cells.size ? 0 : undefined);
           if (cell !== undefined) {
             m.makeTranslation(st.pos.x, st.pos.y, st.pos.z);
             this.sprites.setMatrixAt(nSprites, m);
-            this.spriteData.setXY(nSprites, cell, st.rec.look.height ?? 1.75);
+            const walk = st.moving ? (performance.now() / 1000) * 6.5 + (st.seed % 13) : -1;
+            this.spriteData.setXYZW(nSprites, cell, st.rec.look.height ?? 1.75, walk, Math.min(1, (FAR_R - dist) / 30));
             nSprites++;
           }
           // Queue the nearest unbaked look (near ones too: at the actor cap they stay sprites).
@@ -600,7 +615,7 @@ export class NpcManager {
     // (Headless software-GL test runs skip far sprites: they cost seconds a bake and nobody sees them.)
     // At the actor cap nobody waiting will get one anyway, so baking goes ahead.
     const waiting = wanting.some((w) => !w.actor) && this.active < MAX_ACTORS;
-    if (farLook && !LEAN_TEST && !waiting && this.building.size === 0 && performance.now() - this.lastBuild > 250) {
+    if (farLook && !LEAN_TEST && !waiting && this.building.size === 0 && performance.now() - this.lastBuild > 120) {
       this.lastBuild = performance.now();
       void this.buildActor(lookKey(farLook), farLook);
     }

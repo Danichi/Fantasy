@@ -106,9 +106,12 @@ export class QuestUI {
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: `uniform float uTime; uniform float uAlpha; varying vec2 vUv;
         void main(){
-          float fade = pow(1.0 - vUv.y, 1.6) * smoothstep(0.0, 0.04, vUv.y);
+          // No pow(): the interpolated v can overshoot 1 by a hair, and pow of a tiny
+          // negative is NaN, which the bloom pass smears into a black box.
+          float y = clamp(vUv.y, 0.0, 1.0), k = 1.0 - y;
+          float fade = k * k * smoothstep(0.0, 0.04, y);
           float band = 0.75 + 0.25 * sin(vUv.y * 40.0 - uTime * 3.0);
-          gl_FragColor = vec4(vec3(1.0, 0.78, 0.36) * fade * band * uAlpha, 1.0);
+          gl_FragColor = vec4(clamp(vec3(1.0, 0.78, 0.36) * fade * band * uAlpha, 0.0, 4.0), 1.0);
         }`,
     });
     const g = new THREE.Group();
@@ -181,7 +184,7 @@ export class QuestUI {
       let html = '';
       if (tracked) {
         const lines = this.quests.lines(tracked.id);
-        html += `<span class="q-kicker ${tracked.main ? 'q-mainq' : 'q-side'}">${tracked.main ? 'MAIN QUEST' : 'SIDE QUEST'}</span><b>${esc(tracked.title.toUpperCase())}</b>` +
+        html += `<span class="q-kicker ${tracked.main ? 'q-mainq' : tracked.contract ? 'q-contract' : 'q-side'}">${tracked.main ? 'MAIN QUEST' : tracked.contract ? 'GUILD CONTRACT' : 'SIDE QUEST'}</span><b>${esc(tracked.title.toUpperCase())}</b>` +
           lines.map(([t, p, n]) => `<small class="${p >= n ? 'q-done' : ''}">${p >= n ? '✔' : '◇'} ${esc(t)}${n > 1 ? ` · ${p}/${n}` : ''}</small>`).join('');
       }
       if (others.length) html += `<small class="q-more">${others.map((q) => esc(q.title)).join(' · ')}${act.length > 3 ? ` · +${act.length - 3}` : ''} — J for journal</small>`;

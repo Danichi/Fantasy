@@ -6,6 +6,9 @@ import '@fontsource/cinzel/700.css';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
+import '@fontsource/im-fell-english/400.css';
+import '@fontsource/im-fell-english/400-italic.css';
+import './ui/fantasyTheme.css';
 import * as THREE from 'three';
 import { Renderer, SUN_DIR } from './render/renderer';
 import { physics, PhysicsDebug } from './physics/physics';
@@ -56,8 +59,12 @@ import { buildGlenLandmarks, LANDMARK_CLEARINGS } from './world/glenLandmarks';
 import { QuestLog } from './quests/questLog';
 import { setupElderGlenQuests } from './quests/elderGlenQuests';
 import { setupMainQuest } from './quests/mainQuest';
+import { linkGuildContracts } from './quests/guildContracts';
 import { setupGlenMoreQuests } from './quests/glenMoreQuests';
 import { buildGlenLife } from './world/glenLife';
+import { GoldenExpanse } from './world/desert/goldenExpanse';
+import { sunspireResidents } from './world/desert/sunspireFolk';
+import { setupDesertQuests } from './quests/desertQuests';
 import { QuestUI } from './ui/questUI';
 import { MenuBook } from './ui/menuBook';
 import { glenNamedFolk } from './npc/glenNamed';
@@ -202,6 +209,8 @@ async function boot() {
     ambience.thunderClap(s);
   };
   const npcs = new NpcManager(r.scene, time, r.renderer);
+  // The Golden Expanse (desert, far west-south-west); built once the save and quests exist.
+  let desert: GoldenExpanse | null = null;
   {
     const folk = elderGlenFolk(world.village.houses);
     // Work spots from the farmstead and market square.
@@ -222,6 +231,10 @@ async function boot() {
       npcs.addSettlement(k.settlement);
       for (const rec of k.records) npcs.add(rec);
     }
+    // The Golden Expanse: Sunspire's citizens and court, and the scavengers outside its walls.
+    const desertFolk = sunspireResidents();
+    for (const s of desertFolk.settlements) npcs.addSettlement(s);
+    for (const rec of desertFolk.records) npcs.add(rec);
   }
   // Livestock in their pens and pastures; wild deer and foxes stream per tile.
   const fauna = new Fauna(r.scene);
@@ -323,6 +336,7 @@ async function boot() {
       horses?.setVisible(!h);
       riverLife?.setVisible(!h);
       caravans?.setVisible(!h);
+      desert?.setVisible(!h);
       encounters?.setVisible(!h);
       flowers.mesh.visible = !h;
       river.mesh.visible = !h;
@@ -390,6 +404,25 @@ async function boot() {
     run: () => town.showShop('Zarek the Wanderer', 'Travelling Merchant', 'From the dunes of the Golden Expanse to the vineyards of Valoria: everything has a price, and my prices are fair.', [
       ['healthPotion', 22], ['manaPotion', 26], ['honeycomb', 14], ['duskbloom', 40], ['emberroot', 20], ['silverthistle', 16], ['pumpkinSeed', 5], ['ringSage', 230], ['bloodthirst', 720], ['estoc', 420],
     ], { buyRate: { default: 0.45 } }),
+  }]);
+  // The Golden Expanse's merchants.
+  folkServices.set('hassun', () => [{
+    label: 'Browse the Grand Bazaar',
+    run: () => town.showShop('Bazaar Master Hassun', 'Merchant Prince of the Grand Bazaar', 'Sunsteel and sun-silk, glass and gold. Everything in Sunspire is gilded — even the bargains.', [
+      ['khopesh', 260], ['sunsteelScimitar', 640], ['sunGuardShield', 210], ['falchion', 230], ['greaterHealthPotion', 70], ['greaterManaPotion', 75], ['sunSilk', 130],
+    ], { wants: [['sharkTooth', 45], ['duneGlass', 38], ['scrapMetal', 7], ['sunSilk', 60]], buyRate: { default: 0.4 } }),
+  }]);
+  folkServices.set('rusk', () => [{
+    label: 'Trade at the Rust Market',
+    run: () => town.showShop('Old Rusk', 'Scrap Boss of the Rust Market', 'Buy, sell, or move along. Scrap\'s scrap — but good scrap\'s a living.', [
+      ['scrapCleaver', 55], ['buckler', 110], ['healthPotion', 18], ['manaPotion', 22], ['shortsword', 40],
+    ], { wants: [['scrapMetal', 10], ['sharkTooth', 32], ['duneGlass', 26]], buyRate: { default: 0.3 } }),
+  }]);
+  folkServices.set('ptah', () => [{
+    label: 'Buy dune glass',
+    run: () => town.showShop('Glassmaker Ptahmose', 'Master of the Furnace Street', 'Lightning glass from the deep dunes. I melt it, I blow it, and sometimes I sell it as it is.', [
+      ['duneGlass', 65], ['greaterManaPotion', 70],
+    ], { wants: [['duneGlass', 36], ['scrapMetal', 8]], buyRate: { default: 0.35 } }),
   }]);
   // Townsfolk: one interactable that follows whoever is nearest.
   const folkTalk = {
@@ -850,15 +883,9 @@ async function boot() {
   const worldMap = new WorldMapUI(discovery);
   worldMap.questMarkers = () => {
     const tracked = quests.tracked ?? quests.active()[0]?.id;
-    const out: { x: number; z: number; kind: 'quest' | 'offer'; label?: string; tracked?: boolean }[] =
-      quests.markers().map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label, tracked: m.quest === tracked }));
-    // Townsfolk with a quest to offer (a gold ! over their heads).
-    for (const id of questNpcIds) {
-      if (quests.indicator(id) !== '!') continue;
-      const p = serviceNpc(id)?.pos ?? npcs.find(id)?.pos;
-      if (p) out.push({ x: p.x, z: p.z, kind: 'offer' });
-    }
-    return out;
+    // Only the tracked quest's next steps: the map is for following a quest, not
+    // for finding them (quest givers show their ❗ when you meet them).
+    return quests.markers().filter((m) => m.quest === tracked).map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label, tracked: true }));
   };
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
   microDiscoveries = new MicroDiscoveries(
@@ -934,6 +961,17 @@ async function boot() {
     flags: worldFlags,
   });
   void gravewood.warm(r.renderer, r.camera);
+  desert = new GoldenExpanse(r.scene, fx, {
+    toast: (m) => hud.toast(m),
+    card: (title, sub) => hud.regionCard(title, sub, true),
+    bossBar: (t, name) => hud.bossBar(t, name),
+    flags: worldFlags,
+    give: (id, n) => giveItem(id, n),
+    save: () => save(),
+  }, () => time.hour);
+  realm.overworldInteractables.push(...desert.interactables);
+  const desertQuests = setupDesertQuests(quests, r.scene, fx, (id, n) => giveItem(id, n), (m) => hud.toast(m));
+  realm.overworldInteractables.push(...desertQuests.interactables);
   // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
   quests.fromJSON(saveData?.world?.quests);
@@ -972,6 +1010,9 @@ async function boot() {
     writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
+  // Guild contracts show in the quest log (tracker, journal, map, waypoint).
+  const guildContracts = linkGuildContracts(town.guild, quests);
+  guildContracts.restore();
   realm.onSave = save;
   microDiscoveries.onSave = save;
   // A new game starts the story (after save exists: starting a quest autosaves).
@@ -1045,7 +1086,8 @@ async function boot() {
   const pause = () => {
     if (!started || TEST_MODE || inv.open || skills.open) return;
     pausedByUser = true;
-    overlays.showPaused(true);
+    const day = time.label.split(', ');
+    overlays.showPaused(true, `<span><b>REGION</b>${regionName}</span><span><b>${day[0] ?? 'DAY'}</b>${day[1] ?? ''}</span><span><b>LEVEL</b>${player.prog.level}</span><span><b>GOLD</b>${player.prog.gold.toLocaleString()}</span>`);
   };
   if (!TEST_MODE && hasSave()) {
     overlays.lockOrigin();
@@ -1168,6 +1210,7 @@ async function boot() {
       encounters.update(STEP, time.hour, weather.p.rain);
       duel.update(STEP);
       gravewood.update(STEP, player);
+      desert?.update(STEP, player);
     }
     realm.update(STEP);
     afflictions.update(STEP);
@@ -1283,6 +1326,7 @@ async function boot() {
       if (worldRunning) {
         quests.update(dt, player.pos);
         mainQuest.update(dt);
+        guildContracts.update(dt);
         glenQuests.update(dt);
         glenMore.update(dt);
         glenLife.update(dt, player.pos);
@@ -1386,6 +1430,7 @@ async function boot() {
       realm.mineProgress = { gateOpen: false, guardianDead: false };
       realm.maps = {};
       town.guild.fromJSON(fresh.guild);
+      guildContracts.restore();
       applySave(player, structuredClone(fresh));
       player.respawn(spawn.clone());
       time.day = startDay;
@@ -1397,7 +1442,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, glenLife, mainQuest, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       perf,
       pause: (p: boolean) => (paused = p),

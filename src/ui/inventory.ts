@@ -401,7 +401,7 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon' | n
     </div>`;
   const start = document.createElement('div');
   start.className = 'overlay';
-  start.innerHTML = `<div class="title-card"><h1>ELDERGLEN TOWN</h1><p class="sub">A thriving frontier town. Choose your origin, shape your Heroic Legacy, take Guild contracts, and explore beyond the walls.</p>
+  start.innerHTML = `<div class="title-card"><div class="pause-banner">THE WORLD WAITS</div><h1>ELDERGLEN TOWN</h1><div class="pause-status"></div><p class="sub">A thriving frontier town. Choose your origin, shape your Heroic Legacy, take Guild contracts, and explore beyond the walls.</p>
   <div class="origin-picker">
     <button class="origin-choice" data-origin="human"><b>HUMAN</b><span>Adaptable learning</span></button>
     <button class="origin-choice" data-origin="dragon"><b>DRAGON</b><span>Fire resistance · flight · breath</span></button>
@@ -459,7 +459,9 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon' | n
   return {
     start,
     help,
-    showPaused(show: boolean) {
+    showPaused(show: boolean, status = '') {
+      start.classList.toggle('paused', show);
+      start.querySelector('.pause-status')!.innerHTML = status;
       const title = start.querySelector('h1')!;
       const sub = start.querySelector('.sub')!;
       const cta = start.querySelector('.cta')!;

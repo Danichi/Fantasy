@@ -286,7 +286,11 @@ export class HUD {
 
   private updateBar(b: BarEls, v: number, max: number, dt: number, widthPx: number) {
     const f = Math.max(0, v / max);
-    b.root.style.width = `${Math.min(widthPx, window.innerWidth - 110)}px`;
+    // Bars grow toward the middle of the screen but stop short of the compass
+    // (in a dungeon they sit beside the map, so they have less room).
+    const right = document.body.classList.contains('in-dungeon') ? 262 : 26;
+    const room = Math.max(200, window.innerWidth / 2 - 285 - right);
+    b.root.style.width = `${Math.min(widthPx, room)}px`;
     b.fill.style.transform = `scaleX(${f})`;
     // The pale trail lingers, then drains to show how much was just lost.
     if (f < b.last - 0.002) b.trailHold = 0.5;

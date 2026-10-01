@@ -54,6 +54,8 @@ export interface QuestDef {
   offerHours?: [number, number];
   /** main story quests sort first */
   main?: boolean;
+  /** an Adventurer's Guild contract mirrored from the board (the guild owns its progress and pay) */
+  contract?: boolean;
 }
 
 export interface QuestState {
@@ -199,11 +201,46 @@ export class QuestLog {
     return out;
   }
 
+  /**
+   * Show a quest that another system runs (guild contracts): the log only
+   * displays and tracks it; progress is copied in, and completion comes from
+   * unmirror(). Its objectives should be signals nothing else fires.
+   */
+  mirror(def: QuestDef, progress: number[], quiet = false) {
+    this.defs.set(def.id, def);
+    const st = this.state[def.id];
+    if (!st) {
+      this.state[def.id] = { status: 'active', stage: 0, progress: [...progress] };
+      if (!quiet) {
+        this.tracked = def.id;
+        this.ctx.toast('Contract accepted: ' + def.title);
+        events.emit('questChanged', { id: def.id, status: 'active' });
+      }
+      this.changed();
+      return;
+    }
+    if (st.status === 'active' && progress.some((p, i) => p !== st.progress[i])) {
+      st.progress = [...progress];
+      this.changed();
+    }
+  }
+
+  /** A mirrored quest ended: completed (kept in the journal) or dropped. */
+  unmirror(id: string, completed: boolean) {
+    const st = this.state[id];
+    if (!st || st.status !== 'active') return;
+    if (completed) st.status = 'done';
+    else delete this.state[id];
+    if (this.tracked === id) this.tracked = this.active()[0]?.id ?? null;
+    events.emit('questChanged', { id, status: completed ? 'done' : 'active' });
+    this.changed();
+  }
+
   /** A world trigger fired (repairs, lures, glyph rubbings...). */
   signal(id: string, n = 1) {
     let hit = false;
     this.forEachObjective((q, o, i, st) => {
-      if (o.type === 'signal' && o.id === id && st.progress[i] < (o.count ?? 1)) {
+      if (o.type === 'signal' && o.id === id && st.progress[i] < (o.count ?? 1) && !q.contract) {
         this.bump(q, i, n);
         hit = true;
       }

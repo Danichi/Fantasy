@@ -48,6 +48,12 @@ export const ROAD_SPECS: RoadSpec[] = [
     gate: { at: [-960, -10], reason: 'By order of the Crown, the capital road is closed to unregistered travellers. Earn your Academy registration in Port Aurelle first.' },
   },
   {
+    // Off the Crown Road before its gate: the caravan way west-south-west to
+    // Sunspire in the Golden Expanse (points match desert/desertLayout.ts CARAVAN_ROAD).
+    id: 'sunspire', name: 'The Caravan Way', kind: 'kings',
+    pts: [[-700, 60], [-1050, 150], [-1500, 260], [-2000, 380], [-2600, 480], [-3200, 560], [-3800, 620], [-4400, 660], [-4900, 690], [-5250, 684], [-5390, 679]],
+  },
+  {
     // The northern forest road toward the elven woods.
     id: 'forest', name: 'The Greenwood Road', kind: 'lane',
     pts: [[0, -300], [-20, -380], [-70, -520], [-160, -700], [-300, -900], [-520, -1150], [-900, -1500], [-1500, -2000], [-2100, -2500], [-2800, -3000]],

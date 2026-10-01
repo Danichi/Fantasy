@@ -149,7 +149,13 @@ export class AdventurerGuild {
   private rank: GuildRank = 'D';
   onToggle?: (open: boolean) => void;
   onSave?: () => void;
+  /** contracts taken, finished or dropped (the quest log mirrors them) */
+  onContract?: (q: GuildQuest, what: 'accepted' | 'completed' | 'abandoned') => void;
   openState = false;
+  /** the contracts in progress (read-only) */
+  get activeContracts(): readonly GuildQuest[] {
+    return this.active;
+  }
 
   constructor(scene: THREE.Scene, private progression: Progression, private dialogue: DialogueUI) {
     // The capsule placeholder crowd is gone (docs/ART-DIRECTION.md §7); real villagers replace it.
@@ -158,10 +164,10 @@ export class AdventurerGuild {
     this.ui = document.createElement('div');
     this.ui.className = 'guild-ui hidden';
     this.ui.innerHTML =
-      '<div class="guild-head"><div><span class="eyebrow">FRONTIER ADVENTURERS</span><h1>ADVENTURER\'S GUILD</h1><p class="guild-rank"></p></div><button class="guild-close">CLOSE</button></div>' +
+      '<div class="guild-head"><div><span class="eyebrow">By charter of the Crown of Cresha · Elder Glen Chapter</span><h1>ADVENTURER\'S GUILD</h1><p class="guild-rank"></p></div><button class="guild-close">LEAVE ✕</button></div>' +
       '<div class="guild-tabs"><button data-tab="board">QUEST BOARD</button><button data-tab="map">FRONTIER MAP</button><button data-tab="roster">ADVENTURERS</button></div>' +
       '<div class="guild-body"><div class="guild-board"></div><canvas class="guild-map" width="860" height="520"></canvas><div class="guild-roster"></div></div>' +
-      '<div class="guild-foot"><span>Complete contracts for gold, XP and Guild Reputation.</span><span>Press M to view the frontier map.</span></div>';
+      '<div class="guild-foot"><span>Take a notice from the board; the registrar pays out the moment the work is done.</span><span>M · frontier map · Esc · leave</span></div>';
     root.appendChild(this.ui);
     this.boardEl = this.ui.querySelector('.guild-board')!;
     this.mapCanvas = this.ui.querySelector('.guild-map')!;
@@ -246,6 +252,7 @@ export class AdventurerGuild {
     this.ensureBoard();
     this.onSave?.();
     this.render();
+    this.onContract?.(q, 'accepted');
   }
 
   abandon(id: string) {
@@ -255,6 +262,7 @@ export class AdventurerGuild {
     this.available.push(q);
     this.onSave?.();
     this.render();
+    this.onContract?.(q, 'abandoned');
   }
 
   /** Gather contracts read (and on completion take) from the player's bag. */
@@ -288,6 +296,7 @@ export class AdventurerGuild {
     this.onSave?.();
     events.emit('progressChanged', {});
     this.render();
+    this.onContract?.(q, 'completed');
   }
 
   private questProgress(q: GuildQuest, at: THREE.Vector3) {
@@ -360,7 +369,7 @@ export class AdventurerGuild {
     const board = this.available.map((q) =>
       '<article class="guild-quest"><div class="quest-top"><span class="quest-rank">RANK ' + RANKS[q.minRank].name.toUpperCase() + '</span><h3>' + q.title + '</h3></div><p>' + q.description + '</p><b class="quest-progress">' + progressText(q) + '</b><div class="quest-reward">+' + q.rewardGold + ' gold · +' + q.rewardXp + ' XP · +' + q.rewardRep + ' rep</div><button data-accept="' + q.id + '" ' + (this.active.length >= 4 || !this.canOffer(q) ? 'disabled' : '') + '>ACCEPT CONTRACT</button></article>',
     ).join('');
-    this.boardEl.innerHTML = '<section class="guild-section"><h2>ACTIVE CONTRACTS <span>' + this.active.length + ' / 4</span></h2>' + (active || '<p class="guild-empty">No active contracts. Take a job from the board.</p>') + '</section><section class="guild-section"><h2>AVAILABLE CONTRACTS</h2><div class="guild-grid">' + board + '</div></section>';
+    this.boardEl.innerHTML = '<section class="guild-section"><h2>ACTIVE CONTRACTS <span>' + this.active.length + ' / 4</span></h2>' + (active ? '<div class="guild-grid">' + active + '</div>' : '<p class="guild-empty">No active contracts. Take a job from the board.</p>') + '</section><section class="guild-section"><h2>AVAILABLE CONTRACTS</h2><div class="guild-grid">' + board + '</div></section>';
     this.boardEl.querySelectorAll<HTMLButtonElement>('[data-accept]').forEach((b) => b.addEventListener('click', () => this.accept(b.dataset.accept!)));
     this.boardEl.querySelectorAll<HTMLButtonElement>('[data-abandon]').forEach((b) => b.addEventListener('click', () => this.abandon(b.dataset.abandon!)));
   }
@@ -369,38 +378,40 @@ export class AdventurerGuild {
     const ctx = this.mapCtx, w = this.mapCanvas.width, h = this.mapCanvas.height;
     ctx.clearRect(0, 0, w, h);
     const bg = ctx.createLinearGradient(0, 0, 0, h);
-    bg.addColorStop(0, '#eef8e9'); bg.addColorStop(1, '#d8eadf');
+    bg.addColorStop(0, '#f1e3be'); bg.addColorStop(1, '#d6bd87');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
     const sx = (x: number) => (x + 330) / 660 * w;
     const sz = (z: number) => (z + 330) / 660 * h;
-    ctx.strokeStyle = 'rgba(59,125,96,.7)';
+    ctx.strokeStyle = 'rgba(92,110,58,.55)';
     ctx.lineWidth = 9;
     ctx.beginPath(); ctx.moveTo(sx(0), sz(330)); ctx.lineTo(sx(-14), sz(210)); ctx.lineTo(sx(-8), sz(90)); ctx.stroke();
-    ctx.strokeStyle = 'rgba(75,150,205,.7)';
+    ctx.strokeStyle = 'rgba(70,104,128,.6)';
     ctx.lineWidth = 13;
     ctx.beginPath(); ctx.moveTo(sx(155), sz(330)); ctx.bezierCurveTo(sx(175), sz(150), sx(140), sz(-40), sx(180), sz(-330)); ctx.stroke();
-    ctx.strokeStyle = 'rgba(145,110,70,.8)';
+    ctx.strokeStyle = 'rgba(110,72,36,.85)';
+    ctx.setLineDash([10, 6]);
     ctx.lineWidth = 5;
     const roads: [number, number, number, number][] = [[0, 74, 0, -300], [74, 0, 330, 60], [-230, 80, 0, 0]];
     for (const r of roads) { ctx.beginPath(); ctx.moveTo(sx(r[0]), sz(r[1])); ctx.lineTo(sx(r[2]), sz(r[3])); ctx.stroke(); }
     for (const key of this.explored) {
       const [gx, gz] = key.split(',').map(Number);
       const x = gx * 32 - 320, z = gz * 32 - 320;
-      ctx.fillStyle = 'rgba(255,255,255,.48)';
+      ctx.fillStyle = 'rgba(255,248,225,.42)';
       ctx.fillRect(sx(x), sz(z), w * 32 / 660 + 1, h * 32 / 660 + 1);
     }
-    ctx.fillStyle = '#b88a29'; ctx.beginPath(); ctx.arc(sx(0), sz(0), 10, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#704a2c'; ctx.font = '700 16px Inter, sans-serif';
-    ctx.fillText('STARTING TOWN', sx(0) + 14, sz(0) - 12);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#7a1f12'; ctx.beginPath(); ctx.arc(sx(0), sz(0), 10, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2e2112'; ctx.font = '700 17px Cinzel, serif';
+    ctx.fillText('ELDER GLEN', sx(0) + 14, sz(0) - 12);
     for (const q of this.active) if (q.target && q.progress === 0) {
-      ctx.fillStyle = '#cf8f2d'; ctx.beginPath(); ctx.arc(sx(q.target[0]), sz(q.target[1]), 8, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#5d4931'; ctx.font = '600 12px Inter, sans-serif'; ctx.fillText(q.targetName || 'Contract', sx(q.target[0]) + 10, sz(q.target[1]) + 4);
+      ctx.fillStyle = '#a8210f'; ctx.beginPath(); ctx.arc(sx(q.target[0]), sz(q.target[1]), 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#5a4326'; ctx.font = 'italic 15px "IM Fell English", serif'; ctx.fillText(q.targetName || 'Contract', sx(q.target[0]) + 10, sz(q.target[1]) + 4);
     }
-    ctx.fillStyle = '#35566a'; ctx.font = '600 12px Inter, sans-serif';
+    ctx.fillStyle = '#4a3820'; ctx.font = '700 12px Cinzel, serif';
     ctx.fillText('CRYPT', sx(0) + 10, sz(-318));
     ctx.fillText('EAST BRIDGE', sx(230) + 10, sz(22));
     ctx.fillText('GREENMEADOW', sx(0) + 10, sz(180));
-    ctx.fillStyle = '#587068'; ctx.font = '500 11px Inter, sans-serif';
+    ctx.fillStyle = '#5a4326'; ctx.font = 'italic 14px "IM Fell English", serif';
     ctx.fillText('Discovered sectors: ' + this.explored.size, 18, h - 18);
   }
 

@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { compressedGltf } from '../core/gltf';
 import { heightAt, hasTile, riverX, roadDist, TOWN_R, WORLD_SIZE, CRYPT, TILE, PORT_AURELLE, LOCAL_R0 } from './terrainHeight';
-import { reliefAt, regionAt, RELIEF, SEA_LEVEL } from './worldMap';
+import { reliefAt, regionAt, RELIEF, SEA_LEVEL, sandWeight } from './worldMap';
+import { sunspirePad } from './desert/desertLayout';
 import { fbm, mulberry32, smoothstep } from '../core/math';
 import { physics } from '../physics/physics';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -511,6 +512,7 @@ export class StylizedNature {
     if (r < LOCAL_R0 + 200 && Math.abs(x - riverX(z)) < 11 && Math.abs(z) < 440) return false;
     if (Math.hypot(x - CRYPT.x, z - CRYPT.y - 12) < 28) return false;
     if (Math.hypot(x - PORT_AURELLE.x, z - PORT_AURELLE.y) < 210) return false;
+    if (x < -4800 && sunspirePad(x, z) > 0) return false; // inside Sunspire's walls
     return true;
   }
 
@@ -585,7 +587,7 @@ export class StylizedNature {
         const clump = smoothstep(0.36, 0.56, fbm(px * 0.021 + 5.3, pz * 0.021 - 2.7, 2)); // (this fbm spans ~0.1..0.65)
         if (this.rocks.length && ((stony > 0.58 && roll < 0.18) || (slope > 2.2 && roll < 0.1) || roll < 0.012)) {
           trees.push(px, h - 0.3, pz, rot, 0.55 + sc * 1.1, this.rocks[Math.floor(pick * 991) % this.rocks.length]);
-        } else if (this.bushes.length && d < 0.5 && roll < 0.025 + clump * 0.3 + d * 0.3) {
+        } else if (this.bushes.length && d < 0.5 && roll < 0.025 + clump * 0.3 + d * 0.3 && sandWeight(px, pz) < 0.3) {
           trees.push(px, h - 0.06, pz, rot, 0.7 + sc * 0.6, this.bushes[Math.floor(pick * 991) % this.bushes.length]);
         }
       }
@@ -601,7 +603,7 @@ export class StylizedNature {
         if (!this.clearSpot(px, pz)) continue;
         const [d] = this.density(px, pz);
         const wood = d > 0.25;
-        const meadow = d < 0.2 && heightAt(px, pz) > SEA_LEVEL + 1 && fbm(px * 0.025, pz * 0.025, 3) > 0.5;
+        const meadow = d < 0.2 && heightAt(px, pz) > SEA_LEVEL + 1 && fbm(px * 0.025, pz * 0.025, 3) > 0.5 && sandWeight(px, pz) < 0.3;
         if (!(wood && roll < 0.35) && !(meadow && roll < 0.26)) continue;
         const list = wood ? (pick < 0.7 ? this.smalls.fern : this.smalls.mushroom) : this.smalls.flower;
         if (!list.length) continue;

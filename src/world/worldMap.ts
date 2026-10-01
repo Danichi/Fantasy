@@ -84,6 +84,8 @@ export const pxToWorld = (px: number, py: number) => new THREE.Vector2((px - ORI
 export const worldToPx = (x: number, z: number) => new THREE.Vector2(x / MPP + ORIGIN_PX[0], z / MPP + ORIGIN_PX[1]);
 
 let cells: Uint8ClampedArray | null = null; // RGBA per cell
+/** Has the macro map loaded (so macroHeight is real, not the 2 m placeholder)? */
+export const macroReady = () => cells !== null;
 let macroTex: THREE.DataTexture | null = null;
 let mapTex: THREE.Texture | null = null;
 
@@ -191,6 +193,12 @@ function ridged(x: number, z: number) {
     freq *= 2.03;
   }
   return sum;
+}
+
+/** How sandy the map is here (0..1): dune weight from the relief classes. */
+export function sandWeight(x: number, z: number) {
+  if (!cells) return 0;
+  return Math.min(1, sampleMacro(x, z).dunes / 7);
 }
 
 /** Smoothed macro elevation only (no detail): land >= 0.4 m, sea below. */

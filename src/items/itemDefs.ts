@@ -4,6 +4,7 @@ import { buildArmorPiece, type ArmorPieceId } from './armorModels';
 import { PRODUCE_ITEMS } from './produce';
 import { HERB_ITEMS, HERB_MODELS } from './herbs';
 import { FISH_ITEMS } from '../world/fishing';
+import { DESERT_ITEMS } from './desertItems';
 
 export type Slot =
   | 'main' | 'off'
@@ -145,6 +146,32 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'bloodthirst', name: 'Bloodthirst', kind: 'sword', slot: 'main', rarity: 'epic',
     desc: 'A black blade with a groove that runs red when it drinks. It gives a little of what it takes back to its bearer.',
     stats: { damage: 31, speed: 1, lifesteal: 0.14 }, build: () => buildSword({ ...knight, tint: 0x2a2226, glow: 0xc01020, glowStrength: 2.2 }),
+  },
+  // ---- the Golden Expanse ----
+  khopesh: {
+    id: 'khopesh', name: 'Sunborn Khopesh', kind: 'sword', slot: 'main', rarity: 'fine',
+    desc: 'The sickle-sword of the Sun Guard: a bronze-hued blade hooked like a crescent moon. It catches shields and opens guards.',
+    stats: { damage: 28, speed: 1.05, crit: 0.1 }, build: () => buildSword({ ...arming, bladeLen: 0.66, bladeWidth: 0.034, curve: 0.16, fullerLen: 0, guardStyle: 'straight', pommel: 'pear', guardMat: 'brass', tint: 0xd09a50 }),
+  },
+  sunsteelScimitar: {
+    id: 'sunsteelScimitar', name: 'Sunsteel Scimitar', kind: 'sword', slot: 'main', rarity: 'rare',
+    desc: 'Folded in the furnaces under Sunspire\'s palace and quenched in oil of emberroot. The edge holds the desert\'s heat.',
+    stats: { damage: 30, speed: 1.1, burn: 5 }, build: () => buildSword({ ...arming, bladeLen: 0.8, bladeWidth: 0.028, curve: 0.11, guardStyle: 'curved', pommel: 'pear', guardMat: 'brass', tint: 0xf2e2b4, glow: 0xffb040, glowStrength: 1.2 }),
+  },
+  scrapCleaver: {
+    id: 'scrapCleaver', name: 'Scrap Cleaver', kind: 'sword', slot: 'main', rarity: 'common',
+    desc: 'A slab of salvaged skiff-plate ground to an edge. Ugly, heavy, and it knocks people over.',
+    stats: { damage: 22, speed: 0.92, stagger: 1.3 }, build: () => buildSword({ ...arming, bladeLen: 0.62, bladeWidth: 0.045, thickness: 0.006, fullerLen: 0, guardStyle: 'straight', pommel: 'wheel', tint: 0x7a6a5a }),
+  },
+  sawtoothFang: {
+    id: 'sawtoothFang', name: 'Sawtooth Fang', kind: 'sword', slot: 'main', rarity: 'epic',
+    desc: 'A blade of bone-white tooth set in a sunsteel spine, cut from the jaw of the oldest shark in the Expanse. It bites, and it drinks.',
+    stats: { damage: 36, speed: 1.02, lifesteal: 0.1, crit: 0.12 }, build: () => buildSword({ ...longsword, bladeLen: 0.92, bladeWidth: 0.03, curve: 0.06, guardMat: 'brass', tint: 0xece2c8, glow: 0xff9a3a, glowStrength: 1.1 }),
+  },
+  sunGuardShield: {
+    id: 'sunGuardShield', name: 'Sun Guard Shield', kind: 'shield', slot: 'off', rarity: 'fine',
+    desc: 'A round shield in the Queen\'s teal and gold, worn by the gate guard of Sunspire.',
+    stats: { block: 95, stability: 0.58 }, build: () => buildRoundShield('plain', ['#1f7a7a', '#d4a640']),
   },
   dawnbreaker: {
     id: 'dawnbreaker', name: 'Dawnbreaker', kind: 'sword', slot: 'main', rarity: 'epic',
@@ -293,6 +320,7 @@ export const ITEMS: Record<string, ItemDef> = {
   ...PRODUCE_ITEMS,
   ...HERB_ITEMS,
   ...FISH_ITEMS,
+  ...DESERT_ITEMS,
 };
 
 // The four original herbs use the foraging models for their icons too.

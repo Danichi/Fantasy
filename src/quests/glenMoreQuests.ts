@@ -88,6 +88,76 @@ export const GLEN_MORE_QUESTS: QuestDef[] = [
     rewards: { gold: 15, xp: 60, items: [['luckyCharm', 1]] },
   },
   {
+    id: 'letter-for-hester', title: 'A Letter for the Wayfarer', giver: 'stablemaster', region: 'cresha', requires: ['mq-stranger'],
+    summary: 'Hobb Reed needs a sealed letter carried east along the King\'s Road to Hester Brightwater at the Wayfarer\'s Rest.',
+    offer: 'You look like you\'ve legs for a long walk. This letter goes to Hester Brightwater at the Wayfarer\'s Rest, half-way to the sea along the King\'s Road. My sister. She worries if she doesn\'t hear from me. Take a horse if you like — the road\'s long.',
+    stages: [
+      { note: 'Carry Hobb\'s letter east to the Wayfarer\'s Rest.', objectives: [{ type: 'talk', npc: 'hester', text: 'Deliver the letter to Hester (Wayfarer\'s Rest, King\'s Road east)', reply: 'A letter from your brother Hobb.', say: 'From Hobb? The great lump never writes. Oh — he\'s bought another horse he can\'t afford. Tell him I said he\'s an idiot, and I love him.' }] },
+      { note: 'Bring Hester\'s reply back to Hobb Reed.', objectives: [{ type: 'talk', npc: 'stablemaster', text: 'Bring Hester\'s reply to Hobb Reed', reply: 'Hester says you\'re an idiot. And that she loves you.', say: 'Ha! That\'s her. That\'s exactly her.' }] },
+    ],
+    done: 'Here — and you can ride any of the mares on the house for a week.',
+    rewards: { gold: 60, xp: 130, items: [['healthPotion', 2]] },
+  },
+  {
+    id: 'veyrs-lesson', title: 'The Old Duelist\'s Lesson', giver: 'veyr', region: 'cresha', requires: ['mq-stranger'],
+    summary: 'Master Veyr will teach you something worth knowing — once you\'ve shown him you can handle a goblin pack.',
+    offer: 'You swing like a farmer threshing. Strength, no patience. Find the goblins that raid the fields and hills after dark and break four of them. Watch their feet, not their blades. Then come back and we\'ll talk about what you learned.',
+    stages: [
+      { note: 'Defeat goblins.', objectives: [{ type: 'kill', kind: 'cave', count: 4, text: 'Defeat goblins (the hills and fields after dark)' }] },
+      { note: 'Return to Master Veyr.', objectives: [{ type: 'talk', npc: 'veyr', text: 'Return to Master Veyr', reply: 'I watched their feet.', say: 'And? They step before they strike. Everything does. Learn to see the step and you will never be surprised again.' }] },
+    ],
+    done: 'Take this blade. It belonged to a student who stopped listening. You won\'t.',
+    rewards: { gold: 110, xp: 160, items: [['bastardSword', 1]] },
+  },
+  {
+    id: 'fish-supper', title: 'Fish for the Wayfarer Inn', giver: 'dora', region: 'cresha',
+    summary: 'Dora Sheaf has promised Mara a fish supper for the granary workers. Catch three Glen Perch in the river.',
+    offer: 'I told Mara the granary lads would get fish on Friday and now my rod\'s snapped. Three Glen Perch from the river — any stretch, they bite all day. Take them straight to Mara at the inn and she\'ll fry them up.',
+    stages: [
+      { note: 'Catch three Glen Perch in the river.', objectives: [{ type: 'collect', item: 'glenPerch', count: 3, text: 'Catch Glen Perch in the river' }] },
+      { note: 'Bring the fish to Mara Bell at the inn.', objectives: [{ type: 'deliver', npc: 'innkeeper', item: 'glenPerch', count: 3, text: 'Bring 3 Glen Perch to Mara Bell', say: 'Lovely fat ones. Dora\'s lads will eat well tonight — and so will you.' }] },
+    ],
+    done: 'Dora left your coin with me. And there\'s a plate with your name on it.',
+    rewards: { gold: 45, xp: 80, items: [['healthPotion', 1]] },
+  },
+  {
+    id: 'wool-for-vela', title: 'Wool for the Looms', giver: 'tailor', region: 'cresha',
+    summary: 'Vela Thread needs raw wool to finish the capital\'s cloak order. Shear the sheep in the north pasture.',
+    offer: 'The capital wants forty travelling cloaks by the new moon and I\'m out of wool. The flock in the north pasture is due for shearing — four fleeces would see me through the week. I\'ll make it worth your while.',
+    stages: [
+      { note: 'Shear four fleeces in the north pasture.', objectives: [{ type: 'collect', item: 'wool', count: 4, text: 'Shear sheep in the north pasture', at: [-62, -172] }] },
+      { note: 'Bring the wool to Vela Thread.', objectives: [{ type: 'deliver', npc: 'tailor', item: 'wool', count: 4, text: 'Bring 4 wool to Vela Thread', say: 'Good thick fleece. The capital will think I have magic fingers.' }] },
+    ],
+    done: 'One of the first cloaks off the loom — lined, and it won\'t let the rain through.',
+    rewards: { gold: 40, xp: 90, items: [['wayfarerCloak', 1]] },
+  },
+  {
+    id: 'corvins-rounds', title: 'Walking the Bounds', giver: 'corvin', region: 'cresha', requires: ['mq-stranger'],
+    summary: 'Ser Corvin wants the Glen\'s boundary stones checked: the horse paddock, the western woods and the far fields.',
+    offer: 'Three boundary stones mark the edge of the Glen\'s land: by the horse paddock in the north-east, at the edge of the western woods, and beyond the far fields in the south. Walk them. If any are toppled or marked, I need to know — that is how raids begin.',
+    stages: [
+      { note: 'Check the three boundary stones.', objectives: [
+        { type: 'reach', at: [60, -176], radius: 12, text: 'Check the north-east stone (horse paddock)' },
+        { type: 'reach', at: [-168, -60], radius: 12, text: 'Check the western stone (woods edge)' },
+        { type: 'reach', at: [-40, 300], radius: 14, text: 'Check the southern stone (beyond the far fields)' },
+      ] },
+      { note: 'Report to Ser Corvin.', objectives: [{ type: 'talk', npc: 'corvin', text: 'Report to Ser Corvin', reply: 'All three stones stand.', say: 'Good. Then nothing has crossed our line — yet. You walk the land like a Warden.' }] },
+    ],
+    done: 'The Wardens will hear of this. Here is a boundary-rider\'s pay.',
+    rewards: { gold: 80, xp: 130, guildRep: 20 },
+  },
+  {
+    id: 'milk-for-the-bakery', title: 'Fresh Milk for Tessa', giver: 'baker', region: 'cresha', requires: ['bakers-round'],
+    summary: 'Tessa Rowan needs fresh milk for the week\'s cream buns. Milk the cows at Tom Hale\'s pasture.',
+    offer: 'Now you know the farms — would you fetch me milk? Three pails from Tom Hale\'s cows. He won\'t mind; he owes me for the bread. Cream buns on Sunday if you do.',
+    stages: [
+      { note: 'Milk the cows at Tom Hale\'s pasture.', objectives: [{ type: 'collect', item: 'milk', count: 3, text: 'Milk the cows (west pasture)', at: [-150, 60] }] },
+      { note: 'Bring the milk to Tessa.', objectives: [{ type: 'deliver', npc: 'baker', item: 'milk', count: 3, text: 'Bring 3 milk to Tessa Rowan', say: 'Still cool from the pail. Perfect.' }] },
+    ],
+    done: 'A whole tray of yesterday\'s buns and a bit of coin. Don\'t eat them all at once.',
+    rewards: { gold: 35, xp: 70, items: [['greaterHealthPotion', 1]] },
+  },
+  {
     id: 'friend-of-the-glen', title: 'Friend of the Glen', giver: 'maud', region: 'cresha',
     requires: ['missing-heifer', 'crows-in-wheat', 'mill-wheel-jam', 'granary-rats', 'wolves-at-the-fold', 'bakers-round'],
     summary: 'Word of your help has gone round every hearth in Elder Glen. Elder Maud wants to thank you properly.',
