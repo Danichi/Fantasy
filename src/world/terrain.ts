@@ -113,8 +113,13 @@ vWN = normal;`);
         // Painted ground albedo for one macro relief class.
         vec3 reliefColor(int id, vec4 pN, vec4 fN, float dist, vec3 gNear, vec3 gFar) {
           if (id <= 1) return mix(vec3(0.42, 0.4, 0.3), vec3(0.3, 0.36, 0.33), pN.g);                // seabed
-          if (id == 2) return mix(vec3(0.72, 0.6, 0.38), vec3(0.8, 0.68, 0.45), fN.r);               // beach
-          if (id == 3) return mix(gNear, gFar, smoothstep(10.0, 70.0, dist)) * mix(0.92, 1.06, fN.b); // meadow
+          if (id == 2) {                                                                           // beach
+            // Sand at the waterline, meadow a few metres up (beaches don't climb hills).
+            vec3 sand = mix(vec3(0.72, 0.6, 0.38), vec3(0.8, 0.68, 0.45), fN.r);
+            vec3 mead = mix(gNear, gFar, smoothstep(10.0, 70.0, dist)) * mix(0.92, 1.06, fN.b);
+            return mix(sand, mead, smoothstep(${(SEA_LEVEL + 1.5).toFixed(2)}, ${(SEA_LEVEL + 4.0).toFixed(2)}, vWPos.y + (fN.g - 0.5) * 1.5));
+          }
+          if (id == 3 || id == 12) return mix(gNear, gFar, smoothstep(10.0, 70.0, dist)) * mix(0.92, 1.06, fN.b); // meadow, lake shore
           if (id == 4) {                                                                           // forest floor
             vec3 f = mix(vec3(0.07, 0.13, 0.05), vec3(0.12, 0.17, 0.06), pN.r);
             return mix(f, vec3(0.2, 0.16, 0.09), smoothstep(0.6, 0.8, fN.g) * 0.5);
@@ -179,7 +184,10 @@ vWN = normal;`);
         float bioL = dot(biome, vec3(0.3, 0.55, 0.15));
         vec3 tinted = mapCol / mapL * bioL;
         // (Not on beaches: the map paints surf white along the coast.)
-        biome = mix(biome, tinted, mix(0.25, 0.55, smoothstep(80.0, 900.0, dist)) * (1.0 - beachW));
+        // (Nor where the map is painted pale, its surf, sand and snow: those have
+        // their own relief colours, and the tint bleached green hills white.)
+        float paleMap = smoothstep(0.5, 0.7, mapL);
+        biome = mix(biome, tinted, mix(0.25, 0.55, smoothstep(80.0, 900.0, dist)) * (1.0 - beachW) * (1.0 - paleMap));
 
         // Port Aurelle's levelled ground (and its causeway) is town grass, whatever the map says.
         float inCity = step(uCityRect.x, vWPos.x) * step(vWPos.x, uCityRect.z) * step(uCityRect.y, vWPos.z) * step(vWPos.z, uCityRect.w);

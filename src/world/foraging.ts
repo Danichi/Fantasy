@@ -161,7 +161,7 @@ export class Foraging {
     if (rel === RELIEF.forest) return r < 0.35 ? 'redcap' : r < 0.55 ? 'honeycomb' : r < 0.75 ? 'wildGarlic' : r < 0.87 ? 'duskbloom' : 'ironleaf';
     if (rel === RELIEF.mountain || h > 14) return r < 0.5 ? 'emberroot' : r < 0.8 ? 'silverthistle' : 'ironleaf';
     if (rel === RELIEF.marsh) return r < 0.6 ? 'riverReed' : 'moongrass';
-    if (rel === RELIEF.open || rel === RELIEF.beach) return r < 0.28 ? 'sungrass' : r < 0.48 ? 'wildmint' : r < 0.66 ? 'brambleBerries' : r < 0.8 ? 'wildGarlic' : r < 0.9 ? 'silverthistle' : 'duskbloom';
+    if (rel === RELIEF.open || rel === RELIEF.beach || rel === RELIEF.shore) return r < 0.28 ? 'sungrass' : r < 0.48 ? 'wildmint' : r < 0.66 ? 'brambleBerries' : r < 0.8 ? 'wildGarlic' : r < 0.9 ? 'silverthistle' : 'duskbloom';
     return null;
   }
 

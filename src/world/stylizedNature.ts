@@ -539,6 +539,7 @@ export class StylizedNature {
       // Plains: groves and copses with lone trees between (Zelda-style open country, not an empty lawn).
       case RELIEF.open: return [smoothstep(0.5, 0.74, grove) * 0.52 + 0.02, alpine ? 'pine' : 'tree', giant];
       case RELIEF.marsh: return [0.12 + grove * 0.15, 'tree', giant];
+      case RELIEF.shore: return [smoothstep(0.55, 0.8, grove) * 0.3 + 0.01, 'tree', giant];
       case RELIEF.mountain: return [h < 320 ? 0.16 + grove * 0.2 : h < 420 ? 0.05 : 0, 'pine', 1];
       case RELIEF.mesa: return [0.004, 'tree', 0.8];
       case RELIEF.volcanic: return [0.01, 'pine', 0.9];

@@ -22,7 +22,7 @@ const RECENTER = 40; // metres the camera may drift before a rebuild starts
 const RELIEF_GROUND: Record<number, [number, number, number]> = {
   [RELIEF.deep]: [0, 0, 0], [RELIEF.shelf]: [0, 0, 0], [RELIEF.beach]: [0.03, 0, 1],
   [RELIEF.open]: [1, 1, 0], [RELIEF.forest]: [0.55, 0.25, 0.66], [RELIEF.mountain]: [0.22, 0.2, 0.33],
-  [RELIEF.snow]: [0, 0, 0.33], [RELIEF.sand]: [0.04, 0, 1], [RELIEF.mesa]: [0.12, 0.05, 1],
+  [RELIEF.snow]: [0, 0, 0.33], [RELIEF.sand]: [0.04, 0, 1], [RELIEF.mesa]: [0.12, 0.05, 1], [RELIEF.shore]: [0.9, 0.85, 0],
   [RELIEF.marsh]: [0.65, 0.3, 0.66], [RELIEF.lava]: [0, 0, 1], [RELIEF.volcanic]: [0.05, 0, 1],
 };
 
@@ -105,6 +105,13 @@ export class GroundWindow {
           }
         }
         const h = heightAt(x, z);
+        // Beach sand only near the waterline: above it, the grass comes back.
+        if (reliefAt(x, z) === RELIEF.beach && h > SEA_LEVEL + 1.5) {
+          const up = Math.min(1, (h - SEA_LEVEL - 1.5) / 2.5);
+          grass += (0.9 - grass) * up;
+          flower += (0.8 - flower) * up;
+          tint *= 1 - up;
+        }
         if (h < SEA_LEVEL + 0.5) {
           // Nothing grows under the sea; the tideline thins out.
           const wet = Math.max(0, Math.min(1, (h - SEA_LEVEL) / 0.5));
