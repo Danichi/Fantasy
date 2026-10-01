@@ -52,7 +52,8 @@ function sign(text: string, sub = '') {
   if (sub) { g.font = '600 18px Cinzel, serif'; g.fillText(sub, 192, 70); }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  return new THREE.MeshStandardMaterial({ map: t, roughness: 0.8, side: THREE.DoubleSide });
+  // Front face only: from behind you see the board's timber back, not mirrored letters.
+  return new THREE.MeshStandardMaterial({ map: t, roughness: 0.8 });
 }
 
 interface Fire { pos: THREE.Vector3; light: THREE.PointLight | null; night?: boolean }
@@ -177,6 +178,7 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
     b.position.set(x, y + 2.4, z);
     b.rotation.y = yaw;
     scene.add(b);
+    box(m.timber, w + 0.12, w / 4 + 0.12, 0.08, x - Math.sin(yaw) * 0.05, y + 2.4, z - Math.cos(yaw) * 0.05, yaw);
   };
 
   // ---- Millbrook hamlet and the Chapel of the Dawn ---------------------------------------

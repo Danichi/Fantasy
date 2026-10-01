@@ -170,12 +170,15 @@ export class FarmLife {
     g.fillText('YOUR PLOT', 128, 33);
     const tex = new THREE.CanvasTexture(sc);
     tex.colorSpace = THREE.SRGBColorSpace;
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8, side: THREE.DoubleSide }));
+    // Lettering on the front; a plank back so it never reads mirrored.
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }));
     const sx = c.x - 2.4, sz = c.z + hz + 0.3;
     sign.position.set(sx, heightAt(sx, sz) + 1.1, sz);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.46, 0.05), m.timber);
+    back.position.set(sx, heightAt(sx, sz) + 1.1, sz - 0.03);
     const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.1, 0.1), m.timber);
     post.position.set(sx, heightAt(sx, sz) + 0.55, sz - 0.05);
-    this.scene.add(sign, post);
+    this.scene.add(sign, back, post);
   }
 
   private now() {
