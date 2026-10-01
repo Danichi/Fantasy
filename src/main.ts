@@ -92,6 +92,7 @@ import { DungeonMapUI } from './ui/dungeonMap';
 import { Realm } from './dungeon/realm';
 import { Town, NPCS } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
+import { loadArmourKit } from './enemies/armourKit';
 import { loadSave, writeSave, buildSave, applySave, hasSave, clearSave } from './save';
 import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
@@ -1297,7 +1298,7 @@ async function boot() {
       fpsFrames = 0;
     }
   };
-  await Promise.all([town.ready, gravewood.ready]);
+  await Promise.all([town.ready, gravewood.ready, loadArmourKit()]); // the mine's Living Armour
   mark('npcs');
   // Compile every material's shaders up front, in parallel where the
   // browser supports it, instead of stalling the first frames one by one.
