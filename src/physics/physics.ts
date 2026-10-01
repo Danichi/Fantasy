@@ -76,6 +76,18 @@ export class Physics {
     if (body) this.world.removeRigidBody(body);
   }
 
+  /**
+   * Nothing static (walls, houses, rocks, the terrain's colliders) stands
+   * between two points. Stops a hair short of the far end so the target's
+   * own footing doesn't count.
+   */
+  lineOfSight(from: THREE.Vector3, to: THREE.Vector3, margin = 0.3) {
+    const d = from.distanceTo(to);
+    if (d <= margin) return true;
+    const dir = to.clone().sub(from).divideScalar(d);
+    return this.castRay(from, dir, d - margin) === null;
+  }
+
   /** Ray against static geometry. Returns hit distance or null. */
   castRay(origin: THREE.Vector3, dir: THREE.Vector3, maxDist: number, filterGroups = STATIC_ONLY): number | null {
     const ray = new RAPIER.Ray(origin, dir);

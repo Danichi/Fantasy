@@ -27,7 +27,7 @@ const RELIEF_GROUND: Record<number, [number, number, number]> = {
 };
 
 /** Places grass is cut back: garden beds, yards, quarry floors (circle r or box hx/hz). */
-export const GRASS_MASKS: { x: number; z: number; r?: number; hx?: number; hz?: number; amount: number }[] = [];
+export const GRASS_MASKS: { x: number; z: number; r?: number; hx?: number; hz?: number; amount: number; tint?: number }[] = [];
 
 export class GroundWindow {
   readonly texture: THREE.DataTexture;
@@ -101,6 +101,7 @@ export class GroundWindow {
           if (inside) {
             grass *= 1 - m.amount;
             flower *= 1 - m.amount;
+            if (m.tint !== undefined) tint = m.tint; // e.g. dead, dry grass
           }
         }
         const h = heightAt(x, z);

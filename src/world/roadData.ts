@@ -54,6 +54,11 @@ export const ROAD_SPECS: RoadSpec[] = [
     gate: { at: [-160, -700], reason: 'An elven marker stone stands across the road: none pass into the Verdant Woods without a guide.' },
   },
   {
+    // Off the logging road, south through the fields into the dead wood.
+    id: 'gravewood', name: 'The Gravewood Trail', kind: 'trail',
+    pts: [[-230, 80], [-252, 142], [-292, 206], [-324, 262], [-338, 296], [-340, 306]],
+  },
+  {
     // Spur trails off the King's Road.
     id: 'camp', name: 'The Lantern Camp Trail', kind: 'trail',
     pts: [[1050, 124], [1060, 90], [1070, 52]],

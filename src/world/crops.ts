@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { heightAt, riverX, RIVER_LEVEL, ROAD_LINES, roadDist, TOWN_R } from './terrainHeight';
+import { heightAt, riverX, RIVER_LEVEL, ROAD_LINES, roadDist, TOWN_R, GRAVEWOOD, GRAVEWOOD_R } from './terrainHeight';
 import { mulberry32 } from '../core/math';
 
 // Elder Glen's cultivated flora (World Expansion phase 3): corn, pumpkin
@@ -303,6 +303,7 @@ export function buildCrops(scene: THREE.Scene): CropsResult {
         const r = Math.hypot(x, z);
         if (r < TOWN_R + 18 || r > 1250) continue;
         if (Math.abs(x - riverX(z)) < 26) continue;
+        if (Math.hypot(x - GRAVEWOOD.x, z - GRAVEWOOD.y) < GRAVEWOOD_R + 20) continue; // nothing green grows in the Gravewood
         // Gaps: hedges come and go in long runs.
         const n = Math.sin(x * 0.021 + z * 0.017) + Math.sin(x * 0.047 - z * 0.031) * 0.6;
         if (n < -0.2) continue;

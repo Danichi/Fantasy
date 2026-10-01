@@ -166,12 +166,16 @@ test('livestock is pooled near the player, and Clover follows the player home', 
       await tp(x, z, 2000);
     }
     for (let k = 0; k < 100 && g.quests.state['missing-heifer'].stage < 2; k++) await new Promise((r) => setTimeout(r, 300));
-    return { nearActors, farActors, following, hasClover: !!clover, stage: g.quests.state['missing-heifer'].stage };
+    // Home: she stays in the pasture even when the player walks away.
+    await tp(-100, 20, 5000);
+    const staysHome = !!clover && !clover.follow && g.fauna.contains(g.farm.ranges.cows, clover.pos);
+    return { nearActors, farActors, following, hasClover: !!clover, stage: g.quests.state['missing-heifer'].stage, staysHome };
   });
   expect(res.nearActors).toBeGreaterThan(4);
   expect(res.farActors).toBeLessThan(res.nearActors);
   expect(res.following).toBe(true);
   expect(res.hasClover).toBe(true);
   expect(res.stage).toBe(2);
+  expect(res.staysHome).toBe(true);
   expect(errors).toEqual([]);
 });

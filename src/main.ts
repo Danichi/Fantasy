@@ -93,6 +93,7 @@ import { Realm } from './dungeon/realm';
 import { Town, NPCS } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
 import { loadSave, writeSave, buildSave, applySave, hasSave, clearSave } from './save';
+import { Gravewood } from './world/gravewood';
 
 const STEP = 1 / 60;
 
@@ -165,7 +166,7 @@ async function boot() {
   const port = buildPortAurelle(r.scene, world.mats, fx);
   mark('port');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, Gravewood.clearing];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -301,6 +302,7 @@ async function boot() {
       river.mesh.visible = !h;
       foliage?.setVisible(!h);
       stylizedNature.setVisible(!h && stylizedNature.loaded);
+      gravewood.setVisible(!h);
       town.setVisible(!h);
     },
     clearEnemies: () => { slimes.clear(); frontier?.dispose(); encounters?.clear(); },
@@ -874,6 +876,15 @@ async function boot() {
     save: () => save(),
   });
   realm.overworldInteractables.push(...academy.interactables, ...lowerCity.interactables);
+  // The Gravewood: the graveyard trap in the dead wood south-west of the glen.
+  const gravewood = new Gravewood(r.scene, world.mats, fx, {
+    toast: (m) => hud.toast(m),
+    card: (title, sub) => hud.regionCard(title, sub, true),
+    bossBar: (t, name) => hud.bossBar(t, name),
+    save: () => save(),
+    flags: worldFlags,
+  });
+  void gravewood.warm(r.renderer, r.camera);
   // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
   quests.fromJSON(saveData?.world?.quests);
@@ -1048,7 +1059,8 @@ async function boot() {
 
   events.on('playerDied', () => {
     setTimeout(() => {
-      const at = realm.respawnPoint;
+      // Dying in the Gravewood's trap wakes you at its gate.
+      const at = gravewood.respawnPoint ?? realm.respawnPoint;
       player.respawn(at);
       cam.snapTo(at);
     }, 4200);
@@ -1103,6 +1115,7 @@ async function boot() {
       frontier.update(STEP);
       encounters.update(STEP, time.hour, weather.p.rain);
       duel.update(STEP);
+      gravewood.update(STEP, player);
     }
     realm.update(STEP);
     rewards.update(STEP, player.center);
@@ -1145,7 +1158,7 @@ async function boot() {
     const dtMs = Math.max(0, Math.min(MAX_FRAME_MS, now - last));
     last = now;
     const dt = dtMs / 1000;
-    music.setZone(realm.mode === 'dungeon' ? 'crypt' : 'village');
+    music.setZone(realm.mode === 'dungeon' || gravewood.trapped ? 'crypt' : 'village');
     music.update(dt);
     // Pause the world while the title/pause overlay is up (never in tests).
     const overlayUp = !TEST_MODE && (!started || pausedByUser);
@@ -1168,6 +1181,7 @@ async function boot() {
     if (!paused) player.present(alpha, overlayUp ? 0 : simDt);
     renderPos.copy(player.char.root.position);
     if (!paused) realm.present(alpha, overlayUp || mapUI.open ? 0 : simDt);
+    if (!paused && realm.mode === 'overworld') gravewood.present(alpha, overlayUp || worldMap.open ? 0 : simDt, player, r.camera);
     cam.update(dt, renderPos, player.sprinting);
     r.camera.getWorldDirection(player.aimDir);
     ground.update(r.camera.position);
@@ -1182,6 +1196,7 @@ async function boot() {
     const ts = time.state, wp = weather.p;
     if (realm.mode === 'overworld') {
       r.applyTime(dt, ts, wp);
+      gravewood.atmosphere(r, player.pos);
       precip.update(dt, r.camera.position, wp);
       ocean.setConditions(wp.wind, ts.zenith, ts.horizon, wp.cloud, ts.night);
       grass.setWind(0.45 + wp.wind * 1.35);
@@ -1240,6 +1255,7 @@ async function boot() {
     book.update();
     mapUI.update();
     if (realm.mode === 'overworld') discovery.update(player.pos);
+    worldMap.obscured = realm.mode === 'overworld' ? gravewood.curse : 0;
     worldMap.update(dt, player.pos, player.yaw, realm.mode === 'overworld' && !overlayUp);
     dialogue.update(dt);
     if (realm.mode === 'overworld') town.update(dt, player.pos);
@@ -1266,7 +1282,7 @@ async function boot() {
       fpsFrames = 0;
     }
   };
-  await town.ready;
+  await Promise.all([town.ready, gravewood.ready]);
   mark('npcs');
   // Compile every material's shaders up front, in parallel where the
   // browser supports it, instead of stalling the first frames one by one.
@@ -1323,7 +1339,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

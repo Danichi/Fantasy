@@ -1,0 +1,11 @@
+Model Information:
+* title:	Zombie
+* source:	https://sketchfab.com/3d-models/zombie-6ff73b06cf63405d9557720c78cf5e0c
+* author:	David Glynch (https://sketchfab.com/yaveselyigolovastic)
+
+Model License:
+* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
+* requirements:	Sketchfab Standard licence: may be used in projects, but not redistributed as a standalone asset.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Zombie" (https://sketchfab.com/3d-models/zombie-6ff73b06cf63405d9557720c78cf5e0c) by David Glynch (https://sketchfab.com/yaveselyigolovastic) licensed under SKETCHFAB Standard (https://sketchfab.com/licenses)

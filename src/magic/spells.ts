@@ -161,6 +161,7 @@ export class Spells {
       const d = t.center.distanceTo(at);
       const splash = fb.splash;
       if (t !== direct && d > splash + t.radius) continue;
+      if (t !== direct && !physics.lineOfSight(at, t.center, t.radius * 0.5)) continue; // splash doesn't pass through walls
       const k = t === direct ? 1 : Math.max(0.25, 1 - d / (splash + t.radius));
       const dmg = Math.round(fb.damage * k * (0.9 + Math.random() * 0.2) * (t.stunned ? 2 : 1));
       const dir = t.position.clone().sub(at).setY(0);

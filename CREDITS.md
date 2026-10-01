@@ -10,6 +10,11 @@
 - **Orc warrior** by valkiriaixda — https://sketchfab.com/valkiriaixda
 - **Orc Warchief with Iron Crown and Cleaver** by Pigcraft — https://sketchfab.com/s8819296
 - **Orc House** by arloopa — https://sketchfab.com/arloopa
+- **Stitched Patchwork Abomination Creature** by Pigcraft — https://sketchfab.com/s8819296 (the Gravewood's boss)
+
+## Other 3D model licences
+- **Asset Graveyard (The Darkest Red)** by KIFIR — https://sketchfab.com/kifir — CC BY-NC 4.0 (https://creativecommons.org/licenses/by-nc/4.0/): **non-commercial use only**. Graves, headstones, crosses, sarcophagi and railings in the Gravewood.
+- **Zombie** by David Glynch — https://sketchfab.com/yaveselyigolovastic — Sketchfab Standard licence (https://sketchfab.com/licenses): may be used in a project but not redistributed as a standalone asset. Rebound onto the hero's skeleton for the Gravewood's zombies.
 
 Models were simplified and their textures resized for real-time use.
 

@@ -524,6 +524,7 @@ export class Player {
       if (dist > 24) continue;
       const ang = to.normalize().angleTo(camF);
       if (ang > 0.9) continue;
+      if (!this.canSee(t)) continue; // no locking on through walls
       const score = ang * 3 + dist * 0.1;
       if (score < bestScore) {
         bestScore = score;
@@ -533,8 +534,23 @@ export class Player {
     this.lock = best;
   }
 
+  private lockHidden = 0;
+  /** Eye to target with nothing static in between. */
+  canSee(t: Target) {
+    const eye = this.pos.clone().setY(this.pos.y + 1.55);
+    return physics.lineOfSight(eye, t.center) || physics.lineOfSight(this.center, t.center);
+  }
+  /** A blow can only land if no wall stands between the swing and the target. */
+  private reachable(t: Target) {
+    return physics.lineOfSight(this.center, t.center, t.radius * 0.5);
+  }
+
   private updateLock(cam: ThirdPersonCamera) {
     if (this.lock && (!this.lock.alive || this.lock.center.distanceTo(this.center) > 30)) this.lock = null;
+    if (this.lock) {
+      this.lockHidden = this.canSee(this.lock) ? 0 : this.lockHidden + 1 / 60;
+      if (this.lockHidden > 1.2) this.lock = null;
+    }
     cam.lockTarget = this.lock ? this.lock.center : null;
   }
 
@@ -730,6 +746,7 @@ export class Player {
         if (!t.alive || a.hitSet.has(t.id)) continue;
         const d = t.position.distanceTo(this.pos);
         if (d > 2.6 + t.radius) continue;
+        if (!this.reachable(t)) continue;
         a.hitSet.add(t.id);
         const dir = t.position.clone().sub(this.pos).setY(0).normalize();
         const dmg = Math.round(base * 1.2 * (1 - (d / (2.6 + t.radius)) * 0.5));
@@ -985,6 +1002,7 @@ export class Player {
     for (const tg of targets) {
       if (!tg.alive || a.hitSet.has(tg.id)) continue;
       if (tg.center.distanceTo(this.center) > 3.6) continue;
+      if (!this.reachable(tg)) continue; // the blade stops at the wall
       // Sweep between the blade's previous and current positions.
       for (let i = 0; i <= 6; i++) {
         const u = i / 6;
@@ -1156,6 +1174,7 @@ export class Player {
         const d = to.length();
         if (d > 6.5 || d < 0.01) continue;
         if (to.normalize().dot(f) < 0.62) continue;
+        if (!this.reachable(t)) continue;
         const dmg = Math.round(26 + this.prog.level * 2.5);
         t.takeHit({ damage: dmg, poise: 35, dir: f.clone(), at: t.center.clone(), crit: false, source: 'melee' });
         events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: false, enemyId: t.id });
