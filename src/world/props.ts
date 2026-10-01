@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { registerDoor, type Door } from './doors';
+import { StaticBatch } from './cityKit';
 import { paintedMaterials } from '../render/painted';
 import { buildVillage, type PlacedHouse, type Village } from './village';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -218,6 +219,8 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     { x: 48, z: -35, rot: -0.1, spec: { w: 9, d: 7, floors: 1, roof: 'slate', seed: 98 }, door: { name: 'the stable house' } },
   ];
   const placed: PlacedHouse[] = [];
+  // Houses merge per material (a few draws for the whole town, not ~8 each).
+  const houseBatch = new StaticBatch();
   for (const h of houses) {
     // Roofs: mostly terracotta, some slate-blue, thatch where specified.
     if (h.spec.roof === 'slate' && h.spec.seed % 3 !== 0) h.spec.roof = 'tile';
@@ -228,11 +231,12 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) gy = Math.min(gy, heightAt(h.x + sx * half.x, h.z + sz * half.z));
     group.position.set(h.x, gy, h.z);
     group.rotation.y = h.rot;
-    scene.add(group);
+    houseBatch.addObject(group);
     registerDoor(group, door, h.spec, h.door);
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, h.rot, 0));
     physics.addBox(new THREE.Vector3(h.x, gy + half.y, h.z), half, q);
   }
+  houseBatch.build(scene, 60);
 
   buildBridge(scene, m);
   const crypt = buildCrypt(scene, m, fx);

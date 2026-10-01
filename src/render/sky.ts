@@ -135,7 +135,12 @@ function cloudTexture(seed: number) {
 export class Sky {
   readonly mesh: THREE.Mesh;
   readonly clouds = new THREE.Group();
-  private cloudItems: { mesh: THREE.Mesh; az: number; el: number; speed: number }[] = [];
+  private cloudItems: { inst: THREE.InstancedMesh; idx: number; w: number; az: number; el: number; speed: number }[] = [];
+  private cloudMats: THREE.MeshBasicMaterial[] = [];
+  private cloudM = new THREE.Matrix4();
+  private cloudQ = new THREE.Quaternion();
+  private cloudS = new THREE.Vector3();
+  private cloudP = new THREE.Vector3();
   private mat: THREE.ShaderMaterial;
   private cloudTop = { value: new THREE.Color(1, 1, 1) };
   private cloudBelly = { value: new THREE.Color(0.7, 0.76, 0.86) };
@@ -158,12 +163,13 @@ export class Sky {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = -10;
 
-    // Painted cumulus billboards around the horizon.
+    // Painted cumulus billboards around the horizon: one instanced mesh per
+    // painted card (5 draws for the whole sky, not one per cloud).
     const textures = [11, 23, 37, 51, 67].map(cloudTexture);
     let seed = 7;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    for (let i = 0; i < 26; i++) {
-      const tex = textures[i % textures.length];
+    const N = 26;
+    const insts = textures.map((tex, t) => {
       const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, opacity: 0.96, toneMapped: false });
       // Remap the painted card: bright puffs take the top colour, grey bellies the shade colour.
       mat.onBeforeCompile = (sh) => {
@@ -175,12 +181,16 @@ export class Sky {
           float cl = smoothstep(0.72, 0.98, dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15)));
           diffuseColor.rgb = mix(uBelly, uTop, cl);`);
       };
+      this.cloudMats.push(mat);
+      const inst = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 0.5), mat, Math.ceil((N - t) / textures.length));
+      inst.renderOrder = -9;
+      inst.frustumCulled = false;
+      this.clouds.add(inst);
+      return inst;
+    });
+    for (let i = 0; i < N; i++) {
       const w = 260 + rnd() * 320;
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.5), mat);
-      mesh.renderOrder = -9;
-      mesh.frustumCulled = false;
-      this.clouds.add(mesh);
-      this.cloudItems.push({ mesh, az: rnd() * Math.PI * 2, el: 0.04 + Math.pow(rnd(), 1.6) * 0.34, speed: 0.0008 + rnd() * 0.0012 });
+      this.cloudItems.push({ inst: insts[i % textures.length], idx: Math.floor(i / textures.length), w, az: rnd() * Math.PI * 2, el: 0.04 + Math.pow(rnd(), 1.6) * 0.34, speed: 0.0008 + rnd() * 0.0012 });
     }
     this.mesh.add(this.clouds);
   }
@@ -214,10 +224,7 @@ export class Sky {
     const golden = THREE.MathUtils.smoothstep(0.42, 0.04, sunDir.y) * (1 - night) * (1 - overcast * 0.7);
     this.cloudTop.value.setRGB(0.96, 0.985, 1.05).lerp(new THREE.Color(1.0, 0.74, 0.56), golden).lerp(new THREE.Color(0.66, 0.68, 0.72), overcast).lerp(new THREE.Color(0.13, 0.16, 0.26), night).addScalar(flash * 0.6);
     this.cloudBelly.value.setRGB(0.7, 0.76, 0.86).lerp(new THREE.Color(0.66, 0.52, 0.66), golden).lerp(new THREE.Color(0.42, 0.45, 0.5), overcast).lerp(new THREE.Color(0.05, 0.07, 0.13), night);
-    for (const c of this.cloudItems) {
-      const m = c.mesh.material as THREE.MeshBasicMaterial;
-      m.opacity = 0.96 * (1 - night * 0.45);
-    }
+    for (const m of this.cloudMats) m.opacity = 0.96 * (1 - night * 0.45);
     (u.uCloudShade.value as THREE.Color).setRGB(0.66, 0.73, 0.82).lerp(new THREE.Color(0.35, 0.38, 0.44), overcast).lerp(new THREE.Color(0.06, 0.08, 0.14), night * 0.9);
   }
 
@@ -228,8 +235,11 @@ export class Sky {
     for (const c of this.cloudItems) {
       c.az += c.speed * dt;
       const ce = Math.cos(c.el);
-      c.mesh.position.set(Math.sin(c.az) * ce * R, Math.sin(c.el) * R, Math.cos(c.az) * ce * R);
-      c.mesh.rotation.set(0, c.az + Math.PI, 0); // face the centre (camera), stay upright
+      this.cloudP.set(Math.sin(c.az) * ce * R, Math.sin(c.el) * R, Math.cos(c.az) * ce * R);
+      this.cloudQ.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, c.az + Math.PI); // face the centre, stay upright
+      this.cloudS.set(c.w, c.w, 1);
+      c.inst.setMatrixAt(c.idx, this.cloudM.compose(this.cloudP, this.cloudQ, this.cloudS));
     }
+    for (const c of this.clouds.children) (c as THREE.InstancedMesh).instanceMatrix.needsUpdate = true;
   }
 }

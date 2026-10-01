@@ -144,27 +144,43 @@ function addCropField(scene: THREE.Scene, x: number, z: number, w: number, d: nu
 /** Build the instanced crops once every field has been laid out (one draw call per crop type). */
 function finishCrops(scene: THREE.Scene) {
   if (!cropState) return;
-  const make = (geo: THREE.BufferGeometry, mat: THREE.Material, data: CropList) => {
+  // One instanced mesh per 48 m cell: a single mesh spanning every field
+  // could never be culled, so all ~10k wheat tufts drew twice a frame
+  // (main and shadow pass) from anywhere in Elder Glen.
+  const make = (geo: THREE.BufferGeometry, mat: THREE.Material, data: CropList, shadow = true) => {
     if (!data.pos.length) return;
-    const mesh = new THREE.InstancedMesh(geo, mat, data.pos.length);
+    const CELL = 48;
+    const cells = new Map<string, number[]>();
+    const p = new THREE.Vector3();
     data.pos.forEach((m, i) => {
-      mesh.setMatrixAt(i, m);
-      mesh.setColorAt(i, data.col[i]);
+      p.setFromMatrixPosition(m);
+      const k = Math.floor(p.x / CELL) + ',' + Math.floor(p.z / CELL);
+      let list = cells.get(k);
+      if (!list) cells.set(k, (list = []));
+      list.push(i);
     });
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    scene.add(mesh);
+    for (const list of cells.values()) {
+      const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+      list.forEach((i, j) => {
+        mesh.setMatrixAt(j, data.pos[i]);
+        mesh.setColorAt(j, data.col[i]);
+      });
+      mesh.castShadow = shadow;
+      mesh.receiveShadow = true;
+      mesh.computeBoundingSphere();
+      scene.add(mesh);
+    }
   };
   // Leafy crops: chunky low-poly heads.
   const head = new THREE.IcosahedronGeometry(1, 0);
   head.translate(0, 0.6, 0);
-  make(head, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }), cropState.leafy);
+  make(head, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }), cropState.leafy, false); // low heads: no shadow
   // Wheat: a tuft of thin stalks with heavier ears.
   const parts: THREE.BufferGeometry[] = [];
   for (let k = 0; k < 6; k++) {
-    const stalk = new THREE.CylinderGeometry(0.012, 0.02, 0.9, 3);
+    const stalk = new THREE.CylinderGeometry(0.012, 0.02, 0.9, 3, 1, true); // open: caps on stalks this thin are invisible
     stalk.translate(0, 0.45, 0);
-    const ear = new THREE.CylinderGeometry(0.035, 0.02, 0.2, 4);
+    const ear = new THREE.CylinderGeometry(0.035, 0.02, 0.2, 4, 1, true);
     ear.translate(0, 0.98, 0);
     const a = (k / 6) * Math.PI * 2;
     for (const g of [stalk, ear]) {

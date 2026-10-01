@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { registerDoor } from './doors';
+import { StaticBatch } from './cityKit';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildHouse, worldUV, type HouseSpec, type WorldMats } from './buildings';
 import { heightAt, streetDist, roadDist, TOWN_R, PLAZA_CENTER } from './terrain';
@@ -103,6 +104,7 @@ export function buildVillage(scene: THREE.Scene, m: WorldMats, fx: FX, houses: P
 
   // ---- extra cottages fronting the paths ----------------------------------------
   const extra: PlacedHouse[] = [];
+  const cottages = new StaticBatch(); // merged per material, like the town's houses
   for (let tries = 0; tries < 900 && extra.length < 26; tries++) {
     const a = rnd() * Math.PI * 2;
     const rad = 26 + rnd() * 66;
@@ -125,13 +127,14 @@ export function buildVillage(scene: THREE.Scene, m: WorldMats, fx: FX, houses: P
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) gy = Math.min(gy, heightAt(x + sx * half.x, z + sz * half.z));
     group.position.set(x, gy, z);
     group.rotation.y = rot;
-    scene.add(group);
+    cottages.addObject(group);
     registerDoor(group, door, spec);
     physics.addBox(new THREE.Vector3(x, gy + half.y, z), half, new THREE.Quaternion().setFromAxisAngle(up, rot));
     const ph = { x, z, rot, half, chimney };
     extra.push(ph);
     claims.push({ x, z, r });
   }
+  cottages.build(scene, 60);
   const all = [...houses, ...extra];
 
   // ---- dressing per house -------------------------------------------------------

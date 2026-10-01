@@ -233,7 +233,7 @@ export function buildCrops(scene: THREE.Scene): CropsResult {
   const corn = new Kind(cornGeo(), std(0.22, 2.2, { side: THREE.DoubleSide }));
   const pumpkin = new Kind(pumpkinGeo(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75 }));
   const sunflower = new Kind(sunflowerGeo(), std(0.12, 1.9, { side: THREE.DoubleSide }));
-  const lavender = new Kind(lavenderGeo(), std(0.06, 0.75));
+  const lavender = new Kind(lavenderGeo(), std(0.06, 0.75), false); // knee-high: its shadow barely reads
   const apple = new Kind(orchardTreeGeo(0xd23a2a), std(0.03, 3.5));
   const pear = new Kind(orchardTreeGeo(0xd8c64a), std(0.03, 3.5));
   const hedge = new Kind(hedgeGeo(), std(0.03, 1.6));

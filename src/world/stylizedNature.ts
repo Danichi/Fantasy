@@ -57,7 +57,7 @@ interface Prototype {
 // with the base at y = 0 (scaled by targetHeight like the imported models).
 
 function lumpyBlob(r: number, seed: number) {
-  const g = new THREE.IcosahedronGeometry(r, 3);
+  const g = new THREE.IcosahedronGeometry(r, 2); // (the leaf shader carries the fine detail)
   const p = g.attributes.position as THREE.BufferAttribute;
   const rnd = mulberry32(seed);
   const a = rnd() * 10, b = rnd() * 10;
@@ -597,7 +597,12 @@ export class StylizedNature {
       imp[k * 4 + 3] = 0.9 + rnd() * 0.2;
     }
     geo.setAttribute('aImp', new THREE.InstancedBufferAttribute(imp, 4));
-    mesh.frustumCulled = false;
+    // Cull whole tiles out of view. The quads are sized in the shader, so pad
+    // the instances' bounds by the tallest impostor.
+    mesh.computeBoundingSphere();
+    let tallest = 0;
+    for (let k = 0; k < n; k++) tallest = Math.max(tallest, imp[k * 4 + 1]);
+    mesh.boundingSphere!.radius += tallest;
     mesh.visible = this.visible;
     this.scene.add(mesh);
     return mesh;
@@ -687,7 +692,8 @@ export class StylizedNature {
     for (const n of this.near) {
       n.mesh.count = counts.get(n.mesh) ?? 0;
       n.mesh.instanceMatrix.needsUpdate = true;
-      n.mesh.visible = this.visible;
+      // (An empty instanced mesh still costs a draw call, in both passes.)
+      n.mesh.visible = this.visible && n.mesh.count > 0;
     }
   }
 
@@ -719,7 +725,7 @@ export class StylizedNature {
 
   setVisible(visible: boolean) {
     this.visible = visible;
-    for (const n of this.near) n.mesh.visible = visible;
+    for (const n of this.near) n.mesh.visible = visible && n.mesh.count > 0;
     for (const t of this.tiles.values()) if (t.impostor) t.impostor.visible = visible;
   }
 

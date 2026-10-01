@@ -76,13 +76,15 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
   const lanternMats: THREE.MeshStandardMaterial[] = [];
   const rnd = mulberry32(1380);
 
+  // Roadside houses merge per material (built once every house is placed).
+  const houseBatch = new StaticBatch();
   const house = (x: number, z: number, rot: number, spec: Parameters<typeof buildHouse>[0], info: Partial<Door> = {}) => {
     const { group, half, door } = buildHouse(spec, m);
     let gy = Infinity;
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) gy = Math.min(gy, heightAt(x + sx * half.x, z + sz * half.z));
     group.position.set(x, gy, z);
     group.rotation.y = rot;
-    scene.add(group);
+    houseBatch.addObject(group);
     registerDoor(group, door, spec, info);
     physics.addBox(new THREE.Vector3(x, gy + half.y, z), half, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rot, 0)));
     clearings.push([x, z, Math.max(half.x, half.z) + 6]);
@@ -268,6 +270,7 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
   const paddock = { center: v(W.x - 40, W.z - 22), radius: 14, half: new THREE.Vector2(14, 10), yaw: 0 };
   fenceRun([[W.x - 54, W.z - 12], [W.x - 54, W.z - 32], [W.x - 26, W.z - 32], [W.x - 26, W.z - 16]]);
   fences.build(scene, 120);
+  houseBatch.build(scene, 120);
   clearings.push([paddock.center.x, paddock.center.z, 18]);
   // Courtyard: well, wagons, hitching rail, a merchant's cart and lanterns.
   {
