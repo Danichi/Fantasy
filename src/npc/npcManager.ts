@@ -105,7 +105,7 @@ const SPRITE_CAP = 240;
 // 256 baked looks: Elder Glen, the road and Port Aurelle have more than 128 residents.
 const CELL_W = 64, CELL_H = 128, ATLAS_COLS = 16, ATLAS_ROWS = 16;
 const DESPAWN_R = 40; // released beyond this (hysteresis over ACTIVE_R)
-const MAX_ACTORS = 18;
+const MAX_ACTORS = 22;
 /** Walking pace for a 1.8 m person (m/s); taller people stride further. */
 const WALK_SPEED = 1.15;
 /** How far the walk clip carries a 1.8 m body per second at normal playback (measured from its planted feet). */

@@ -55,6 +55,9 @@ import { road, distanceAlong } from './world/roadNetwork';
 import { buildGlenLandmarks, LANDMARK_CLEARINGS } from './world/glenLandmarks';
 import { QuestLog } from './quests/questLog';
 import { setupElderGlenQuests } from './quests/elderGlenQuests';
+import { setupMainQuest } from './quests/mainQuest';
+import { setupGlenMoreQuests } from './quests/glenMoreQuests';
+import { buildGlenLife } from './world/glenLife';
 import { QuestUI } from './ui/questUI';
 import { MenuBook } from './ui/menuBook';
 import { glenNamedFolk } from './npc/glenNamed';
@@ -96,6 +99,8 @@ import { loadArmourKit } from './enemies/armourKit';
 import { loadSave, writeSave, buildSave, applySave, hasSave, clearSave } from './save';
 import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
+import { afflictions } from './combat/afflictions';
+import { ShopUI } from './ui/shopUI';
 
 const STEP = 1 / 60;
 
@@ -139,6 +144,7 @@ async function boot() {
   }
 
   const fx = new FX(r.scene, heightAt);
+  afflictions.fx = fx;
   const slimes = new BeastSpawner(r.scene, fx);
   if (TEST_MODE) slimes.enabled = false;
   const spells = new Spells(r.scene, fx, player);
@@ -235,6 +241,21 @@ async function boot() {
   fauna.addHerd('sheep', 6, { center: new THREE.Vector3(600, 0, 34), radius: 22 });
   fauna.addHerd('cat', 3, { center: new THREE.Vector3(0, 0, -4), radius: 45 });
   fauna.addHerd('pigeon', 8, { center: new THREE.Vector3(0, 0, -4), radius: 14 });
+  // A busier village and countryside: hens scratching in the lanes, pigeons on
+  // the market, farm dogs in the fields, a sheepdog with the flock, deer
+  // grazing at the edge of the wheat.
+  fauna.addHerd('pigeon', 6, { center: new THREE.Vector3(0, 0, 6), radius: 10 });
+  fauna.addHerd('chicken', 5, { center: new THREE.Vector3(-30, 0, 40), radius: 9 });
+  fauna.addHerd('chicken', 4, { center: new THREE.Vector3(12, 0, 130), radius: 7 });
+  fauna.addHerd('chick', 3, { center: new THREE.Vector3(12, 0, 130), radius: 5 });
+  fauna.addHerd('cat', 2, { center: new THREE.Vector3(-20, 0, 20), radius: 30 });
+  fauna.addHerd('dog', 1, { center: new THREE.Vector3(0, 0, 165), radius: 45 });
+  fauna.addHerd('husky', 1, farm.ranges.sheep);
+  fauna.addHerd('cow', 3, farm.ranges.cows);
+  fauna.addHerd('pig', 2, farm.ranges.pigs);
+  fauna.addHerd('deer', 3, { center: new THREE.Vector3(-120, 0, 235), radius: 22 });
+  fauna.addHerd('deer', 2, { center: new THREE.Vector3(140, 0, -200), radius: 20 });
+  const glenLife = buildGlenLife(r.scene, fx, farm.clearings, () => time.hour);
   void ocean;
   mark('flowers');
   const rewards = new Rewards(r.scene, player.prog);
@@ -315,6 +336,8 @@ async function boot() {
   }, rewards, world.crypt.door, world.mineDoor);
   const dialogue = new DialogueUI();
   const town = new Town(r.scene, r.camera, dialogue, player);
+  const shopUI = new ShopUI(player);
+  town.shopUI = shopUI;
   town.mentorOptions = (spec, say) => mentorOptions(player.paths, spec, say, (m) => hud.toast(m));
   frontier = new FrontierRegion(
     r.scene, player, fx, dialogue, world.mats,
@@ -364,8 +387,8 @@ async function boot() {
   folkServices.set('zarek', () => [{
     label: 'Browse exotic wares',
     run: () => town.showShop('Zarek the Wanderer', 'Travelling Merchant', 'From the dunes of the Golden Expanse to the vineyards of Valoria: everything has a price, and my prices are fair.', [
-      ['healthPotion', 22], ['manaPotion', 26], ['honeycomb', 14], ['duskbloom', 40], ['emberroot', 20], ['silverthistle', 16], ['pumpkinSeed', 5], ['ringSage', 230],
-    ]),
+      ['healthPotion', 22], ['manaPotion', 26], ['honeycomb', 14], ['duskbloom', 40], ['emberroot', 20], ['silverthistle', 16], ['pumpkinSeed', 5], ['ringSage', 230], ['bloodthirst', 720], ['estoc', 420],
+    ], { buyRate: { default: 0.45 } }),
   }]);
   // Townsfolk: one interactable that follows whoever is nearest.
   const folkTalk = {
@@ -439,6 +462,9 @@ async function boot() {
     count: countItem, take: takeItem, give: giveItem, toast: (m) => hud.toast(m),
   });
   town.questOptions = (id, show, back) => quests.options(id, show, back);
+  town.questDone = (id) => quests.isDone(id);
+  const glenMore = setupGlenMoreQuests({ quests, scene: r.scene, fx, beasts: slimes, toast: (m) => hud.toast(m) });
+  const mainQuest = setupMainQuest(quests, { grukkDead: () => realm.progress.bossDead, gravewoodCleared: () => gravewood.cleared });
   // ---- Road encounters, caravans and the King's Road quests (phase 4) ------------------
   const encounters = new Encounters(r.scene, player, slimes, fx);
   encounters.enabled = !TEST_MODE;
@@ -630,7 +656,7 @@ async function boot() {
   town.serviceOptions = (id, show, back) => (id === 'stablemaster' ? stableFor(id, glenYard, 'elderGlen')(show, back) : []);
   folkServices.set('dunmore', stableFor('dunmore', kingsRoad.stableYard, 'waystation'));
   folkServices.set('hobbs', stableFor('hobbs', PORT_SPOTS.stable, 'portAurelle'));
-  realm.overworldInteractables.push(encounters.interactable, ...roadQuests.interactables, horses.interactable, ...roads.interactables, foraging.interactable, ...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables);
+  realm.overworldInteractables.push(encounters.interactable, ...roadQuests.interactables, horses.interactable, ...roads.interactables, foraging.interactable, ...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables, ...glenMore.interactables);
 
   // ---- Buildings you can walk into ----------------------------------------------------
   // Every placed house registered its doorstep (world/doors.ts). Stepping through
@@ -765,6 +791,7 @@ async function boot() {
     const f = npcs.find(id);
     return f && !f.hidden ? f.pos.clone().setY(f.pos.y + (f.rec.look.height ?? 1.75)) : null;
   }, () => questNpcIds);
+  questUI.attachScene(r.scene);
   // The book: the menus as tabbed pages, opened from the corner button or their keys.
   const book = new MenuBook([
     { id: 'inventory', label: 'Inventory', key: 'I', isOpen: () => inv.open, open: () => inv.toggle(true), close: () => inv.toggle(false) },
@@ -802,9 +829,14 @@ async function boot() {
   if (resume && !TEST_MODE) player.teleport(new THREE.Vector3(resume[0], Math.max(resume[1], heightAt(resume[0], resume[2])) + 0.2, resume[2]));
   dialogue.onToggle = (open) => {
     if (!open) npcs.engaged = null;
-    input.uiMode = open || inv.open || skills.open || mapUI.open;
+    input.uiMode = open || inv.open || skills.open || mapUI.open || shopUI.open;
     if (open) input.exitLock();
-    else input.requestLock();
+    else if (!shopUI.open) input.requestLock();
+  };
+  shopUI.onToggle = (open) => {
+    input.uiMode = open || inv.open || skills.open || mapUI.open || dialogue.open;
+    if (open) input.exitLock();
+    else if (!dialogue.open) input.requestLock();
   };
   if (saveData) {
     realm.progress = saveData.dungeon;
@@ -941,6 +973,8 @@ async function boot() {
   if (saveData) town.guild.fromJSON(saveData.guild);
   realm.onSave = save;
   microDiscoveries.onSave = save;
+  // A new game starts the story (after save exists: starting a quest autosaves).
+  mainQuest.begin();
   town.guild.onSave = save;
   town.guild.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open || dialogue.open;
@@ -1135,6 +1169,7 @@ async function boot() {
       gravewood.update(STEP, player);
     }
     realm.update(STEP);
+    afflictions.update(STEP);
     rewards.update(STEP, player.center);
     // Interaction: nearest enabled thing in reach.
     let best: (typeof realm.interactables)[number] | null = null;
@@ -1246,7 +1281,10 @@ async function boot() {
       if (worldRunning) roadQuests.update(dt);
       if (worldRunning) {
         quests.update(dt, player.pos);
+        mainQuest.update(dt);
         glenQuests.update(dt);
+        glenMore.update(dt);
+        glenLife.update(dt, player.pos);
       }
       questUI.update(player.pos);
       folkTalk.npc = npcs.nearest(player.pos);
@@ -1314,6 +1352,7 @@ async function boot() {
   setOnIconsReady(() => {
     hud.markHotbarDirty();
     if (inv.open) inv.render();
+    shopUI.refresh();
   });
   await loadBakedIcons();
   buildIcons(r.renderer, r.scene.environment, player.equip.items.map((i) => i.def.id));
@@ -1357,7 +1396,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, glenLife, mainQuest, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       perf,
       pause: (p: boolean) => (paused = p),

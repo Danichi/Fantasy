@@ -35,12 +35,20 @@ export const SEAL_WAIT = 20;
 const LULL = 5; // seconds between waves
 const WAVES: UndeadKind[][] = [
   ['zombie', 'zombie', 'zombie', 'skeleton'],
-  ['zombie', 'zombie', 'zombie', 'zombie', 'skeleton', 'skeleton'],
-  ['zombie', 'zombie', 'skeleton'],
+  ['zombie', 'zombie', 'skeleton', 'zombie', 'skeleton'],
+  ['zombie', 'zombie', 'zombie', 'skeleton', 'zombie', 'skeleton', 'skeleton'],
+  ['skeleton', 'skeleton', 'zombie', 'skeleton', 'zombie', 'zombie', 'skeleton', 'zombie'],
+  ['zombie', 'skeleton', 'zombie', 'skeleton'], // the last wave: the Abomination climbs out behind them
 ];
+const LAST = WAVES.length - 1;
+const WAVE_CARDS = ['The dead rise', 'More claw their way up', 'The graves empty', 'Bone and rot, shoulder to shoulder', 'The ground itself is moving'];
+/** When the Abomination is badly hurt it calls more of the dead up around it. */
+const BOSS_ADDS: UndeadKind[] = ['skeleton', 'zombie', 'skeleton'];
+/** Fraction of max health restored between waves. */
+const LULL_HEAL = 0.18;
 export const ABOMINATION: BossSpec = {
-  name: 'The Stitched Abomination', model: '/assets/gravewood/gwAbomination.glb', hp: 500, scale: 1.3,
-  kind: 'abomination', bow: false, damage: 0.5, emerge: true, wake: -1,
+  name: 'The Stitched Abomination', model: '/assets/gravewood/gwAbomination.glb', hp: 900, scale: 1.3,
+  kind: 'abomination', bow: false, damage: 0.75, emerge: true, wake: -1,
 };
 /** Local (x, z) of the boss's pit: where it rises, where the light breaks, where the pedestal stands. */
 const BOSS_AT = new THREE.Vector2(0, 1.5);
@@ -184,6 +192,7 @@ export class Gravewood {
   private spawnQueue: { kind: UndeadKind; at: number }[] = [];
   mobs: Undead[] = [];
   boss: OrcWarlord | null = null;
+  private bossAdds = false;
   private bossPending = false;
   private pendingReset = false;
   private graves: THREE.Vector2[] = []; // local mound centres (rising spots)
@@ -798,10 +807,10 @@ export class Gravewood {
     this.state = 'wave';
     this.t = 0;
     // The dead rise one after another, not all at once.
-    WAVES[i].forEach((kind, k) => this.spawnQueue.push({ kind, at: 0.4 + k * 2.1 }));
-    this.hooks.card(i === 2 ? 'The Final Wave' : `Wave ${i + 1}`, i === 0 ? 'The dead rise' : i === 1 ? 'More claw their way up' : 'The ground itself is moving');
+    WAVES[i].forEach((kind, k) => this.spawnQueue.push({ kind, at: 0.4 + k * 1.6 }));
+    this.hooks.card(i === LAST ? 'The Final Wave' : `Wave ${i + 1} of ${WAVES.length}`, WAVE_CARDS[i] ?? 'The dead rise');
     sfx.rumble(3, 0.9);
-    if (i === 2) this.bossPending = true;
+    if (i === LAST) this.bossPending = true;
   }
 
   /** A rising spot: a grave mound (not one the player stands on). */
@@ -864,6 +873,7 @@ export class Gravewood {
     this.boss?.dispose();
     this.boss = null;
     this.bossPending = false;
+    this.bossAdds = false;
     this.hooks.bossBar(null);
     this.state = 'dormant';
     this.wave = -1;
@@ -902,14 +912,22 @@ export class Gravewood {
         }
         this.spawnQueue = this.spawnQueue.filter((s) => this.t < s.at);
         if (this.bossPending && this.t > 3.5) this.spawnBoss(player);
+        // Half dead, it howls and the graves around it split open again.
+        const b = this.boss;
+        if (b && !this.bossAdds && b.alive && b.hp < b.maxHp * 0.5) {
+          this.bossAdds = true;
+          BOSS_ADDS.forEach((kind, k) => this.spawnQueue.push({ kind, at: this.t + 0.8 + k * 1.2 }));
+          sfx.rumble(2.5, 1);
+          this.hooks.toast('The Abomination howls — the graves split open around it!');
+        }
         const minionsLeft = this.mobs.length + this.spawnQueue.length;
-        if (!minionsLeft && this.wave < 2) {
+        if (!minionsLeft && this.wave < LAST) {
           this.state = 'lull';
           this.t = 0;
           // A breath between waves: pale light seeps up from the emptied graves and eases your wounds.
-          player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.3);
+          player.hp = Math.min(player.maxHp, player.hp + player.maxHp * LULL_HEAL);
           this.fx.add.spawn({ pos: player.center.clone(), vel: new THREE.Vector3(0, 2, 0), spread: 1.5, count: 30, life: [0.8, 1.6], size: [0.12, 0.02], color: 0xcfe8ff, color2: 0x7fb0ff, upBias: 1.2, drag: 1.2, jitter: 1.2 });
-          this.hooks.toast(this.wave === 0 ? 'The ground falls still… a cold light eases your wounds.' : 'A deep rumble rolls through the earth… the light steadies you.');
+          this.hooks.toast(this.wave === 0 ? 'The ground falls still… a cold light eases your wounds.' : this.wave === LAST - 1 ? 'A deep rumble rolls through the earth… something enormous is coming.' : 'The ground falls still, for now… the light steadies you.');
         }
         break;
       }

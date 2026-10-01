@@ -11,7 +11,7 @@ import type { Player } from '../player/player';
 import { events } from '../core/events';
 import { ITEMS } from '../items/itemDefs';
 import { AdventurerGuild } from '../guild/adventurerGuild';
-import { shopOptions } from './services';
+import type { ShopUI, ShopOpts } from '../ui/shopUI';
 
 // The townsfolk: who they are, where they stand, and what they teach or sell.
 
@@ -186,6 +186,10 @@ export class Town {
   questOptions?: (npcId: string, show: (text: string, opts: DialogueOption[]) => void, back: () => void) => DialogueOption[];
   /** services from other systems (stables, coaches) */
   serviceOptions?: (npcId: string, show: (text: string, opts: DialogueOption[]) => void, back: () => void) => DialogueOption[];
+  /** the merchant window (set by main); without it shops fall back to dialogue lists */
+  shopUI?: ShopUI;
+  /** quest completion, for stock that unlocks as the story moves on */
+  questDone?: (id: string) => boolean;
   private tags = new Map<string, HTMLDivElement>();
   private tmp = new THREE.Vector3();
 
@@ -231,7 +235,12 @@ export class Town {
     ];
   }
 
-  showShop(speaker: string, title: string, intro: string, stock: [string, number][]) {
+  showShop(speaker: string, title: string, intro: string, stock: [string, number][], extra: Partial<ShopOpts> = {}) {
+    if (this.shopUI) {
+      this.dialogue.close();
+      this.shopUI.show({ speaker, title, intro, stock, ...extra });
+      return;
+    }
     const opts = stock.map(([id, price]) => ({
       label: 'Buy ' + ITEMS[id].name + ' — ' + price + 'g',
       run: () => {
@@ -275,19 +284,19 @@ export class Town {
         this.service(s.name, s.title, 'A warm room and a full meal will restore your health, mana and stamina.', 18);
         return true;
       case 'apothecary':
-        this.showShop(s.name, s.title, 'Carefully brewed field medicine.', [['healthPotion', 20], ['manaPotion', 25]]);
+        this.showShop(s.name, s.title, 'Carefully brewed field medicine.', [['healthPotion', 20], ['manaPotion', 25], ['greaterHealthPotion', 60]], { wants: BUYS.apothecary });
         return true;
       case 'baker':
-        this.showShop(s.name, s.title, 'Travel provisions — and seed for anyone working a plot. Plant it, water it, and it is ready in half a day.', [['healthPotion', 15], ['manaPotion', 20], ['wheatSeed', 3], ['carrotSeed', 3], ['cabbageSeed', 4], ['pumpkinSeed', 6]]);
+        this.showShop(s.name, s.title, 'Travel provisions — and seed for anyone working a plot. Plant it, water it, and it is ready in half a day.', [['healthPotion', 15], ['manaPotion', 20], ['wheatSeed', 3], ['carrotSeed', 3], ['cabbageSeed', 4], ['pumpkinSeed', 6]], { wants: BUYS.baker });
         return true;
       case 'tailor':
-        this.showShop(s.name, s.title, 'Cloaks and belts made for long expeditions.', [['wayfarerCloak', 95], ['warriorBelt', 80]]);
+        this.showShop(s.name, s.title, 'Cloaks and belts made for long expeditions.', [['wayfarerCloak', 95], ['warriorBelt', 80], ['luckyCharm', 140]], { wants: BUYS.tailor, buyRate: { armor: 0.45, accessory: 0.45, default: 0.3 } });
         return true;
       case 'carpenter':
-        this.showShop(s.name, s.title, 'Reliable beginner gear, built to survive rough travel.', [['roundShield', 55], ['armingSword', 60]]);
+        this.showShop(s.name, s.title, 'Reliable beginner gear, built to survive rough travel.', [['shortsword', 45], ['armingSword', 60], ['roundShield', 55], ['buckler', 115]], { buyRate: { sword: 0.4, shield: 0.4, default: 0.3 } });
         return true;
       case 'arcanist':
-        this.showShop(s.name, s.title, 'Battle magic for people who have already learned to respect fire.', [['fireball', 150], ['healingLight', 165], ['ringSage', 190]]);
+        this.showShop(s.name, s.title, 'Battle magic for people who have already learned to respect fire.', [['fireball', 150], ['healingLight', 165], ['ringSage', 190], ['manaPotion', 24], ['greaterManaPotion', 65]], { buyRate: { spell: 0.5, accessory: 0.45, default: 0.3 } });
         return true;
       case 'stablemaster':
         this.showShop(s.name, s.title, 'Restock before you leave the walls.', [['healthPotion', 18], ['manaPotion', 22]]);
@@ -348,10 +357,32 @@ export class Town {
     this.dialogue.show(s.name, s.title, text, opts);
   }
 
-  private shop(text = "Pick something useful. I can sell you the steel; what you do with it is your business.") {
-    const opts = shopOptions(this.player, (next) => this.shop(next));
-    opts.push({ label: 'Leave the stall.', run: () => this.dialogue.close() });
-    this.dialogue.show('Master Fröst', 'Smith & Merchant', text, opts);
+  /**
+   * Fröst's forge: plain steel from the start; better blades once you've
+   * proved yourself on the hill (or helped at the forge), and enchanted
+   * ones once the Gravewood has fallen.
+   */
+  private shop() {
+    const done = (id: string) => this.questDone?.(id) ?? false;
+    const tier2 = done('mq-crypt') || done('tempered-steel');
+    const tier3 = done('mq-gravewood');
+    const stock: [string, number][] = [
+      ['shortsword', 45], ['longsword', 90], ['bastardSword', 150], ['roundShield', 55], ['kiteShield', 100],
+      ['ironHelm', 60], ['gauntlets', 50], ['sabatons', 50],
+      ['healthPotion', 20], ['manaPotion', 25],
+    ];
+    const locked: [string, string][] = [];
+    const t2: [string, number][] = [['falchion', 210], ['knightSword', 220], ['claymore', 340], ['towerShield', 170], ['pauldrons', 90], ['greaves', 100], ['breastplate', 180]];
+    const t3: [string, number][] = [['estoc', 380], ['frostbite', 440], ['emberbrand', 460]];
+    if (tier2) stock.push(...t2);
+    else locked.push(['claymore', 'Clear the crypt on the hill, or help at the forge (Tempered Steel)'], ['falchion', 'The same']);
+    if (tier3) stock.push(...t3);
+    else locked.push(['emberbrand', 'Break the curse on the Gravewood'], ['frostbite', 'The same']);
+    this.showShop('Master Fröst', 'Smith & Merchant',
+      tier3 ? 'The Gravewood\'s broken and the charcoal-burners are back in the forest. I\'ve been able to finish some of the pieces I\'d been saving.'
+        : tier2 ? 'Word is you walked out of the crypt. That buys you the good steel.'
+          : 'Pick something useful. I can sell you the steel; what you do with it is your business.',
+      stock, { locked, wants: BUYS.froest, buyRate: { sword: 0.5, shield: 0.5, armor: 0.5, default: 0.3 } });
   }
 
   setVisible(v: boolean) {

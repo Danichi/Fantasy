@@ -1,5 +1,5 @@
 import type { Player } from '../player/player';
-import { ARMOR_SLOTS, ACCESSORY_SLOTS, STAT_LABEL, type ItemKind, type ItemStats, type Slot } from '../items/itemDefs';
+import { ARMOR_SLOTS, ACCESSORY_SLOTS, STAT_LABEL, traitLines, type ItemKind, type ItemStats, type Slot } from '../items/itemDefs';
 import type { ItemInstance } from '../items/equipment';
 import { events } from '../core/events';
 import { iconFor, wideIconFor } from './icons';
@@ -350,6 +350,7 @@ export class InventoryUI {
       <div class="dhead"><img class="big" src="${iconFor(d.id)}" alt=""><div><div class="name">${esc(d.name)}</div><div class="rar r-${d.rarity}">${d.rarity} ${d.kind === 'armor' ? 'armour' : d.kind === 'key' ? 'quest item' : d.kind}${d.stack ? ` · ×${it.qty}` : ''}</div></div></div>
       <p>${esc(d.desc)}</p>
       ${rows.length ? `<div class="stats">${rows.join('')}</div>` : ''}
+      ${traitLines(d.stats).map((t) => `<div class="trait">✦ ${t}</div>`).join('')}
       ${worn ? `<div class="cmp">Compared with your <b>${esc(worn.def.name)}</b></div>` : slot ? `<div class="cmp">Worn: ${SLOT_LABEL[slot]}</div>` : ''}
       <div class="dact">${actions.join('')}</div>`;
     box.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((b) =>

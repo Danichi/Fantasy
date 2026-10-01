@@ -13,7 +13,7 @@ export const PORT_QUESTS: QuestDef[] = [
   // ---- Main story -------------------------------------------------------------------------
   {
     id: 'road-to-port', title: 'The Road to Port Aurelle', giver: 'maud', region: 'cresha', main: true,
-    requires: [],
+    requires: ['mq-gravewood'],
     summary: 'Elder Maud believes the Knight\'s Academy in Port Aurelle can teach a summoned hero what they need to survive this world.',
     offer: 'You didn\'t come to Elder Glen by any road I know of, and you fight like someone half-remembering a dream. The Knight\'s Academy in Port Aurelle trains the realm\'s best. Follow the King\'s Road east to the sea — ten minutes\' walk for young legs — and present yourself to Ser Elian Marrow. Tell him Elder Glen sent you.',
     acceptLabel: 'I\'ll go to Port Aurelle.',

@@ -5,7 +5,7 @@ import { STREET_LINES, heightAt, PLAZA_CENTER, TOWN_R, GATES } from '../world/te
 import { mulberry32 } from '../core/math';
 
 // Elder Glen's townsfolk (prompt §4): the farming town that feeds Cresha.
-// About sixty named residents with jobs and daily routines: farmers in the
+// About eighty named residents with jobs and daily routines: farmers in the
 // fields from dawn, merchants at the market, the miller and smith at work,
 // children at play, guards on their rounds, and everyone at the inn after
 // dark. Places and the walking graph are built from the real town layout.
@@ -28,7 +28,7 @@ const HAIRS = [0x1f1a17, 0x3a2618, 0x6a4428, 0x8a3f22, 0xb0562a, 0xd2b26a, 0xb8b
 const LINENS = [0xe8d8b8, 0xc9dbe8, 0xd8c29a, 0xe8c8c0, 0xb8c4a0, 0xf0e0a8, 0xd9cfe8, 0xc4d8c0];
 
 type Job = 'farmer' | 'merchant' | 'guard' | 'child' | 'elder' | 'miller' | 'smith' | 'innfolk' | 'shepherd' | 'weaver';
-const JOBS: [Job, number][] = [['farmer', 20], ['merchant', 6], ['guard', 6], ['child', 8], ['elder', 5], ['miller', 2], ['smith', 2], ['innfolk', 3], ['shepherd', 3], ['weaver', 3]];
+const JOBS: [Job, number][] = [['farmer', 27], ['merchant', 9], ['guard', 7], ['child', 12], ['elder', 6], ['miller', 2], ['smith', 3], ['innfolk', 4], ['shepherd', 4], ['weaver', 4]];
 
 const LINES: Record<Job, NpcRecord['lines']> = {
   farmer: {

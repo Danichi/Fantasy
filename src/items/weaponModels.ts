@@ -15,6 +15,13 @@ export interface SwordSpec {
   guardStyle: 'straight' | 'curved';
   pommel: 'wheel' | 'pear';
   guardMat?: 'darkSteel' | 'brass';
+  /** sideways sweep of the blade toward the point (metres at the tip): sabres and falchions */
+  curve?: number;
+  /** steel colour (default bright steel) and how metallic it reads */
+  tint?: number;
+  /** a glowing core along the fuller (enchanted blades), and how bright */
+  glow?: number;
+  glowStrength?: number;
 }
 
 /** Lofted blade with bevelled edges, a fuller and a tapered point. */
@@ -39,10 +46,11 @@ function bladeGeometry(s: SwordSpec) {
       [w, 0], [w * 0.6, th * 0.72], [w * 0.24, th], [0, th - fuller], [-w * 0.24, th], [-w * 0.6, th * 0.72],
       [-w, 0], [-w * 0.6, -th * 0.72], [-w * 0.24, -th], [0, -(th - fuller)], [w * 0.24, -th], [w * 0.6, -th * 0.72],
     );
-    rings.push(ring.map(([x, z]) => new THREE.Vector3(x, y, z)));
+    const bend = (s.curve ?? 0) * t * t;
+    rings.push(ring.map(([x, z]) => new THREE.Vector3(x + bend, y, z)));
     vs.push(t);
   }
-  const tip = new THREE.Vector3(0, s.bladeLen + 0.004, 0);
+  const tip = new THREE.Vector3(s.curve ?? 0, s.bladeLen + 0.004, 0);
   const R = 12;
   for (let i = 0; i < SEG; i++) {
     for (let k = 0; k < R; k++) {
@@ -94,9 +102,26 @@ export function buildSword(s: SwordSpec) {
   const g = new THREE.Group();
   const guardY = s.gripLen / 2 + 0.012;
 
-  const blade = new THREE.Mesh(bladeGeometry(s), m.blade);
+  let bladeMat: THREE.Material = m.blade;
+  if (s.tint !== undefined) {
+    const t = (m.blade as THREE.MeshStandardMaterial).clone();
+    t.color.set(s.tint);
+    bladeMat = t;
+  }
+  const blade = new THREE.Mesh(bladeGeometry(s), bladeMat);
   blade.position.y = guardY + 0.01;
   g.add(blade);
+  if (s.glow !== undefined) {
+    // An enchanted core: a slimmer, slightly proud copy of the blade that glows.
+    const core = bladeGeometry({ ...s, bladeWidth: s.bladeWidth * 0.34, thickness: s.thickness * 1.25, fullerLen: 0 });
+    const k = s.glowStrength ?? 2.2;
+    const glowMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(s.glow).multiplyScalar(k), toneMapped: true });
+    const c = new THREE.Mesh(core, glowMat);
+    c.position.y = guardY + 0.01;
+    c.scale.set(1, 0.97, 1);
+    g.add(c);
+    g.userData.glow = s.glow;
+  }
 
   const guard = new THREE.Mesh(guardGeometry(s), m[s.guardMat ?? 'darkSteel']);
   guard.position.y = guardY;

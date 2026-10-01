@@ -32,12 +32,44 @@ export interface ItemStats {
   staminaRegen?: number; // fraction, 0.25 = +25%
   manaRegen?: number;
   damagePct?: number; // fraction
+  // weapon traits (swords)
+  burn?: number; // fire damage per second for 3 s after a hit
+  frost?: number; // chance a hit freezes the target solid for a moment
+  lifesteal?: number; // fraction of damage dealt returned as health
+  crit?: number; // extra critical-hit chance
+  stagger?: number; // multiplier on the poise damage of every blow
 }
 
 export const STAT_LABEL: Partial<Record<keyof ItemStats, string>> = {
   maxHp: 'Max health', maxStamina: 'Max stamina', maxMana: 'Max mana',
   staminaRegen: 'Stamina regen', manaRegen: 'Mana regen', damagePct: 'Damage',
 };
+
+/** Weapon traits in plain words, for shop cards and the inventory. */
+export function traitLines(s: ItemStats): string[] {
+  const out: string[] = [];
+  if (s.burn) out.push(`Burns: ${s.burn} fire damage a second for 3 s`);
+  if (s.frost) out.push(`Frost: ${Math.round(s.frost * 100)}% chance to freeze a foe in place`);
+  if (s.lifesteal) out.push(`Bloodthirst: heals ${Math.round(s.lifesteal * 100)}% of damage dealt`);
+  if (s.crit) out.push(`Keen: +${Math.round(s.crit * 100)}% critical chance`);
+  if (s.stagger && s.stagger > 1) out.push(`Crushing: +${Math.round((s.stagger - 1) * 100)}% stagger`);
+  return out;
+}
+
+/** What an item is worth to a merchant buying it from you (gold). */
+export function itemValue(def: ItemDef) {
+  const base = { common: 8, fine: 30, rare: 90, epic: 220 }[def.rarity];
+  const s = def.stats;
+  let v = base;
+  if (def.kind === 'sword') v += (s.damage ?? 0) * 3 + ((s.burn ?? 0) + (s.frost ?? 0) * 100 + (s.lifesteal ?? 0) * 300 + (s.crit ?? 0) * 200) * 2;
+  if (def.kind === 'shield') v += (s.block ?? 0) * 0.8;
+  if (def.kind === 'armor') v += (s.armor ?? 0) * 8;
+  if (def.kind === 'accessory') v += 40;
+  if (def.kind === 'spell') v += 60;
+  if (def.kind === 'consumable') v = Math.max(3, Math.round(((s.heal ?? 0) + (s.restoreMana ?? 0) + (s.restoreStamina ?? 0)) / 5));
+  if (def.kind === 'key') return 0;
+  return Math.round(v);
+}
 
 export interface ItemDef {
   id: string;
@@ -73,6 +105,61 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'knightSword', name: "Knight's Broadsword", kind: 'sword', slot: 'main', rarity: 'fine',
     desc: 'A broad blade with a brass-fitted hilt. Heavier strikes, slower recovery.',
     stats: { damage: 30, speed: 0.88, poise: 5 }, build: () => buildSword(knight),
+  },
+  shortsword: {
+    id: 'shortsword', name: 'Iron Shortsword', kind: 'sword', slot: 'main', rarity: 'common',
+    desc: 'A stubby soldier\'s blade. No reach to speak of, but it never stops moving.',
+    stats: { damage: 16, speed: 1.3 }, build: () => buildSword({ ...arming, bladeLen: 0.56, bladeWidth: 0.027, fullerLen: 0.5, tint: 0xb9b3aa }),
+  },
+  bastardSword: {
+    id: 'bastardSword', name: 'Bastard Sword', kind: 'sword', slot: 'main', rarity: 'fine',
+    desc: 'Longer than an arming sword, lighter than a greatsword. A veteran\'s favourite.',
+    stats: { damage: 27, speed: 0.96, poise: 3 }, build: () => buildSword({ ...longsword, bladeLen: 0.94, bladeWidth: 0.027, guardSpan: 0.13, guardStyle: 'straight', pommel: 'wheel' }),
+  },
+  falchion: {
+    id: 'falchion', name: 'Falchion', kind: 'sword', slot: 'main', rarity: 'fine',
+    desc: 'A single-edged chopping blade that widens toward the point. Finds the gaps.',
+    stats: { damage: 29, speed: 0.95, crit: 0.08 }, build: () => buildSword({ ...arming, bladeLen: 0.74, bladeWidth: 0.036, curve: 0.05, guardStyle: 'straight', pommel: 'pear', tint: 0xc9c2b4 }),
+  },
+  claymore: {
+    id: 'claymore', name: "Warden's Claymore", kind: 'sword', slot: 'main', rarity: 'rare',
+    desc: 'A Highland greatsword with drooping quillons. Every swing lands like a falling door.',
+    stats: { damage: 36, speed: 0.78, poise: 10, stagger: 1.6 }, build: () => buildSword({ ...longsword, bladeLen: 1.12, bladeWidth: 0.031, thickness: 0.005, gripLen: 0.24, guardSpan: 0.17, guardStyle: 'curved', pommel: 'wheel', guardMat: 'brass' }),
+  },
+  estoc: {
+    id: 'estoc', name: 'Moonlit Estoc', kind: 'sword', slot: 'main', rarity: 'rare',
+    desc: 'A needle-thin thrusting blade, silvered so it catches the moon. Made to slip between plates.',
+    stats: { damage: 25, speed: 1.15, crit: 0.22 }, build: () => buildSword({ ...arming, bladeLen: 0.98, bladeWidth: 0.012, thickness: 0.0055, fullerLen: 0, guardSpan: 0.11, guardStyle: 'curved', pommel: 'pear', tint: 0xdfe8ff, glow: 0x9fc4ff, glowStrength: 0.9 }),
+  },
+  emberbrand: {
+    id: 'emberbrand', name: 'Emberbrand', kind: 'sword', slot: 'main', rarity: 'rare',
+    desc: 'Forged in a Cinder Guild furnace; the fuller still glows like a coal. What it cuts, burns.',
+    stats: { damage: 27, speed: 1, burn: 9 }, build: () => buildSword({ ...longsword, tint: 0x5a4a44, glow: 0xff5a18, glowStrength: 2.6, guardMat: 'brass' }),
+  },
+  frostbite: {
+    id: 'frostbite', name: 'Frostbite Sabre', kind: 'sword', slot: 'main', rarity: 'rare',
+    desc: 'A curved sabre of pale northern steel, cold enough to frost your breath. Now and then a foe simply stops.',
+    stats: { damage: 25, speed: 1.12, frost: 0.2 }, build: () => buildSword({ ...arming, bladeLen: 0.82, bladeWidth: 0.022, curve: 0.08, tint: 0xcfe4ff, glow: 0x7fd4ff, glowStrength: 1.8, pommel: 'pear' }),
+  },
+  bloodthirst: {
+    id: 'bloodthirst', name: 'Bloodthirst', kind: 'sword', slot: 'main', rarity: 'epic',
+    desc: 'A black blade with a groove that runs red when it drinks. It gives a little of what it takes back to its bearer.',
+    stats: { damage: 31, speed: 1, lifesteal: 0.14 }, build: () => buildSword({ ...knight, tint: 0x2a2226, glow: 0xc01020, glowStrength: 2.2 }),
+  },
+  dawnbreaker: {
+    id: 'dawnbreaker', name: 'Dawnbreaker', kind: 'sword', slot: 'main', rarity: 'epic',
+    desc: 'A greatsword with the Sunwheel worked into its crossguard, pulled from the Gravewood\'s pedestal. It burns with a clean, gold light.',
+    stats: { damage: 35, speed: 0.95, burn: 6, stagger: 1.3, poise: 6 }, build: () => buildSword({ ...longsword, bladeLen: 1.02, bladeWidth: 0.029, guardSpan: 0.15, guardMat: 'brass', tint: 0xf4ead0, glow: 0xffc85a, glowStrength: 2.4 }),
+  },
+  towerShield: {
+    id: 'towerShield', name: 'Tower Shield', kind: 'shield', slot: 'off', rarity: 'fine',
+    desc: 'A tall heater of oak and iron. Nothing gets past it; you won\'t be dancing, either.',
+    stats: { block: 115, stability: 0.72 }, build: () => { const s = buildKiteShield(); s.scale.set(1.12, 1.4, 1.1); return s; },
+  },
+  buckler: {
+    id: 'buckler', name: 'Spiked Buckler', kind: 'shield', slot: 'off', rarity: 'fine',
+    desc: 'A fist-sized steel buckler with a spike in the boss. Catches blades, and parries like lightning.',
+    stats: { block: 60, stability: 0.35, poise: 3 }, build: () => { const s = buildRoundShield('plain', ['#5a5f66', '#8a8f96']); s.scale.setScalar(0.6); return s; },
   },
   roundShield: {
     id: 'roundShield', name: 'Round Shield', kind: 'shield', slot: 'off', rarity: 'common',

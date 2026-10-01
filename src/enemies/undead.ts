@@ -37,14 +37,14 @@ interface Stats {
 
 const STATS: Record<UndeadKind, Stats> = {
   zombie: {
-    hp: 58, damage: 11, poise: 24, speed: 1.35, staggerPoise: 18, rise: 2.6,
+    hp: 78, damage: 14, poise: 24, speed: 1.45, staggerPoise: 18, rise: 2.6,
     swings: [
       { clip: 'attack_light_2', speed: 0.85, hitFrom: 0.34, hitTo: 0.56, lunge: 1.4 },
       { clip: 'attack_light_1', speed: 0.9, hitFrom: 0.5, hitTo: 0.74, lunge: 1.6 },
     ],
   },
   skeleton: {
-    hp: 50, damage: 13, poise: 30, speed: 2.25, staggerPoise: 24, rise: 1.9,
+    hp: 66, damage: 16, poise: 30, speed: 2.35, staggerPoise: 24, rise: 1.9,
     swings: [
       { clip: 'attack_light_1', speed: 1.1, hitFrom: 0.5, hitTo: 0.72, lunge: 2.2 },
       { clip: 'attack_heavy', speed: 1.0, hitFrom: 0.55, hitTo: 0.95, lunge: 2.6 },
@@ -389,7 +389,7 @@ export class Undead implements Target {
     if (!this.alive || this.state === 'dying' || this.state === 'rising') return;
     // Skeletons catch blows on the shield when facing them and not mid-swing.
     const fwd = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    const blocked = this.kind === 'skeleton' && this.state !== 'attack' && h.source !== 'spell' && h.dir.clone().setY(0).normalize().dot(fwd) < -0.6 && Math.random() < 0.25;
+    const blocked = this.kind === 'skeleton' && this.state !== 'attack' && h.source !== 'spell' && h.dir.clone().setY(0).normalize().dot(fwd) < -0.6 && Math.random() < 0.35;
     this.hp -= blocked ? h.damage * 0.25 : h.damage;
     this.flash = 1;
     if (blocked) this.fx.sparks(this.center.clone().addScaledVector(fwd, 0.4), fwd);

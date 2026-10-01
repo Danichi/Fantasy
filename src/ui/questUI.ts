@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { QuestLog } from '../quests/questLog';
 import type { HUD } from './hud';
+import { heightAt } from '../world/terrainHeight';
 
 // Quest presentation (World Expansion §46): side quests under the main quest
 // in the HUD tracker, a journal (J) with active and completed quests, gold
@@ -21,6 +22,13 @@ export class QuestUI {
   private cmpTicks: { el: HTMLElement; bearing: number }[] = [];
   private cmpTarget: HTMLDivElement;
   private camDir = new THREE.Vector3();
+  /** the tracked objective: a pillar of light in the world, a marker on screen, an arrow at the edge */
+  private beacon: THREE.Group | null = null;
+  private beaconMat: THREE.ShaderMaterial | null = null;
+  private wp: HTMLDivElement;
+  private visible = true;
+  private target: { x: number; z: number; label: string; d: number } | null = null;
+  private wpPos = new THREE.Vector3();
   /** "Show on map" in the journal */
   onShowOnMap?: (x: number, z: number) => void;
 
@@ -52,6 +60,10 @@ export class QuestUI {
     this.cmpTarget.className = 'cmp-target';
     this.compass.appendChild(this.cmpTarget);
     root.appendChild(this.compass);
+    this.wp = document.createElement('div');
+    this.wp.className = 'waypoint';
+    this.wp.innerHTML = '<i class="wp-arrow"></i><b>◆</b><span></span>';
+    root.appendChild(this.wp);
     this.journal.addEventListener('click', (e) => {
       const t = e.target as HTMLElement;
       const pick = t.closest('[data-quest]') as HTMLElement | null;
@@ -84,6 +96,36 @@ export class QuestUI {
       this.dirty = true;
       if (this.open) this.render();
     };
+  }
+
+  /** Put the objective beacon into the world (a soft gold pillar that shows through fog). */
+  attachScene(scene: THREE.Scene) {
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      uniforms: { uTime: { value: 0 }, uAlpha: { value: 1 } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `uniform float uTime; uniform float uAlpha; varying vec2 vUv;
+        void main(){
+          float fade = pow(1.0 - vUv.y, 1.6) * smoothstep(0.0, 0.04, vUv.y);
+          float band = 0.75 + 0.25 * sin(vUv.y * 40.0 - uTime * 3.0);
+          gl_FragColor = vec4(vec3(1.0, 0.78, 0.36) * fade * band * uAlpha, 1.0);
+        }`,
+    });
+    const g = new THREE.Group();
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.9, 70, 16, 1, true), mat);
+    pillar.position.y = 35;
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.25, 70, 8, 1, true), mat);
+    core.position.y = 35;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(1.3, 1.9, 40), new THREE.MeshBasicMaterial({ color: 0xffc860, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.12;
+    g.add(pillar, core, ring);
+    g.traverse((o) => (o.renderOrder = 5));
+    g.visible = false;
+    g.name = 'questBeacon';
+    scene.add(g);
+    this.beacon = g;
+    this.beaconMat = mat;
   }
 
   toggle(open: boolean) {
@@ -126,7 +168,11 @@ export class QuestUI {
 
   /** Per frame: tracker text, the compass and NPC head markers. */
   update(player?: THREE.Vector3) {
-    if (player) this.updateCompass(player);
+    if (player) {
+      this.pickTarget(player);
+      this.updateCompass(player);
+      this.updateWaypoint(player);
+    }
     if (this.dirty) {
       this.dirty = false;
       const act = this.quests.active();
@@ -135,7 +181,7 @@ export class QuestUI {
       let html = '';
       if (tracked) {
         const lines = this.quests.lines(tracked.id);
-        html += `<span class="q-kicker q-side">SIDE QUEST</span><b>${esc(tracked.title.toUpperCase())}</b>` +
+        html += `<span class="q-kicker ${tracked.main ? 'q-mainq' : 'q-side'}">${tracked.main ? 'MAIN QUEST' : 'SIDE QUEST'}</span><b>${esc(tracked.title.toUpperCase())}</b>` +
           lines.map(([t, p, n]) => `<small class="${p >= n ? 'q-done' : ''}">${p >= n ? '✔' : '◇'} ${esc(t)}${n > 1 ? ` · ${p}/${n}` : ''}</small>`).join('');
       }
       if (others.length) html += `<small class="q-more">${others.map((q) => esc(q.title)).join(' · ')}${act.length > 3 ? ` · +${act.length - 3}` : ''} — J for journal</small>`;
@@ -181,13 +227,8 @@ export class QuestUI {
       t.el.style.display = show ? '' : 'none';
       if (show) t.el.style.left = `${50 - (r / HALF) * 50}%`;
     }
-    const tracked = this.quests.tracked ?? this.quests.active()[0]?.id;
-    let best: { x: number; z: number; label: string } | null = null, bd = Infinity;
-    for (const m of this.quests.markers()) {
-      if (m.quest !== tracked) continue;
-      const d = Math.hypot(m.x - player.x, m.z - player.z);
-      if (d < bd) (bd = d), (best = m);
-    }
+    const best = this.target;
+    const bd = best?.d ?? Infinity;
     this.cmpTarget.style.display = best ? '' : 'none';
     if (!best) return;
     const r = rel(Math.atan2(best.x - player.x, best.z - player.z));
@@ -200,7 +241,70 @@ export class QuestUI {
     this.cmpTarget.title = best.label;
   }
 
+  /** The tracked quest's nearest unfinished objective. */
+  private pickTarget(player: THREE.Vector3) {
+    const tracked = this.quests.tracked ?? this.quests.active()[0]?.id;
+    let best: QuestUI['target'] = null;
+    for (const m of this.quests.markers()) {
+      if (m.quest !== tracked) continue;
+      const d = Math.hypot(m.x - player.x, m.z - player.z);
+      if (!best || d < best.d) best = { x: m.x, z: m.z, label: m.label, d };
+    }
+    this.target = best;
+  }
+
+  /** Beacon in the world, a marker over it on screen, and an arrow at the screen edge when it's behind or off to the side. */
+  private updateWaypoint(player: THREE.Vector3) {
+    const t = this.target;
+    const show = this.visible && !!t && !this.open;
+    if (this.beacon) {
+      this.beacon.visible = show && t!.d > 6;
+      if (this.beacon.visible) {
+        this.beacon.position.set(t!.x, heightAt(t!.x, t!.z), t!.z);
+        // Thicker with distance so it still reads from across the valley; fades out as you arrive.
+        const s = THREE.MathUtils.clamp(t!.d / 60, 1, 5);
+        this.beacon.scale.set(s, 1, s);
+        this.beaconMat!.uniforms.uTime.value = performance.now() / 1000;
+        this.beaconMat!.uniforms.uAlpha.value = THREE.MathUtils.smoothstep(t!.d, 6, 22) * 0.85;
+      }
+    }
+    if (!show) {
+      this.wp.style.display = 'none';
+      return;
+    }
+    const y = Math.max(heightAt(t!.x, t!.z), player.y - 30) + 2.4;
+    const p = this.wpPos.set(t!.x, y, t!.z).project(this.camera);
+    const W = window.innerWidth, H = window.innerHeight;
+    const behind = p.z > 1;
+    let sx = p.x, sy = p.y;
+    if (behind) (sx = -sx), (sy = -sy);
+    const off = behind || Math.abs(sx) > 0.9 || Math.abs(sy) > 0.86;
+    let px: number, py: number, ang = 0;
+    if (off) {
+      // Behind you: an arrow on the side of the screen you should turn toward.
+      if (behind) (sx = sx < 0 ? -1 : 1), (sy = 0);
+      // Pin to an inset ellipse round the screen edge, pointing outward (clear of the hotbar below).
+      const a = Math.atan2(sy * H, sx * W);
+      px = W / 2 + Math.cos(a) * (W / 2 - 70);
+      py = H / 2 - Math.sin(a) * (Math.sin(a) < 0 ? H / 2 - 190 : H / 2 - 90);
+      ang = -a;
+    } else {
+      px = (p.x * 0.5 + 0.5) * W;
+      py = (-p.y * 0.5 + 0.5) * H;
+    }
+    this.wp.style.display = 'flex';
+    this.wp.classList.toggle('off', off);
+    this.wp.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px)`;
+    (this.wp.firstElementChild as HTMLElement).style.transform = `rotate(${ang}rad)`;
+    const d = t!.d;
+    (this.wp.lastElementChild as HTMLElement).textContent = d < 6 ? 'here' : d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`;
+    this.wp.title = t!.label;
+  }
+
   setVisible(v: boolean) {
+    this.visible = v;
+    if (!v) this.wp.style.display = 'none';
+    if (!v && this.beacon) this.beacon.visible = false;
     if (!v) for (const el of this.marks.values()) el.style.display = 'none';
     this.compass.style.display = v ? '' : 'none';
   }

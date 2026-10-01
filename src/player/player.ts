@@ -6,6 +6,7 @@ import { RigLayer, blendPose, overlayPose, type ProcPose } from './rigLayer';
 import { Animator } from './animator';
 import { ThirdPersonCamera } from './camera';
 import { Input } from '../core/input';
+import { afflictions } from '../combat/afflictions';
 import { physics, groups, G_PLAYER, STATIC_ONLY } from '../physics/physics';
 import { clamp, damp, wrapAngle, segmentSegmentDistance, smoothstep } from '../core/math';
 import { events } from '../core/events';
@@ -1015,14 +1016,19 @@ export class Player {
         if (segmentSegmentDistance(b, t, ha, hb) < tg.radius + 0.06) {
           a.hitSet.add(tg.id);
           const extra = this.meleeBonus?.(tg);
-          const crit = tg.stunned || !!extra?.crit || Math.random() < this.mods.crit;
+          const ws = weapon?.def.stats ?? {};
+          const crit = tg.stunned || !!extra?.crit || Math.random() < this.mods.crit + (ws.crit ?? 0);
           const charge = 1 + a.charge * 0.6;
           const light = a.def.id.startsWith('slash') || a.def.id.startsWith('offslash') ? this.mods.lightAttack : 1;
           const bonus = (1 + this.equip.bonus('damagePct')) * this.paths.meleePower(weapon?.def.stats.speed ?? 1) * this.mods.melee * light * a.mult * (extra?.mult ?? 1);
           const dmg = Math.round(base * h.dmg * charge * bonus * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
           const dir = tg.position.clone().sub(this.pos).setY(0).normalize();
           const at2 = tg.center.clone().addScaledVector(dir, -tg.radius * 0.8);
-          tg.takeHit({ damage: dmg, poise: h.poise * charge * this.paths.poisePower * this.mods.poise, dir, at: at2, crit, source: 'melee' });
+          tg.takeHit({ damage: dmg, poise: h.poise * charge * this.paths.poisePower * this.mods.poise * (ws.stagger ?? 1), dir, at: at2, crit, source: 'melee' });
+          // The weapon's own nature: fire that lingers, frost that locks, a blade that feeds you.
+          if (ws.burn && tg.alive) afflictions.burn(tg, ws.burn);
+          if (ws.frost && tg.alive && Math.random() < ws.frost) afflictions.freeze(tg);
+          if (ws.lifesteal && !this.dead) this.hp = Math.min(this.maxHp, this.hp + dmg * ws.lifesteal);
           events.emit('enemyHit', { at: at2, amount: dmg, crit, enemyId: tg.id });
           events.emit('meleeHit', { target: tg, amount: dmg, crit, action: a.def.id });
           const heavy = a.def.id === 'heavy' || a.def.id === 'airAttack';

@@ -48,7 +48,7 @@ test('stepping through the gate seals the graveyard: gate shut, walls solid, map
   expect(errors).toEqual([]);
 });
 
-test('three waves rise from the graves, the abomination climbs out, and victory clears the Gravewood', async ({ page }) => {
+test('five waves rise from the graves, the abomination climbs out, and victory clears the Gravewood', async ({ page }) => {
   test.setTimeout(420_000);
   const errors = await boot(page);
   await page.evaluate(() => {
@@ -59,7 +59,7 @@ test('three waves rise from the graves, the abomination climbs out, and victory 
   await sleep(2000);
   await page.evaluate(() => { (window as any).__game.gravewood.t = 19.9; });
   const seen = { waves: new Set<number>(), kinds: new Set<string>(), rose: false, bossEmerged: false, bossRoared: false };
-  for (let i = 0; i < 180; i++) {
+  for (let i = 0; i < 240; i++) {
     await sleep(1000);
     const s = await page.evaluate(() => {
       const gw = (window as any).__game.gravewood;
@@ -74,7 +74,7 @@ test('three waves rise from the graves, the abomination climbs out, and victory 
     if (s.boss === 'roar' || s.boss === 'chase' || s.boss === 'attack') seen.bossRoared = true;
     if (seen.bossRoared) break;
   }
-  expect([...seen.waves].sort()).toEqual([0, 1, 2]);
+  expect([...seen.waves].sort()).toEqual([0, 1, 2, 3, 4]);
   expect([...seen.kinds].sort()).toEqual(['skeleton', 'zombie']);
   expect(seen.rose).toBe(true);
   expect(seen.bossEmerged).toBe(true);
