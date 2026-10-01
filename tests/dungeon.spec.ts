@@ -44,7 +44,12 @@ test('Old King\'s Road Mine can be entered, opened and completed', async ({ page
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     await g.realm.enterMine();
+    // Still standing in the mine a moment later (the spawn once sat past the
+    // entrance wall: you fell through and woke up in Elder Glen).
+    await new Promise((r) => setTimeout(r, 1500));
+    const standing = g.player.pos.x > 4900 && g.player.pos.y > -1;
     const entered = {
+      standing,
       mode: g.realm.mode,
       active: g.realm.active,
       insideMine: g.realm.mode === 'dungeon' && g.realm.active === 'mine' && !!g.realm.mineInstance,
@@ -94,6 +99,7 @@ test('Old King\'s Road Mine can be entered, opened and completed', async ({ page
   expect(res.entered.active).toBe('mine');
   expect(res.entered.insideMine).toBe(true);
   expect(res.entered.hasWinch).toBe(true);
+  expect(res.entered.standing).toBe(true);
   expect(res.opened.gateOpen).toBe(true);
   expect(res.opened.winchGone).toBe(true);
   expect(res.defeated.guardianDead).toBe(true);

@@ -144,15 +144,19 @@ export class Realm {
         exposure: u?.uExposure.value ?? 1, glExposure: r.renderer.toneMappingExposure,
       };
       s.background = new THREE.Color(0x000000);
+      // Underground and indoors there is no sky: gaps in a wall showed the
+      // sky dome's clouds as flat pink cards hanging in the dark.
+      if (r.sky) r.sky.mesh.visible = false;
       s.environmentIntensity = mine ? 0.08 : 0.12;
       r.sun.intensity = 0;
-      r.hemi.intensity = mine ? 0.18 : 0.22;
+      r.hemi.intensity = mine ? 0.34 : 0.22;
       r.hemi.color.set(mine ? 0x7186a5 : 0x7d8aa6);
       r.hemi.groundColor.set(mine ? 0x18130f : 0x2a2018);
       r.camera.far = mine ? 175 : 140;
       if (!Q.post) s.fog = new THREE.Fog(mine ? 0x06080c : 0x050608, mine ? 12 : 8, mine ? 48 : 30);
       if (u) {
-        u.uHaze.value = 0.03;
+        // The mine is long: thinner haze so lamps further down still read.
+        u.uHaze.value = mine ? 0.016 : 0.03;
         (u.uHazeColor.value as THREE.Color).setRGB(0.015, 0.016, 0.022);
         (u.uSunColor.value as THREE.Color).setRGB(0.015, 0.016, 0.022);
         u.uClouds.value = 0;
@@ -175,6 +179,7 @@ export class Realm {
       }
     } else if (!dungeon && this.saved) {
       const v = this.saved;
+      if (r.sky) r.sky.mesh.visible = true;
       s.background = v.background;
       s.environmentIntensity = v.envIntensity;
       r.sun.intensity = v.sun;

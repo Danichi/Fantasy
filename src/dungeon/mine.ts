@@ -151,7 +151,8 @@ export class MineInstance {
   }
 
   get spawnPoint() {
-    return MINE_ORIGIN.clone().add(new THREE.Vector3(0, 0.25, 7.5));
+    // Inside the entrance room (z -7..7): at 7.5 you stood past its north wall and fell.
+    return MINE_ORIGIN.clone().add(new THREE.Vector3(0, 0.25, 4.5));
   }
 
   get entranceYaw() {
@@ -332,7 +333,11 @@ export class MineInstance {
     bulb.castShadow = false;
     this.group.add(bulb);
 
-    const light = new THREE.PointLight(color, intensity, distance, 2);
+    // Physical units: a few candela barely reached the floor, so the mine read
+    // as black. Pools of warm light now carry the eye from lamp to lamp.
+    // (They hang about 6 m up: a softer falloff spreads each into a broad pool.)
+    intensity *= 12;
+    const light = new THREE.PointLight(color, intensity, distance * 1.3, 1.6);
     light.position.copy(bulb.position);
     light.castShadow = false;
     this.group.add(light);
@@ -371,11 +376,11 @@ export class MineInstance {
       this.addLanternLight(new THREE.Vector3(MINE_ORIGIN.x + x, y, MINE_ORIGIN.z + z), 0xff8c46, intensity, 14);
     }
 
-    const cold = new THREE.PointLight(0x4b9ed9, 3.1, 23, 2);
+    const cold = new THREE.PointLight(0x4b9ed9, 30, 26, 1.6);
     cold.position.set(MINE_ORIGIN.x, 3.8, MINE_ORIGIN.z - 112);
     this.group.add(cold);
 
-    const cold2 = new THREE.PointLight(0x5a8ee8, 2.0, 18, 2);
+    const cold2 = new THREE.PointLight(0x5a8ee8, 20, 20, 1.6);
     cold2.position.set(MINE_ORIGIN.x + 11, 2.9, MINE_ORIGIN.z - 124);
     this.group.add(cold2);
 
@@ -943,7 +948,9 @@ export class MineInstance {
 
     if (this.boss) {
       if (this.boss.alive) {
-        this.hooks.bossBar(this.boss, 'The Deep Warden');
+        // The Warden's bar shows once you reach its chamber, not from the entrance.
+        const near = this.boss.center.distanceTo(player.pos) < 30;
+        this.hooks.bossBar(near ? this.boss : null, 'The Deep Warden');
       } else if (!this.progress.guardianDead) {
         this.progress.guardianDead = true;
         this.hooks.bossBar(null);
