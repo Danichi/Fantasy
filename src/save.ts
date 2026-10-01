@@ -3,6 +3,7 @@ import type { Slot } from './items/itemDefs';
 import { ITEMS } from './items/itemDefs';
 import type { MapData } from './ui/dungeonMap';
 import type { DungeonProgress } from './dungeon/instance';
+import type { MineProgress } from './dungeon/mine';
 import type { GuildSaveData } from './guild/adventurerGuild';
 import type { DiscoverySave } from './world/discovery';
 import { xpToNext } from './progression/progression';
@@ -57,6 +58,8 @@ export interface SaveData {
   activeSpell: number | null;
   maps: Record<string, MapData>;
   dungeon: DungeonProgress;
+  /** Old King's Road Mine progression */
+  mine?: MineProgress;
   guild: GuildSaveData;
   world: WorldSave;
 }
@@ -104,7 +107,7 @@ export function loadSave(): SaveData | null {
 }
 
 /** The save data for the current game (without writing it). */
-export function buildSave(player: Player, seed: number, maps: Record<string, MapData>, dungeon: DungeonProgress, guild: GuildSaveData, world: WorldSave = { flags: {} }): SaveData {
+export function buildSave(player: Player, seed: number, maps: Record<string, MapData>, dungeon: DungeonProgress, guild: GuildSaveData, world: WorldSave = { flags: {} }, mine?: MineProgress): SaveData {
   const eq = player.equip;
   const idx = (uid: number | null | undefined) => (uid == null ? null : eq.items.findIndex((i) => i.uid === uid));
   const equipped: SaveData['equipped'] = {};
@@ -135,14 +138,15 @@ export function buildSave(player: Player, seed: number, maps: Record<string, Map
     activeSpell: idx(eq.activeSpell),
     maps,
     dungeon,
+    mine,
     guild,
     world,
   };
   return data;
 }
 
-export function writeSave(player: Player, seed: number, maps: Record<string, MapData>, dungeon: DungeonProgress, guild: GuildSaveData, world: WorldSave = { flags: {} }) {
-  const data = buildSave(player, seed, maps, dungeon, guild, world);
+export function writeSave(player: Player, seed: number, maps: Record<string, MapData>, dungeon: DungeonProgress, guild: GuildSaveData, world: WorldSave = { flags: {} }, mine?: MineProgress) {
+  const data = buildSave(player, seed, maps, dungeon, guild, world, mine);
   try {
     localStorage.setItem(KEY, JSON.stringify(data));
   } catch {}

@@ -79,7 +79,7 @@ export class Interior {
   private rnd: () => number;
   private cloth: THREE.MeshStandardMaterial[];
 
-  constructor(readonly door: Door, readonly kind: InteriorKind, private scene: THREE.Scene, private m: WorldMats, onLeave: () => void, private lender?: LightLender) {
+  constructor(readonly door: Door, readonly kind: InteriorKind, private scene: THREE.Scene, private m: WorldMats, onLeave: () => void, private lender?: LightLender, private onInspect?: (label: string, text: string) => void) {
     this.rnd = mulberry32(door.spec.seed * 7 + 11);
     const big = kind === 'guild' || kind === 'hall' || kind === 'tavern';
     this.W = kind === 'undercity' ? 22 : Math.max(big ? 9 : 6, door.spec.w - 0.6);
@@ -98,9 +98,10 @@ export class Interior {
       this.furnish();
     }
     this.lightUp();
-    // The way out.
+    // The way out is always first so doorway interactions remain reliable even when
+    // a furnished room has nearby inspection hotspots.
     const exit = kind === 'undercity' ? this.at(0, this.D / 2 - 4.2) : this.at(0, this.D / 2 - 0.5);
-    this.interactables.push({
+    this.interactables.unshift({
       pos: exit, radius: 1.6,
       label: () => (kind === 'undercity' ? 'Climb back up to the alley' : `Leave ${door.name ?? 'the house'}`),
       enabled: () => true,
@@ -349,6 +350,70 @@ export class Interior {
     this.seats.push({ pos: this.at(x, z), yaw, seated });
   }
 
+  private inspectProp(x: number, z: number, label: string, text: string) {
+    const pos = this.at(x, z, 0.4);
+    this.interactables.push({
+      pos,
+      // Keep doorway prompts dominant when a furnishing sits nearby.
+      radius: 0.9,
+      label: () => label,
+      enabled: () => true,
+      action: () => this.onInspect?.(label, text),
+    });
+    // Inspection text is routed through the dialogue callback; no UI state is stored on the Vector3.
+  }
+
+  private smallProp(mat: THREE.Material, x: number, y: number, z: number, s = 0.18) {
+    const g = new THREE.Mesh(new THREE.CylinderGeometry(s, s * 0.85, s * 1.4, 8), mat);
+    g.position.set(x, y, z);
+    g.castShadow = g.receiveShadow = true;
+    this.group.add(g);
+    return g;
+  }
+
+  private sack(x: number, z: number, scale = 0.55) {
+    const sackMat = new THREE.MeshStandardMaterial({ color: 0xb6a27e, roughness: 1 });
+    const g = new THREE.Mesh(new THREE.CapsuleGeometry(0.32 * scale, 0.45 * scale, 5, 8), sackMat);
+    g.position.set(x, 0.45 * scale, z);
+    g.scale.y = 1.15;
+    g.castShadow = g.receiveShadow = true;
+    this.group.add(g);
+  }
+
+  private bottleRack(x: number, z: number, w: number) {
+    this.shelf(x, z, 0, w, 'jars');
+    for (let i = 0; i < 5; i++) this.smallProp(this.cloth[i], x - w / 2 + 0.25 + i * (w - 0.5) / 4, 0.52, z + 0.12, 0.12);
+  }
+
+  private specialistShopDetails(back: number, left: number, right: number, D: number) {
+    const keeper = this.door.keeper;
+    if (keeper === 'baker') {
+      this.hearth(right - 0.8, back + 0.9, -Math.PI / 2);
+      this.shelf(left + 1.4, back + 0.25, 0, Math.min(3.8, this.W - 2.2), 'bread');
+      for (const x of [-0.8, -0.1, 0.6]) this.sack(x, D / 2 - 1.1, 0.7);
+      this.inspectProp(0, back + 1.2, 'Inspect the bakery oven', 'A soot-dark oven holds the last heat of the morning bake. Flour dust coats the wooden peel beside it.');
+    } else if (keeper === 'apothecary') {
+      this.bottleRack(left + 1.0, back + 1.0, 2.1);
+      this.bottleRack(right - 1.0, back + 0.9, 1.8);
+      for (const [x, mat] of [[-0.7, this.cloth[0]], [0, this.cloth[2]], [0.7, this.cloth[4]]] as const) this.smallProp(mat, x, 0.18, 0.3, 0.12);
+      this.inspectProp(0, back + 1.0, 'Inspect the apothecary table', 'Dried herbs, crushed roots and colored tinctures cover the workbench. A little brass mortar is still warm.');
+    } else if (keeper === 'tailor') {
+      for (const x of [-1.0, 0, 1.0]) this.box(this.cloth[Math.round((x + 1) * 2) % this.cloth.length], 0.55, 0.25, 0.55, x, 0.55, 0.4, 0.15);
+      this.shelf(right - 1.0, back + 1.0, Math.PI / 2, 1.7, 'cloth');
+      this.inspectProp(0, 0.7, 'Inspect the cutting table', 'Pins, chalk and folded cloth cover a broad cutting table. A half-finished travel cloak hangs from a peg.');
+    } else if (keeper === 'carpenter') {
+      this.table(left + 1.8, back + 1.0, 2.3, 0.9, 0.08);
+      for (const z of [back + 0.9, back + 1.45, back + 2.0]) this.box(this.m.timber, 0.18, 0.18, 2.6, right - 1.0, 0.25, z, 0.05);
+      this.inspectProp(0, back + 1.0, 'Inspect the carpenter’s bench', 'Fresh curls of wood cover the bench beside a square, a plane and a half-carved shield rim.');
+    } else if (keeper === 'arcanist') {
+      this.table(0, back + 1.5, 2.8, 1.0);
+      const arcane = new THREE.MeshStandardMaterial({ color: 0x5369a8, emissive: 0x202a76, emissiveIntensity: 1.2, roughness: 0.35, metalness: 0.2 });
+      for (const [x, z] of [[-0.75, back + 1.5], [0, back + 1.5], [0.75, back + 1.5]]) this.smallProp(arcane, x, 0.92, z, 0.13);
+      this.shelf(right - 0.8, 0.2, -Math.PI / 2, 1.8, 'books');
+      this.inspectProp(0, back + 1.5, 'Inspect the arcane table', 'A ring of chalk surrounds three faintly glowing crystals. The ink in the open grimoire has not dried yet.');
+    }
+  }
+
   /** An iron-bracketed wall torch: an emissive flame (no light of its own). */
   private sconce(x: number, y: number, z: number, ry: number) {
     const g = new THREE.Group();
@@ -559,6 +624,8 @@ export class Interior {
       this.shelf(left + 0.3, back + 1.2, Math.PI / 2, 1.4, this.rnd() < 0.5 ? 'jars' : 'books');
       this.crate(right - 0.6, D / 2 - 1.5);
       this.barrel(right - 0.6, D / 2 - 2.5);
+      this.smallProp(this.m.stone, left + 2.4, 0.9, 0.2, 0.11);
+      this.inspectProp(left + 1.5, 0.1, 'Inspect the family table', 'A scratched table holds a loaf board, a chipped cup and the kind of little repairs people make when they plan to stay.');
       this.keeperSpot = { pos: this.at(0.8, back + 1.8), yaw: Math.PI * 0.9, seated: false };
     } else if (kind === 'tavern') {
       this.hearth(right - 0.45, back + D * 0.35, -Math.PI / 2);
@@ -581,6 +648,11 @@ export class Interior {
           this.seat(x + 0.35, z - 0.75, 0);
         }
       }
+      for (const z of [back + D * 0.55, back + D * 0.78]) {
+        this.smallProp(this.cloth[1], left + 1.2, 0.9, z, 0.12);
+        this.smallProp(this.cloth[4], right - 1.2, 0.9, z + 0.1, 0.12);
+      }
+      this.inspectProp(left + 1.1, back + 1.0, 'Inspect the tavern bar', 'The shelves smell of ale and herbs. Chalk marks on the counter track tabs owed by regulars.');
       this.rug(right - 2.2, back + D * 0.35, 2, 1.6);
     } else if (kind === 'shop') {
       this.counter(0, back + D * 0.45, Math.min(W - 2, 5), 0);
@@ -592,7 +664,9 @@ export class Interior {
       this.crate(left + 0.7, D / 2 - 1.2);
       this.crate(left + 1.3, D / 2 - 1.0, 0.5);
       this.barrel(right - 0.7, D / 2 - 1.2);
+      this.smallProp(this.m.stone, 0, 1.05, back + D * 0.45, 0.09);
       this.rug(0, D * 0.15, 2.4, 1.6);
+      this.specialistShopDetails(back, left, right, D);
     } else if (kind === 'smithy') {
       this.hearth(0, back + 0.45, 0, true);
       this.cyl(this.m.stone, 0.35, 0.6, 0, 0.3, back + 2.6, true, 10);
@@ -601,6 +675,8 @@ export class Interior {
       this.barrel(right - 0.7, back + 1.2);
       this.barrel(right - 0.7, back + 2.1);
       this.crate(right - 0.8, D / 2 - 1.4);
+      for (const x of [-0.8, 0, 0.8]) this.box(this.m.timber, 0.12, 0.75, 0.12, x, 0.9, 0.2);
+      this.inspectProp(left + 1.0, 0.3, 'Inspect the forge', 'An anvil, quench barrel and unfinished blades make it clear this forge is a workplace, not a showroom.');
       this.keeperSpot = { pos: this.at(0.9, back + 2.6), yaw: -Math.PI / 2, seated: false };
     } else if (kind === 'guild') {
       this.hearth(left + 0.45, back + D * 0.4, Math.PI / 2);
@@ -627,6 +703,8 @@ export class Interior {
         banner.position.set(sx * 2.4, 2.0, back + 0.1);
         this.group.add(banner);
       }
+      this.table(0, back + D * 0.34, 3.2, 0.9);
+      this.inspectProp(0, back + D * 0.34, 'Inspect the guild map table', 'Pins mark roads, ruins and old contracts across the Glen. Someone has circled the northern hills in fresh charcoal.');
     } else {
       // A hall or warehouse: stacked goods, a clerk's desk.
       for (let i = 0; i < 10; i++) {

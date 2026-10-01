@@ -223,3 +223,66 @@ test('walking uphill keeps its pace, and standing on a slope does not slide', as
   expect(res.grounded).toBe(true);
   expect(errors).toEqual([]);
 });
+
+
+test('living-world micro discoveries persist and award once', async ({ game }) => {
+  const { page } = game;
+  const result = await page.evaluate(() => {
+    const g = (window as any).__game;
+    const d = g.microDiscoveries.interactables.find((x: any) => x.label() === 'Investigate The Forgotten Cart');
+    if (!d) throw new Error('Forgotten Cart discovery missing');
+    const before = g.player.prog.gold;
+    d.action();
+    const afterFirst = g.player.prog.gold;
+    const flag = !!g.worldFlags['forgotten-cart'];
+    d.action();
+    const afterSecond = g.player.prog.gold;
+    return {
+      count: g.microDiscoveries.interactables.length,
+      flag,
+      firstGain: afterFirst - before,
+      secondGain: afterSecond - afterFirst,
+    };
+  });
+  expect(result.count).toBeGreaterThanOrEqual(8);
+  expect(result.flag).toBe(true);
+  expect(result.firstGain).toBe(28);
+  expect(result.secondGain).toBe(0);
+  expect(game.errors).toEqual([]);
+});
+
+test('key Elder Glen interiors have role-specific detail and working inspections', async ({ game }) => {
+  const { page } = game;
+  const result = await page.evaluate(async () => {
+    const g = (window as any).__game;
+    const keepers = ['baker', 'apothecary', 'tailor', 'carpenter', 'arcanist', 'froest'];
+    const seen: Record<string, { kind: string; inspect: boolean; children: number }> = {};
+    for (const keeper of keepers) {
+      const door = g.doors.find((d: any) => d.keeper === keeper);
+      if (!door) throw new Error('Missing door for ' + keeper);
+      const it = g.realm.overworldInteractables.find((x: any) => Math.hypot(x.pos.x - door.pos.x, x.pos.z - door.pos.z) < 0.5);
+      if (!it) throw new Error('Missing door interactable for ' + keeper);
+      it.action();
+      while (g.realm.busy) await new Promise((r) => setTimeout(r, 25));
+      const labels = g.realm.interactables.map((x: any) => x.label()).filter(Boolean);
+      const inspectLabel = labels.find((x: string) => x.startsWith('Inspect the '));
+      const before = g.dialogue.open;
+      if (inspectLabel) {
+        g.realm.interactables.find((x: any) => x.label() === inspectLabel).action();
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      seen[keeper] = { kind: g.realm.interior?.kind, inspect: Boolean(inspectLabel) && g.dialogue.open, children: g.realm.interior?.group.children.length ?? 0 };
+      g.dialogue.close();
+      await g.realm.leaveInterior();
+      while (g.realm.busy) await new Promise((r) => setTimeout(r, 25));
+      void before;
+    }
+    return { seen };
+  });
+  for (const keeper of ['baker', 'apothecary', 'tailor', 'carpenter', 'arcanist', 'froest']) {
+    expect(result.seen[keeper].kind).toBe(keeper === 'froest' ? 'smithy' : 'shop');
+    expect(result.seen[keeper].inspect).toBe(true);
+    expect(result.seen[keeper].children).toBeGreaterThan(25);
+  }
+  expect(game.errors).toEqual([]);
+});

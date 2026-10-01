@@ -93,6 +93,7 @@ import { Realm } from './dungeon/realm';
 import { Town, NPCS } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
 import { loadSave, writeSave, buildSave, applySave, hasSave, clearSave } from './save';
+import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 
 const STEP = 1 / 60;
@@ -283,6 +284,7 @@ async function boot() {
   skills.runtime = skillRt;
   const mapUI = new DungeonMapUI();
   let frontier!: FrontierRegion;
+  let microDiscoveries!: MicroDiscoveries;
   const realm = new Realm(r, player, cam, fx, hud, mapUI, {
     hide: (h) => {
       terrain.group.visible = !h;
@@ -303,11 +305,12 @@ async function boot() {
       foliage?.setVisible(!h);
       stylizedNature.setVisible(!h && stylizedNature.loaded);
       gravewood.setVisible(!h);
+      microDiscoveries?.setVisible(!h);
       town.setVisible(!h);
     },
     clearEnemies: () => { slimes.clear(); frontier?.dispose(); encounters?.clear(); },
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
-  }, rewards, world.crypt.door);
+  }, rewards, world.crypt.door, world.mineDoor);
   const dialogue = new DialogueUI();
   const town = new Town(r.scene, r.camera, dialogue, player);
   town.mentorOptions = (spec, say) => mentorOptions(player.paths, spec, say, (m) => hud.toast(m));
@@ -642,7 +645,7 @@ async function boot() {
       pos: d.pos, radius: 1.5,
       label: () => `Enter ${info.name}`,
       enabled: () => realm.mode === 'overworld' && !player.mounted,
-      action: () => void realm.enterInterior({ ...d, kind: info.kind, name: info.name, keeper: info.keeper }, info.kind, world.mats, spells),
+      action: () => void realm.enterInterior({ ...d, kind: info.kind, name: info.name, keeper: info.keeper }, info.kind, world.mats, spells, (label: string, text: string) => dialogue.show('Elder Glen', label, text, [{ label: 'Back.', run: () => dialogue.close() }])),
     });
   }
   // People inside: a borrowed town NPC (moved in, put back on the way out) or
@@ -803,6 +806,7 @@ async function boot() {
   };
   if (saveData) {
     realm.progress = saveData.dungeon;
+    realm.mineProgress = saveData.mine ?? { gateOpen: false, guardianDead: false };
     realm.maps = saveData.maps;
   }
   // Exploration: fog of war, regions and places (saved), the world map and minimap.
@@ -822,6 +826,16 @@ async function boot() {
     return out;
   };
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
+  microDiscoveries = new MicroDiscoveries(
+    r.scene,
+    world.mats,
+    worldFlags,
+    giveItem,
+    (n) => player.prog.addGold(n),
+    (n) => player.prog.addXp(n),
+    (m) => hud.toast(m),
+  );
+  realm.overworldInteractables.push(...microDiscoveries.interactables);
   // Waystones: touching one attunes it; once Magus Orren has explained the Sunwheel
   // (The Sunwheel quest), attuned stones carry you between each other.
   realm.overworldInteractables.push(...WAYSTONES.map((w) => ({
@@ -869,7 +883,7 @@ async function boot() {
   const lowerCity = setupLowerCity({
     quests, player, flags: worldFlags,
     door: trapdoor,
-    enter: () => void realm.enterInterior(denDoor, 'undercity', world.mats, spells),
+    enter: () => void realm.enterInterior(denDoor, 'undercity', world.mats, spells, (label: string, text: string) => dialogue.show('Elder Glen', label, text, [{ label: 'Back.', run: () => dialogue.close() }])),
     talk: (who, title, text, opts) => dialogue.show(who, title, text, opts), close: () => dialogue.close(),
     shop: (who, title, intro, stock) => town.showShop(who, title, intro, stock),
     sell: (back) => town.sellOptions('nix', 'Nix the Fence', 'Black Market of the Quiet Hands', back),
@@ -920,10 +934,11 @@ async function boot() {
     if (TEST_MODE && !location.search.includes('save')) return;
     const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON() });
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   realm.onSave = save;
+  microDiscoveries.onSave = save;
   town.guild.onSave = save;
   town.guild.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open || dialogue.open;
@@ -1304,7 +1319,7 @@ async function boot() {
   if (DEBUG || TEST_MODE) {
     // Tests share one booted game per worker; resetForTest puts it back to how
     // it was at boot: player, inventory and XP, quests, flags, time, weather.
-    const fresh = buildSave(player, realm.seed, {}, structuredClone(realm.progress), town.guild.toJSON(), { flags: {} });
+    const fresh = buildSave(player, realm.seed, {}, structuredClone(realm.progress), town.guild.toJSON(), { flags: {} }, { gateOpen: false, guardianDead: false });
     const startHour = time.hour, startDay = time.day;
     const resetForTest = async () => {
       input.releaseAll();
@@ -1326,6 +1341,7 @@ async function boot() {
       quests.tracked = null;
       for (const k of Object.keys(worldFlags)) delete worldFlags[k];
       realm.progress = structuredClone(fresh.dungeon);
+      realm.mineProgress = { gateOpen: false, guardianDead: false };
       realm.maps = {};
       town.guild.fromJSON(fresh.guild);
       applySave(player, structuredClone(fresh));
@@ -1340,6 +1356,7 @@ async function boot() {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
       THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      microDiscoveries,
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {
