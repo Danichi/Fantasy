@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { heightAt } from './terrainHeight';
 import { physics } from '../physics/physics';
 import { mulberry32 } from '../core/math';
@@ -50,7 +50,7 @@ export function sunwheelTexture(stroke = 'rgba(255, 214, 120, 1)', glow = true) 
 }
 
 function rock(rnd: () => number, r: number, detail = 1) {
-  const g = new THREE.IcosahedronGeometry(r, detail);
+  const g = mergeVertices(new THREE.IcosahedronGeometry(r, detail).deleteAttribute('normal').deleteAttribute('uv'), 1e-4); // welded, so the jitter can't split faces apart
   const p = g.attributes.position as THREE.BufferAttribute;
   for (let i = 0; i < p.count; i++) {
     const k = 0.78 + rnd() * 0.4;

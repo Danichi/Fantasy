@@ -91,7 +91,7 @@ test('Old King\'s Road Mine can be entered, opened and completed', async ({ page
       entered,
       opened,
       defeated,
-      after: { mode: g.realm.mode, active: g.realm.active, nearMine: Math.abs(g.player.pos.x - 250) < 10 && Math.abs(g.player.pos.z - 39) < 10 },
+      after: { mode: g.realm.mode, active: g.realm.active, nearMine: Math.abs(g.player.pos.x - 330) < 10 && Math.abs(g.player.pos.z + 25) < 10 }, // back out at the outcrop (MINE_ENTRANCE)
     };
   });
 

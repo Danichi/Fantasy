@@ -117,13 +117,14 @@ function bushGeometry(seed: number, hue = 0) {
 
 function rockGeometry(seed: number) {
   const rnd = mulberry32(seed);
-  let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, 1);
+  // Weld corners before jittering (jittered copies of a corner split into shards).
+  let g: THREE.BufferGeometry = mergeVertices(new THREE.IcosahedronGeometry(1, 1).deleteAttribute('normal').deleteAttribute('uv'), 1e-4);
   const p = g.attributes.position as THREE.BufferAttribute;
   for (let i = 0; i < p.count; i++) {
     const k = 0.78 + rnd() * 0.4;
     p.setXYZ(i, p.getX(i) * k * 1.25, Math.max(-0.35, p.getY(i)) * k * 0.72, p.getZ(i) * k);
   }
-  g = mergeVertices(g.deleteAttribute('normal').deleteAttribute('uv'), 1e-4).toNonIndexed(); // flat faces
+  g = g.toNonIndexed(); // flat faces
   g.computeBoundingBox();
   const bb = g.boundingBox!;
   g.translate(0, -bb.min.y, 0);

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { registerDoor, type Door } from './doors';
 import { buildHouse, worldUV, type WorldMats } from './buildings';
 import { heightAt } from './terrainHeight';
@@ -351,7 +352,7 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
     // A jagged outcrop of dark ridge rock around the cave mouth.
     const rockMat = new THREE.MeshStandardMaterial({ color: 0x6f675c, roughness: 1, flatShading: true });
     const crag = (r: number) => {
-      const g = new THREE.IcosahedronGeometry(r, 0);
+      const g = mergeVertices(new THREE.IcosahedronGeometry(r, 0).deleteAttribute('normal').deleteAttribute('uv'), 1e-4); // welded, so the jitter can't split faces apart
       const p = g.attributes.position as THREE.BufferAttribute;
       for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i) * (0.8 + rnd() * 0.45), p.getY(i) * (0.9 + rnd() * 0.7), p.getZ(i) * (0.8 + rnd() * 0.4));
       g.computeVertexNormals();

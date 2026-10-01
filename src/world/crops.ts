@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { heightAt, riverX, RIVER_LEVEL, ROAD_LINES, roadDist, TOWN_R, GRAVEWOOD, GRAVEWOOD_R } from './terrainHeight';
 import { mulberry32 } from '../core/math';
 
@@ -190,10 +190,12 @@ function hedgeGeo() {
   const parts: THREE.BufferGeometry[] = [];
   const rnd = mulberry32(3);
   for (let k = 0; k < 4; k++) {
-    const g = new THREE.IcosahedronGeometry(0.75 + rnd() * 0.2, 1);
+    // Welded before the jitter, or each face moves on its own and the hedge shatters into shards.
+    const g = mergeVertices(new THREE.IcosahedronGeometry(0.75 + rnd() * 0.2, 1).deleteAttribute('normal').deleteAttribute('uv'), 1e-4);
     const p = g.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i) * (1 + (rnd() - 0.5) * 0.18), p.getY(i) * (1 + (rnd() - 0.5) * 0.18), p.getZ(i) * (1 + (rnd() - 0.5) * 0.18));
     g.translate((k - 1.5) * 0.85, 0.75 + rnd() * 0.15, (rnd() - 0.5) * 0.3);
+    g.computeVertexNormals();
     parts.push(tint(ni(g), [0x3f7a34, 0x4a8a3a, 0x3a7030, 0x467f36][k]));
   }
   // A few blossoms (hawthorn white and dog-rose pink).

@@ -3,9 +3,47 @@ import { heightAt } from './terrain';
 import { physics } from '../physics/physics';
 import type { FX } from '../fx/particles';
 import type { WorldMats } from './buildings';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mulberry32 } from '../core/math';
+import { GRASS_MASKS } from './groundWindow';
+
+/**
+ * Where the mine is: north of the King's Road, a short trail off it (signposted
+ * at the junction), its portal cut into a rocky outcrop. It used to stand on
+ * the road itself, a stone arch in open field.
+ */
+export const MINE_ENTRANCE = new THREE.Vector2(330, -28);
+/** keep trees and grass off the outcrop: [x, z, radius] */
+export const MINE_CLEARING: [number, number, number] = [MINE_ENTRANCE.x, MINE_ENTRANCE.y - 8, 26];
+
+/** A boulder: a jittered icosahedron, flat-shaded, grey with moss where it faces up. */
+function boulderGeo(seed: number, sx: number, sy: number, sz: number) {
+  // Weld the shared corners first, then jitter: jittering the separate copies
+  // of a corner split the faces apart into shards.
+  let g: THREE.BufferGeometry = mergeVertices(new THREE.IcosahedronGeometry(1, 1).deleteAttribute('normal').deleteAttribute('uv'), 1e-4);
+  const rnd = mulberry32(seed);
+  const p = g.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const k = 0.8 + rnd() * 0.35;
+    p.setXYZ(i, p.getX(i) * k * sx, p.getY(i) * k * sy, p.getZ(i) * k * sz);
+  }
+  g = g.toNonIndexed();
+  g.computeVertexNormals();
+  const n = g.attributes.normal as THREE.BufferAttribute;
+  const col = new Float32Array(n.count * 3);
+  const stone = new THREE.Color(0x7c766c), shade = new THREE.Color(0x4f4b46), moss = new THREE.Color(0x56782c), c = new THREE.Color();
+  for (let i = 0; i < n.count; i += 3) {
+    const ny = (n.getY(i) + n.getY(i + 1) + n.getY(i + 2)) / 3;
+    c.copy(shade).lerp(stone, Math.min(1, ny * 0.5 + 0.6)).multiplyScalar(0.9 + rnd() * 0.18);
+    if (ny > 0.65 && rnd() < 0.85) c.lerp(moss, 0.6);
+    for (let v = 0; v < 3; v++) col.set([c.r, c.g, c.b], (i + v) * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
+}
 
 export function buildMineEntrance(scene: THREE.Scene, m: WorldMats, fx: FX) {
-  const at = new THREE.Vector2(250, 34);
+  const at = MINE_ENTRANCE;
   const baseY = heightAt(at.x, at.y) + 0.05;
   const g = new THREE.Group();
   const stone = m.bridgeStone ?? m.stone;
@@ -63,6 +101,29 @@ export function buildMineEntrance(scene: THREE.Scene, m: WorldMats, fx: FX) {
     g.add(b);
   }
 
+  // The outcrop the mine is cut into: shoulders either side of the portal and
+  // a crag rising behind it (the rails run on into the rock).
+  const parts: THREE.BufferGeometry[] = [];
+  const crag = (seed: number, x: number, y: number, z: number, sx: number, sy: number, sz: number, ry = 0) => {
+    const b = boulderGeo(seed, sx, sy, sz);
+    b.rotateY(ry);
+    b.translate(x, y, z);
+    parts.push(b);
+  };
+  crag(1, 0, 6.5, -9, 9, 8, 7);
+  crag(2, -8.5, 3.6, -2.5, 4.6, 4.6, 4.2, 0.4);
+  crag(3, 8.6, 3.4, -2.2, 4.4, 4.4, 4.2, -0.3);
+  crag(4, -12, 2.4, -9, 5, 4.2, 6, 0.8);
+  crag(5, 12.5, 2.6, -10, 5.4, 4.6, 6, -0.6);
+  crag(6, -4, 10.5, -12, 5, 4, 5, 0.2);
+  crag(7, 5, 9.5, -13, 5.5, 4.4, 5, 1.1);
+  crag(8, 0, 3.2, -17, 10, 5, 4, 0.1);
+  crag(9, -15.5, 1.2, -1, 2.4, 1.8, 2.2, 0.5);
+  crag(10, 15, 1.1, 0.5, 2.2, 1.6, 2, 1.3);
+  const hill = new THREE.Mesh(mergeGeometries(parts)!, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, flatShading: true }));
+  hill.position.y = -0.6;
+  g.add(hill);
+
   g.position.set(at.x, baseY, at.y);
   g.traverse((o) => {
     const mesh = o as THREE.Mesh;
@@ -76,6 +137,12 @@ export function buildMineEntrance(scene: THREE.Scene, m: WorldMats, fx: FX) {
   add(4.2, 2.5, 0, 0.8, 2.5, 2);
   add(0, 5.4, 0, 4.2, 0.35, 1.2);
   add(0, 0.5, -7, 4.2, 0.5, 5);
+  // The outcrop's mass: shoulders, the crag behind, its far side.
+  add(-10, 4, -5, 5.6, 4, 6.5);
+  add(10, 4, -5, 5.6, 4, 6.5);
+  add(0, 6, -14, 15, 6, 6);
+  add(0, 4, -5.5, 4.2, 4, 3.2); // the tunnel ends in rock a few metres in
+  GRASS_MASKS.push({ x: at.x, z: at.y - 8, r: 16, amount: 1 });
 
   return {
     door: new THREE.Vector3(at.x, baseY + 0.3, at.y - 1.7),

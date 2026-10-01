@@ -96,6 +96,7 @@ import { Realm } from './dungeon/realm';
 import { Town, NPCS } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
 import { loadArmourKit } from './enemies/armourKit';
+import { MINE_CLEARING } from './world/mineEntrance';
 import { loadSave, writeSave, buildSave, applySave, hasSave, clearSave } from './save';
 import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
@@ -174,7 +175,7 @@ async function boot() {
   const port = buildPortAurelle(r.scene, world.mats, fx);
   mark('port');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, Gravewood.clearing];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, Gravewood.clearing, MINE_CLEARING];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);

@@ -72,6 +72,11 @@ export const ROAD_SPECS: RoadSpec[] = [
     pts: [[2210, 152], [2222, 132], [2232, 112]],
   },
   {
+    // North off the King's Road to the Old King's Road Mine.
+    id: 'mine', name: 'The Old Mine Track', kind: 'trail',
+    pts: [[336, 64], [334, 34], [331, 4], [330, -21]],
+  },
+  {
     id: 'chapel', name: 'Chapel Lane', kind: 'lane',
     pts: [[640, 99], [650, 140], [668, 176]],
   },
