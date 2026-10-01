@@ -33,11 +33,66 @@ const BLUR_FRAG = /* glsl */ `
     gl_FragColor = vec4(s, 1.0);
   }`;
 
+// Contact shading: scalable ambient obscurance (McGuire et al.) from the
+// depth buffer alone, at half resolution. Normals come from depth
+// derivatives; a jittered spiral of taps within AO_R metres darkens creases,
+// eaves, wall feet and the ground under things. A depth-aware blur smooths
+// the jitter before the final pass applies it.
+const AO_FRAG = /* glsl */ `
+  uniform sampler2D tDepth;
+  uniform mat4 uProjInv;
+  uniform vec2 uTexel; uniform float uProjScale;
+  varying vec2 vUv;
+  const float AO_R = 0.9;
+  vec3 viewPos(vec2 uv, float depth) {
+    vec4 v = uProjInv * vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+    return v.xyz / v.w;
+  }
+  void main() {
+    float depth = texture2D(tDepth, vUv).r;
+    if (depth >= 0.99999) { gl_FragColor = vec4(1.0); return; }
+    vec3 p = viewPos(vUv, depth);
+    vec3 n = normalize(cross(dFdx(p), dFdy(p)));
+    float ssR = min(AO_R * uProjScale / max(-p.z, 0.1), 60.0);
+    if (ssR < 1.5 || -p.z > 140.0) { gl_FragColor = vec4(1.0); return; }
+    float ang0 = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 6.2832;
+    float sum = 0.0;
+    for (int i = 0; i < 8; i++) {
+      float a = (float(i) + 0.5) / 8.0;
+      float ang = ang0 + a * 13.0;
+      vec2 suv = vUv + vec2(cos(ang), sin(ang)) * a * ssR * uTexel;
+      vec3 q = viewPos(suv, texture2D(tDepth, suv).r);
+      vec3 v = q - p;
+      float vv = dot(v, v);
+      float vn = dot(v, n) + p.z * 0.002; // bias grows with distance (depth precision)
+      float f = max(AO_R * AO_R - vv, 0.0);
+      sum += f * f * f * max(vn / (vv + 0.02), 0.0);
+    }
+    float ao = max(0.0, 1.0 - sum * (6.0 / pow(AO_R, 6.0)) / 8.0);
+    gl_FragColor = vec4(ao, -p.z, 0.0, 1.0);
+  }`;
+
+/** 3x3 blur that ignores taps across depth edges (keeps silhouettes crisp). */
+const AO_BLUR_FRAG = /* glsl */ `
+  uniform sampler2D tAO; uniform vec2 uTexel;
+  varying vec2 vUv;
+  void main() {
+    vec2 c = texture2D(tAO, vUv).rg;
+    float sum = 0.0, wsum = 0.0;
+    for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+      vec2 s = texture2D(tAO, vUv + vec2(float(x), float(y)) * uTexel).rg;
+      float w = 1.0 / (1.0 + abs(s.g - c.g) * 4.0);
+      sum += s.r * w; wsum += w;
+    }
+    gl_FragColor = vec4(sum / wsum, c.g, 0.0, 1.0);
+  }`;
+
 const FINAL_FRAG = /* glsl */ `
   uniform sampler2D tColor, tDepth, tBloom, tNoise;
   uniform mat4 uProjInv, uCamWorld;
   uniform vec3 uCamPos, uSunDir, uSunColor, uHazeColor;
   uniform float uNear, uFar, uTime, uExposure, uBloom, uHaze, uClouds, uMist;
+  uniform sampler2D tAO; uniform float uAO;
   varying vec2 vUv;
 
   vec3 aces(vec3 x) {
@@ -51,6 +106,7 @@ const FINAL_FRAG = /* glsl */ `
   }
   float noise2(vec2 p) { return texture2D(tNoise, p).r; }
 
+
   void main() {
     vec3 col = texture2D(tColor, vUv).rgb;
     if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
@@ -60,6 +116,13 @@ const FINAL_FRAG = /* glsl */ `
     vec3 ray = normalize(wp - uCamPos);
     bool sky = depth >= 0.99999;
     float dist = sky ? 3000.0 : length(wp - uCamPos);
+
+    if (!sky && uAO > 0.0 && dist < 140.0) {
+      float ao = texture2D(tAO, vUv).r;
+      // Soft and cool, never black: occlusion tints toward a shaded blue-green.
+      float k = uAO * (1.0 - smoothstep(70.0, 140.0, dist));
+      col *= mix(vec3(1.0), mix(vec3(0.42, 0.46, 0.55), vec3(1.0), ao), k);
+    }
 
     // Drifting cloud shadows on anything lit (ground, buildings, characters).
     if (!sky && uClouds > 0.0) {
@@ -151,6 +214,10 @@ export class Post {
   private fsScene = new THREE.Scene();
   private brightMat: THREE.ShaderMaterial;
   private blurMat: THREE.ShaderMaterial;
+  private aoMat: THREE.ShaderMaterial;
+  private aoBlurMat: THREE.ShaderMaterial;
+  private aoA: THREE.WebGLRenderTarget;
+  private aoB: THREE.WebGLRenderTarget;
   readonly finalMat: THREE.ShaderMaterial;
   private time = 0;
 
@@ -162,6 +229,13 @@ export class Post {
     this.bright = lo();
     this.blurA = lo();
     this.blurB = lo();
+    this.aoA = lo();
+    this.aoB = lo();
+    this.aoMat = new THREE.ShaderMaterial({
+      vertexShader: FS_VERT, fragmentShader: AO_FRAG,
+      uniforms: { tDepth: { value: null }, uProjInv: { value: new THREE.Matrix4() }, uTexel: { value: new THREE.Vector2(1, 1) }, uProjScale: { value: 300 } },
+    });
+    this.aoBlurMat = new THREE.ShaderMaterial({ vertexShader: FS_VERT, fragmentShader: AO_BLUR_FRAG, uniforms: { tAO: { value: null }, uTexel: { value: new THREE.Vector2(1, 1) } } });
     this.brightMat = new THREE.ShaderMaterial({ vertexShader: FS_VERT, fragmentShader: BRIGHT_FRAG, uniforms: { tColor: { value: null }, uThreshold: { value: 1.6 } } });
     this.blurMat = new THREE.ShaderMaterial({ vertexShader: FS_VERT, fragmentShader: BLUR_FRAG, uniforms: { tIn: { value: null }, uDir: { value: new THREE.Vector2() } } });
     this.finalMat = new THREE.ShaderMaterial({
@@ -174,6 +248,7 @@ export class Post {
         uSunColor: { value: new THREE.Color(1.0, 0.93, 0.78) }, uHazeColor: { value: new THREE.Color(0.72, 0.86, 0.96) },
         uNear: { value: 0.1 }, uFar: { value: 900 }, uTime: { value: 0 },
         uExposure: { value: 1.0 }, uBloom: { value: 0.28 }, uHaze: { value: 0.00072 }, uClouds: { value: 0.85 }, uMist: { value: 0 },
+        tAO: { value: null }, uAO: { value: 0.85 },
       },
       depthTest: false,
       depthWrite: false,
@@ -185,6 +260,11 @@ export class Post {
 
   setSize(w: number, h: number) {
     this.scene.setSize(w, h);
+    const aw = Math.max(1, Math.floor(w / 2)), ah = Math.max(1, Math.floor(h / 2));
+    this.aoA.setSize(aw, ah);
+    this.aoB.setSize(aw, ah);
+    (this.aoMat.uniforms.uTexel.value as THREE.Vector2).set(1 / aw, 1 / ah);
+    (this.aoBlurMat.uniforms.uTexel.value as THREE.Vector2).set(1 / aw, 1 / ah);
     const bw = Math.max(1, Math.floor(w / 4)), bh = Math.max(1, Math.floor(h / 4));
     this.bright.setSize(bw, bh);
     this.blurA.setSize(bw, bh);
@@ -221,7 +301,19 @@ export class Post {
       src = this.blurB;
     }
 
+    // Contact shading at half resolution, then a depth-aware blur.
+    if (this.finalMat.uniforms.uAO.value > 0) {
+      const a = this.aoMat.uniforms;
+      a.tDepth.value = this.scene.depthTexture;
+      (a.uProjInv.value as THREE.Matrix4).copy(camera.projectionMatrixInverse);
+      a.uProjScale.value = this.aoA.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+      this.pass(this.aoMat, this.aoA);
+      this.aoBlurMat.uniforms.tAO.value = this.aoA.texture;
+      this.pass(this.aoBlurMat, this.aoB);
+    }
+
     const u = this.finalMat.uniforms;
+    u.tAO.value = this.aoB.texture;
     u.tColor.value = this.scene.texture;
     u.tDepth.value = this.scene.depthTexture;
     u.tBloom.value = this.blurB.texture;

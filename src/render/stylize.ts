@@ -88,6 +88,58 @@ patch(
 #if defined( RE_IndirectSpecular )`,
 );
 
+// Weathered buildings (materials that define STYLE_WEATHER; roofs add
+// STYLE_ROOF): no two walls quite the same colour, faint rain streaks down
+// the plaster and stone, moss and lichen on what faces the sky. All from
+// world position, so it is free of extra textures and survives batching.
+(S as Record<string, string>).common += `
+#ifdef STYLE_WEATHER
+varying vec3 vStyleWorld;
+varying float vStyleUp;
+float styleHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float styleNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(styleHash(i), styleHash(i + vec2(1.0, 0.0)), f.x), mix(styleHash(i + vec2(0.0, 1.0)), styleHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+#endif
+`;
+patch(
+  'project_vertex',
+  `gl_Position = projectionMatrix * mvPosition;`,
+  `gl_Position = projectionMatrix * mvPosition;
+#ifdef STYLE_WEATHER
+  vec4 styleW = vec4( transformed, 1.0 );
+  #ifdef USE_INSTANCING
+    styleW = instanceMatrix * styleW;
+  #endif
+  vStyleWorld = ( modelMatrix * styleW ).xyz;
+  vStyleUp = normalize( mat3( modelMatrix ) * objectNormal ).y;
+#endif`,
+);
+patch(
+  'color_fragment',
+  `#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )`,
+  `#ifdef STYLE_WEATHER
+	{
+		vec3 w = vStyleWorld;
+		// Broad drift: each house and wall a shade warmer, cooler, older.
+		diffuseColor.rgb *= mix( 0.9, 1.07, styleNoise( w.xz * 0.06 + 3.1 ) );
+		// Rain streaks running down walls.
+		float wall = 1.0 - smoothstep( 0.35, 0.7, abs( vStyleUp ) );
+		float streak = styleNoise( vec2( ( w.x + w.z ) * 2.3, w.y * 0.35 ) ) * styleNoise( vec2( ( w.x - w.z ) * 0.9, w.y * 0.12 + 5.0 ) );
+		diffuseColor.rgb *= 1.0 - wall * smoothstep( 0.25, 0.6, streak ) * 0.16;
+		#ifdef STYLE_ROOF
+			// Moss and lichen on the sky-facing slopes.
+			float up = smoothstep( 0.3, 0.7, vStyleUp );
+			float moss = smoothstep( 0.55, 0.8, styleNoise( w.xz * 0.35 + 9.0 ) * 0.7 + styleNoise( w.xz * 1.7 ) * 0.3 );
+			diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.72, 0.9, 0.55 ), up * moss * 0.55 );
+		#endif
+	}
+#endif
+#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )`,
+);
+
 // The uniforms above are declared in every standard shader (map_pars_fragment
 // is always included), so feed them to every standard/physical material.
 // Materials that set their own onBeforeCompile (terrain, grass, water...) get

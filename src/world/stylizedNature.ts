@@ -6,6 +6,7 @@ import { reliefAt, regionAt, RELIEF, SEA_LEVEL } from './worldMap';
 import { fbm, mulberry32, smoothstep } from '../core/math';
 import { physics } from '../physics/physics';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { WIND } from './grass';
 
 // Trees and understory for the whole world (docs/ART-DIRECTION.md §5).
 //
@@ -32,6 +33,8 @@ interface PrototypeMesh {
   material: THREE.Material | THREE.Material[];
   local: THREE.Matrix4;
   castShadow: boolean;
+  /** leaves, needles, fronds (they sway and take the canopy shading) */
+  foliage?: boolean;
 }
 
 interface Prototype {
@@ -203,6 +206,49 @@ interface VegTile {
   impostor: THREE.InstancedMesh | null;
 }
 
+/**
+ * Living canopies: leaves sway in the shared wind, every tree takes its own
+ * shade of green, the undersides of the crown fall into shadow, and leaves
+ * glow where the sun shines through them toward the camera.
+ */
+function leafShader(mat: THREE.Material) {
+  const m = mat as THREE.MeshStandardMaterial;
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = WIND.uTime;
+    sh.uniforms.uWindDir = WIND.uWindDir;
+    sh.uniforms.uWindStrength = WIND.uWindStrength;
+    sh.uniforms.uLeafSun = WIND.uSunDir;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>
+        uniform float uTime, uWindStrength; uniform vec2 uWindDir;
+        varying float vLeafVar; varying float vLeafUp;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        #ifdef USE_INSTANCING
+          vec3 leafBase = instanceMatrix[3].xyz;
+        #else
+          vec3 leafBase = vec3(0.0);
+        #endif
+        vLeafVar = fract(sin(dot(leafBase.xz, vec2(12.9898, 78.233))) * 43758.5453);
+        vLeafUp = objectNormal.y;
+        float leafSway = sin(uTime * 1.3 + leafBase.x * 0.21 + leafBase.z * 0.17 + position.y * 0.4) * 0.6
+                       + sin(uTime * 3.1 + position.x * 1.7 + position.z * 1.3) * 0.25;
+        transformed.xz += uWindDir * leafSway * uWindStrength * 0.02 * max(position.y, 0.0);`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform vec3 uLeafSun;
+        varying float vLeafVar; varying float vLeafUp;`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        diffuseColor.rgb *= mix(vec3(0.9, 0.96, 0.8), vec3(1.08, 1.05, 0.9), vLeafVar);
+        diffuseColor.rgb *= mix(0.7, 1.06, vLeafUp * 0.5 + 0.5);`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        {
+          vec3 sunV = normalize((viewMatrix * vec4(uLeafSun, 0.0)).xyz);
+          float through = pow(max(dot(-normalize(vViewPosition), sunV), 0.0), 4.0) * smoothstep(-0.05, 0.25, uLeafSun.y);
+          totalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.95, 0.65) * through * 0.55;
+        }`);
+  };
+}
+
 function meshLocalMatrices(root: THREE.Object3D): PrototypeMesh[] {
   root.updateMatrixWorld(true);
   const inv = root.matrixWorld.clone().invert();
@@ -210,9 +256,11 @@ function meshLocalMatrices(root: THREE.Object3D): PrototypeMesh[] {
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh) return;
-    const name = mesh.name.toLowerCase();
-    const foliage = /leaf|foliage|flower|grass|fern|needle|canopy/.test(name);
-    out.push({ geometry: mesh.geometry, material: mesh.material, local: inv.clone().multiply(mesh.matrixWorld), castShadow: !foliage });
+    // The pack names parts after the model; the materials say what they are.
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const name = (mesh.name + ' ' + mats.map((m) => m.name).join(' ')).toLowerCase();
+    const foliage = /leaf|leaves|foliage|flower|grass|fern|needle|canopy/.test(name);
+    out.push({ geometry: mesh.geometry, material: mesh.material, local: inv.clone().multiply(mesh.matrixWorld), castShadow: !foliage, foliage });
   });
   return out;
 }
@@ -304,6 +352,8 @@ export class StylizedNature {
       if (!meshes.length) continue;
       const size = modelBox(item.root).getSize(new THREE.Vector3());
       const isTree = item.spec.kind === 'tree' || item.spec.kind === 'pine';
+      // Tree crowns cast their shade on the ground (small plants don't bother).
+      if (isTree) for (const part of meshes) if (part.foliage) part.castShadow = true;
       const idx = this.prototypes.length;
       this.prototypes.push({
         spec: item.spec,
@@ -436,6 +486,7 @@ export class StylizedNature {
       const isTree = proto.atlas >= 0;
       for (const part of proto.meshes) {
         const mat = Array.isArray(part.material) ? part.material.map((m) => m.clone()) : (part.material as THREE.Material).clone();
+        if (part.foliage) for (const m of Array.isArray(mat) ? mat : [mat]) leafShader(m);
         const mesh = new THREE.InstancedMesh(part.geometry, mat, isTree ? NEAR_CAP : 700);
         mesh.count = 0;
         mesh.frustumCulled = false;

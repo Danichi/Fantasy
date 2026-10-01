@@ -233,15 +233,21 @@ export function paintedMaterials(aniso: number): PaintedMats {
     m.userData.styleSoftness = 0; // already painted
     return m;
   };
+  // Building surfaces weather in the shader (render/stylize.ts): colour drift,
+  // rain streaks, and moss on roofs.
+  const weather = (m: THREE.MeshStandardMaterial, roof = false) => {
+    m.defines = { ...m.defines, STYLE_WEATHER: '', ...(roof ? { STYLE_ROOF: '' } : {}) };
+    return m;
+  };
   return {
-    stone: mat(PAINT.stone(rnd)),
-    bridgeStone: mat(PAINT.stone(rnd, '#b3ada1')),
-    plaster: mat(PAINT.plaster(rnd), 0.96),
-    timber: mat(PAINT.timber(rnd)),
-    slate: mat(PAINT.roofTiles(rnd, '#566479', '#465266', '#687690'), 0.8),
-    tile: mat(PAINT.roofTiles(rnd, '#a4553c', '#874632', '#b86a4d'), 0.85),
-    thatch: mat(PAINT.thatch(rnd), 1),
-    planks: mat(PAINT.planks(rnd)),
+    stone: weather(mat(PAINT.stone(rnd))),
+    bridgeStone: weather(mat(PAINT.stone(rnd, '#b3ada1'))),
+    plaster: weather(mat(PAINT.plaster(rnd), 0.96)),
+    timber: weather(mat(PAINT.timber(rnd))),
+    slate: weather(mat(PAINT.roofTiles(rnd, '#566479', '#465266', '#687690'), 0.8), true),
+    tile: weather(mat(PAINT.roofTiles(rnd, '#a4553c', '#874632', '#b86a4d'), 0.85), true),
+    thatch: weather(mat(PAINT.thatch(rnd), 1), true),
+    planks: weather(mat(PAINT.planks(rnd))),
     bark: mat(PAINT.bark(rnd)),
   };
 }
