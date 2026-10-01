@@ -114,6 +114,8 @@ export class MineInstance {
   private gateBars: THREE.Group | null = null;
   private gateCollider: any = null;
   private gateT = 0;
+  /** the Warden fell on this visit (its reward is paid once per kill) */
+  private bossDown = false;
   private time = 0;
   private disposed = false;
   private decorLights: Array<{ light: THREE.PointLight; base: number; phase: number }> = [];
@@ -151,7 +153,8 @@ export class MineInstance {
   }
 
   get spawnPoint() {
-    // Inside the entrance room (z -7..7): at 7.5 you stood past its north wall and fell.
+    // Inside the entrance room (z -7..7), by the way out: at 7.5 you stood
+    // outside its back wall and fell.
     return MINE_ORIGIN.clone().add(new THREE.Vector3(0, 0.25, 4.5));
   }
 
@@ -241,46 +244,65 @@ export class MineInstance {
     );
   }
 
-  private corridor(
-    x: number,
-    z: number,
-    w: number,
-    d: number,
-    m: ReturnType<typeof makeMaterials>,
-  ) {
-    const floor = meshBox(
-      this.group,
-      new THREE.Vector3(MINE_ORIGIN.x + x, -0.175, MINE_ORIGIN.z + z),
-      new THREE.Vector3(w, 0.35, d),
-      m.stone,
-    );
-    this.box(floor.position.clone(), new THREE.Vector3(w / 2, 0.175, d / 2));
+  /**
+   * A walled tunnel joining two rooms' doorways across the gap between them:
+   * floor wide enough for both doorways, walls down both sides and a roof.
+   * (Bare floor slabs used to bridge these gaps, and you could walk off them
+   * into the void.) 'ns': `a` lies south (+z) of `b`; 'ew': `a` lies west of `b`.
+   */
+  private tunnel(a: Rect, b: Rect, axis: 'ns' | 'ew', m: ReturnType<typeof makeMaterials>) {
+    const t = 0.65, h = 5.8, half = 2.3 + 0.4; // doorway half-width plus a margin
+    const O = MINE_ORIGIN;
+    if (axis === 'ns') {
+      const zS = a.z - a.d / 2, zN = b.z + b.d / 2; // a's north wall, b's south wall
+      const x0 = Math.min(a.x, b.x) - half, x1 = Math.max(a.x, b.x) + half;
+      const cx = (x0 + x1) / 2, cz = (zS + zN) / 2, len = zS - zN;
+      const floor = meshBox(this.group, new THREE.Vector3(O.x + cx, -0.175, O.z + cz), new THREE.Vector3(x1 - x0, 0.35, len + 1.3), m.stone);
+      this.box(floor.position.clone(), new THREE.Vector3((x1 - x0) / 2, 0.175, (len + 1.3) / 2));
+      this.wall(O.x + x0 - t / 2, O.z + cz, t, h, len, m.stoneDark);
+      this.wall(O.x + x1 + t / 2, O.z + cz, t, h, len, m.stoneDark);
+      meshBox(this.group, new THREE.Vector3(O.x + cx, O.y + 6.15, O.z + cz), new THREE.Vector3(x1 - x0 + 1.3, 0.38, len + 1.3), m.stoneDark);
+    } else {
+      const xW = a.x + a.w / 2, xE = b.x - b.w / 2; // a's east wall, b's west wall
+      const z0 = Math.min(a.z, b.z) - half, z1 = Math.max(a.z, b.z) + half;
+      const cx = (xW + xE) / 2, cz = (z0 + z1) / 2, len = xE - xW;
+      const floor = meshBox(this.group, new THREE.Vector3(O.x + cx, -0.175, O.z + cz), new THREE.Vector3(len + 1.3, 0.35, z1 - z0), m.stone);
+      this.box(floor.position.clone(), new THREE.Vector3((len + 1.3) / 2, 0.175, (z1 - z0) / 2));
+      this.wall(O.x + cx, O.z + z0 - t / 2, len, h, t, m.stoneDark);
+      this.wall(O.x + cx, O.z + z1 + t / 2, len, h, t, m.stoneDark);
+      meshBox(this.group, new THREE.Vector3(O.x + cx, O.y + 6.15, O.z + cz), new THREE.Vector3(len + 1.3, 0.38, z1 - z0 + 1.3), m.stoneDark);
+    }
   }
 
   private buildShell(m: ReturnType<typeof makeMaterials>) {
     // The mine follows the concept image's progression:
     // entrance -> foreman's camp -> winding tunnels -> machinery -> ruins -> blue deep mine -> boss.
-    this.room({ x: 0, z: 0, w: 14, d: 14 }, m, { south: true });
-    this.corridor(0, -9, 7, 10, m);
-
-    this.room({ x: -4, z: -22, w: 20, d: 18 }, m, { north: true, south: true });
-    this.corridor(-3.5, -35, 4.5, 8, m);
-
-    this.room({ x: 0, z: -47, w: 12, d: 20 }, m, { north: true, south: true, east: true });
-    this.corridor(5, -59, 8, 6, m);
-
-    this.room({ x: 8, z: -72, w: 28, d: 22 }, m, { north: true, south: true, west: true });
-    this.corridor(-9, -72, 6, 6, m);
-    this.corridor(10, -49, 9, 6, m);
-
-    this.room({ x: 0, z: -103, w: 30, d: 24 }, m, { north: true, south: true });
-    this.corridor(4, -87, 8, 8, m);
-
-    this.room({ x: 0, z: -140, w: 24, d: 20 }, m, { north: true });
-
+    // The entrance chamber opens north into the tunnels; you came in by the
+    // ladder at its back wall (south), where 'Leave the mine' waits.
+    const ENTRANCE: Rect = { x: 0, z: 0, w: 14, d: 14 };
+    const CAMP: Rect = { x: -4, z: -22, w: 20, d: 18 };
+    const TUNNELS: Rect = { x: 0, z: -47, w: 12, d: 20 };
+    const MACHINERY: Rect = { x: 8, z: -72, w: 28, d: 22 };
+    const RUINS: Rect = { x: 0, z: -103, w: 30, d: 24 };
+    const WARDEN: Rect = { x: 0, z: -140, w: 24, d: 20 };
+    const ALTAR: Rect = { x: -18, z: -72, w: 12, d: 14 };
+    const STORE: Rect = { x: 20, z: -49, w: 11, d: 13 };
+    this.room(ENTRANCE, m, { north: true });
+    this.room(CAMP, m, { north: true, south: true });
+    this.room(TUNNELS, m, { north: true, south: true, east: true });
+    this.room(MACHINERY, m, { north: true, south: true, west: true });
+    this.room(RUINS, m, { north: true, south: true });
+    this.room(WARDEN, m, { south: true }); // entered from the ruins; the north is the dead end
     // Side chambers echo the concept art's offset cutaway silhouette.
-    this.room({ x: -18, z: -72, w: 12, d: 14 }, m, { east: true });
-    this.room({ x: 20, z: -49, w: 11, d: 13 }, m, { west: true });
+    this.room(ALTAR, m, { east: true });
+    this.room(STORE, m, { west: true });
+    this.tunnel(ENTRANCE, CAMP, 'ns', m);
+    this.tunnel(CAMP, TUNNELS, 'ns', m);
+    this.tunnel(TUNNELS, MACHINERY, 'ns', m);
+    this.tunnel(MACHINERY, RUINS, 'ns', m);
+    this.tunnel(RUINS, WARDEN, 'ns', m);
+    this.tunnel(ALTAR, MACHINERY, 'ew', m);
+    this.tunnel(TUNNELS, STORE, 'ew', m);
 
     // Rock ceiling slabs visually unify the separate chambers.
     for (const [x, z, w, d] of [
@@ -688,13 +710,14 @@ export class MineInstance {
     top.position.y = 5.25;
     g.add(top);
 
-    g.position.set(MINE_ORIGIN.x, 0, MINE_ORIGIN.z - 82);
+    // In the machinery hall's north doorway (x 8): at x 0 it barred nothing.
+    g.position.set(MINE_ORIGIN.x + 8, 0, MINE_ORIGIN.z - 83);
     this.group.add(g);
     this.gateBars = g;
     this.gateT = this.progress.gateOpen ? 1 : 0;
     if (!this.progress.gateOpen) {
       this.gateCollider = this.box(
-        new THREE.Vector3(MINE_ORIGIN.x, 2.6, MINE_ORIGIN.z - 82),
+        new THREE.Vector3(MINE_ORIGIN.x + 8, 2.6, MINE_ORIGIN.z - 83),
         new THREE.Vector3(2.5, 2.6, 0.3),
       );
     } else {
@@ -870,7 +893,8 @@ export class MineInstance {
     this.enemies.push(new LivingArmour(pts[2], this.scene, this.fx));
     this.enemies.push(new LivingArmour(pts[3], this.scene, this.fx));
 
-    if (!this.progress.guardianDead) {
+    // The Warden stands guard again on every visit (its hoard is won once).
+    {
       this.boss = new LivingArmour(
         new THREE.Vector3(MINE_ORIGIN.x, 0, MINE_ORIGIN.z - 140),
         this.scene,
@@ -883,14 +907,14 @@ export class MineInstance {
   private buildExit(m: ReturnType<typeof makeMaterials>) {
     meshBox(
       this.group,
-      new THREE.Vector3(MINE_ORIGIN.x + 5.8, 1.4, MINE_ORIGIN.z + 5.5),
+      new THREE.Vector3(MINE_ORIGIN.x + 5.8, 1.4, MINE_ORIGIN.z + 5.2),
       new THREE.Vector3(0.32, 1.3, 0.32),
       m.brass,
     );
 
     this.interactables.push({
-      pos: new THREE.Vector3(MINE_ORIGIN.x, 0, MINE_ORIGIN.z + 7.5),
-      radius: 2.4,
+      pos: new THREE.Vector3(MINE_ORIGIN.x, 0, MINE_ORIGIN.z + 5.6),
+      radius: 2.0,
       label: () => 'Leave the mine',
       enabled: () => true,
       action: () => this.hooks.leave(),
@@ -951,12 +975,19 @@ export class MineInstance {
         // The Warden's bar shows once you reach its chamber, not from the entrance.
         const near = this.boss.center.distanceTo(player.pos) < 30;
         this.hooks.bossBar(near ? this.boss : null, 'The Deep Warden');
-      } else if (!this.progress.guardianDead) {
+      } else if (!this.bossDown) {
+        this.bossDown = true;
+        const first = !this.progress.guardianDead;
         this.progress.guardianDead = true;
         this.hooks.bossBar(null);
-        this.hooks.giveGold(this.boss.center.clone(), 350);
-        const reward = this.hooks.giveItem('knightSword');
-        this.hooks.toast('The Deep Warden falls. Its hoard yields a ' + reward + '.');
+        if (first) {
+          this.hooks.giveGold(this.boss.center.clone(), 350);
+          const reward = this.hooks.giveItem('knightSword');
+          this.hooks.toast('The Deep Warden falls. Its hoard yields a ' + reward + '.');
+        } else {
+          this.hooks.giveGold(this.boss.center.clone(), 175);
+          this.hooks.toast('The Deep Warden falls again. A few coins glint in the rubble.');
+        }
         this.hooks.save();
       }
     }

@@ -548,21 +548,25 @@ export class DungeonInstance {
       // The crypt's regular enemies are now orcs on both floors. The
       // existing orc remains the end-of-dungeon boss.
       if (s.kind === 'orc') {
-        if (this.progress.bossDead) {
-          this.buildPortal();
-          continue;
-        }
+        // Grukk holds his hall again every time you come down. His hoard (the
+        // tusk and the odachi) is only won once; later he drops a lesser purse.
         const at = this.cellCenter(s.cell[0], s.cell[1]);
         const toEntrance = this.spawnPoint.sub(at);
         this.bossHome = { at: at.clone(), yaw: Math.atan2(toEntrance.x, toEntrance.z) };
         this.ready = OrcWarlord.create(at, Math.atan2(toEntrance.x, toEntrance.z), this.scene, this.fx).then((o) => {
           if (this.disposed) return o.dispose();
           o.onDeath = (dead) => {
+            const first = !this.progress.bossDead;
             this.progress.bossDead = true;
-            this.hooks.giveGold(dead.center, 300);
-            const a = this.hooks.giveItem('warlordTusk');
-            const b = this.hooks.giveItem('orcOdachi');
-            this.hooks.toast(`Grukk falls. Found: ${a} and ${b}`);
+            if (first) {
+              this.hooks.giveGold(dead.center, 300);
+              const a = this.hooks.giveItem('warlordTusk');
+              const b = this.hooks.giveItem('orcOdachi');
+              this.hooks.toast(`Grukk falls. Found: ${a} and ${b}`);
+            } else {
+              this.hooks.giveGold(dead.center, 150);
+              this.hooks.toast('Grukk falls again. His war-chest has refilled a little.');
+            }
             setTimeout(() => this.hooks.bossBar(null), 2500);
             this.buildPortal();
             this.hooks.save();

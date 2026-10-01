@@ -131,6 +131,8 @@ export class Player {
   aimDir = new THREE.Vector3(0, 0, -1);
 
   onHitStop?: (sec: number) => void;
+  /** where a fall out of the world lands you (the current realm's restart point) */
+  fallBack?: () => THREE.Vector3;
   onShake?: (amt: number) => void;
   onSpell?: (spell: string, from: THREE.Vector3, dir: THREE.Vector3, target: Target | null) => void;
   onPlungeLand?: (at: THREE.Vector3) => void;
@@ -728,7 +730,8 @@ export class Player {
     if (this.grounded && this.vel.y < 0) this.vel.y = 0;
     this.pos.set(next.x, next.y - CENTER_Y - 0.02, next.z);
 
-    if (this.pos.y < -30) this.teleport(new THREE.Vector3(0, 2, 10));
+    // Fell out of the world: back to where this realm (overworld, dungeon, room) restarts you.
+    if (this.pos.y < -30) this.teleport(this.fallBack?.().clone().setY(this.fallBack().y + 1) ?? new THREE.Vector3(0, 2, 10));
   }
 
   private onLand() {

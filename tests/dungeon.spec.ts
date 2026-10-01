@@ -248,3 +248,45 @@ test('the Orc Warlord fights with blade and bow, and drops his loot', async ({ p
   expect(res.odachi).toBe(true);
   expect(res.portal).toBe(true);
 });
+
+test('bosses hold their halls again on every visit; their unique loot drops once', async ({ page }) => {
+  await boot(page);
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game;
+    const T = g.THREE;
+    const count = (id: string) => g.player.equip.items.filter((i: any) => i.def.id === id).reduce((n: number, i: any) => n + (i.qty ?? 1), 0);
+    const killGrukk = async () => {
+      await g.realm.enter(2, 'entrance');
+      await g.realm.instance.ready;
+      const o = g.realm.instance.bossTarget;
+      const there = !!o && o.alive;
+      o?.takeHit({ damage: 99999, poise: 0, dir: new T.Vector3(0, 0, 1), at: o.center.clone(), crit: true, source: 'melee' });
+      await new Promise((r) => setTimeout(r, 300));
+      await g.realm.leave();
+      return there;
+    };
+    const first = await killGrukk();
+    const tusks1 = count('warlordTusk');
+    const again = await killGrukk();
+    const tusks2 = count('warlordTusk');
+    // The mine: the Warden is back too, and from the entrance you can walk on into the tunnels.
+    g.realm.mineProgress.guardianDead = true;
+    await g.realm.enterMine();
+    const warden = !!g.realm.mineInstance.boss?.alive;
+    g.player.yaw = Math.PI; g.cam.yaw = Math.PI;
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+    const z0 = g.player.pos.z;
+    for (let i = 0; i < 60 && g.player.pos.z > -9; i++) await new Promise((r) => setTimeout(r, 100));
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
+    const walkedOut = g.player.pos.z < -9 && g.player.pos.y > -1;
+    await g.realm.leave();
+    return { first, again, tusks1, tusks2, bossDead: g.realm.progress.bossDead, warden, walkedOut, z0 };
+  });
+  expect(res.first).toBe(true);
+  expect(res.again).toBe(true);
+  expect(res.tusks1).toBe(1);
+  expect(res.tusks2).toBe(1);
+  expect(res.bossDead).toBe(true);
+  expect(res.warden).toBe(true);
+  expect(res.walkedOut).toBe(true);
+});

@@ -255,6 +255,7 @@ async function boot() {
   const cam = new ThirdPersonCamera(r.camera, input);
   cam.snapTo(player.pos);
   player.onShake = (a) => cam.shake(a);
+  player.fallBack = () => realm.respawnPoint;
   player.onPlungeLand = (at) => {
     fx.dust(at, 3);
     fx.add.spawn({ pos: at.clone().setY(at.y + 0.2), spread: 7, count: 30, life: [0.2, 0.5], size: [0.12, 0.02], color: 0xfff1c8, color2: 0xff9a3a, gravity: 6, upBias: 0.3 });
