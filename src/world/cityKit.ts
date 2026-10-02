@@ -36,7 +36,7 @@ export class StaticBatch {
   }
 
   /** Merge into meshes (split into chunks so culling still works across a city). */
-  build(scene: THREE.Scene, chunk = 60) {
+  build(scene: THREE.Object3D, chunk = 60) {
     const out: THREE.Mesh[] = [];
     for (const [mat, list] of this.parts) {
       // Bucket by rough position so one far district doesn't draw with the near one.

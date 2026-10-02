@@ -109,7 +109,9 @@ test('the Quiet Hands: a hidden trapdoor, Aldric\'s debt, and the black market',
     g.lowerCity.nix();
     const after = opts();
     g.dialogue['options'].find((o: any) => /fell off the wagons/.test(o.label)).run();
-    const shop = opts();
+    // (Goods show in the merchant window.)
+    const shop = [...document.querySelectorAll('.shop2 .sc-name')].map((e) => e.textContent ?? '');
+    g.town.shopUI.close();
     g.dialogue.close();
     await g.realm.leaveInterior();
     return { hidden, known, below, first, paid, stage, done, after, shop };

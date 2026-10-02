@@ -1,4 +1,5 @@
 import { PLACE_DEFS, pxToWorld } from './worldMap';
+import { PALACE, PLAZA, TEMPLE, LIBRARY, COLLEGIUM, COMMANDERY, GUILD, KINGSBRIDGE } from './capitalCity';
 
 // Every region of the known world (World Expansion prompt §§2–16, §82).
 // Outlines live in data/regions.json (traced from the world map); this file
@@ -109,8 +110,14 @@ export const REGIONS: Record<string, RegionDef> = {
     id: 'royalCapital', name: 'The Royal Capital', subtitle: 'Heart of the Kingdom', levels: [10, 30],
     weather: { clear: 5, cloudy: 3, rain: 2, fog: 1, storm: 0.3 }, ambience: 'city', music: 'city', encounters: 'capital', faction: 'cresha',
     resources: ['knowledge', 'arcane reagents'], exports: ['law', 'coin', 'enchantments'], imports: ['everything'],
-    landmarks: [place('royalCapital', 'The Royal Capital', 'capital'), at('palace', 'The Sunspire Palace', 'castle', -3300, -1000)],
-    surface: ['the palace and court', 'the grand Adventurer’s Guild', 'temples, markets, the Royal Library', 'the Arcane Collegium'],
+    landmarks: [
+      place('royalCapital', 'The Royal Capital', 'capital'), at('palace', 'The Palace of Cresha', 'castle', PALACE[0], PALACE[1]),
+      at('plazaOfCrowns', 'The Plaza of Crowns', 'landmark', PLAZA[0], PLAZA[1]), at('templeOfDawn', 'The Temple of the Dawn', 'landmark', TEMPLE[0], TEMPLE[1]),
+      at('royalLibrary', 'The Royal Library', 'landmark', LIBRARY[0], LIBRARY[1]), at('collegium', 'The Arcane Collegium', 'landmark', COLLEGIUM[0], COLLEGIUM[1]),
+      at('silverLance', 'The Silver Lance Commandery', 'castle', COMMANDERY[0], COMMANDERY[1]), at('grandHall', 'The Grand Hall of the Guild', 'landmark', GUILD[0], GUILD[1]),
+      at('kingsbridge', 'The Kingsbridge', 'landmark', KINGSBRIDGE[0], KINGSBRIDGE[1]),
+    ],
+    surface: ['the palace and court on Crown Hill', 'the Grand Hall of the Adventurer’s Guild', 'the Temple of the Dawn, the Crown Market, the Royal Library', 'the Arcane Collegium', 'the Silver Lance Commandery and its tourney'],
     hidden: ['the old city beneath the palace', 'court intrigues'],
     deep: ['the Crown Vault', 'the summoning chamber'],
     coherence: {

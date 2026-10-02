@@ -2,6 +2,7 @@ import { TILE, WORLD_SIZE, hasTile, putTile } from './terrainHeight';
 import { macroCells } from './worldMap';
 import { ROAD_POLYS } from './roadData';
 import { CITY_BOUNDS, CAUSEWAY } from './portCity';
+import { CAP_CENTER, CAP_RX, CAP_RZ } from './capitalCity';
 
 // Boot-time tile prefetch: placing props along the roads and across Port
 // Aurelle asks for heights in far tiles, and each uncached tile used to be
@@ -30,6 +31,9 @@ export function buildTiles(): [number, number][] {
   }
   for (let x = CITY_BOUNDS.x0 - 40; x <= CITY_BOUNDS.x1 + 80; x += 32) for (let z = CITY_BOUNDS.z0 - 60; z <= CITY_BOUNDS.z1 + 30; z += 32) add(x, z);
   for (let x = CAUSEWAY.x0 - 30; x <= CAUSEWAY.x1; x += 32) add(x, CAUSEWAY.z);
+  // The Royal Capital (its residents' places are placed at boot) and the Kingsbridge.
+  for (let x = CAP_CENTER[0] - CAP_RX - 40; x <= CAP_CENTER[0] + CAP_RX + 40; x += 64) for (let z = CAP_CENTER[1] - CAP_RZ - 40; z <= CAP_CENTER[1] + CAP_RZ + 40; z += 64) add(x, z);
+  for (let x = -4100; x <= -3700; x += 64) add(x, -1066);
   return [...set].map((k) => k.split(',').map(Number) as [number, number]).filter(([i, j]) => !hasTile(i, j));
 }
 

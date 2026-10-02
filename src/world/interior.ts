@@ -5,6 +5,7 @@ import { mulberry32 } from '../core/math';
 import { worldUV, type WorldMats } from './buildings';
 import type { Door, InteriorKind } from './doors';
 import type { Interactable } from '../dungeon/instance';
+import { sunwheelTexture } from './glenLandmarks';
 
 // Building interiors, built when you step through a door (world/doors.ts) and
 // thrown away when you leave. One room sized to the house outside: plank
@@ -44,6 +45,55 @@ const sharedMats = () =>
   });
 
 export const INTERIOR_ORIGIN = new THREE.Vector3(-40000, 0, 0);
+
+/** The Royal Capital's great rooms: marble, gold, long carpets (shared between visits). */
+let grand: {
+  floor: THREE.MeshStandardMaterial; floorDark: THREE.MeshStandardMaterial; wall: THREE.MeshStandardMaterial; gold: THREE.MeshStandardMaterial;
+  red: THREE.MeshStandardMaterial; blue: THREE.MeshStandardMaterial; spines: THREE.MeshStandardMaterial; sun: THREE.MeshStandardMaterial;
+} | null = null;
+function grandMats(m: WorldMats) {
+  if (grand) return grand;
+  const tint = (src: THREE.Material, r: number, g: number, b: number) => {
+    const s = src as THREE.MeshStandardMaterial;
+    const c = s.clone();
+    c.defines = { ...(s.defines ?? {}) };
+    c.color.setRGB(r, g, b);
+    return c;
+  };
+  // Book spines for the library's cases: one painted texture for every shelf.
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#3a2416'; g.fillRect(0, 0, 256, 256);
+  const cols = ['#6a2a1e', '#2a3f6a', '#3a5a2a', '#7a5a2a', '#4a2a5a', '#8a6a3a', '#2a4a4a', '#5a1a1a'];
+  const rnd = mulberry32(5150);
+  for (let row = 0; row < 4; row++) {
+    let x = 2;
+    const y0 = row * 64 + 6;
+    while (x < 252) {
+      const w = 5 + rnd() * 9, h = 44 + rnd() * 14;
+      g.fillStyle = cols[Math.floor(rnd() * cols.length)];
+      g.fillRect(x, y0 + 58 - h, w, h);
+      g.fillStyle = 'rgba(230,200,120,0.7)';
+      g.fillRect(x, y0 + 58 - h + 6, w, 2);
+      x += w + 1;
+    }
+    g.fillStyle = '#5a3a22'; g.fillRect(0, row * 64 + 58, 256, 6);
+  }
+  const spines = new THREE.CanvasTexture(c);
+  spines.colorSpace = THREE.SRGBColorSpace;
+  spines.wrapS = spines.wrapT = THREE.RepeatWrapping;
+  return (grand = {
+    floor: tint(m.bridgeStone ?? m.stone, 1.7, 1.66, 1.58),
+    floorDark: tint(m.stone, 0.9, 0.88, 0.86),
+    wall: tint(m.bridgeStone ?? m.stone, 1.75, 1.7, 1.62),
+    gold: new THREE.MeshStandardMaterial({ color: 0xe2bc62, metalness: 0.75, roughness: 0.32 }),
+    red: new THREE.MeshStandardMaterial({ color: 0x8a1f24, roughness: 1 }),
+    blue: new THREE.MeshStandardMaterial({ color: 0x24467e, roughness: 1 }),
+    spines: new THREE.MeshStandardMaterial({ map: spines, roughness: 0.9 }),
+    sun: new THREE.MeshStandardMaterial({ map: sunwheelTexture(), emissive: 0xffc060, emissiveMap: sunwheelTexture(), emissiveIntensity: 1.1, transparent: true, color: 0xfff0d0 }),
+  });
+}
 const H = 3.4; // wall height
 
 export interface Seat {
@@ -81,7 +131,7 @@ export class Interior {
 
   constructor(readonly door: Door, readonly kind: InteriorKind, private scene: THREE.Scene, private m: WorldMats, onLeave: () => void, private lender?: LightLender, private onInspect?: (label: string, text: string) => void) {
     this.rnd = mulberry32(door.spec.seed * 7 + 11);
-    const big = kind === 'guild' || kind === 'hall' || kind === 'tavern';
+    const big = kind === 'guild' || kind === 'hall' || kind === 'tavern' || kind === 'throne' || kind === 'temple' || kind === 'library';
     this.W = kind === 'undercity' ? 22 : Math.max(big ? 9 : 6, door.spec.w - 0.6);
     this.D = kind === 'undercity' ? 44 : Math.max(big ? 8 : 5.5, door.spec.d - 0.6);
     this.group.position.copy(INTERIOR_ORIGIN);
@@ -92,6 +142,10 @@ export class Interior {
     if (kind === 'undercity') {
       this.undercity();
       this.spawn = this.at(0, this.D / 2 - 5.2);
+    } else if (kind === 'throne' || kind === 'temple' || kind === 'library') {
+      this.grandShell();
+      this.spawn = this.at(0, this.D / 2 - 1.6);
+      this.furnish();
     } else {
       this.shell();
       this.spawn = this.at(0, this.D / 2 - 1.1);
@@ -175,6 +229,65 @@ export class Interior {
     }
     // A soft fill so corners aren't black.
     this.wants.push({ pos: this.at(0, 0, H - 0.6), color: 0xffe2b8, intensity: 2.5, distance: Math.max(W, D) * 1.6, decay: 1.6, fire: false });
+  }
+
+  /** The capital's great rooms: a stone floor, tall marble walls with gilded pilasters, high windows. */
+  private grandShell() {
+    const { W, D } = this;
+    const g = grandMats(this.m);
+    const GH = this.kind === 'library' ? 6.6 : 8.2;
+    const wallT = 0.5;
+    this.box(g.floor, W, 0.2, D, 0, -0.1, 0, 0, true);
+    // A border of darker stone round the floor.
+    for (const sx of [-1, 1]) this.box(g.floorDark, 0.8, 0.02, D, sx * (W / 2 - 0.4), 0.01, 0);
+    this.box(g.wall, W + wallT * 2, GH, wallT, 0, GH / 2, -D / 2 - wallT / 2, 0, true);
+    for (const sx of [-1, 1]) this.box(g.wall, wallT, GH, D, sx * (W / 2 + wallT / 2), GH / 2, 0, 0, true);
+    const gap = 2.6, side = (W - gap) / 2;
+    for (const sx of [-1, 1]) this.box(g.wall, side + wallT, GH, wallT, sx * (W / 2 - side / 2 + wallT / 2), GH / 2, D / 2 + wallT / 2, 0, true);
+    this.box(g.wall, gap, GH - 4.2, wallT, 0, 4.2 + (GH - 4.2) / 2, D / 2 + wallT / 2);
+    this.box(this.m.planks, 2.5, 4.2, 0.1, 0, 2.1, D / 2 + 0.3, 0, true);
+    this.box(g.gold, 3.0, 0.3, 0.6, 0, 4.35, D / 2 + 0.1);
+    for (const sx of [-1, 1]) this.box(g.gold, 0.25, 4.2, 0.6, sx * 1.4, 2.1, D / 2 + 0.1);
+    // The ceiling: coffers framed in gold.
+    this.box(g.wall, W + 1, 0.3, D + 1, 0, GH + 0.15, 0);
+    const rows = Math.max(2, Math.round(D / 4));
+    for (let i = 1; i < rows; i++) this.box(g.gold, W, 0.25, 0.3, 0, GH - 0.12, -D / 2 + (D * i) / rows);
+    for (const sx of [-1, 1]) this.box(g.gold, 0.3, 0.25, D, sx * W / 4, GH - 0.12, 0);
+    // Pilasters with gilded capitals, tall windows between them.
+    const bays = Math.max(3, Math.round(D / 4.2));
+    for (let i = 0; i <= bays; i++) {
+      const z = -D / 2 + (D * i) / bays;
+      for (const sx of [-1, 1]) {
+        this.box(g.wall, 0.7, GH, 0.5, sx * (W / 2 - 0.2), GH / 2, z);
+        this.box(g.gold, 0.9, 0.35, 0.65, sx * (W / 2 - 0.25), GH - 0.6, z);
+        this.box(g.floorDark, 0.9, 0.5, 0.65, sx * (W / 2 - 0.25), 0.25, z);
+      }
+      if (i === bays) continue;
+      const zm = -D / 2 + (D * (i + 0.5)) / bays;
+      for (const sx of [-1, 1]) {
+        const win = new THREE.Mesh(new THREE.PlaneGeometry(1.5, GH * 0.5), this.windowMat);
+        win.position.set(sx * (W / 2 - 0.01), GH * 0.52, zm);
+        win.rotation.y = -sx * Math.PI / 2;
+        this.group.add(win);
+        if (i % 2 === 0) this.sconce(sx * (W / 2 - 0.05), 2.6, zm, sx > 0 ? -Math.PI / 2 : Math.PI / 2);
+      }
+    }
+    this.wants.push({ pos: this.at(0, 0, GH - 1), color: 0xfff0d8, intensity: 6, distance: Math.max(W, D) * 1.8, decay: 1.2, fire: false });
+    this.wants.push({ pos: this.at(0, -D / 3, GH - 1.5), color: 0xffe0b0, intensity: 4, distance: Math.max(W, D), decay: 1.3, fire: false });
+  }
+
+  /** Book-lined cases (one painted texture of spines) against a wall. */
+  private bookcase(x: number, z: number, ry: number, w: number, h: number) {
+    const g = grandMats(this.m);
+    this.box(this.m.timber, w, h, 0.5, x, h / 2, z, ry, true);
+    const geo = new THREE.PlaneGeometry(w - 0.2, h - 0.3);
+    const uv = geo.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (w / 2), uv.getY(i) * (h / 2.2));
+    const front = new THREE.Mesh(geo, g.spines);
+    front.position.set(x + Math.sin(ry) * 0.26, h / 2, z + Math.cos(ry) * 0.26);
+    front.rotation.y = ry;
+    this.group.add(front);
+    this.box(g.gold, w + 0.1, 0.12, 0.6, x, h + 0.06, z, ry);
   }
 
   /** Borrow what the pool can spare: the fire first, then the fill. */
@@ -705,6 +818,97 @@ export class Interior {
       }
       this.table(0, back + D * 0.34, 3.2, 0.9);
       this.inspectProp(0, back + D * 0.34, 'Inspect the guild map table', 'Pins mark roads, ruins and old contracts across the Glen. Someone has circled the northern hills in fresh charcoal.');
+    } else if (kind === 'throne') {
+      const g = grandMats(this.m);
+      // The long carpet from the door to the dais, and two rows of columns.
+      this.box(g.red, 3.2, 0.03, D - 5, 0, 0.015, 2.2);
+      for (const sx of [-1, 1]) this.box(g.gold, 0.12, 0.031, D - 5, sx * 1.66, 0.016, 2.2);
+      for (let z = back + 6; z < D / 2 - 2; z += 4.5) for (const sx of [-1, 1]) {
+        this.cyl(g.wall, 0.5, 8.2, sx * (W / 2 - 3.2), 4.1, z, true, 16);
+        this.box(g.gold, 1.2, 0.4, 1.2, sx * (W / 2 - 3.2), 7.9, z);
+        this.box(g.floorDark, 1.3, 0.5, 1.3, sx * (W / 2 - 3.2), 0.25, z);
+      }
+      // The dais: three steps up to the throne.
+      for (let k = 0; k < 3; k++) this.box(k === 2 ? g.red : g.floorDark, 9 - k * 1.8, 0.3, 5.2 - k * 1.0, 0, 0.15 + k * 0.3, back + 2.6 - k * 0.5, 0, true);
+      const dy = 0.9;
+      this.box(g.gold, 1.5, 0.5, 1.2, 0, dy + 0.25, back + 1.6, 0, true);
+      this.box(g.red, 1.3, 0.12, 1.0, 0, dy + 0.56, back + 1.65);
+      this.box(g.gold, 1.6, 3.0, 0.28, 0, dy + 1.5, back + 1.0, 0, true);
+      this.box(g.red, 1.2, 2.2, 0.06, 0, dy + 1.5, back + 1.16);
+      for (const sx of [-1, 1]) {
+        this.box(g.gold, 0.18, 0.4, 1.0, sx * 0.72, dy + 0.75, back + 1.6);
+        const point = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.45, 4), g.gold);
+        point.position.set(sx * 0.5, dy + 3.2, back + 1.0);
+        this.group.add(point);
+      }
+      {
+        const point = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.6, 4), g.gold);
+        point.position.set(0, dy + 3.3, back + 1.0);
+        this.group.add(point);
+      }
+      // Banners of the Crown behind, braziers either side.
+      for (const sx of [-1, 1]) {
+        this.box(g.blue, 1.6, 5.2, 0.05, sx * 3.4, 4.2, back + 0.08);
+        this.box(g.gold, 0.6, 0.6, 0.06, sx * 3.4, 4.6, back + 0.1, Math.PI / 4);
+        this.brazier(sx * 5.4, back + 3.6);
+      }
+      this.keeperSpot = { pos: this.at(0, back + 1.75, dy), yaw: 0, seated: true };
+      for (const sx of [-1, 1]) for (const z of [back + 6, back + 9]) this.seat(sx * 3.6, z, -sx * Math.PI / 2, false);
+      this.inspectProp(2.6, back + 4.6, 'Inspect the throne', 'The Throne of Cresha: gold over oak older than the palace. The Sunwheel is worked into its back, worn smooth by four centuries of kings leaning against it.');
+    } else if (kind === 'temple') {
+      const g = grandMats(this.m);
+      this.box(g.blue, 2.4, 0.03, D - 4, 0, 0.015, 1.5);
+      // The altar under the great Sunwheel.
+      this.box(g.floorDark, 6, 0.4, 3, 0, 0.2, back + 2.2, 0, true);
+      this.box(g.wall, 3.2, 1.1, 1.3, 0, 0.95, back + 2.2, 0, true);
+      this.box(g.gold, 3.4, 0.08, 1.5, 0, 1.54, back + 2.2);
+      const wheel = new THREE.Mesh(new THREE.CircleGeometry(2.6, 40), g.sun);
+      wheel.position.set(0, 4.8, back + 0.07);
+      this.group.add(wheel);
+      for (let i = 0; i < 5; i++) {
+        const x = -1.2 + i * 0.6;
+        this.cyl(this.m.plaster, 0.05, 0.3, x, 1.73, back + 2.0, false, 8);
+        const f = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.12, 6), sharedMats().flameCore);
+        f.position.set(x, 1.95, back + 2.0);
+        this.group.add(f);
+        this.flames.push(f);
+      }
+      this.wants.push({ pos: this.at(0, back + 2.6, 3), color: 0xffd080, intensity: 6, distance: 12, decay: 1.4, fire: false });
+      // Pews either side of the aisle, facing the altar.
+      for (let z = back + 6; z < D / 2 - 2.5; z += 1.7) for (const sx of [-1, 1]) {
+        const len = Math.min(4.6, W / 2 - 2.2);
+        this.bench(sx * (1.6 + len / 2), z, len, 0);
+        this.box(this.m.planks, len, 0.6, 0.06, sx * (1.6 + len / 2), 0.75, z + 0.2);
+        this.seat(sx * (1.6 + len / 2), z, Math.PI);
+      }
+      this.keeperSpot = { pos: this.at(0, back + 4.2), yaw: 0, seated: false };
+      this.inspectProp(1.8, back + 3.6, 'Inspect the Sunwheel', 'The Dawn’s great wheel: twelve spokes, a ring, a point at the centre. The same mark is cut into the standing stones above Elder Glen and over the crypt door. The priests call it the oldest prayer in Cresha. Nobody can say who first carved it.');
+    } else if (kind === 'library') {
+      const g = grandMats(this.m);
+      // Book-lined walls, a long carpet, reading tables, a lectern and a globe.
+      for (const sx of [-1, 1]) for (let z = back + 2.4; z < D / 2 - 2.4; z += 3.4) this.bookcase(sx * (W / 2 - 0.7), z, -sx * Math.PI / 2, 3.0, 5.2);
+      for (const sx of [-1, 1]) this.bookcase(sx * (W / 4 + 0.6), back + 0.5, 0, Math.min(5, W / 2 - 3), 5.6);
+      this.box(g.red, 2.2, 0.03, D - 4, 0, 0.015, 1.5);
+      for (const z of [back + D * 0.45, back + D * 0.7]) for (const sx of [-1, 1]) {
+        this.table(sx * 3.2, z, 2.6, 1.1);
+        this.seat(sx * 3.2 - 0.6, z + 0.85, Math.PI);
+        this.seat(sx * 3.2 + 0.6, z - 0.85, 0);
+        const f = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 6), sharedMats().flameCore);
+        f.position.set(sx * 3.2, 1.05, z);
+        this.group.add(f);
+        this.flames.push(f);
+      }
+      // The desk at the back where the keeper works.
+      this.counter(0, back + 3.4, 3.4, 0);
+      this.keeperSpot = { pos: this.at(0, back + 2.5), yaw: 0, seated: false };
+      this.box(this.m.timber, 0.5, 1.1, 0.5, 2.6, 0.55, back + 5.2, 0, true);
+      this.box(this.m.timber, 0.8, 0.06, 0.6, 2.6, 1.15, back + 5.2, -0.5);
+      this.box(g.floor, 0.7, 0.04, 0.5, 2.6, 1.2, back + 5.2, -0.5);
+      const globe = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 12), new THREE.MeshStandardMaterial({ color: 0x3a6a8a, roughness: 0.6 }));
+      globe.position.set(-2.6, 1.3, back + 5.2);
+      this.group.add(globe);
+      this.box(g.gold, 0.08, 0.9, 0.08, -2.6, 0.45, back + 5.2);
+      this.inspectProp(2.6, back + 5.6, 'Read the open folio', 'A chronicle of the summoned. Four heroes in a thousand years, each arriving “as the old wheel turns”. The margins are crowded with a later hand: Sunwheel stones, Elder Glen, the Gravewood. Someone here has been asking the same questions you are.');
     } else {
       // A hall or warehouse: stacked goods, a clerk's desk.
       for (let i = 0; i < 10; i++) {

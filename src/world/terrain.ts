@@ -19,7 +19,8 @@ import { FLOWER_GLSL } from './flowerNoise';
 //             Port Aurelle on the coast 2.5 km east
 // ---------------------------------------------------------------------------
 export * from './terrainHeight';
-import { buildRoadTexture, ROAD_RECT } from './roadNetwork';
+import { buildRoadTexture, buildRoadTextureWest, ROAD_RECT, ROAD_RECT_W } from './roadNetwork';
+import { CAP_CENTER, CAP_RX, CAP_RZ } from './capitalCity';
 import { CITY_BOUNDS } from './portCity';
 import { normalAt, splatAt, WORLD_SIZE, TILE, TILE_SEG, TILE_N, tileData, tileKey, hasTile, putTile, worldHeightFn, LOCAL_R1 } from './terrainHeight';
 import { macroTexture, paintedMapTexture, macroCells, macroHeight, WORLD_X0, WORLD_Z0, WORLD_W, WORLD_H, GW, GH, SEA_LEVEL } from './worldMap';
@@ -52,6 +53,8 @@ const WET = { value: 0 };
 
 let roadTex: THREE.DataTexture | null = null;
 const roadTexture = () => (roadTex ??= buildRoadTexture());
+let roadTexW: THREE.DataTexture | null = null;
+const roadTextureW = () => (roadTexW ??= buildRoadTextureWest());
 
 function terrainMaterial(renderer: THREE.WebGLRenderer, splat: THREE.DataTexture) {
   // Painted ground (docs/ART-DIRECTION.md §3): each macro relief class has its
@@ -77,6 +80,9 @@ function terrainMaterial(renderer: THREE.WebGLRenderer, splat: THREE.DataTexture
     uWet: WET,
     tRoads: { value: roadTexture() },
     uRoadRect: { value: new THREE.Vector4(ROAD_RECT.x0, ROAD_RECT.z0, ROAD_RECT.w, ROAD_RECT.h) },
+    tRoadsW: { value: roadTextureW() },
+    uRoadRectW: { value: new THREE.Vector4(ROAD_RECT_W.x0, ROAD_RECT_W.z0, ROAD_RECT_W.w, ROAD_RECT_W.h) },
+    uCap: { value: new THREE.Vector4(CAP_CENTER[0], CAP_CENTER[1], CAP_RX, CAP_RZ) },
     uCityRect: { value: new THREE.Vector4(CITY_BOUNDS.x0 - 16, CITY_BOUNDS.z0 - 40, CITY_BOUNDS.x1 + 6, CITY_BOUNDS.z1 + 12) },
   };
   mat.onBeforeCompile = (sh) => {
@@ -94,8 +100,8 @@ vWN = normal;`);
         `#include <common>
         varying vec3 vWPos;
         varying vec3 vWN;
-        uniform sampler2D tSplat, tNoise, tCobble, tDirt, tMacro, tMap, tRoads;
-        uniform vec4 uRoadRect, uCityRect;
+        uniform sampler2D tSplat, tNoise, tCobble, tDirt, tMacro, tMap, tRoads, tRoadsW;
+        uniform vec4 uRoadRect, uRoadRectW, uCityRect, uCap;
         uniform float uSize;
         uniform vec4 uWorld;
         uniform vec2 uGrid;
@@ -187,12 +193,18 @@ vWN = normal;`);
         // (Nor where the map is painted pale, its surf, sand and snow: those have
         // their own relief colours, and the tint bleached green hills white.)
         float paleMap = smoothstep(0.5, 0.7, mapL);
-        biome = mix(biome, tinted, mix(0.25, 0.55, smoothstep(80.0, 900.0, dist)) * (1.0 - beachW) * (1.0 - paleMap));
+        // (Nor round the Royal Capital: the map paints the whole city there, a
+        // dark-and-gold drawing far wider than its walls.)
+        float capD = length((vWPos.xz - uCap.xy) / uCap.zw);
+        float capArt = 1.0 - smoothstep(2.6, 3.8, capD);
+        biome = mix(biome, tinted, mix(0.25, 0.55, smoothstep(80.0, 900.0, dist)) * (1.0 - beachW) * (1.0 - paleMap) * (1.0 - capArt));
 
         // Port Aurelle's levelled ground (and its causeway) is town grass, whatever the map says.
         float inCity = step(uCityRect.x, vWPos.x) * step(vWPos.x, uCityRect.z) * step(uCityRect.y, vWPos.z) * step(vWPos.z, uCityRect.w);
         inCity = max(inCity, step(2540.0, vWPos.x) * step(vWPos.x, 2700.0) * step(abs(vWPos.z - 150.0), 12.0));
         biome = mix(biome, mix(gNear, gFar, smoothstep(10.0, 70.0, dist)), inCity * step(-0.6, vWPos.y));
+        // The Royal Capital's lawns and gardens inside its walls.
+        biome = mix(biome, mix(gNear, gFar, smoothstep(10.0, 70.0, dist)), smoothstep(1.2, 1.0, capD));
 
         // Elder Glen's authored splat near the origin.
         vec2 luv = vWPos.xz / uSize + 0.5;
@@ -211,9 +223,13 @@ vWN = normal;`);
         }
 
         // The road network beyond the authored town splat: packed dirt, cobbles near towns.
+        // (Two sheets: Elder Glen to Port Aurelle, and the west with the Royal Capital.)
         vec2 ruv = (vWPos.xz - uRoadRect.xy) / uRoadRect.zw;
-        if (ruv.x > 0.0 && ruv.y > 0.0 && ruv.x < 1.0 && ruv.y < 1.0) {
-          vec2 rd = texture2D(tRoads, ruv).rg;
+        vec2 ruvW = (vWPos.xz - uRoadRectW.xy) / uRoadRectW.zw;
+        bool inE = ruv.x > 0.0 && ruv.y > 0.0 && ruv.x < 1.0 && ruv.y < 1.0;
+        bool inW = ruvW.x > 0.0 && ruvW.y > 0.0 && ruvW.x < 1.0 && ruvW.y < 1.0;
+        if (inE || inW) {
+          vec2 rd = inE ? texture2D(tRoads, ruv).rg : texture2D(tRoadsW, ruvW).rg;
           float outside = 1.0 - localW;
           float edge = (fineN.r - 0.5) * 0.45 + (patchN.g - 0.5) * 0.2;
           float wD = smoothstep(0.2, 0.62, rd.r + edge) * outside;

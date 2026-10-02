@@ -54,7 +54,7 @@ import { Boats } from './world/boats';
 import { RiverLife } from './world/riverLife';
 import { PORT_QUESTS } from './quests/portQuests';
 import { RIVER_LEVEL } from './world/terrainHeight';
-import { road, distanceAlong } from './world/roadNetwork';
+import { road, distanceAlong, roadLength } from './world/roadNetwork';
 import { buildGlenLandmarks, LANDMARK_CLEARINGS } from './world/glenLandmarks';
 import { QuestLog } from './quests/questLog';
 import { setupElderGlenQuests } from './quests/elderGlenQuests';
@@ -65,6 +65,9 @@ import { buildGlenLife } from './world/glenLife';
 import { GoldenExpanse } from './world/desert/goldenExpanse';
 import { sunspireResidents } from './world/desert/sunspireFolk';
 import { setupDesertQuests } from './quests/desertQuests';
+import { RoyalCapital, CAPITAL_SPOTS } from './world/royalCapital';
+import { capitalResidents } from './world/capitalFolk';
+import { CAPITAL_QUESTS } from './quests/capitalQuests';
 import { QuestUI } from './ui/questUI';
 import { MenuBook } from './ui/menuBook';
 import { glenNamedFolk } from './npc/glenNamed';
@@ -181,8 +184,11 @@ async function boot() {
   mark('kingsRoad');
   const port = buildPortAurelle(r.scene, world.mats, fx);
   mark('port');
+  // The Royal Capital: its skyline now, the city itself streamed in as you come near.
+  const capital = new RoyalCapital(r.scene, world.mats, fx);
+  mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, Gravewood.clearing, MINE_CLEARING];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...capital.clearings, Gravewood.clearing, MINE_CLEARING];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -227,6 +233,10 @@ async function boot() {
     // The King's Road: the Wayfarer's Rest, Millbrook, the chapel and the Lantern Camp.
     npcs.addSettlement(port.settlement);
     for (const rec of port.records) npcs.add(rec);
+    // The Royal Capital: the court, the orders, the envoys and the townsfolk.
+    const capFolk = capitalResidents();
+    npcs.addSettlement(capFolk.settlement);
+    for (const rec of capFolk.records) npcs.add(rec);
     for (const k of kingsRoad.settlements) {
       npcs.addSettlement(k.settlement);
       for (const rec of k.records) npcs.add(rec);
@@ -527,7 +537,7 @@ async function boot() {
     const rx = riverX(z);
     return { pos: new THREE.Vector3(rx - 9, heightAt(rx - 9, z), z), water: new THREE.Vector3(rx - 2, RIVER_LEVEL, z), kind: 'river' as const, name: 'The Elder Glen river' };
   });
-  const fishingSpots = [...port.fishingSpots, ...riverSpots];
+  const fishingSpots = [...port.fishingSpots, ...capital.fishingSpots, ...riverSpots];
   realm.overworldInteractables.push(...fishingSpots.map((spot) => ({
     pos: spot.pos, radius: 2.2,
     label: () => (fishing.active ? '' : countItem('fishingRod') ? `Fish here (${spot.name})` : 'A good fishing spot — you need a rod (Dockmaster Mira)'),
@@ -555,6 +565,25 @@ async function boot() {
     if (won) f?.();
   };
   quests.add(...PORT_QUESTS);
+  quests.add(...CAPITAL_QUESTS);
+  // The Crown checkpoint lifts its barrier for anyone registered at the Academy (on load too).
+  quests.hooks.set('academy-trial:done', () => roads.open('capital'));
+  // The Crown's tourney: a bout with Ser Gawen in the Silver Lance's ring.
+  const listsAt = CAPITAL_SPOTS.lists.clone().setY(heightAt(CAPITAL_SPOTS.lists.x, CAPITAL_SPOTS.lists.z));
+  const startTourney = () => {
+    const rec = npcs.find('gawen')?.rec;
+    if (player.mounted) horses.dismount();
+    duelWin = () => quests.signal('tourney-won');
+    duel.start({ name: rec?.name ?? 'Ser Gawen Ashby', look: rec!.look, hp: 340, damage: 15, pace: 0.95, ring: listsAt, radius: 9 });
+    hud.toast('Grand Marshal Hart: "For Crown and Lance. Begin!"');
+  };
+  quests.hooks.set('duel:gawen', startTourney);
+  realm.overworldInteractables.push({
+    pos: listsAt, radius: 10,
+    label: () => (!duel.active && quests.wants('tourney-won') ? 'Step into the tourney ring (Ser Gawen)' : ''),
+    enabled: () => !duel.active && quests.wants('tourney-won'),
+    action: startTourney,
+  });
   quests.hooks.set('duel:hadrik', () => startDuel('hadrik'));
   quests.hooks.set('duel:dorian', () => startDuel('dorian'));
   quests.hooks.set('fishing:rod', () => {
@@ -640,6 +669,46 @@ async function boot() {
       show('You sleep to the creak of ropes and the cry of gulls. It is seven in the morning.', [{ label: 'Good morning.', run: () => dialogue.close() }]);
     },
   }]);
+  // ---- The Royal Capital's services ----------------------------------------------------
+  folkServices.set('grandmaster', () => [{ label: 'See the guild board', run: () => { dialogue.close(); town.guild.open('board'); } }]);
+  folkServices.set('armourer', () => [{ label: 'Browse royal armour', run: () => shop('armourer', 'Fitted by appointment. Today is your appointment.', [['ironHelm', 70], ['pauldrons', 85], ['breastplate', 170], ['gauntlets', 60], ['greaves', 95], ['sabatons', 60], ['kiteShield', 95], ['towerShield', 150]]) }]);
+  folkServices.set('bladesmith', () => [{ label: 'Browse capital blades', run: () => shop('bladesmith', 'Every edge here was folded under the royal charter.', [['knightSword', 115], ['bastardSword', 150], ['claymore', 280], ['estoc', 260], ['frostbite', 340], ['emberbrand', 340]]) }]);
+  folkServices.set('capAlchemist', () => [{ label: 'Browse court draughts', run: () => shop('capAlchemist', 'Brewed to the Collegium\u2019s own recipes.', [['healthPotion', 16], ['manaPotion', 20], ['greaterHealthPotion', 50], ['greaterManaPotion', 55]]) }]);
+  folkServices.set('capJeweller', () => [{ label: 'Browse court jewellery', run: () => shop('capJeweller', 'Garnets, gold, and a little protective enchantment.', [['garnetAmulet', 260], ['ringVigor', 220], ['ringSage', 200], ['warriorBelt', 180]]) }]);
+  folkServices.set('archmage', () => [{ label: 'Study at the Collegium (spell tomes)', run: () => shop('archmage', 'The first grammar of magic: fire, and its opposite.', [['fireball', 140], ['healingLight', 155], ['manaPotion', 22], ['greaterManaPotion', 60]]) }]);
+  folkServices.set('cartographer', (show) => [{
+    label: 'Buy a map of the Crown lands \u2014 40g',
+    run: () => {
+      if (player.prog.gold < 40) return show('Forty gold, I\u2019m afraid. Surveyors don\u2019t walk for free.', [{ label: 'Farewell.', run: () => dialogue.close() }]);
+      player.prog.addGold(-40);
+      for (const id of ['royalCapital', 'cresha', 'elderGlen']) discovery.revealRegion(id);
+      worldMap.markFogDirty();
+      save();
+      show('There: the Crown lands, from the Kingsbridge to the coast. Mind the parts marked \u201chere be wolves\u201d. They mean it.', [{ label: 'Thank you.', run: () => dialogue.close() }]);
+    },
+  }]);
+  folkServices.set('ferrywoman', (show) => [{
+    label: 'Buy a fishing rod \u2014 25g',
+    run: () => {
+      if (player.prog.gold < 25) return show('Twenty-five, dear. Rods don\u2019t grow on the riverbank. Well. Willow does. Not good willow.', [{ label: 'Farewell.', run: () => dialogue.close() }]);
+      player.prog.addGold(-25);
+      giveItem('fishingRod', 1);
+      show('Cast where the current slows, under the arches. The pike sulk there.', [{ label: 'Thank you.', run: () => dialogue.close() }]);
+    },
+  }]);
+  folkServices.set('stagKeeper', (show, back) => [{
+    label: 'A room for the night \u2014 20g',
+    run: () => {
+      if (player.prog.gold < 20) return show('Twenty, friend. The Stag\u2019s feather beds are royal; so\u2019s the price.', [{ label: 'Back.', run: back }]);
+      player.prog.addGold(-20);
+      time.skipTo(7);
+      player.hp = player.maxHp;
+      player.mana = player.maxMana;
+      player.stamina = player.maxStamina;
+      save();
+      show('You sleep under a gilded stag\u2019s antlers and wake to the palace bells. It is seven in the morning.', [{ label: 'Good morning.', run: () => dialogue.close() }]);
+    },
+  }]);
   const roadQuests = setupRoadQuests({
     quests, scene: r.scene, player, mats: world.mats, encounters, beasts: slimes, toast: (m) => hud.toast(m),
     talk: (who, title, text, opts) => dialogue.show(who, title, text, opts), close: () => dialogue.close(),
@@ -654,6 +723,8 @@ async function boot() {
     { id: 'elderGlen', name: 'Elder Glen', pos: glenYard, along: 0 },
     { id: 'waystation', name: "The Wayfarer's Rest", pos: kingsRoad.stableYard, along: distanceAlong(kr, kingsRoad.stableYard.x, kingsRoad.stableYard.z) },
     { id: 'portAurelle', name: 'Port Aurelle (West Gate)', pos: PORT_SPOTS.stable, along: distanceAlong(kr, 2690, 150) },
+    // (The capital lies the other way from Elder Glen: the Logging Road, then the Crown Road.)
+    { id: 'royalCapital', name: 'The Royal Capital (Crown Stables)', pos: CAPITAL_SPOTS.stable, along: -(roadLength(road('west')) + roadLength(road('capital'))) },
   ];
   const coachOptions = (here: string, show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) => {
     const from = stops.find((s) => s.id === here)!;
@@ -690,6 +761,7 @@ async function boot() {
   town.serviceOptions = (id, show, back) => (id === 'stablemaster' ? stableFor(id, glenYard, 'elderGlen')(show, back) : []);
   folkServices.set('dunmore', stableFor('dunmore', kingsRoad.stableYard, 'waystation'));
   folkServices.set('hobbs', stableFor('hobbs', PORT_SPOTS.stable, 'portAurelle'));
+  folkServices.set('capOstler', stableFor('capOstler', CAPITAL_SPOTS.stable, 'royalCapital'));
   realm.overworldInteractables.push(encounters.interactable, ...roadQuests.interactables, horses.interactable, ...roads.interactables, foraging.interactable, ...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables, ...glenMore.interactables);
 
   // ---- Buildings you can walk into ----------------------------------------------------
@@ -701,15 +773,21 @@ async function boot() {
     const name = d.name ?? (kind === 'shop' && keeperName ? `${keeperName.split(' ')[0]}’s shop` : 'the house');
     return { kind, name, keeper: d.keeper };
   };
-  for (const d of DOORS) {
-    const info = resolveDoor(d);
-    realm.overworldInteractables.push({
-      pos: d.pos, radius: 1.5,
-      label: () => `Enter ${info.name}`,
-      enabled: () => realm.mode === 'overworld' && !player.mounted,
-      action: () => void realm.enterInterior({ ...d, kind: info.kind, name: info.name, keeper: info.keeper }, info.kind, world.mats, spells, (label: string, text: string) => dialogue.show('Elder Glen', label, text, [{ label: 'Back.', run: () => dialogue.close() }])),
-    });
-  }
+  const addDoors = (list: Door[]) => {
+    for (const d of list) {
+      const info = resolveDoor(d);
+      const where = REGIONS[regionAt(d.pos.x, d.pos.z)]?.name ?? 'Elder Glen';
+      realm.overworldInteractables.push({
+        pos: d.pos, radius: 1.5,
+        label: () => `Enter ${info.name}`,
+        enabled: () => realm.mode === 'overworld' && !player.mounted,
+        action: () => void realm.enterInterior({ ...d, kind: info.kind, name: info.name, keeper: info.keeper }, info.kind, world.mats, spells, (label: string, text: string) => dialogue.show(where, label, text, [{ label: 'Back.', run: () => dialogue.close() }])),
+      });
+    }
+  };
+  addDoors(DOORS);
+  // The capital registers its doors when it is built (as you come near it).
+  capital.onBuilt = (doors) => addDoors(doors);
   // People inside: a borrowed town NPC (moved in, put back on the way out) or
   // characters built for the visit from resident records.
   const inside = {
@@ -785,7 +863,7 @@ async function boot() {
       extras.push({ pos: spot.pos, radius: 2.4, label: () => `Talk to ${svc.spec.name}`, enabled: () => true, action: () => town.talk(svc.spec) });
     } else if (keeper && spot) {
       const st = npcs.find(keeper);
-      if (st) folkInside(st, spot, it, extras, 'idle');
+      if (st) folkInside(st, spot, it, extras, spot.seated ? 'sit' : 'idle'); // (the King sits his throne)
     }
     if (it.kind === 'guild') extras.push({ pos: it.at(0, -it.D / 2 + 0.8), radius: 2, label: () => 'Read the quest board', enabled: () => true, action: () => town.guild.open('board') });
     // Taverns and the guild have company: residents who live nearby.
@@ -1314,6 +1392,7 @@ async function boot() {
       horses.update(dt);
       caravans.update(dt, player.pos);
       port.update(dt, ts.night);
+      capital.update(dt, player.pos, ts.night);
       boats.update(dt);
       if (worldRunning) riverLife.update(dt, player.pos, player.sprinting, ts.night);
       fishing.update(dt);
@@ -1442,7 +1521,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       perf,
       pause: (p: boolean) => (paused = p),

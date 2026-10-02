@@ -44,7 +44,7 @@ export const ROAD_SPECS: RoadSpec[] = [
   {
     // Continues the logging road west and north-west toward the Royal Capital.
     id: 'capital', name: 'The Crown Road', kind: 'kings',
-    pts: [[-320, 118], [-480, 104], [-700, 60], [-960, -10], [-1250, -120], [-1600, -300], [-2000, -520], [-2450, -720], [-2900, -900], [-3300, -1000]],
+    pts: [[-320, 118], [-480, 104], [-700, 60], [-960, -10], [-1250, -120], [-1600, -300], [-2000, -520], [-2450, -720], [-2900, -900], [-3060, -1012], [-3150, -1056], [-3196, -1060]], // ends at the capital's East Gate
     gate: { at: [-960, -10], reason: 'By order of the Crown, the capital road is closed to unregistered travellers. Earn your Academy registration in Port Aurelle first.' },
   },
   {
@@ -52,6 +52,21 @@ export const ROAD_SPECS: RoadSpec[] = [
     // Sunspire in the Golden Expanse (points match desert/desertLayout.ts CARAVAN_ROAD).
     id: 'sunspire', name: 'The Caravan Way', kind: 'kings',
     pts: [[-700, 60], [-1050, 150], [-1500, 260], [-2000, 380], [-2600, 480], [-3200, 560], [-3800, 620], [-4400, 660], [-4900, 690], [-5250, 684], [-5390, 679]],
+  },
+  {
+    // Out of the capital's West Gate, over the Kingsbridge and on toward the Wildlands.
+    id: 'kingsbridge', name: 'The Kingsbridge Road', kind: 'kings',
+    pts: [[-3696, -1060], [-3800, -1064], [-3930, -1066], [-4000, -1066], [-4090, -1070], [-4250, -1092]],
+  },
+  {
+    // Down to the riverside quay below the capital.
+    id: 'crownQuay', name: 'Quay Lane', kind: 'lane',
+    pts: [[-3800, -1064], [-3880, -1030], [-3930, -1010]],
+  },
+  {
+    // South from the capital's South Gate to the Caravan Way.
+    id: 'queens', name: "The Queen's Road", kind: 'kings',
+    pts: [[-3440, -840], [-3436, -700], [-3420, -500], [-3370, -200], [-3300, 120], [-3240, 380], [-3200, 560]],
   },
   {
     // The northern forest road toward the elven woods.
@@ -98,6 +113,8 @@ export const COBBLE_ZONES: [number, number, number][] = [
   [140, 12, 60], // Elder Glen's east gate and the stone bridge
   [1380, 130, 70], // the Wayfarer's Rest
   [2690, 150, 150], // Port Aurelle's West Gate
+  [-3440, -1060, 330], // the Royal Capital and its gates
+  [-4000, -1066, 70], // the Kingsbridge
 ];
 
 /** Millbrook Brook: a creek from the northern hills, under the King's Road's wooden bridge, into Millbrook Mere. */
