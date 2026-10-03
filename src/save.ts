@@ -36,6 +36,8 @@ export interface WorldSave {
   horses?: import('./world/horses').HorseSave;
   /** trophies and unsold catch */
   fishing?: { trophies?: Record<string, number>; held?: Record<string, number> };
+  /** ships, crew, rentals, wrecks and Seamanship */
+  sailing?: import('./world/sea/sailing').SailingSave;
 }
 
 export interface SaveData {

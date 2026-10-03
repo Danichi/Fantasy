@@ -10,6 +10,8 @@ export class ThirdPersonCamera {
   yaw = Math.PI; // start looking north (-Z)
   pitch = 0.22;
   distance = 4.8;
+  /** extra arm length and height (at a ship's helm: see the whole ship) */
+  extra = 0;
   private armLen = 4.8;
   private shoulder = 0.48;
   private pivot = new THREE.Vector3();
@@ -50,7 +52,7 @@ export class ThirdPersonCamera {
     }
 
     // Pivot trails the player slightly for weight, but never far.
-    const target = new THREE.Vector3(focus.x, focus.y + 1.55, focus.z);
+    const target = new THREE.Vector3(focus.x, focus.y + 1.55 + this.extra * 0.22, focus.z);
     this.pivot.x = damp(this.pivot.x, target.x, 16, dt);
     this.pivot.z = damp(this.pivot.z, target.z, 16, dt);
     this.pivot.y = damp(this.pivot.y, target.y, 9, dt);
@@ -76,7 +78,7 @@ export class ThirdPersonCamera {
     const shoulder = this.shoulder;
     const origin = this.pivot.clone().addScaledVector(right, shoulder * 0.5);
     const back = fwd.clone().negate();
-    const want = origin.clone().addScaledVector(right, shoulder * 0.5).addScaledVector(back, this.distance);
+    const want = origin.clone().addScaledVector(right, shoulder * 0.5).addScaledVector(back, this.distance + this.extra);
 
     // Spring arm: a bundle of rays (centre plus a 0.25 m ring) approximates a
     // sphere sweep, so the camera never ends up hugging a wall face.

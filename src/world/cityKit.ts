@@ -114,11 +114,16 @@ const M4 = (x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1)
   new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz));
 
 /** A docked ship of one of the Grand Ocean's six types. */
-export function buildShip(kind: ShipKind, hullColor = 0x5a3a24, trim = 0xc9a25a) {
+export function buildShip(kind: ShipKind, hullColor = 0x5a3a24, trim = 0xc9a25a, opts: { rigged?: boolean } = {}) {
   const g = new THREE.Group();
   const L = { fishing: 7, sloop: 12, merchant: 18, galleon: 26, naval: 22, expedition: 16 }[kind];
   const B = L * (kind === 'fishing' ? 0.34 : 0.3), D = L * 0.16;
-  const solid = new ShipPart(), cloth = new ShipPart(), glow = new ShipPart();
+  const solid = new ShipPart(), glow = new ShipPart();
+  // Rigged ships (ones you sail) keep each mast's canvas as its own piece, so
+  // the sails can swing with the trim and shorten when reefed.
+  const hullCloth = new ShipPart();
+  let cloth = hullCloth;
+  const mastCloth: { part: ShipPart; z: number }[] = [];
   const rope: THREE.Vector3[] = [];
   // Hulls are painted: lift dark wood so it reads warm on bright water.
   const hullC = new THREE.Color(hullColor).multiplyScalar(2.3);
@@ -178,7 +183,11 @@ export function buildShip(kind: ShipKind, hullColor = 0x5a3a24, trim = 0xc9a25a)
   }
   // The transom (flat stern) closes the back.
   const st = ring[0];
-  for (let k = 1; k < NS; k++) tri(st[0], st[k], st[k + 1], sheer(0));
+  // (both windings: it's seen from astern and from the deck)
+  for (let k = 1; k < NS; k++) {
+    tri(st[0], st[k], st[k + 1], sheer(0));
+    tri(st[0], st[k + 1], st[k], sheer(0));
+  }
   const hullGeo = new THREE.BufferGeometry();
   hullGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   hullGeo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
@@ -210,7 +219,7 @@ export function buildShip(kind: ShipKind, hullColor = 0x5a3a24, trim = 0xc9a25a)
     solid.add(new THREE.BoxGeometry(B * 0.88, D * 0.12, qd + 0.04), hullC, M4(0, deckY + D * 0.1, -L / 2 + qd / 2 + L * 0.03));
     solid.add(new THREE.BoxGeometry(B * 0.9, 0.1, qd + 0.1), deckC, M4(0, deckY + D * 0.92, -L / 2 + qd / 2 + L * 0.03));
     solid.add(new THREE.BoxGeometry(B * 0.9, 0.14, 0.1), trimC, M4(0, deckY + D * 1.25, -L / 2 + L * 0.03));
-    for (let w = -1; w <= 1; w++) glow.add(new THREE.BoxGeometry(B * 0.14, D * 0.3, 0.06), 0xffffff, M4(w * B * 0.24, deckY + D * 0.5, -L / 2 + L * 0.025));
+    for (let w = -1; w <= 1; w++) glow.add(new THREE.BoxGeometry(B * 0.14, D * 0.3, 0.06), 0xffffff, M4(w * B * 0.24, deckY + D * 0.42, -L / 2 - 0.05)); // stern windows, on the transom
     // Stern lanterns on posts at the corners of the quarterdeck.
     const lt = deckY + D * 0.92;
     for (const s of [-1, 1]) {
@@ -275,6 +284,10 @@ export function buildShip(kind: ShipKind, hullColor = 0x5a3a24, trim = 0xc9a25a)
   for (const mz of masts) {
     const z = mz * L;
     const base = deckY;
+    if (opts.rigged) {
+      cloth = new ShipPart();
+      mastCloth.push({ part: cloth, z });
+    }
     solid.add(new THREE.CylinderGeometry(0.07 + L * 0.004, 0.12 + L * 0.007, H, 8), woodC, M4(0, base + H / 2, z));
     if (big) solid.add(new THREE.CylinderGeometry(B * 0.16, B * 0.12, 0.14, 10), woodC, M4(0, base + H * 0.66, z));
     // Pennant streaming from the masthead.
@@ -316,7 +329,19 @@ export function buildShip(kind: ShipKind, hullColor = 0x5a3a24, trim = 0xc9a25a)
   }
 
   const ms = shipMaterials();
-  for (const [part, mat, shadow] of [[solid, ms.solid, true], [cloth, ms.cloth, true], [glow, ms.glow, false]] as const) {
+  const sails: THREE.Object3D[] = [];
+  for (const { part, z } of mastCloth) {
+    for (const geo of part.geos) geo.translate(0, 0, -z);
+    const mesh = part.mesh(ms.cloth);
+    if (!mesh) continue;
+    mesh.castShadow = true;
+    const pivot = new THREE.Group();
+    pivot.position.z = z;
+    pivot.add(mesh);
+    g.add(pivot);
+    sails.push(pivot);
+  }
+  for (const [part, mat, shadow] of [[solid, ms.solid, true], [hullCloth, ms.cloth, true], [glow, ms.glow, false]] as const) {
     const mesh = part.mesh(mat);
     if (!mesh) continue;
     mesh.castShadow = shadow;
@@ -324,5 +349,5 @@ export function buildShip(kind: ShipKind, hullColor = 0x5a3a24, trim = 0xc9a25a)
     g.add(mesh);
   }
   g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(rope), ms.rope));
-  return { group: g, length: L, beam: B, draft: D };
+  return { group: g, length: L, beam: B, draft: D, sails };
 }

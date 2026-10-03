@@ -126,6 +126,15 @@ export class Input {
     if (this.down.delete(code)) this.released.add(code);
   }
 
+  /** A raw key held (KeyboardEvent.code), for context controls like the helm. */
+  heldKey(code: string) {
+    return this.down.has(code);
+  }
+  /** A raw key pressed since the last sim step. */
+  pressedKey(code: string) {
+    return this.pressed.has(code);
+  }
+
   held(a: Action) {
     return this.bindings[a].some((c) => this.down.has(c));
   }

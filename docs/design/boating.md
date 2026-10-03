@@ -1,10 +1,30 @@
-# Boats, Sailing and Seamanship (design plan v0.2)
+# Boats, Sailing and Seamanship (design plan v0.3)
 
-Status: a plan, with Malachi's decisions folded in (2026-10-03). Nothing is
-built yet beyond what "What exists" lists. Numbers are starting points to tune;
-names are placeholders. It follows the progression model in `combat-paths.md`
+Status: a plan, with Malachi's decisions folded in (2026-10-03). The first
+playable slice is built (see "Built so far" below). Numbers are starting points
+to tune; names are placeholders. It follows the progression model in `combat-paths.md`
 (XP invested in disciplines; Callings are real power) and the Grand Ocean phase
 of the World Expansion plan (six ship types, sea encounters, ports, islands).
+
+---
+
+## Built so far (2026-10-03)
+
+| Area | What works | Where |
+|---|---|---|
+| The sea | One Gerstner wave set shared by the shader and the physics (`waveAt`); ripples, subsurface glow on crests, fresnel sky, sun glitter, sunset path, whitecaps and wind streaks that grow with the wind, shore foam, storm tint | `src/world/sea/ocean.ts`, `seaState.ts` |
+| Danger | Tiers 0 to 5 (Sheltered, Coastal, Open, Wild, Perilous, Abyssal) by distance from Port Aurelle and by region (Emerald Isles, Azure Isles, Shattered Isles, Sunken Isles, Demon Continent); waves, wind, storms, pirates and monsters scale with it | `seaState.ts` (`dangerAt`, `SEA_REGIONS`) |
+| Storms | Drifting storm cells with storm swells (to about 11 m), veering gusts, rain and lightning; ships are kicked off course, drift downwind, broach, capsize, ship green water and lose crew overboard | `seaState.ts`, `ship.ts` |
+| Ships | Skiff, Fishing Sloop, Cutter, Brigantine, Galleon: speed, hull, sails, how big a sea each can take, crew needed, cargo, guns; Seamanship level gates which you may command | `shipTypes.ts`, `ship.ts` |
+| Sailing | Points of sail, trim (auto in assisted mode, Z/X by hand in full mode), reefing, anchor, rowing, heel, leeway, grounding; you walk the deck while she sails; the helm HUD | `ship.ts`, `sailing.ts`, `src/ui/sailingHud.ts` |
+| Owning | Buy at the Aurelle Shipwrights (Master Hale Barrow), rent from Mira or Maud Reeve's river ferry, fetch home, sell; up to four ships; saved | `sailing.ts` |
+| Upgrades | Sails, Hull, Keel, Guns, Harpoon, Pumps, Figurehead, Hold, each in tiers; top tiers need sea serpent scales; the hull caps what fits | `shipTypes.ts` (`UPGRADES`) |
+| Crew | Sailors on the quay and a broker (Sal Rigby): roles (bosun, navigator, gunner, shipwright, lookout, harpooner, cook, deckhand), traits, wages, morale, XP; one-voyage hands for hire | `crew.ts`, `sailing.ts` |
+| Damage and loss | Hull in three sections, canvas, water in the hold and pumps; a sunk ship is gone for good and leaves a wreck you can dive and search | `ship.ts`, `sailing.ts` |
+| Combat | Broadsides on the side you face (with lead), harpoons that lay onto the nearest target near your aim; pirates hunt, trade broadsides, grapple and board, strike and can be plundered; sea serpents stalk, dive, ram and rear up to bite; sharks circle swimmers | `gunnery.ts`, `seaThreats.ts` |
+| Swimming | Swim anywhere, dive (hold C), breath meter, drowning | `src/player/player.ts` |
+
+Tests: `tests/sailing.spec.ts`.
 
 ---
 

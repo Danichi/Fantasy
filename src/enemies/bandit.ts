@@ -122,6 +122,16 @@ export class Bandit implements Target {
   /** set when the bandit notices the player (for ambush groups) */
   alerted = false;
 
+  /** Moved by what it stands on (a ship's deck under it). */
+  carry(dx: number, dy: number, dz: number) {
+    const cur = this.rb.translation();
+    const next = { x: cur.x + dx, y: cur.y + dy, z: cur.z + dz };
+    this.rb.setTranslation(next, true);
+    this.col.setTranslation(next);
+    this.position.set(next.x, next.y - 0.86, next.z);
+    this.home.add(new THREE.Vector3(dx, dy, dz));
+  }
+
   constructor(readonly role: BanditRole, at: THREE.Vector3, private scene: THREE.Scene, private bolts: Bolts, readonly home = at.clone(), look?: Look) {
     this.kind = role === 'chief' ? 'banditChief' : 'bandit';
     this.name = role === 'chief' ? 'Varn the Hollow' : role === 'crossbow' ? 'Bandit Crossbowman' : 'Bandit Cutthroat';

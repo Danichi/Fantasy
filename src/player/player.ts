@@ -16,6 +16,8 @@ import { targets, hurtSegment, type Target, type IncomingAttack, type DefenceRes
 import { surfaceAt, heightAt as heightAtGround } from '../world/terrain';
 import { waterDepthAt } from '../world/water';
 import { waterSurfaceAt } from '../world/waterLevel';
+import { SEA_LEVEL } from '../world/worldMap';
+import { waveAt } from '../world/sea/seaState';
 import { Progression } from '../progression/progression';
 import { Paths } from '../paths/paths';
 import { baseMods, type CombatMods } from '../combat/mods';
@@ -216,7 +218,16 @@ export class Player {
   }
 
   /** a boat carrying the player (world/boats.ts) */
-  vehicle: { pos: THREE.Vector3; yaw: number; speed: number } | null = null;
+  vehicle: { pos: THREE.Vector3; yaw: number; speed: number; stand?: boolean } | null = null;
+  /** diving: metres below the surface, held breath 0..1, seconds a full breath lasts */
+  diveDepth = 0;
+  breath = 1;
+  breathTime = 25;
+  private diveHeld = false;
+  private breathT = 0;
+  get underwater() {
+    return this.swimming && this.diveDepth > 0.8;
+  }
   /** in deep water (river pools, the canal, the sea) */
   swimming = false;
   private drownT = 0;
@@ -325,6 +336,7 @@ export class Player {
     if (input.wasPressed('cast')) buf('cast');
     if (input.wasPressed('originAbility')) buf('originAbility');
     this.blocking = input.held('offhand') && this.equip.hasShield && this.mods.canBlock && (!this.act || this.act.def.id === 'parryShield');
+    this.diveHeld = input.held('jump');
     if (input.wasPressed('jump') && this.grounded && !this.act) {
       this.vel.y = JUMP_V;
       this.grounded = false;
@@ -607,9 +619,13 @@ export class Player {
       if (this.swimming) targetSpeed = this.sprinting ? 3.6 : 2.3;
     }
     // Swimming: float with the chest at the waterline, tire, and drown if spent.
-    const surface = waterSurfaceAt(this.pos.x, this.pos.z);
+    // (At sea you float on the waves themselves.)
+    const still = waterSurfaceAt(this.pos.x, this.pos.z);
+    const surface = still !== null && Math.abs(still - SEA_LEVEL) < 0.01 ? still + waveAt(this.pos.x, this.pos.z).y : still;
     const depth = surface === null ? 0 : surface - this.groundBelow();
-    this.swimming = !this.dead && depth > 1.35;
+    // ...but only in it: standing on a ship's deck over deep water isn't swimming.
+    const inWater = surface !== null && this.pos.y < surface - (this.swimming ? -0.4 : 0.6);
+    this.swimming = !this.dead && depth > 1.35 && inWater;
     if (this.swimming) {
       this.stamina = Math.max(0, this.stamina - (this.sprinting ? 7 : 2.2) * dt);
       this.staminaDelay = 0.6;
@@ -621,6 +637,24 @@ export class Player {
         }
       }
     } else this.drownT = 0;
+    // Diving: hold jump to go under, let go to rise; breath runs out down there.
+    if (this.swimming) {
+      const room = Math.max(0, depth - 2.2);
+      this.diveDepth = Math.max(0, Math.min(room, this.diveDepth + (this.diveHeld ? 2.4 : -3.2) * dt));
+    } else this.diveDepth = 0;
+    if (this.underwater) {
+      this.breath = Math.max(0, this.breath - dt / this.breathTime);
+      if (this.breath <= 0) {
+        this.breathT += dt;
+        if (this.breathT > 1) {
+          this.breathT = 0;
+          this.applyDamage(this.maxHp * 0.1);
+        }
+      }
+    } else {
+      this.breath = Math.min(1, this.breath + dt / 2.5);
+      this.breathT = 0;
+    }
     if (this.sprinting && !this.mounted && !this.swimming) {
       this.stamina = Math.max(0, this.stamina - 13 * dt);
       this.staminaDelay = 0.5;
@@ -666,7 +700,7 @@ export class Player {
     // Vertical.
     if (this.swimming && surface !== null) {
       // Buoyancy: ease toward treading water at the surface.
-      this.vel.y = (surface - 1.25 - this.pos.y) * 5;
+      this.vel.y = (surface - 1.25 - this.diveDepth - this.pos.y) * 5;
     } else {
       this.vel.y -= GRAVITY * dt;
       if (this.grounded && this.vel.y < 0) this.vel.y = 0;
@@ -772,6 +806,15 @@ export class Player {
     this.vel.set(0, 0, 0);
     this.onTeleport?.(p);
   }
+  /** Moved by what you stand on (a ship's deck): keeps your velocity, unlike teleport. */
+  carry(to: THREE.Vector3, dyaw = 0) {
+    const c = { x: to.x, y: to.y + CENTER_Y + 0.05, z: to.z };
+    this.body.setTranslation(c, true);
+    this.collider.setTranslation(c);
+    this.prevPos.add(to.clone().sub(this.pos));
+    this.pos.copy(to);
+    this.yaw += dyaw;
+  }
   /** Called after a teleport so streamed ground and trees can load around the new spot. */
   onTeleport?: (p: THREE.Vector3) => void;
 
@@ -782,7 +825,7 @@ export class Player {
     const root = this.char.root;
     root.position.lerpVectors(this.prevPos, this.pos, alpha);
     // In the saddle: the rider sits on the horse's back.
-    root.position.y += this.vehicle ? -0.32 : this.mounted && this.mountStats ? RIDE_HEIGHT : this.mounted ? -0.72 : 0;
+    root.position.y += this.vehicle ? (this.vehicle.stand ? 0 : -0.32) : this.mounted && this.mountStats ? RIDE_HEIGHT : this.mounted ? -0.72 : 0;
     // Getting on: start beside the horse's left flank and hop up into the saddle.
     let rideW = 1;
     if (this.mounted && this.mountStats && this.mountT < 1) {
@@ -913,7 +956,7 @@ export class Player {
       vis.position.z = -k * 0.2;
     }
     this.rig.apply(pose);
-    if ((this.mounted && this.mountStats) || this.vehicle || this.dismountFrom) this.ridePose(this.vehicle ? 1 : rideW);
+    if ((this.mounted && this.mountStats) || (this.vehicle && !this.vehicle.stand) || this.dismountFrom) this.ridePose(this.vehicle ? 1 : rideW);
 
     // Blade hit detection against the pose we just drew.
     if (a && at !== this.lastPresentT) this.detectHits(a, at);

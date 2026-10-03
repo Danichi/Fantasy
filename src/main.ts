@@ -90,6 +90,8 @@ import { PerfOverlay } from './ui/perfOverlay';
 import { regionAt, reliefAt, RELIEF } from './world/worldMap';
 import { targets } from './combat/targets';
 import { Ocean } from './world/sea/ocean';
+import { updateSea } from './world/sea/seaState';
+import { Sailing, harbourFolk, HARBOUR_SAILORS } from './world/sea/sailing';
 import { GroundWindow } from './world/groundWindow';
 import { SkillsUI } from './ui/skills';
 import { DISC } from './paths/data';
@@ -242,6 +244,10 @@ async function boot() {
     // The King's Road: the Wayfarer's Rest, Millbrook, the chapel and the Lantern Camp.
     npcs.addSettlement(port.settlement);
     for (const rec of port.records) npcs.add(rec);
+    // The harbour's shipwright, crew broker, and sailors looking for a berth.
+    const hf = harbourFolk((x, z) => new THREE.Vector3(x, heightAt(x, z), z));
+    for (const pl of hf.places) port.settlement.places.set(pl.id, pl);
+    for (const rec of hf.records) npcs.add(rec);
     // The Royal Capital: the court, the orders, the envoys and the townsfolk.
     const capFolk = capitalResidents();
     npcs.addSettlement(capFolk.settlement);
@@ -670,9 +676,32 @@ async function boot() {
   folkServices.set('guildmaster', () => [{ label: 'See the guild board', run: () => { dialogue.close(); town.guild.open('board'); } }]);
   const riverLife = new RiverLife(r.scene, fx);
   const boats = new Boats(r.scene, player);
+  // Ships: owned, hired and crewed; the helm, the deck, pirates and serpents.
+  const sailing = new Sailing(r.scene, fx, player, input, cam, {
+    toast: (m) => hud.toast(m),
+    gold: () => player.prog.gold,
+    addGold: (n) => player.prog.addGold(n),
+    give: (id, n) => giveItem(id, n),
+    count: (id) => countItem(id),
+    take: (id, n) => takeItem(id, n),
+    talk: (who, title, text, opts) => dialogue.show(who, title, text, opts),
+    close: () => dialogue.close(),
+    save: () => save(),
+    bossBar: (t, name) => hud.bossBar(t, name),
+    day: () => time.day,
+    hours: () => time.day * 24 + time.hour,
+    shake: (n) => cam.shake(n),
+    dismount: () => { if (player.mounted) horses.dismount(); },
+  });
+  sailing.fromJSON(saveData?.world?.sailing);
+  realm.overworldInteractables.push(...sailing.interactables);
+  folkServices.set('shipwright', (show, back) => sailing.shipwrightOptions(show, back));
+  folkServices.set('rigby', (show, back) => sailing.brokerOptions(show, back));
+  for (const c of HARBOUR_SAILORS) folkServices.set(c.id, (show, back) => sailing.sailorOptions(c.id, show, back));
   boats.onFish = (spot) => fishing.start(spot);
   realm.overworldInteractables.push(...boats.interactables);
-  folkServices.set('mira', () => [
+  folkServices.set('mira', (show, back) => [
+    ...sailing.miraOptions(show, back),
     { label: 'Buy a fishing rod — 20g', run: () => { if (player.prog.gold >= 20) { player.prog.addGold(-20); giveItem('fishingRod', 1); } dialogue.close(); } },
     {
       label: 'Hire a rowing boat — 5g',
@@ -721,7 +750,7 @@ async function boot() {
       show('There: the Crown lands, from the Kingsbridge to the coast. Mind the parts marked \u201chere be wolves\u201d. They mean it.', [{ label: 'Thank you.', run: () => dialogue.close() }]);
     },
   }]);
-  folkServices.set('ferrywoman', (show) => [{
+  folkServices.set('ferrywoman', (show, back) => [...sailing.ferryOptions(show, back), {
     label: 'Buy a fishing rod \u2014 25g',
     run: () => {
       if (player.prog.gold < 25) return show('Twenty-five, dear. Rods don\u2019t grow on the riverbank. Well. Willow does. Not good willow.', [{ label: 'Farewell.', run: () => dialogue.close() }]);
@@ -1158,7 +1187,7 @@ async function boot() {
     if (TEST_MODE && !location.search.includes('save')) return;
     const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON() }, realm.mineProgress);
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   // Guild contracts show in the quest log (tracker, journal, map, waypoint).
@@ -1353,6 +1382,7 @@ async function boot() {
       else worldMap.toggle();
     }
     slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
+    if (realm.mode === 'overworld') sailing.preStep(STEP);
     player.update(STEP, input, cam);
     skillRt.update(STEP);
     if (realm.mode === 'overworld') {
@@ -1435,6 +1465,7 @@ async function boot() {
     ground.update(r.camera.position);
     grass.update(dt, r.camera.position, renderPos);
     ambient.update(dt, r.camera.position, now / 1000);
+    updateSea(dt, r.camera.position, weather.p);
     ocean.update(dt, r.camera.position);
     // Time of day and weather drive the sky, light, water, grass and sound.
     const worldRunning = !(paused || overlayUp || mapUI.open || worldMap.open || questUI.open);
@@ -1486,6 +1517,7 @@ async function boot() {
         glenLife.update(dt, player.pos);
       }
       questUI.update(player.pos);
+      sailing.frame(dt);
       folkTalk.npc = npcs.nearest(player.pos);
       if (folkTalk.npc) folkTalk.pos.copy(folkTalk.npc.pos);
       else folkTalk.pos.set(0, -999, 0);
@@ -1581,6 +1613,7 @@ async function boot() {
       slimes.clear();
       encounters.clear();
       crownRoad.threats.clear();
+      sailing.reset();
       quests.state = {};
       quests.tracked = null;
       for (const k of Object.keys(worldFlags)) delete worldFlags[k];
@@ -1600,7 +1633,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       perf,
       pause: (p: boolean) => (paused = p),

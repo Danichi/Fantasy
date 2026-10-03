@@ -317,6 +317,15 @@ export const ITEMS: Record<string, ItemDef> = {
       return g;
     },
   },
+  serpentScale: {
+    id: 'serpentScale', name: 'Sea Serpent Scale', kind: 'material', rarity: 'rare',
+    desc: 'A plate of scale the size of a shield, green-black and hard as bronze. The Aurelle Shipwrights make hull plating of it.', stats: {},
+    build: () => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x1e5a52, metalness: 0.4, roughness: 0.35 }));
+      m.scale.set(1, 0.3, 1.3);
+      return m;
+    },
+  },
   wreckLedger: {
     id: 'wreckLedger', name: 'Waterlogged Ledger', kind: 'key', rarity: 'common',
     desc: "A merchant's ledger from a wagon wrecked on the Crown Road, stamped with the seal of the Kingsmile.", stats: {},
