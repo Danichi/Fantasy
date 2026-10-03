@@ -12,6 +12,7 @@ export const XP_FOR_KIND: Record<string, [xp: number, gold: number]> = {
   rat: [4, 1], dire: [140, 30], bandit: [34, 12], banditChief: [260, 120],
   zombie: [28, 5], skeleton: [32, 7], abomination: [650, 240],
   // the Golden Expanse
+  sandGolem: [1500, 500], sandEel: [30, 6], sandCrab: [42, 9], duneJelly: [18, 4], rayRider: [95, 30],
   sandShark: [70, 12], sandRay: [32, 6], sawtooth: [1100, 400], scavenger: [44, 16], scavengerChief: [320, 160],
 };
 

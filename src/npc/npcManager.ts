@@ -101,7 +101,7 @@ const SHADOW_R = 20;
 const ACTIVE_R = 50; // metres: actors spawn inside this radius
 const LIVE_R = 80; // settlements are simulated (schedules snap) within this of their edge
 const FAR_R = 190; // sprite impostors between ACTIVE_R and this (dissolving out over the last stretch)
-const SPRITE_CAP = 240;
+const SPRITE_CAP = 400;
 // 256 baked looks: Elder Glen, the road and Port Aurelle have more than 128 residents.
 const CELL_W = 64, CELL_H = 128, ATLAS_COLS = 16, ATLAS_ROWS = 16;
 const DESPAWN_R = 58; // released beyond this (hysteresis over ACTIVE_R)

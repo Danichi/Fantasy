@@ -185,11 +185,11 @@ export const REGIONS: Record<string, RegionDef> = {
     weather: { clear: 6, heatHaze: 4, storm: 0.6 }, ambience: 'desert', music: 'desert', encounters: 'desert', faction: 'desertKingdoms',
     resources: ['spices', 'glass sand', 'sunstone'], exports: ['spices', 'rare materials', 'caravan goods'], imports: ['water', 'grain', 'metals'],
     landmarks: [
-      at('sunspireOasis', 'Sunspire', 'capital', -5830, 700), at('rustMarket', 'The Rust Market', 'town', -5270, 450), at('waystop', 'The Waystop', 'town', -4330, 630),
+      at('sunspireOasis', 'Ghagrabba', 'capital', -5830, 700), at('rustMarket', 'The Rust Market', 'town', -5270, 450), at('waystop', 'The Waystop', 'town', -4330, 630),
       at('glasswind', 'Glasswind', 'ruin', -5310, 1030), at('boneWells', 'The Bone Wells', 'ruin', -5950, 1260), at('saltreach', 'Saltreach', 'ruin', -6430, 820),
       at('hulks', 'The Hulks', 'ruin', -5790, 140), at('sawtoothBasin', 'Sawtooth Basin', 'dungeon', -4740, 1700),
     ],
-    surface: ['Sunspire, gold city of the Sunborn, and its Grand Bazaar', 'the Caravan Way and the Waystop', 'scavenger camps of scrap and tarp'], hidden: ['the Hulks: wrecked sand-skiffs', 'Saltreach and the lost caravan'], deep: ['Old Sawtooth in the southern basin', 'whatever the Sunborn palace keeps below'],
+    surface: ['Ghagrabba, gold city of the Sunborn, and its Grand Bazaar', 'the Caravan Way and the Waystop', 'scavenger camps of scrap and tarp'], hidden: ['the Hulks: wrecked sand-skiffs', 'Saltreach and the lost caravan'], deep: ['Old Sawtooth in the southern basin', 'whatever the Sunborn palace keeps below'],
     coherence: {
       geography: 'Dunes and mesas west of the mountains’ rain shadow.', people: 'Desert kingdoms and nomad tribes.', produces: 'Spices and rare materials.', threats: 'Heat, thirst, sand monsters.',
       roads: 'Caravan routes between oases.', power: 'Desert kingdoms.', unique: 'Amber dunes, red mesas, turquoise oases.', secrets: 'Cities beneath the sand.', draw: 'Trade, tombs, treasure.', story: 'An old empire buried.',

@@ -155,7 +155,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   sunsteelScimitar: {
     id: 'sunsteelScimitar', name: 'Sunsteel Scimitar', kind: 'sword', slot: 'main', rarity: 'rare',
-    desc: 'Folded in the furnaces under Sunspire\'s palace and quenched in oil of emberroot. The edge holds the desert\'s heat.',
+    desc: 'Folded in the furnaces under Ghagrabba\'s palace and quenched in oil of emberroot. The edge holds the desert\'s heat.',
     stats: { damage: 30, speed: 1.1, burn: 5 }, build: () => buildSword({ ...arming, bladeLen: 0.8, bladeWidth: 0.028, curve: 0.11, guardStyle: 'curved', pommel: 'pear', guardMat: 'brass', tint: 0xf2e2b4, glow: 0xffb040, glowStrength: 1.2 }),
   },
   scrapCleaver: {
@@ -170,7 +170,7 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   sunGuardShield: {
     id: 'sunGuardShield', name: 'Sun Guard Shield', kind: 'shield', slot: 'off', rarity: 'fine',
-    desc: 'A round shield in the Queen\'s teal and gold, worn by the gate guard of Sunspire.',
+    desc: 'A round shield in the Queen\'s teal and gold, worn by the gate guard of Ghagrabba.',
     stats: { block: 95, stability: 0.58 }, build: () => buildRoundShield('plain', ['#1f7a7a', '#d4a640']),
   },
   dawnbreaker: {

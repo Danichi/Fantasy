@@ -5,7 +5,7 @@ import type { HouseSpec } from './buildings';
 // house (buildHouse knows where its door is); the interior behind it is built
 // only when you step through (world/interior.ts).
 
-export type InteriorKind = 'home' | 'tavern' | 'shop' | 'smithy' | 'guild' | 'hall' | 'undercity' | 'throne' | 'temple' | 'library';
+export type InteriorKind = 'home' | 'tavern' | 'shop' | 'smithy' | 'guild' | 'hall' | 'undercity' | 'throne' | 'temple' | 'library' | 'palace';
 
 export interface Door {
   /** the doorstep, just outside, on the ground */
@@ -18,6 +18,8 @@ export interface Door {
   name?: string;
   /** NPC id of whoever keeps the place (they meet you inside) */
   keeper?: string;
+  /** sandstone and palm-wood rooms (Ghagrabba) instead of plaster and oak */
+  style?: 'desert';
 }
 
 export const DOORS: Door[] = [];

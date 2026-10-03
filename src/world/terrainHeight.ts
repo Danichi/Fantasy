@@ -187,7 +187,7 @@ export function worldHeightFn(x: number, z: number) {
   if (h < SEA_LEVEL + 0.6 && macroElevAt(x, z) > SEA_LEVEL + 0.3 && Math.abs(x - riverX(z)) > 16) {
     h = SEA_LEVEL + 0.6 - (SEA_LEVEL + 0.6 - h) * 0.12;
   }
-  // The Golden Expanse: real dune shapes on the sand, Sunspire's pad, the scavenger camps.
+  // The Golden Expanse: real dune shapes on the sand, Ghagrabba's pad, the scavenger camps.
   if (x < -1800) h = shapeDesert(x, z, h, sandWeight(x, z));
   // Port Aurelle stands on a levelled pad of terraces, quays and a causeway.
   const city = cityHeight(x, z);

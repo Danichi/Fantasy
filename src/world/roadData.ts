@@ -49,7 +49,7 @@ export const ROAD_SPECS: RoadSpec[] = [
   },
   {
     // Off the Crown Road before its gate: the caravan way west-south-west to
-    // Sunspire in the Golden Expanse (points match desert/desertLayout.ts CARAVAN_ROAD).
+    // Ghagrabba in the Golden Expanse (points match desert/desertLayout.ts CARAVAN_ROAD).
     id: 'sunspire', name: 'The Caravan Way', kind: 'kings',
     pts: [[-700, 60], [-1050, 150], [-1500, 260], [-2000, 380], [-2600, 480], [-3200, 560], [-3800, 620], [-4400, 660], [-4900, 690], [-5250, 684], [-5390, 679]],
   },

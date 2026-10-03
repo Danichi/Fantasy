@@ -72,6 +72,8 @@ export class WorldMapUI {
   miniVisible = true;
   /** 0..1: a cursed fog (the Gravewood) blots out both maps around the player */
   obscured = 0;
+  /** what the mist hides, written across the big map */
+  obscuredText = 'The fog hides everything beyond the graveyard walls';
 
   constructor(private discovery: Discovery) {
     const root = document.getElementById('ui')!;
@@ -352,7 +354,7 @@ export class WorldMapUI {
         g.fillText(m.label, p.x, p.y + 30);
       }
     }
-    if (this.obscured > 0.01) this.drawMist(g, W, H, 'The fog hides everything beyond the graveyard walls');
+    if (this.obscured > 0.01) this.drawMist(g, W, H, this.obscuredText);
     // The player.
     const pp = worldToPx(this.player.x, this.player.z);
     const ps = this.mapToScreen(pp.x, pp.y);

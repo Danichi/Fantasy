@@ -512,7 +512,7 @@ export class StylizedNature {
     if (r < LOCAL_R0 + 200 && Math.abs(x - riverX(z)) < 11 && Math.abs(z) < 440) return false;
     if (Math.hypot(x - CRYPT.x, z - CRYPT.y - 12) < 28) return false;
     if (Math.hypot(x - PORT_AURELLE.x, z - PORT_AURELLE.y) < 210) return false;
-    if (x < -4800 && sunspirePad(x, z) > 0) return false; // inside Sunspire's walls
+    if (x < -4800 && sunspirePad(x, z) > 0) return false; // inside Ghagrabba's walls
     return true;
   }
 

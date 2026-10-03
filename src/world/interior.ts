@@ -94,6 +94,39 @@ function grandMats(m: WorldMats) {
     sun: new THREE.MeshStandardMaterial({ map: sunwheelTexture(), emissive: 0xffc060, emissiveMap: sunwheelTexture(), emissiveIntensity: 1.1, transparent: true, color: 0xfff0d0 }),
   });
 }
+/** Ghagrabba's houses: sandstone floors, sand plaster, dark palm wood. */
+let desertM: WorldMats | null = null;
+function desertMats(m: WorldMats): WorldMats {
+  if (desertM) return desertM;
+  const tint = (src: THREE.Material, r: number, g: number, b: number) => {
+    const c = (src as THREE.MeshStandardMaterial).clone();
+    c.color.setRGB(r, g, b);
+    return c;
+  };
+  return (desertM = { ...m, planks: tint(m.stone, 1.55, 1.3, 0.95), plaster: tint(m.plaster, 1.05, 0.88, 0.66), timber: tint(m.timber, 0.55, 0.42, 0.32) });
+}
+/** The Sunborn palace: pale sandstone, teal silk, gold. */
+let palaceM: ReturnType<typeof makePalaceMats> | null = null;
+function makePalaceMats(m: WorldMats) {
+  const tint = (src: THREE.Material, r: number, g: number, b: number) => {
+    const c = (src as THREE.MeshStandardMaterial).clone();
+    c.color.setRGB(r, g, b);
+    return c;
+  };
+  return {
+    floor: tint(m.bridgeStone ?? m.stone, 1.75, 1.5, 1.1),
+    floorDark: tint(m.stone, 1.1, 0.9, 0.62),
+    wall: tint(m.bridgeStone ?? m.stone, 1.85, 1.58, 1.15),
+    column: tint(m.bridgeStone ?? m.stone, 1.9, 1.7, 1.3),
+    gold: new THREE.MeshStandardMaterial({ color: 0xe2b85a, metalness: 0.8, roughness: 0.3 }),
+    teal: new THREE.MeshStandardMaterial({ color: 0x1f7a7a, roughness: 0.95 }),
+    leaf: new THREE.MeshStandardMaterial({ color: 0x4a7a2a, roughness: 0.9 }),
+    sun: new THREE.MeshStandardMaterial({ color: 0xffd060, emissive: 0xffa020, emissiveIntensity: 0.9, metalness: 0.6, roughness: 0.3 }),
+  };
+}
+function palaceMats(m: WorldMats) {
+  return (palaceM ??= makePalaceMats(m));
+}
 const H = 3.4; // wall height
 
 export interface Seat {
@@ -131,15 +164,19 @@ export class Interior {
 
   constructor(readonly door: Door, readonly kind: InteriorKind, private scene: THREE.Scene, private m: WorldMats, onLeave: () => void, private lender?: LightLender, private onInspect?: (label: string, text: string) => void) {
     this.rnd = mulberry32(door.spec.seed * 7 + 11);
+    if (door.style === 'desert') this.m = desertMats(m);
     const big = kind === 'guild' || kind === 'hall' || kind === 'tavern' || kind === 'throne' || kind === 'temple' || kind === 'library';
-    this.W = kind === 'undercity' ? 22 : Math.max(big ? 9 : 6, door.spec.w - 0.6);
-    this.D = kind === 'undercity' ? 44 : Math.max(big ? 8 : 5.5, door.spec.d - 0.6);
+    this.W = kind === 'palace' ? 34 : kind === 'undercity' ? 22 : Math.max(big ? 9 : 6, door.spec.w - 0.6);
+    this.D = kind === 'palace' ? 46 : kind === 'undercity' ? 44 : Math.max(big ? 8 : 5.5, door.spec.d - 0.6);
     this.group.position.copy(INTERIOR_ORIGIN);
     scene.add(this.group);
     const sm = sharedMats();
     this.cloth = sm.cloth;
     this.windowMat = sm.window;
-    if (kind === 'undercity') {
+    if (kind === 'palace') {
+      this.palace();
+      this.spawn = this.at(0, this.D / 2 - 1.6);
+    } else if (kind === 'undercity') {
       this.undercity();
       this.spawn = this.at(0, this.D / 2 - 5.2);
     } else if (kind === 'throne' || kind === 'temple' || kind === 'library') {
@@ -274,6 +311,195 @@ export class Interior {
     }
     this.wants.push({ pos: this.at(0, 0, GH - 1), color: 0xfff0d8, intensity: 6, distance: Math.max(W, D) * 1.8, decay: 1.2, fire: false });
     this.wants.push({ pos: this.at(0, -D / 3, GH - 1.5), color: 0xffe0b0, intensity: 4, distance: Math.max(W, D), decay: 1.3, fire: false });
+  }
+
+
+  /**
+   * The Sunborn palace in Ghagrabba: an entrance hall of columns, the throne
+   * room at the heart, and four chambers off it (the Queen's bedchamber, the
+   * Prince's quarters, the royal dining hall and the treasury), with the
+   * walled garden and its pool behind the throne.
+   */
+  private palace() {
+    const { W, D } = this;
+    const p = palaceMats(this.m);
+    const GH = 7.2, T = 0.6;
+    const back = -D / 2;
+    // Floor, ceiling, outer walls (the front wall keeps the doorway).
+    this.box(p.floor, W, 0.2, D, 0, -0.1, 0, 0, true);
+    this.box(p.wall, W + 1, 0.3, D + 1, 0, GH + 0.15, 0);
+    this.box(p.wall, W + T * 2, GH, T, 0, GH / 2, back - T / 2, 0, true);
+    for (const sx of [-1, 1]) this.box(p.wall, T, GH, D, sx * (W / 2 + T / 2), GH / 2, 0, 0, true);
+    const gap = 3.2, side = (W - gap) / 2;
+    for (const sx of [-1, 1]) this.box(p.wall, side + T, GH, T, sx * (W / 2 - side / 2 + T / 2), GH / 2, D / 2 + T / 2, 0, true);
+    this.box(p.wall, gap, GH - 4.4, T, 0, 4.4 + (GH - 4.4) / 2, D / 2 + T / 2);
+    this.box(p.gold, gap + 0.6, 0.35, 0.7, 0, 4.55, D / 2 + 0.1);
+    // Interior walls, each a run with doorways cut into it.
+    const run = (x0: number, z0: number, x1: number, z1: number, gaps: [number, number][]) => {
+      const alongX = Math.abs(x1 - x0) > Math.abs(z1 - z0);
+      const a0 = alongX ? Math.min(x0, x1) : Math.min(z0, z1), a1 = alongX ? Math.max(x0, x1) : Math.max(z0, z1);
+      const cuts = gaps.map(([c, w]) => [c - w / 2, c + w / 2]).sort((a, b) => a[0] - b[0]);
+      let s = a0;
+      const seg = (from: number, to: number) => {
+        if (to - from < 0.05) return;
+        const mid = (from + to) / 2, len = to - from;
+        if (alongX) this.box(p.wall, len, GH, T, mid, GH / 2, z0, 0, true);
+        else this.box(p.wall, T, GH, len, x0, GH / 2, mid, 0, true);
+      };
+      for (const [c0, c1] of cuts) {
+        seg(s, c0);
+        // A lintel over each doorway, gilded.
+        const mid = (c0 + c1) / 2, w = c1 - c0;
+        if (alongX) {
+          this.box(p.wall, w, GH - 4, T, mid, 4 + (GH - 4) / 2, z0);
+          this.box(p.gold, w + 0.3, 0.3, T + 0.1, mid, 4.1, z0);
+        } else {
+          this.box(p.wall, T, GH - 4, w, x0, 4 + (GH - 4) / 2, mid);
+          this.box(p.gold, T + 0.1, 0.3, w + 0.3, x0, 4.1, mid);
+        }
+        s = c1;
+      }
+      seg(s, a1);
+    };
+    const IX = 8, ZH = 10, ZB = -8; // inner wall x, hall/throne line, throne/back line
+    // Throne room sides, with doorways to the four chambers.
+    for (const sx of [-1, 1]) run(sx * IX, back, sx * IX, ZH, [[1, 2.6], [-15, 2.6]]);
+    // Hall front: the chambers close off from the entrance hall; the throne room opens wide.
+    for (const sx of [-1, 1]) run(sx * W / 2, ZH, sx * IX, ZH, [[sx * (W / 2 + IX) / 2, 2.4]]);
+    // Behind the throne: two doors through to the garden.
+    run(-IX, ZB, IX, ZB, [[-5.2, 2.4], [5.2, 2.4]]);
+    // Between front and back chambers.
+    for (const sx of [-1, 1]) run(sx * W / 2, ZB, sx * IX, ZB, []);
+
+    // ---- entrance hall: columns and a carpet to the throne ----
+    for (const z of [ZH + 3, ZH + 7.5, ZH + 12]) for (const sx of [-1, 1]) {
+      this.cyl(p.column, 0.55, GH, sx * 5, GH / 2, z, true, 14);
+      this.box(p.gold, 1.4, 0.4, 1.4, sx * 5, GH - 0.3, z);
+      this.box(p.floorDark, 1.4, 0.5, 1.4, sx * 5, 0.25, z);
+    }
+    this.box(p.teal, 3.4, 0.03, D / 2 - 2, 0, 0.015, (D / 2 + ZB) / 2 + 2);
+    for (const sx of [-1, 1]) this.box(p.gold, 0.14, 0.031, D / 2 - 2, sx * 1.77, 0.016, (D / 2 + ZB) / 2 + 2);
+    for (const sx of [-1, 1]) {
+      this.brazier(sx * 3.2, D / 2 - 3);
+      this.statue(sx * (W / 2 - 1.6), ZH + 5, -sx * Math.PI / 2, p);
+      this.statue(sx * (W / 2 - 1.6), ZH + 10.5, -sx * Math.PI / 2, p);
+    }
+    this.spots.guardL = { pos: this.at(-2.6, D / 2 - 2.2), yaw: Math.PI, seated: false };
+    this.spots.guardR = { pos: this.at(2.6, D / 2 - 2.2), yaw: Math.PI, seated: false };
+    this.spots.herald = { pos: this.at(-3.2, ZH + 1.2), yaw: Math.PI * 0.9, seated: false };
+
+    // ---- the throne room ----
+    for (let k = 0; k < 3; k++) this.box(k === 2 ? p.teal : p.floorDark, 9 - k * 1.8, 0.3, 4.6 - k * 0.9, 0, 0.15 + k * 0.3, ZB + 2.4 - k * 0.4, 0, true);
+    const dy = 0.9;
+    this.box(p.gold, 1.6, 0.55, 1.2, 0, dy + 0.27, ZB + 1.5, 0, true);
+    this.box(p.teal, 1.4, 0.12, 1.0, 0, dy + 0.6, ZB + 1.55);
+    this.box(p.gold, 1.7, 3.2, 0.3, 0, dy + 1.6, ZB + 0.9, 0, true);
+    const sun = new THREE.Mesh(new THREE.CircleGeometry(1.5, 32), p.sun);
+    sun.position.set(0, 5.4, ZB + 0.33 - T / 2 + 0.6);
+    this.group.add(sun);
+    for (const sx of [-1, 1]) {
+      this.box(p.gold, 0.2, 0.45, 1.0, sx * 0.78, dy + 0.8, ZB + 1.5);
+      this.box(p.teal, 1.5, 5.6, 0.05, sx * 3.6, 3.6, ZB + 0.36);
+      this.brazier(sx * 5.6, ZB + 3.6);
+      for (const z of [ZB + 6, ZB + 11]) this.cyl(p.column, 0.45, GH, sx * 6.3, GH / 2, z, true, 14);
+    }
+    this.spots.throne = { pos: this.at(0, ZB + 1.65, dy), yaw: 0, seated: true };
+    this.spots.vizier = { pos: this.at(-2.3, ZB + 3.4, 0.6), yaw: Math.PI * 0.15, seated: false };
+    this.spots.consort = { pos: this.at(2.3, ZB + 3.4, 0.6), yaw: -Math.PI * 0.15, seated: false };
+    this.spots.court1 = { pos: this.at(-4.6, ZB + 8), yaw: Math.PI / 2, seated: false };
+    this.spots.court2 = { pos: this.at(4.6, ZB + 8.5), yaw: -Math.PI / 2, seated: false };
+    this.keeperSpot = this.spots.throne;
+    this.inspectProp(3.2, ZB + 5, 'Inspect the Sun Throne', 'Gold beaten over black stone older than the city. The sun disc behind it is polished every dawn so the first light through the high windows strikes it and fills the room.');
+
+    // ---- the Queen's bedchamber (front left) ----
+    const QX = -(W / 2 + IX) / 2;
+    this.box(p.teal, 6, 0.03, 7, QX, 0.015, 1);
+    this.bed(QX - 1.5, ZB + 1.8, 0);
+    this.bed(QX + 1.0, ZB + 1.8, 0);
+    this.box(p.gold, 5.4, 3.2, 0.12, QX - 0.25, 3.2, ZB + 0.5);
+    this.shelf(-W / 2 + 0.35, 3, Math.PI / 2, 2.6, 'cloth');
+    this.table(QX + 2.4, 6.5, 1.4, 0.8);
+    this.seat(QX + 2.4, 7.4, Math.PI);
+    this.spots.queenMother = { pos: this.at(QX + 2.4, 7.4), yaw: Math.PI, seated: true };
+    this.inspectProp(QX - 1, 6, 'Inspect the Queen\'s chamber', 'Sun-silk hangings, a bed wide enough for a family, and a writing desk covered in the Vizier\'s reports — each one annotated in the Queen\'s small, furious hand.');
+
+    // ---- the Prince's quarters (front right) ----
+    const PX = (W / 2 + IX) / 2;
+    this.bed(PX + 2, ZB + 1.8, 0);
+    this.shelf(W / 2 - 0.35, 3, -Math.PI / 2, 2.6, 'weapons');
+    this.rug(PX - 1, 3, 3.2, 2.4);
+    this.dummy(PX - 1, 5.5);
+    this.table(PX - 2, 0, 1.2, 0.8);
+    this.spots.prince = { pos: this.at(PX - 1.2, 2), yaw: -Math.PI * 0.6, seated: false };
+    this.spots.princess = { pos: this.at(PX + 1.4, 6.5), yaw: Math.PI, seated: false };
+    this.inspectProp(PX + 1, -2, 'Inspect the Prince\'s quarters', 'Practice blades, a battered dummy, maps of the deep dunes covered in notes. Someone here wants very badly to leave the city.');
+
+    // ---- the royal dining hall (back left) ----
+    const DZ = (back + ZB) / 2;
+    this.table(QX, DZ, 2.2, 7, Math.PI / 2);
+    this.table(QX, DZ, 1.2, 6, Math.PI / 2);
+    for (let i = 0; i < 4; i++) {
+      for (const sx of [-1, 1]) this.seat(QX + sx * 1.6, DZ - 2.4 + i * 1.6, -sx * Math.PI / 2);
+    }
+    this.spots.diner = { pos: this.at(QX - 1.6, DZ - 0.8), yaw: Math.PI / 2, seated: true };
+    this.spots.servant = { pos: this.at(QX + 2.8, DZ + 3), yaw: -Math.PI / 2, seated: false };
+    this.shelf(-W / 2 + 0.35, DZ, Math.PI / 2, 3, 'jars');
+
+    // ---- the treasury (back right) ----
+    for (let i = 0; i < 9; i++) {
+      const x = PX - 3 + (i % 3) * 2.4, z = DZ - 3 + Math.floor(i / 3) * 2.4;
+      const pile = new THREE.Mesh(new THREE.ConeGeometry(0.7 + (i % 2) * 0.3, 0.6 + (i % 3) * 0.2, 9), p.gold);
+      pile.position.set(x, 0.3, z);
+      this.group.add(pile);
+      this.crate(x + 0.9, z + 0.6, 0.6);
+    }
+    this.spots.treasurer = { pos: this.at(PX, DZ + 3.5), yaw: Math.PI, seated: false };
+    this.inspectProp(PX, DZ, 'Inspect the treasury', 'Gold in heaps, more than all of Elder Glen has seen in a century. Most of it, the ledger says, came from scrap the scavengers sold to the city at a tenth of its worth.');
+
+    // ---- the walled garden behind the throne ----
+    const GZ = (back + ZB) / 2;
+    const pool = new THREE.Mesh(new THREE.BoxGeometry(6, 0.1, 6), sharedMats().water);
+    pool.position.set(0, 0.06, GZ);
+    this.group.add(pool);
+    for (const [sx, sz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) this.box(p.floorDark, sz ? 6.6 : 0.3, 0.35, sx ? 6.6 : 0.3, sx * 3.15, 0.17, GZ + sz * 3.15, 0, true);
+    for (const [x, z] of [[-6, back + 2], [6, back + 2], [-6, ZB - 2], [6, ZB - 2]]) this.palm(x, z, p);
+    this.spots.garden = { pos: this.at(-3.8, GZ + 1), yaw: Math.PI / 2, seated: false };
+    this.spots.garden2 = { pos: this.at(3.8, GZ - 1.5), yaw: -Math.PI / 2, seated: false };
+
+    // Light: the throne room, the hall and each chamber.
+    this.wants.push({ pos: this.at(0, ZB + 5, GH - 1), color: 0xffe2b0, intensity: 7, distance: 26, decay: 1.2, fire: false });
+    this.wants.push({ pos: this.at(0, ZH + 7, GH - 1), color: 0xfff0d8, intensity: 5, distance: 22, decay: 1.2, fire: false });
+    this.wants.push({ pos: this.at(QX, 1, GH - 1.5), color: 0xffd8a0, intensity: 3.5, distance: 14, decay: 1.4, fire: false });
+    this.wants.push({ pos: this.at(PX, 1, GH - 1.5), color: 0xffd8a0, intensity: 3.5, distance: 14, decay: 1.4, fire: false });
+    this.wants.push({ pos: this.at(0, GZ, GH - 1), color: 0xfff6e0, intensity: 4, distance: 18, decay: 1.3, fire: false });
+  }
+
+  private statue(x: number, z: number, ry: number, p: ReturnType<typeof palaceMats>) {
+    this.box(p.floorDark, 1.2, 0.8, 1.2, x, 0.4, z, ry, true);
+    this.cyl(p.column, 0.32, 2.6, x, 2.1, z, false, 10);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.1, 4), p.gold);
+    head.position.set(x, 3.95, z);
+    head.rotation.y = ry + Math.PI / 4;
+    this.group.add(head);
+  }
+
+  private palm(x: number, z: number, p: ReturnType<typeof palaceMats>) {
+    this.cyl(this.m.timber, 0.18, 4.6, x, 2.3, z, true, 8);
+    for (let i = 0; i < 7; i++) {
+      const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.35, 2.4, 4), p.leaf);
+      const a = (i / 7) * Math.PI * 2;
+      leaf.position.set(x + Math.cos(a) * 0.9, 4.5, z + Math.sin(a) * 0.9);
+      leaf.rotation.set(Math.sin(a) * 1.2, 0, -Math.cos(a) * 1.2);
+      this.group.add(leaf);
+    }
+  }
+
+  private dummy(x: number, z: number) {
+    this.cyl(this.m.timber, 0.08, 1.8, x, 0.9, z, true, 8);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.9, 10), sharedMats().cloth[4]);
+    body.position.set(x, 1.4, z);
+    this.group.add(body);
+    this.cyl(this.m.timber, 0.05, 1.3, x, 1.6, z, false, 6).rotation.z = Math.PI / 2;
   }
 
   /** Book-lined cases (one painted texture of spines) against a wall. */

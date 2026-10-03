@@ -261,7 +261,7 @@ export class QuestUI {
     const t = this.target;
     const show = this.visible && !!t && !this.open;
     if (this.beacon) {
-      this.beacon.visible = show && t!.d > 6;
+      this.beacon.visible = show && t!.d > 6 && !this.lost;
       if (this.beacon.visible) {
         this.beacon.position.set(t!.x, heightAt(t!.x, t!.z), t!.z);
         // Thicker with distance so it still reads from across the valley; fades out as you arrive.
@@ -302,6 +302,16 @@ export class QuestUI {
     const d = t!.d;
     (this.wp.lastElementChild as HTMLElement).textContent = d < 6 ? 'here' : d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`;
     this.wp.title = t!.label;
+  }
+
+  /** A sandstorm: no compass and no waypoint; you navigate by the sun, if you can see it. */
+  private lost = false;
+  setLost(lost: boolean) {
+    if (lost === this.lost) return;
+    this.lost = lost;
+    this.compass.classList.toggle('lost', lost);
+    this.wp.classList.toggle('lost', lost);
+    if (this.beacon) this.beacon.userData.lost = lost;
   }
 
   setVisible(v: boolean) {

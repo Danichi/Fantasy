@@ -65,6 +65,9 @@ import { buildGlenLife } from './world/glenLife';
 import { GoldenExpanse } from './world/desert/goldenExpanse';
 import { sunspireResidents } from './world/desert/sunspireFolk';
 import { setupDesertQuests } from './quests/desertQuests';
+import { PALACE_SEATS } from './world/desert/sunspireFolk';
+import { CITY_SHOPS } from './world/desert/cityGrid';
+import { CAMP_INFO } from './world/desert/desertLayout';
 import { RoyalCapital, CAPITAL_SPOTS } from './world/royalCapital';
 import { capitalResidents } from './world/capitalFolk';
 import { CAPITAL_QUESTS } from './quests/capitalQuests';
@@ -247,7 +250,7 @@ async function boot() {
       npcs.addSettlement(k.settlement);
       for (const rec of k.records) npcs.add(rec);
     }
-    // The Golden Expanse: Sunspire's citizens and court, and the scavengers outside its walls.
+    // The Golden Expanse: Ghagrabba's citizens and court, and the scavengers outside its walls.
     const desertFolk = sunspireResidents();
     for (const s of desertFolk.settlements) npcs.addSettlement(s);
     for (const rec of desertFolk.records) npcs.add(rec);
@@ -425,7 +428,7 @@ async function boot() {
   // The Golden Expanse's merchants.
   folkServices.set('hassun', () => [{
     label: 'Browse the Grand Bazaar',
-    run: () => town.showShop('Bazaar Master Hassun', 'Merchant Prince of the Grand Bazaar', 'Sunsteel and sun-silk, glass and gold. Everything in Sunspire is gilded — even the bargains.', [
+    run: () => town.showShop('Bazaar Master Hassun', 'Merchant Prince of the Grand Bazaar', 'Sunsteel and sun-silk, glass and gold. Everything in Ghagrabba is gilded — even the bargains.', [
       ['khopesh', 260], ['sunsteelScimitar', 640], ['sunGuardShield', 210], ['falchion', 230], ['greaterHealthPotion', 70], ['greaterManaPotion', 75], ['sunSilk', 130],
     ], { wants: [['sharkTooth', 45], ['duneGlass', 38], ['scrapMetal', 7], ['sunSilk', 60]], buyRate: { default: 0.4 } }),
   }]);
@@ -441,6 +444,30 @@ async function boot() {
       ['duneGlass', 65], ['greaterManaPotion', 70],
     ], { wants: [['duneGlass', 36], ['scrapMetal', 8]], buyRate: { default: 0.35 } }),
   }]);
+  // Ghagrabba's shops (each keeper meets you inside their shop) and the village traders.
+  const DESERT_STOCK: Record<string, [string, number][]> = {
+    'gh-smith': [['khopesh', 260], ['sunsteelScimitar', 640], ['falchion', 230], ['claymore', 360], ['estoc', 420]],
+    'gh-armour': [['sunGuardShield', 210], ['towerShield', 180], ['buckler', 115], ['breastplate', 190], ['ironHelm', 64], ['gauntlets', 55], ['greaves', 105]],
+    'gh-apoth': [['healthPotion', 22], ['greaterHealthPotion', 70], ['manaPotion', 26], ['greaterManaPotion', 75]],
+    'gh-spice': [['honeycomb', 14], ['emberroot', 22], ['duskbloom', 42], ['wildGarlic', 6], ['healthPotion', 22]],
+    'gh-silk': [['sunSilk', 130], ['wayfarerCloak', 110], ['warriorBelt', 90]],
+    'gh-jewel': [['luckyCharm', 160], ['ringSage', 240], ['duneGlass', 70]],
+    'gh-scribe': [['fireball', 170], ['healingLight', 185], ['greaterManaPotion', 75]],
+    'gh-food': [['apple', 6], ['pear', 6], ['honeycomb', 14], ['milk', 8], ['healthPotion', 22]],
+  };
+  for (const [id, name, shop] of CITY_SHOPS) {
+    folkServices.set(id, () => [{
+      label: `Browse ${shop}`,
+      run: () => town.showShop(name, shop, 'Gold in, goods out. In Ghagrabba everything is for sale, and nothing is cheap.', DESERT_STOCK[id] ?? [['healthPotion', 22]], { wants: [['sharkTooth', 40], ['duneGlass', 34], ['sunSilk', 60], ['scrapMetal', 6]], buyRate: { default: 0.4 } }),
+    }]);
+  }
+  CAMP_INFO.forEach((c, k) => {
+    if (!c.friendly) return;
+    folkServices.set('vtrader-' + k, () => [{
+      label: 'Trade scrap and water',
+      run: () => town.showShop('Village Trader', c.name, 'Scrap for water, water for scrap. Simple trade.', [['healthPotion', 18], ['manaPotion', 22], ['scrapCleaver', 55], ['shortsword', 40], ['honeycomb', 12]], { wants: [['scrapMetal', 11], ['sharkTooth', 34], ['duneGlass', 28]], buyRate: { default: 0.3 } }),
+    }]);
+  });
   // Townsfolk: one interactable that follows whoever is nearest.
   const folkTalk = {
     pos: new THREE.Vector3(0, -999, 0),
@@ -904,6 +931,13 @@ async function boot() {
     if (it.kind === 'guild') extras.push({ pos: it.at(0, -it.D / 2 + 0.8), radius: 2, label: () => 'Read the quest board', enabled: () => true, action: () => town.guild.open('board') });
     // Taverns and the guild have company: residents who live nearby.
     if (it.kind === 'undercity') fillUndercity(it, extras);
+    // The Palace of the Sun: the royal family and their court, each in their chamber.
+    if (it.kind === 'palace') {
+      for (const [id, seat] of Object.entries(PALACE_SEATS)) {
+        const st = npcs.find(id), spot = it.spots[seat];
+        if (st && spot) folkInside(st, spot, it, extras, spot.seated ? 'sit' : id.startsWith('pguard') ? 'idle' : 'talk');
+      }
+    }
     const want = it.kind === 'tavern' ? (time.state.night > 0.3 ? 5 : 3) : it.kind === 'guild' || it.kind === 'undercity' ? 3 : 0;
     if (want) {
       const near = npcs.npcs
@@ -1082,8 +1116,11 @@ async function boot() {
     flags: worldFlags,
     give: (id, n) => giveItem(id, n),
     save: () => save(),
+    trade: (name) => town.showShop(name, 'Caravan Trader', 'From the coast, from the capital, from the deep dunes: whatever the turtle can carry.', [['greaterHealthPotion', 66], ['greaterManaPotion', 70], ['sunSilk', 120], ['khopesh', 250], ['sunGuardShield', 200], ['honeycomb', 12]], { wants: [['sharkTooth', 42], ['duneGlass', 36], ['scrapMetal', 8]], buyRate: { default: 0.4 } }),
   }, () => time.hour);
   realm.overworldInteractables.push(...desert.interactables);
+  // Ghagrabba's houses, shops, taverns and the palace open once the city has streamed in.
+  desert.onDoors = (doors) => addDoors(doors);
   const desertQuests = setupDesertQuests(quests, r.scene, fx, (id, n) => giveItem(id, n), (m) => hud.toast(m));
   realm.overworldInteractables.push(...desertQuests.interactables);
   // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
@@ -1408,6 +1445,7 @@ async function boot() {
     if (realm.mode === 'overworld') {
       r.applyTime(dt, ts, wp);
       gravewood.atmosphere(r, player.pos);
+      desert?.atmosphere(r);
       precip.update(dt, r.camera.position, wp);
       ocean.setConditions(wp.wind, ts.zenith, ts.horizon, wp.cloud, ts.night);
       grass.setWind(0.45 + wp.wind * 1.35);
@@ -1471,7 +1509,10 @@ async function boot() {
     book.update();
     mapUI.update();
     if (realm.mode === 'overworld') discovery.update(player.pos);
-    worldMap.obscured = realm.mode === 'overworld' ? gravewood.curse : 0;
+    const storm = realm.mode === 'overworld' ? desert?.storm ?? 0 : 0;
+    worldMap.obscured = realm.mode === 'overworld' ? Math.max(gravewood.curse, storm) : 0;
+    worldMap.obscuredText = storm > gravewood.curse ? 'The sandstorm swallows the land. You cannot tell which way is which.' : 'The fog hides everything beyond the graveyard walls';
+    questUI.setLost(storm > 0.35);
     worldMap.update(dt, player.pos, player.yaw, realm.mode === 'overworld' && !overlayUp);
     dialogue.update(dt);
     if (realm.mode === 'overworld') town.update(dt, player.pos);

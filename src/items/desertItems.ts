@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { ItemDef } from './itemDefs';
 
 // Goods of the Golden Expanse: what the scavengers dig out of the sand and
-// what the Sunspire bazaar sells back to them at ten times the price.
+// what the Ghagrabba bazaar sells back to them at ten times the price.
 
 const std = (color: number, roughness = 0.8, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
 const mat = (id: string, name: string, desc: string, build: () => THREE.Object3D, rarity: ItemDef['rarity'] = 'common'): ItemDef =>
@@ -67,7 +67,7 @@ function seal() {
 export const DESERT_ITEMS: Record<string, ItemDef> = {
   scrapMetal: mat('scrapMetal', 'Scrap Metal', 'Rusted plate and bolts dug out of the dunes. The scavengers trade it by the sackful.', scrap),
   sharkTooth: mat('sharkTooth', 'Sand Shark Tooth', 'Long as a finger and sharp as a knife. Scavengers wear them for luck; smiths set them in blades.', tooth, 'fine'),
-  sunSilk: mat('sunSilk', 'Sun-Silk', 'Teal silk woven in Sunspire\'s palace looms. Worth its weight in Cresha silver.', silk, 'fine'),
+  sunSilk: mat('sunSilk', 'Sun-Silk', 'Teal silk woven in Ghagrabba\'s palace looms. Worth its weight in Cresha silver.', silk, 'fine'),
   duneGlass: mat('duneGlass', 'Dune Glass', 'Sand fused to green glass where lightning struck the dunes. The glassmakers pay well for it.', glass, 'fine'),
   sunSeal: { id: 'sunSeal', name: 'The Caravan Seal', kind: 'key', rarity: 'rare', desc: 'A gold seal stamped with the Sunwheel of the Sunborn: the lost caravan\'s writ of passage.', stats: {}, build: seal },
 };

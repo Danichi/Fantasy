@@ -360,3 +360,18 @@
   border-color: #8a6431;
 }
 #ui .book-tabs button.on kbd { color: var(--ink-red); border-color: rgba(122, 31, 18, .4); }
+
+/* ===== Sandstorm (world/desert/goldenExpanse.ts) ===== */
+#ui .sandstorm {
+  position: absolute; inset: 0; z-index: 4; pointer-events: none; display: none; opacity: 0;
+  background:
+    repeating-linear-gradient(100deg, rgba(196, 150, 92, .0) 0 26px, rgba(214, 170, 110, .35) 26px 30px, rgba(196, 150, 92, 0) 30px 70px),
+    radial-gradient(ellipse at 50% 55%, rgba(170, 120, 64, .35), rgba(120, 80, 40, .85));
+  background-size: 400px 400px, 100% 100%;
+  animation: sand-blow .6s linear infinite;
+  mix-blend-mode: normal;
+}
+@keyframes sand-blow { from { background-position: 0 0, 0 0; } to { background-position: 400px 40px, 0 0; } }
+#ui .compass.lost { opacity: .0; transition: opacity .8s; }
+#ui .compass { transition: opacity .8s; }
+#ui .waypoint.lost { display: none !important; }

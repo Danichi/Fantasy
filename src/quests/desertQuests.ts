@@ -4,10 +4,10 @@ import type { Interactable } from '../dungeon/instance';
 import type { FX } from '../fx/particles';
 import { heightAt } from '../world/terrainHeight';
 import { SUNSPIRE, SUNSPIRE_HALF, SUNSPIRE_GATE_Z, SCAV_CAMPS } from '../world/desert/desertLayout';
-import { SAWTOOTH_BASIN } from '../world/desert/goldenExpanse';
+import { SAWTOOTH_BASIN, WARDEN_AT as WARDEN } from '../world/desert/goldenExpanse';
 
 // The Golden Expanse's first stories: Zarek points you down the Caravan Way;
-// the scavengers outside Sunspire's walls have work (and grudges); the Sun
+// the scavengers outside Ghagrabba's walls have work (and grudges); the Sun
 // Guard wants the basin's old shark dead; and the Vizier has lost something
 // he would rather the Queen never knew about.
 
@@ -17,16 +17,39 @@ const STRONGBOX = new THREE.Vector3(SCAV_CAMPS[3][0] - 6, 0, SCAV_CAMPS[3][1] + 
 
 export const DESERT_QUESTS: QuestDef[] = [
   {
+    id: 'the-warden-below', title: 'The Warden Below', giver: 'mereth', region: 'Golden Expanse', requires: ['silk-road-west'],
+    summary: 'Captain Mereth\'s scouts have seen the southern dunes heave like something breathing. The old scrolls call it the Warden: a golem of the old kingdom, asleep under the sand.',
+    offer: 'Four scouts went south of the Bone Wells. Two came back, and they will not say what they saw — only that a dune stood up. Princess Nefret says the palace scrolls speak of a Warden left by the kings before ours. Go south-west of the city, past the Bone Wells. Walk softly. When the ground shakes, do not stand still.',
+    acceptLabel: 'I\'ll find the Warden.',
+    stages: [
+      { note: 'Find the Warden under the southern sands, and destroy it.', objectives: [{ type: 'kill', kind: 'sandGolem', count: 1, text: 'Destroy the Warden of the Sands (south-west of the city)', at: [WARDEN.x, WARDEN.z], radius: 300 }] },
+      { note: 'Report to Captain Mereth.', objectives: [{ type: 'talk', npc: 'mereth', text: 'Report to Captain Mereth at the east gate', reply: 'The Warden is sand again.', say: 'Then the southern caravans can run again. The Queen will hear of it — and the Princess will want every detail.' }] },
+    ],
+    done: 'From the palace armoury, by the Queen\'s leave. You have earned the right to carry the sun.',
+    rewards: { gold: 600, xp: 1100, items: [['sunsteelScimitar', 1], ['greaterHealthPotion', 3]], guildRep: 50 },
+  },
+  {
+    id: 'raider-season', title: 'Raider Season', giver: 'elder-6', region: 'Golden Expanse',
+    summary: 'The raider camps strike the friendly villages every few weeks. The elder of Dunewatch wants them driven off.',
+    offer: 'Rattle Hollow, the Cinder Pits, Skifftown, Bleached Ribs — raider camps, all of them, and every one feeds on villages like ours. Break their fighters. Ten of them. Then they will think twice before coming for our water.',
+    stages: [
+      { note: 'Defeat raiders from the hostile camps.', objectives: [{ type: 'kill', kind: 'scavenger', count: 10, text: 'Defeat scavenger raiders (any raider camp)' }] },
+      { note: 'Return to the elder of Dunewatch.', objectives: [{ type: 'talk', npc: 'elder-6', text: 'Return to the elder of Dunewatch', reply: 'The raiders have been taught a lesson.', say: 'Ten! The children can fetch water without a guard again. You are welcome at every fire in the Expanse.' }] },
+    ],
+    done: 'We have little, but we share it.',
+    rewards: { gold: 160, xp: 380, items: [['greaterHealthPotion', 2], ['duneGlass', 2]] },
+  },
+  {
     id: 'silk-road-west', title: 'The Caravan Way', giver: 'zarek', region: 'Golden Expanse', requires: ['mq-crypt'],
-    summary: 'Zarek the Wanderer wants a letter carried west along the Caravan Way to Bazaar Master Hassun in Sunspire, the gold city of the Sunborn.',
-    offer: 'You have the look of someone who walks far. Sunspire — the gold city in the Golden Expanse — sits at the end of the Caravan Way, west off the Crown Road before the capital gate. Carry this letter to Bazaar Master Hassun. Keep to the road: the sand out there has teeth.',
+    summary: 'Zarek the Wanderer wants a letter carried west along the Caravan Way to Bazaar Master Hassun in Ghagrabba, the gold city of the Sunborn.',
+    offer: 'You have the look of someone who walks far. Ghagrabba — the gold city in the Golden Expanse — sits at the end of the Caravan Way, west off the Crown Road before the capital gate. Carry this letter to Bazaar Master Hassun. Keep to the road: the sand out there has teeth.',
     acceptLabel: 'I\'ll take the letter west.',
     stages: [
       { note: 'Follow the Caravan Way west to the Waystop.', objectives: [{ type: 'reach', at: at(5), radius: 30, text: 'Reach the Waystop on the Caravan Way (far west)' }] },
-      { note: 'Reach the gates of Sunspire.', objectives: [{ type: 'reach', at: GATE, radius: 28, text: 'Reach Sunspire\'s east gate' }] },
-      { note: 'Deliver Zarek\'s letter to Bazaar Master Hassun.', objectives: [{ type: 'talk', npc: 'hassun', text: 'Deliver the letter to Hassun (the Grand Bazaar)', reply: 'A letter from Zarek the Wanderer.', say: 'Zarek! Still alive, the old goat. He writes that you are reliable. In Sunspire that is rarer than water.' }] },
+      { note: 'Reach the gates of Ghagrabba.', objectives: [{ type: 'reach', at: GATE, radius: 28, text: 'Reach Ghagrabba\'s east gate' }] },
+      { note: 'Deliver Zarek\'s letter to Bazaar Master Hassun.', objectives: [{ type: 'talk', npc: 'hassun', text: 'Deliver the letter to Hassun (the Grand Bazaar)', reply: 'A letter from Zarek the Wanderer.', say: 'Zarek! Still alive, the old goat. He writes that you are reliable. In Ghagrabba that is rarer than water.' }] },
     ],
-    done: 'For your trouble: Sunspire silk, and a merchant prince\'s good opinion. Spend both wisely.',
+    done: 'For your trouble: Ghagrabba silk, and a merchant prince\'s good opinion. Spend both wisely.',
     rewards: { gold: 150, xp: 320, items: [['sunSilk', 1]] },
   },
   {

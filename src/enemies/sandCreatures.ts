@@ -17,7 +17,7 @@ const SAND = 0xd9b77a, SAND_DARK = 0xa8854f;
 
 // ---- bodies ------------------------------------------------------------------------------------------
 
-interface BodySpec {
+export interface BodySpec {
   length: number;
   /** radius along the body, tail (t=0) to nose (t=1), as a fraction of length */
   profile: [number, number][];
@@ -159,7 +159,7 @@ const SHARK: BodySpec = {
   profile: [[0, 0.015], [0.12, 0.05], [0.32, 0.1], [0.55, 0.13], [0.75, 0.12], [0.9, 0.08], [0.98, 0.03], [1, 0]],
   dorsal: { at: 0.58, h: 0.26, sweep: 0.12 }, pectorals: { at: 0.62, span: 0.2 }, fluke: 'vertical', plates: 4, eyes: 0xffb020, eyeAt: 0.9,
 };
-const RAY: BodySpec = {
+export const RAY: BodySpec = {
   length: 2.2, squash: 0.22, widen: 3.2, back: 0xc8a36a, belly: 0xf2e2bc, fin: 0x8a6a3a,
   profile: [[0, 0.01], [0.25, 0.06], [0.5, 0.17], [0.7, 0.2], [0.88, 0.14], [1, 0]], fluke: 'vertical', eyes: 0x60ffd0, eyeAt: 0.82,
 };
@@ -182,7 +182,7 @@ const bodyGeo = (s: BodySpec) => {
 };
 
 /** A swimming body: the mesh plus its swim uniforms. */
-class Swimmer {
+export class Swimmer {
   readonly group = new THREE.Group();
   readonly mesh: THREE.Mesh;
   readonly swim: { uPhase: { value: number }; uAmp: { value: number }; uLen: { value: number } };
@@ -206,7 +206,7 @@ class Swimmer {
   }
 }
 
-const sandSpray = (fx: FX, at: THREE.Vector3, n: number, power = 1) =>
+export const sandSpray = (fx: FX, at: THREE.Vector3, n: number, power = 1) =>
   fx.add.spawn({ pos: at, vel: new THREE.Vector3(0, 4 * power, 0), spread: 1.4 * power, count: n, life: [0.5, 1.3], size: [0.28 * power, 0.06], color: SAND, color2: SAND_DARK, gravity: 9, upBias: 0.8, alpha: 0.85 });
 
 // ---- sand shark --------------------------------------------------------------------------------------

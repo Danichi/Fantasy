@@ -7,8 +7,11 @@ import { heightAt, roadDist } from '../terrainHeight';
 import { sandWeight } from '../worldMap';
 import { WAYSTONES } from '../kingsRoad';
 import { sfx } from '../../audio/sfx';
-import { SUNSPIRE, SUNSPIRE_HALF, SUNSPIRE_GATE_Z, SCAV_CAMPS, sunspirePad, sunspireY, campFloor } from './desertLayout';
-import { MODEL, cellWorld, streetCells, worldCell, cellTop } from './cityGrid';
+import { SUNSPIRE, SUNSPIRE_HALF, SUNSPIRE_GATE_Z, SCAV_CAMPS, CAMP_INFO, CARAVAN_ROAD, WEST_GATE, sunspirePad, sunspireY, campFloor, panAt } from './desertLayout';
+import { MODEL, cellWorld, streetCells, worldCell, cellTop, cityDoors } from './cityGrid';
+import { registerDoor, type Door } from '../doors';
+import { SandGolem } from '../../enemies/sandGolem';
+import { SandEel, SandCrab, DuneJelly, RaySkimmer, CaravanTurtle, type SandCreature } from '../../enemies/sandCreatures2';
 import { SandShark, SandRay, DolphinPod, SandWhale } from '../../enemies/sandCreatures';
 import { Bandit, Bolts } from '../../enemies/bandit';
 import type { FX } from '../../fx/particles';
@@ -17,29 +20,55 @@ import type { Interactable } from '../../dungeon/instance';
 import type { Look } from '../../npc/charBuilder';
 
 // The Golden Expanse (the map's desert, west-south-west of Elder Glen):
-// Sunspire, the walled gold city of the Sunborn, streamed in as the player
+// Ghagrabba, the walled gold city of the Sunborn, streamed in as the player
 // nears it; scavenger camps of scrap and tarp in the dunes around it, some
 // friendly and some raiders; and the sand-sea's creatures — sharks, rays,
 // dolphin pods, whales, and Old Sawtooth in his basin.
 
-/** Sunspire's waystones: at the east gate and at the Waystop. */
+/** Ghagrabba's waystones: at the east gate and at the Waystop. */
 const GATE_X = SUNSPIRE.x + SUNSPIRE_HALF.x + 30;
 WAYSTONES.push(
-  { id: 'sunspire', name: 'Sunspire (East Gate)', pos: new THREE.Vector3(GATE_X + 6, 0, SUNSPIRE_GATE_Z + 14) },
+  { id: 'sunspire', name: 'Ghagrabba (East Gate)', pos: new THREE.Vector3(GATE_X + 6, 0, SUNSPIRE_GATE_Z + 14) },
   { id: 'waystop', name: 'The Waystop (Caravan Way)', pos: new THREE.Vector3(SCAV_CAMPS[5][0] + 10, 0, SCAV_CAMPS[5][1] - 16) },
 );
 
 /** Where Old Sawtooth hunts: a dune basin south of the caravan way. */
 export const SAWTOOTH_BASIN = new THREE.Vector3(-4740, 0, 1700);
 
-const CAMP_NAMES = ['The Rust Market', 'Glasswind', 'The Bone Wells', 'Saltreach', 'The Hulks', 'The Waystop'];
-const HOSTILE_CAMPS = [1, 2, 3, 4];
+const HOSTILE_CAMPS = CAMP_INFO.map((c, k) => (c.friendly ? -1 : k)).filter((k) => k >= 0);
+/** Where the Warden sleeps under the southern sand (nothing marks the spot). */
+export const WARDEN_AT = new THREE.Vector3(-6050, 0, 1850);
 
 const RAIDER_LOOKS: Look[] = [
   { body: 'male', outfit: 'ranger', hood: true, hair: 'buzzed', beard: true, hairColor: 0x2a1a10, skin: 0x8a5a3a, cloth: 0x5a4030, linen: 0x7a6a50, bracers: true, height: 1.78 },
   { body: 'female', outfit: 'ranger', hood: true, hair: 'long', hairColor: 0x1a1410, skin: 0xa8744e, cloth: 0x6a3a2a, linen: 0x8a7a60, height: 1.68 },
   { body: 'male', outfit: 'ranger', hood: false, hair: 'buzzed', beard: true, hairColor: 0x6a5a48, skin: 0x7a4e32, cloth: 0x4a4a40, pauldron: true, height: 1.82 },
 ];
+
+/** Homes for one kind of creature, spawned as the player comes near and packed away behind. */
+class Stream {
+  readonly live = new Map<number, SandCreature>();
+  private respawnAt = new Map<number, number>();
+  constructor(readonly homes: THREE.Vector3[], private max: number, private near: number, private far: number, private respawn: number, private make: (h: THREE.Vector3, i: number) => SandCreature) {}
+  update(dt: number, player: Player, time: number, sheltered: (p: THREE.Vector3) => boolean) {
+    const p = player.pos;
+    this.homes.forEach((h, i) => {
+      const d = Math.hypot(p.x - h.x, p.z - h.z);
+      const c = this.live.get(i);
+      if (!c && d < this.near && this.live.size < this.max && (this.respawnAt.get(i) ?? 0) < time) this.live.set(i, this.make(h, i));
+      if (c && (d > this.far || c.dead)) {
+        if (c.dead) this.respawnAt.set(i, time + this.respawn);
+        c.dispose();
+        this.live.delete(i);
+      }
+    });
+    for (const c of this.live.values()) c.update(dt, player, sheltered);
+  }
+  clear() {
+    for (const c of this.live.values()) c.dispose();
+    this.live.clear();
+  }
+}
 
 export interface DesertHooks {
   toast(msg: string): void;
@@ -48,6 +77,8 @@ export interface DesertHooks {
   flags: Record<string, boolean | number | string>;
   give(item: string, n: number): void;
   save(): void;
+  /** trade with a passing caravan (by its trader's name) */
+  trade?(name: string): void;
 }
 
 const std = (color: number, roughness = 0.85, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
@@ -76,6 +107,23 @@ export class GoldenExpanse {
   private t = 0;
   private fires: { at: THREE.Vector3; flame: THREE.Mesh }[] = [];
   private visible = true;
+  private doorsPlaced = false;
+  private digCount = 0;
+  private cityLoadedAt = 0;
+  /** the city's doors, once placed (main.ts makes them enterable) */
+  onDoors?: (doors: Door[]) => void;
+  private warden: SandGolem | null = null;
+  private wardenShown = false;
+  private creatures: Stream[] = [];
+  private riders: Stream;
+  private loose: Bandit[] = [];
+  private caravans: CaravanTurtle[] = [];
+  private nearCaravan: CaravanTurtle | null = null;
+  // The sandstorm: 0 calm .. 1 blind.
+  storm = 0;
+  private stormLeft = 0;
+  private stormNext = 200 + Math.random() * 300;
+  private stormOverlay: HTMLDivElement;
 
   constructor(private scene: THREE.Scene, private fx: FX, private hooks: DesertHooks, private hour: () => number) {
     scene.add(this.group);
@@ -101,8 +149,56 @@ export class GoldenExpanse {
       w.setVisible(false);
       this.whales.push(w);
     }
+    // Eels in burrows, crabs under the crests, jellyfish drifting over the flat pans.
+    const homes = (n: number, ok: (x: number, z: number) => boolean, seed: number) => {
+      const r2 = mulberry32(seed), out: THREE.Vector3[] = [];
+      for (let tries = 0; tries < n * 60 && out.length < n; tries++) {
+        const a = r2() * Math.PI * 2, r = 120 + r2() * 3000;
+        const x = SUNSPIRE.x + 800 + Math.cos(a) * r, z = SUNSPIRE.z + 300 + Math.sin(a) * r * 0.75;
+        if (sandWeight(x, z) < 0.5 || sheltered(x, z) || !ok(x, z)) continue;
+        out.push(new THREE.Vector3(x, 0, z));
+      }
+      return out;
+    };
+    this.creatures.push(
+      new Stream(homes(70, () => true, 11), 6, 90, 160, 200, (h) => new SandEel(h, scene, fx)),
+      new Stream(homes(70, (x, z) => panAt(x, z) < 0.5, 12), 6, 110, 190, 240, (h) => new SandCrab(h, scene, fx)),
+      new Stream(homes(50, (x, z) => panAt(x, z) > 0.4, 13), 8, 140, 220, 200, (h) => new DuneJelly(h, scene, fx)),
+    );
+    // Raiders on harnessed rays roam the open sand.
+    this.riders = new Stream(homes(14, () => true, 14), 3, 240, 380, 420, (h, i) => {
+      const r = new RaySkimmer(h, scene, fx, this.bolts, RAIDER_LOOKS[i % RAIDER_LOOKS.length]);
+      r.onDismount = (at) => this.dismount(at, i);
+      return r;
+    });
+    // Trader caravans on great sand turtles plod the Caravan Way.
+    const road = CARAVAN_ROAD.filter(([x]) => x <= -2600);
+    this.caravans.push(
+      new CaravanTurtle(road, 0, scene, fx, { body: 'male', outfit: 'peasant', hood: true, hair: 'buzzed', beard: true, hairColor: 0x2a1a10, skin: 0x8a5a3a, cloth: 0x1f7a7a, linen: 0xe8dcc0, height: 1.74 }, 'Caravan Master Amenhir'),
+      new CaravanTurtle([...road].reverse(), 2, scene, fx, { body: 'female', outfit: 'peasant', hood: true, hair: 'long', hairColor: 0x120c08, skin: 0xa8744e, cloth: 0xb8402e, linen: 0xf0e4c8, height: 1.66 }, 'Trader Satiah'),
+    );
+    for (const c of this.caravans) c.setVisible(false);
+    this.interactables.push({
+      pos: new THREE.Vector3(0, -999, 0), radius: 6,
+      label: () => `Trade with ${this.nearCaravan?.name ?? 'the caravan'}`,
+      enabled: () => !!this.nearCaravan,
+      action: () => this.nearCaravan && this.hooks.trade?.(this.nearCaravan.name),
+    });
+    // The storm overlay: blowing sand across the whole screen.
+    this.stormOverlay = document.createElement('div');
+    this.stormOverlay.className = 'sandstorm';
+    document.getElementById('ui')?.appendChild(this.stormOverlay);
     this.buildCamps();
     this.buildInteractables();
+  }
+
+  /** A ray dies: its rider is thrown clear and fights on foot. */
+  private dismount(at: THREE.Vector3, i: number) {
+    const b = new Bandit('sword', at.clone().setY(heightAt(at.x, at.z)), this.scene, this.bolts, undefined, RAIDER_LOOKS[i % RAIDER_LOOKS.length]);
+    b.kind = 'scavenger';
+    b.name = 'Unhorsed Ray-Rider';
+    b.alerted = true;
+    this.loose.push(b);
   }
 
   /** Near enough to the Expanse that its world needs to exist? */
@@ -115,7 +211,7 @@ export class GoldenExpanse {
     void at;
   }
 
-  // ---- Sunspire --------------------------------------------------------------------------------------
+  // ---- Ghagrabba --------------------------------------------------------------------------------------
 
   private async loadCity() {
     this.cityLoading = true;
@@ -125,8 +221,8 @@ export class GoldenExpanse {
       .multiply(new THREE.Matrix4().makeScale(S, S, S))
       .multiply(new THREE.Matrix4().makeTranslation(-mcx, -mcy, -mcz));
     g.scene.updateMatrixWorld(true);
-    // Bake every mesh into world space, then cut the city into chunks so
-    // only the streets in view are drawn.
+    // Bake every mesh into world space, cut the west gate through the walls,
+    // then split the city into chunks so only the streets in view are drawn.
     const CH = 6;
     const x0 = SUNSPIRE.x - SUNSPIRE_HALF.x, z0 = SUNSPIRE.z - SUNSPIRE_HALF.z;
     const cw = (SUNSPIRE_HALF.x * 2) / CH, cd = (SUNSPIRE_HALF.z * 2) / CH;
@@ -138,22 +234,24 @@ export class GoldenExpanse {
       const src = mesh.geometry;
       const m = new THREE.Matrix4().multiplyMatrices(place, mesh.matrixWorld);
       const posA = src.getAttribute('position'), nrmA = src.getAttribute('normal'), uvA = src.getAttribute('uv');
-      const n = posA.count;
-      const P = new Float32Array(n * 3), N = nrmA ? new Float32Array(n * 3) : null, U = uvA ? new Float32Array(n * 2) : null;
+      const n0 = posA.count;
+      const P0 = new Float32Array(n0 * 3), N0 = nrmA ? new Float32Array(n0 * 3) : null, U0 = uvA ? new Float32Array(n0 * 2) : null;
       const v = new THREE.Vector3(), nm = new THREE.Matrix3().getNormalMatrix(m);
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i < n0; i++) {
         v.fromBufferAttribute(posA, i).applyMatrix4(m);
-        P[i * 3] = v.x; P[i * 3 + 1] = v.y; P[i * 3 + 2] = v.z;
-        if (N) {
+        P0[i * 3] = v.x; P0[i * 3 + 1] = v.y; P0[i * 3 + 2] = v.z;
+        if (N0) {
           v.fromBufferAttribute(nrmA, i).applyMatrix3(nm).normalize();
-          N[i * 3] = v.x; N[i * 3 + 1] = v.y; N[i * 3 + 2] = v.z;
+          N0[i * 3] = v.x; N0[i * 3 + 1] = v.y; N0[i * 3 + 2] = v.z;
         }
-        if (U) {
-          U[i * 2] = uvA.getX(i);
-          U[i * 2 + 1] = uvA.getY(i);
+        if (U0) {
+          U0[i * 2] = uvA.getX(i);
+          U0[i * 2 + 1] = uvA.getY(i);
         }
       }
-      const idx = src.index ? src.index.array : Uint32Array.from({ length: n }, (_, i) => i);
+      const idx0: ArrayLike<number> = src.index ? src.index.array : Uint32Array.from({ length: n0 }, (_, i) => i);
+      const { P, N, U, idx } = cutWestGate(P0, N0, U0, idx0, sunspireY());
+      const n = P.length / 3;
       // Collision: everything, in world space.
       const base = collPos.length / 3;
       for (let i = 0; i < P.length; i++) collPos.push(P[i]);
@@ -198,6 +296,7 @@ export class GoldenExpanse {
     }
     const city = new THREE.Group();
     city.name = 'sunspire';
+    let wallMat: THREE.Material | null = null;
     for (const { mat, geos } of chunks.values()) {
       const geo = geos.length > 1 ? mergeGeometries(geos)! : geos[0];
       if (!geo.getAttribute('normal')) geo.computeVertexNormals();
@@ -205,6 +304,7 @@ export class GoldenExpanse {
       geo.computeBoundingBox();
       const m = mat as THREE.MeshStandardMaterial;
       if (m.map) m.map.anisotropy = 4;
+      if (/Brick/.test(m.name) && m.map) wallMat ??= m;
       const mesh = new THREE.Mesh(geo, mat);
       mesh.matrixAutoUpdate = false;
       mesh.castShadow = true;
@@ -214,8 +314,85 @@ export class GoldenExpanse {
     this.cityCollider = physics.addTrimesh(new Float32Array(collPos), new Uint32Array(collIdx));
     this.city = city;
     this.group.add(city);
+    this.buildWestGate(wallMat);
     this.dressCity();
+    this.cityLoadedAt = this.time;
     this.cityLoading = false;
+  }
+
+  /** The west gatehouse: lined passage walls through the cut, a lintel, towers and the Queen's banners. */
+  private buildWestGate(wallMat: THREE.Material | null) {
+    const G = WEST_GATE, y = sunspireY();
+    const mat = wallMat ?? std(0xc8a070, 0.95);
+    const box = (w: number, h: number, d: number, x: number, yy: number, z: number, collide = true) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      const uv = mesh.geometry.getAttribute('uv') as THREE.BufferAttribute;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * Math.max(w, d) / 4, uv.getY(i) * h / 4);
+      mesh.position.set(x, yy, z);
+      mesh.castShadow = mesh.receiveShadow = true;
+      this.cityDressing.add(mesh);
+      if (collide) physics.addBox(mesh.position.clone(), new THREE.Vector3(w / 2, h / 2, d / 2));
+    };
+    const len = G.x1 - G.x0, mx = (G.x0 + G.x1) / 2;
+    // Passage sides (hide the hollow inside the thick walls) and a roof over the passage.
+    for (const s of [-1, 1]) box(len, G.top + 0.4, 0.8, mx, y + (G.top + 0.4) / 2, G.z + s * (G.halfW + 0.4));
+    box(len, 1.2, G.halfW * 2 + 1.6, mx, y + G.top + 0.6, G.z, false);
+    // Two squat towers flanking the outer mouth, with gilded caps.
+    const gold = std(0xd4a640, 0.35, 0.8);
+    for (const s of [-1, 1]) {
+      box(5, 13, 5, G.x0 - 1, y + 6.5, G.z + s * (G.halfW + 3.3));
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(3.2, 2.4, 4), gold);
+      cap.position.set(G.x0 - 1, y + 14.2, G.z + s * (G.halfW + 3.3));
+      cap.rotation.y = Math.PI / 4;
+      this.cityDressing.add(cap);
+      const ban = buildBanner();
+      ban.position.set(G.x0 - 4, y, G.z + s * (G.halfW + 1.2));
+      ban.rotation.y = Math.PI;
+      this.cityDressing.add(ban);
+    }
+    box(4, 2.4, G.halfW * 2 + 0.2, G.x0 - 1, y + G.top + 1.2, G.z);
+  }
+
+  /** Doors on Ghagrabba's houses, shops, taverns and the palace: found on the street map, set against the real walls by raycast. */
+  private placeDoors() {
+    this.doorsPlaced = true;
+    const y0 = sunspireY();
+    const made: Door[] = [];
+    const slabGeo = new THREE.BoxGeometry(1.5, 2.6, 0.14);
+    slabGeo.translate(0, 1.3, 0);
+    const frameGeo = new THREE.BoxGeometry(2.1, 0.35, 0.3);
+    frameGeo.translate(0, 2.75, 0);
+    const list = cityDoors();
+    const slabs = new THREE.InstancedMesh(slabGeo, std(0x5a3a22, 0.85), list.length);
+    const frames = new THREE.InstancedMesh(frameGeo, std(0xd4a640, 0.4, 0.6), list.length);
+    let n = 0;
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+    for (const d of list) {
+      const dir = new THREE.Vector3(d.di, 0, d.dj);
+      const start = new THREE.Vector3(d.x, y0 + 1.2, d.z);
+      // The palace front is a pylon with an open gateway: its door sits in the gateway itself.
+      const hit = d.kind === 'palace' ? 1.5 : physics.castRay(start, dir, 8);
+      if (hit === null) continue;
+      const wall = start.clone().addScaledVector(dir, hit).setY(y0);
+      const step = wall.clone().addScaledVector(dir, -0.8);
+      const big = d.kind === 'palace';
+      q.setFromAxisAngle(up, d.yaw);
+      m4.compose(wall.clone().addScaledVector(dir, -0.06), q, new THREE.Vector3(big ? 2.2 : 1, big ? 1.8 : 1, 1));
+      slabs.setMatrixAt(n, m4);
+      frames.setMatrixAt(n, m4);
+      n++;
+      const obj = new THREE.Object3D();
+      obj.position.copy(step);
+      obj.rotation.y = d.yaw;
+      const door = registerDoor(obj, new THREE.Vector3(), { w: big ? 30 : 6.5 + (d.seed % 3), d: big ? 40 : 6 + (d.seed % 2), floors: 1, roof: 'tile', seed: d.seed }, {
+        kind: d.kind, name: d.name, keeper: d.keeper, style: d.kind === 'palace' ? undefined : 'desert',
+      });
+      made.push(door);
+    }
+    slabs.count = frames.count = n;
+    slabs.castShadow = frames.castShadow = true;
+    this.cityDressing.add(slabs, frames);
+    this.onDoors?.(made);
   }
 
   /** Palms, the bazaar's stalls, the throne under its canopy, braziers, banners and the gate golems. */
@@ -273,19 +450,6 @@ export class GoldenExpanse {
       ban.position.copy(p);
       this.cityDressing.add(ban);
     }
-    // Two sand golems stand guard either side of the east gate.
-    void compressedGltf.loadAsync('/assets/desert/sandGolem.glb').then((gl) => {
-      for (const side of [-1, 1]) {
-        const golem = gl.scene.clone(true);
-        golem.scale.setScalar(0.72);
-        const gx = GATE_X - 4, gz = SUNSPIRE_GATE_Z + side * 9;
-        golem.position.set(gx, heightAt(gx, gz), gz);
-        golem.rotation.y = Math.PI / 2;
-        golem.traverse((o) => ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
-        this.cityDressing.add(golem);
-        physics.addBox(new THREE.Vector3(gx, heightAt(gx, gz) + 2.5, gz), new THREE.Vector3(1.6, 2.5, 1.2));
-      }
-    });
   }
 
   // ---- the scavenger camps ---------------------------------------------------------------------------
@@ -293,7 +457,7 @@ export class GoldenExpanse {
   private buildCamps() {
     SCAV_CAMPS.forEach(([cx, cz, r], k) => {
       const g = new THREE.Group();
-      g.name = 'camp:' + CAMP_NAMES[k];
+      g.name = 'camp:' + CAMP_INFO[k].name;
       const rnd = mulberry32(300 + k);
       const y = campFloor(cx, cz);
       const huts = k === 5 ? 4 : 6;
@@ -329,7 +493,29 @@ export class GoldenExpanse {
           g.add(skiff);
         }
       }
-      if (k === 5 || k === 2) {
+      if (!CAMP_INFO[k].friendly) {
+        // Raider camps: bone pikes and a red rag on a pole at the entrance.
+        for (let b = 0; b < 5; b++) {
+          const a = (b / 5) * 6.28 + 0.3;
+          const pike = buildPike(rnd);
+          pike.position.set(cx + Math.cos(a) * (r + 2), y, cz + Math.sin(a) * (r + 2));
+          g.add(pike);
+        }
+        const ban = buildBanner();
+        ban.traverse((o) => {
+          const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+          if (m && m.color && m.color.getHex() === 0x1f7a7a) (o as THREE.Mesh).material = std(0x7a1a10, 0.95);
+        });
+        ban.position.set(cx + r * 0.3, y, cz - r * 0.3);
+        g.add(ban);
+      } else {
+        // Friendly villages: awnings over the trading spot, water jars.
+        const awn = buildStall(0xb8a07a, rnd);
+        awn.position.set(cx - 4, y, cz - 3);
+        awn.rotation.y = 0.4;
+        g.add(awn);
+      }
+      if (k === 5 || k === 2 || CAMP_INFO[k].friendly) {
         const well = buildWell();
         well.position.set(cx + 6, y, cz - 4);
         g.add(well);
@@ -356,6 +542,7 @@ export class GoldenExpanse {
         this.camps[k].add(heap);
       }
     }
+    this.digCount = heaps.length;
     heaps.forEach((p, i) => {
       this.interactables.push({
         pos: p, radius: 2.2,
@@ -389,13 +576,13 @@ export class GoldenExpanse {
       const d = Math.hypot(player.pos.x - cx, player.pos.z - cz);
       if (!r.list.length && d < 160 && d > cr + 25 && this.time - r.clearedAt > 480) {
         const y = campFloor(cx, cz);
-        const n = r.camp === 1 ? 5 : 4;
+        const n = r.camp === 1 ? 6 : 4 + (r.camp % 3);
         for (let i = 0; i < n; i++) {
           const a = (i / n) * 6.28;
-          const role = r.camp === 1 && i === 0 ? 'chief' : i % 3 === 2 ? 'crossbow' : 'sword';
+          const role = (r.camp === 1 || r.camp === 12) && i === 0 ? 'chief' : i % 3 === 2 ? 'crossbow' : 'sword';
           const b = new Bandit(role, new THREE.Vector3(cx + Math.cos(a) * cr * 0.4, y, cz + Math.sin(a) * cr * 0.4), this.scene, this.bolts, undefined, RAIDER_LOOKS[i % RAIDER_LOOKS.length]);
           b.kind = role === 'chief' ? 'scavengerChief' : 'scavenger';
-          b.name = role === 'chief' ? 'Vash, Queen of Glasswind' : role === 'crossbow' ? 'Scavenger Bolt-thrower' : 'Scavenger Raider';
+          b.name = role === 'chief' ? (r.camp === 1 ? 'Vash, Queen of Glasswind' : 'Gnasher, the Scrap King') : role === 'crossbow' ? 'Scavenger Bolt-thrower' : 'Scavenger Raider';
           r.list.push(b);
         }
       }
@@ -453,6 +640,55 @@ export class GoldenExpanse {
       }
     });
     for (const pod of this.pods.values()) pod.update(dt);
+    for (const c of this.creatures) c.update(dt, player, this.time, this.sheltered);
+    this.riders.update(dt, player, this.time, this.sheltered);
+    for (const b of this.loose) b.update(dt, player);
+    for (const b of this.loose.filter((b) => b.dead)) b.dispose();
+    this.loose = this.loose.filter((b) => !b.dead && b.position.distanceTo(p) < 300);
+    // Trader caravans.
+    this.nearCaravan = null;
+    for (const c of this.caravans) {
+      const d = c.pos.distanceTo(p);
+      c.setVisible(d < 900);
+      if (d < 900) c.update(dt, p);
+      if (d < 9) this.nearCaravan = c;
+    }
+    if (this.nearCaravan) this.interactables[this.interactables.length - 1 - this.digCount].pos.copy(this.nearCaravan.pos);
+    // The Warden: asleep under the southern sand until you walk over it.
+    if (!this.hooks.flags.wardenDead) {
+      const d = Math.hypot(p.x - WARDEN_AT.x, p.z - WARDEN_AT.z);
+      if (!this.warden && d < 200) {
+        this.warden = new SandGolem(WARDEN_AT, this.scene, this.fx);
+        this.warden.onWake = () => this.hooks.card('The Warden of the Sands', 'It was never a rock');
+        this.warden.onDeath = () => {
+          this.hooks.flags.wardenDead = true;
+          this.hooks.bossBar(null);
+          this.hooks.card('The Warden Falls', 'The sand takes it back');
+          this.hooks.give('duneGlass', 4);
+          this.hooks.give('sunSilk', 1);
+          this.hooks.save();
+        };
+      }
+      const w = this.warden;
+      if (w) {
+        w.update(dt, player);
+        const engaged = w.alive && w.awake && d < 80;
+        if (engaged) this.hooks.bossBar(w, w.name);
+        else if (this.wardenShown) this.hooks.bossBar(null);
+        this.wardenShown = engaged;
+        if (w.alive && w.awake && (player.dead || d > 120)) w.reset();
+        if (d > 320) {
+          w.dispose();
+          this.warden = null;
+        }
+      }
+    } else if (this.warden) {
+      this.warden.update(dt, player);
+      if (this.warden.dead) {
+        this.warden.dispose();
+        this.warden = null;
+      }
+    }
     for (const w of this.whales) {
       const d = Math.hypot(p.x - w.center.x, p.z - w.center.z);
       w.setVisible(d < 1800);
@@ -502,6 +738,8 @@ export class GoldenExpanse {
     if (this.city) this.city.visible = this.near(p, 3200);
     this.cityDressing.visible = this.near(p, 900);
     this.camps.forEach((c, k) => (c.visible = Math.hypot(p.x - SCAV_CAMPS[k][0], p.z - SCAV_CAMPS[k][1]) < 700));
+    if (this.city && !this.doorsPlaced && this.time - this.cityLoadedAt > 1) this.placeDoors();
+    this.updateStorm(dt, player);
     if (p.x > -1600) return; // nothing out here is awake
     this.updateCreatures(dt, player);
     this.updateRaiders(dt, player);
@@ -515,8 +753,64 @@ export class GoldenExpanse {
     }
   }
 
+  // ---- the sandstorm ---------------------------------------------------------------------------------
+
+  /** In the Expanse proper (where storms blow)? */
+  private inDesert(p: THREE.Vector3) {
+    return p.x < -2300 && (sandWeight(p.x, p.z) > 0.25 || sunspirePad(p.x, p.z) > 0);
+  }
+
+  private updateStorm(dt: number, player: Player) {
+    const p = player.pos;
+    const here = this.inDesert(p);
+    if (this.stormLeft > 0) this.stormLeft -= dt;
+    else if (here) {
+      this.stormNext -= dt;
+      if (this.stormNext <= 0) this.startStorm();
+    }
+    const want = this.stormLeft > 0 && here ? 1 : 0;
+    this.storm += Math.sign(want - this.storm) * Math.min(Math.abs(want - this.storm), dt / 7);
+    this.stormOverlay.style.opacity = (this.storm * 0.62).toFixed(3);
+    this.stormOverlay.style.display = this.storm > 0.005 ? 'block' : 'none';
+    // Sand streaming past the camera.
+    if (this.storm > 0.05) {
+      const n = Math.random() < dt * 60 * this.storm ? 6 : 0;
+      for (let k = 0; k < n; k++) {
+        const at = p.clone().add(new THREE.Vector3(-14 + Math.random() * 6, 0.3 + Math.random() * 4, (Math.random() - 0.5) * 24));
+        this.fx.add.spawn({ pos: at, vel: new THREE.Vector3(26, -0.5, 4), spread: 1, count: 1, life: [0.8, 1.4], size: [0.9, 0.3], color: 0xc8a26a, color2: 0x9a7a4a, alpha: 0.5, drag: 0.1 });
+      }
+    }
+  }
+
+  /** Start a storm now (also used by tests and the console). */
+  startStorm(seconds = 70 + Math.random() * 60) {
+    this.stormLeft = seconds;
+    this.stormNext = 260 + Math.random() * 420;
+    this.hooks.toast('The horizon turns brown. A sandstorm is coming — find shelter or keep your head down.');
+    sfx.rumble(3, 0.5);
+  }
+
+  /** After the sky is applied: the storm swallows the view. */
+  atmosphere(r: { post?: { finalMat: THREE.ShaderMaterial } | null; scene: THREE.Scene }) {
+    const k = this.storm;
+    if (k <= 0.001) return;
+    const sand = new THREE.Color(0.74, 0.56, 0.34);
+    const u = r.post?.finalMat.uniforms;
+    if (u) {
+      u.uHaze.value += k * 0.07;
+      (u.uHazeColor.value as THREE.Color).lerp(sand, k);
+      (u.uSunColor.value as THREE.Color).lerp(sand, k * 0.8);
+      u.uMist.value = Math.max(u.uMist.value, k * 0.9);
+      u.uClouds.value *= 1 - k;
+    } else if (r.scene.fog instanceof THREE.Fog) {
+      r.scene.fog.color.lerp(sand, k);
+      r.scene.fog.far = THREE.MathUtils.lerp(r.scene.fog.far, 24, k);
+    }
+  }
+
   setVisible(v: boolean) {
     this.visible = v;
+    for (const c of this.caravans) c.setVisible(v && false);
     this.group.visible = v;
     for (const w of this.whales) w.setVisible(v && false);
     if (!v) {
@@ -534,6 +828,14 @@ export class GoldenExpanse {
         r.list = [];
       }
       this.bolts.clear();
+      for (const c of this.creatures) c.clear();
+      this.riders.clear();
+      for (const b of this.loose) b.dispose();
+      this.loose = [];
+      this.warden?.dispose();
+      this.warden = null;
+      this.storm = 0;
+      this.stormOverlay.style.display = 'none';
     }
   }
 
@@ -542,7 +844,10 @@ export class GoldenExpanse {
     return !!this.city;
   }
   get creatureCounts() {
-    return { sharks: this.sharks.size, rays: this.rays.size, pods: this.pods.size, boss: !!this.boss, raiders: this.raiders.reduce((n, r) => n + r.list.length, 0) };
+    return {
+      sharks: this.sharks.size, rays: this.rays.size, pods: this.pods.size, boss: !!this.boss, raiders: this.raiders.reduce((n, r) => n + r.list.length, 0),
+      eels: this.creatures[0].live.size, crabs: this.creatures[1].live.size, jellies: this.creatures[2].live.size, riders: this.riders.live.size, warden: this.warden ? (this.warden.awake ? 'awake' : 'asleep') : 'none', doors: this.doorsPlaced,
+    };
   }
   /** Is a world point inside the walled city? (for the region card and the map) */
   inCity(x: number, z: number) {
@@ -829,5 +1134,92 @@ function buildScrapHeap(rnd: () => number) {
   const mound = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), std(0xc8a670, 1));
   mound.scale.set(1.1, 0.35, 1.1);
   g.add(mound);
+  return g;
+}
+
+// ---- the west gate cut ------------------------------------------------------------------------------
+
+type Vtx = number[]; // x y z nx ny nz u v
+
+/**
+ * Cut the west gate's passage out of the city model: triangles crossing the
+ * passage box are split along its faces and the pieces inside it dropped
+ * (the ground under it is left alone; the terrain pad is there).
+ */
+function cutWestGate(P: Float32Array, N: Float32Array | null, U: Float32Array | null, idx: ArrayLike<number>, base: number) {
+  const G = WEST_GATE;
+  const box = { x0: G.x0, x1: G.x1, z0: G.z - G.halfW, z1: G.z + G.halfW, y0: base + 0.35, y1: base + G.top };
+  const vtx = (i: number): Vtx => [P[i * 3], P[i * 3 + 1], P[i * 3 + 2], N ? N[i * 3] : 0, N ? N[i * 3 + 1] : 1, N ? N[i * 3 + 2] : 0, U ? U[i * 2] : 0, U ? U[i * 2 + 1] : 0];
+  const outP: number[] = Array.from(P), outN: number[] = N ? Array.from(N) : [], outU: number[] = U ? Array.from(U) : [];
+  const outI: number[] = [];
+  let touched = false;
+  const inBox = (poly: Vtx[]) => {
+    let x = 0, y = 0, z = 0;
+    for (const v of poly) (x += v[0]), (y += v[1]), (z += v[2]);
+    x /= poly.length; y /= poly.length; z /= poly.length;
+    return x > box.x0 && x < box.x1 && z > box.z0 && z < box.z1 && y > box.y0 && y < box.y1;
+  };
+  const split = (poly: Vtx[], axis: number, val: number): [Vtx[], Vtx[]] => {
+    const a: Vtx[] = [], b: Vtx[] = [];
+    for (let k = 0; k < poly.length; k++) {
+      const p = poly[k], q = poly[(k + 1) % poly.length];
+      const dp = p[axis] - val, dq = q[axis] - val;
+      if (dp <= 0) a.push(p);
+      if (dp >= 0) b.push(p);
+      if ((dp < 0 && dq > 0) || (dp > 0 && dq < 0)) {
+        const t = dp / (dp - dq);
+        const r = p.map((c, i) => c + (q[i] - c) * t);
+        a.push(r);
+        b.push(r);
+      }
+    }
+    return [a, b];
+  };
+  for (let t = 0; t < idx.length; t += 3) {
+    const ia = idx[t], ib = idx[t + 1], ic = idx[t + 2];
+    const xs = [P[ia * 3], P[ib * 3], P[ic * 3]], ys = [P[ia * 3 + 1], P[ib * 3 + 1], P[ic * 3 + 1]], zs = [P[ia * 3 + 2], P[ib * 3 + 2], P[ic * 3 + 2]];
+    const hit = Math.max(...xs) > box.x0 && Math.min(...xs) < box.x1 && Math.max(...zs) > box.z0 && Math.min(...zs) < box.z1 && Math.max(...ys) > box.y0 && Math.min(...ys) < box.y1;
+    if (!hit) {
+      outI.push(ia, ib, ic);
+      continue;
+    }
+    touched = true;
+    let pieces: Vtx[][] = [[vtx(ia), vtx(ib), vtx(ic)]];
+    for (const [axis, val] of [[0, box.x0], [0, box.x1], [2, box.z0], [2, box.z1], [1, box.y0], [1, box.y1]] as [number, number][]) {
+      const next: Vtx[][] = [];
+      for (const poly of pieces) {
+        const [a, b] = split(poly, axis, val);
+        if (a.length >= 3) next.push(a);
+        if (b.length >= 3) next.push(b);
+      }
+      pieces = next;
+    }
+    for (const poly of pieces) {
+      if (inBox(poly)) continue;
+      const start = outP.length / 3;
+      for (const v of poly) {
+        outP.push(v[0], v[1], v[2]);
+        if (N) outN.push(v[3], v[4], v[5]);
+        if (U) outU.push(v[6], v[7]);
+      }
+      for (let k = 1; k + 1 < poly.length; k++) outI.push(start, start + k, start + k + 1);
+    }
+  }
+  if (!touched) return { P, N, U, idx: Uint32Array.from(idx) };
+  return { P: new Float32Array(outP), N: N ? new Float32Array(outN) : null, U: U ? new Float32Array(outU) : null, idx: new Uint32Array(outI) };
+}
+
+/** A pike of bleached bones and a shark skull: raider camps mark their ground with these. */
+function buildPike(rnd: () => number) {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 2.6, 5), std(0x5a4028));
+  pole.position.y = 1.3;
+  pole.rotation.z = (rnd() - 0.5) * 0.15;
+  const skull = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.8, 5), std(0xe8dcc0, 0.7));
+  skull.rotation.x = Math.PI / 2;
+  skull.position.y = 2.65;
+  const rag = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.7), new THREE.MeshStandardMaterial({ color: 0x7a1a10, side: THREE.DoubleSide, roughness: 1 }));
+  rag.position.set(0.22, 2.1, 0);
+  g.add(pole, skull, rag);
   return g;
 }
