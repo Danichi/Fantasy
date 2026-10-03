@@ -167,7 +167,7 @@ export const road = (id: string) => ROAD_SPECS.find((r) => r.id === id)!;
 
 // ---- roadside furniture ----------------------------------------------------------------
 
-function carvedText(lines: string[], w: number, h: number, bg: string, ink: string, font = 'Cinzel, serif') {
+export function carvedText(lines: string[], w: number, h: number, bg: string, ink: string, font = 'Cinzel, serif') {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const g = c.getContext('2d')!;

@@ -36,9 +36,13 @@ test('terrain and trees stream in and out without leaking', async ({ page }) => 
     const g = (window as any).__game;
     const T = g.THREE;
     const { heightAt } = await import('/src/world/terrainHeight.ts' as string);
+    const { characterGeometryCount } = await import('/src/npc/charMerge.ts' as string);
     const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    // (Townsfolk bodies are cached once per part combination the first time
+    // you meet one: a bounded cache that fills as you see more people, not a
+    // streaming leak, so it's counted apart.)
     const snap = () => ({
-      geo: g.r.renderer.info.memory.geometries,
+      geo: g.r.renderer.info.memory.geometries - characterGeometryCount(),
       bodies: g.physics.world.bodies.len(),
       tiles: g.terrain.tileCount,
       veg: g.stylizedNature.tileCount,

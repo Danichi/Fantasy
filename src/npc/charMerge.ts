@@ -128,6 +128,12 @@ interface GeoEntry {
   waiting: ((lo: THREE.BufferGeometry) => void)[];
 }
 const geoCache = new Map<string, GeoEntry>();
+/** Geometries held by the character cache (one merged body per part combination, plus its LOD): bounded, not a leak. */
+export const characterGeometryCount = () => {
+  let n = 0;
+  for (const g of geoCache.values()) n += 1 + (g.lo ? 1 : 0);
+  return n;
+};
 /** Simplification queue: one at a time, a little after each build, never inside one. */
 const simplifyQueue: GeoEntry[] = [];
 let simplifying = false;

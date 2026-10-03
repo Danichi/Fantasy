@@ -1,5 +1,6 @@
 import { PLACE_DEFS, pxToWorld } from './worldMap';
 import { PALACE, PLAZA, TEMPLE, LIBRARY, COLLEGIUM, COMMANDERY, GUILD, KINGSBRIDGE } from './capitalCity';
+import { crownSitePoint } from './roadData';
 
 // Every region of the known world (World Expansion prompt §§2–16, §82).
 // Outlines live in data/regions.json (traced from the world map); this file
@@ -116,6 +117,13 @@ export const REGIONS: Record<string, RegionDef> = {
       at('royalLibrary', 'The Royal Library', 'landmark', LIBRARY[0], LIBRARY[1]), at('collegium', 'The Arcane Collegium', 'landmark', COLLEGIUM[0], COLLEGIUM[1]),
       at('silverLance', 'The Silver Lance Commandery', 'castle', COMMANDERY[0], COMMANDERY[1]), at('grandHall', 'The Grand Hall of the Guild', 'landmark', GUILD[0], GUILD[1]),
       at('kingsbridge', 'The Kingsbridge', 'landmark', KINGSBRIDGE[0], KINGSBRIDGE[1]),
+      // Along the Crown Road.
+      at('crownCheckpoint', 'The Crown Checkpoint', 'landmark', ...crownSitePoint('outpost')),
+      at('thornfield', 'Thornfield', 'town', ...crownSitePoint('thornfield')),
+      at('oldWatchtower', 'The Old Watchtower', 'ruin', ...crownSitePoint('watchtower')),
+      at('kingsmile', 'The Kingsmile', 'town', ...crownSitePoint('kingsmile')),
+      at('gorrakCamp', 'Gorrak’s Warcamp', 'dungeon', ...crownSitePoint('orcCamp')),
+      at('oldKingsBarrow', 'The Barrow of the Old Kings', 'ruin', ...crownSitePoint('barrow')),
     ],
     surface: ['the palace and court on Crown Hill', 'the Grand Hall of the Adventurer’s Guild', 'the Temple of the Dawn, the Crown Market, the Royal Library', 'the Arcane Collegium', 'the Silver Lance Commandery and its tourney'],
     hidden: ['the old city beneath the palace', 'court intrigues'],

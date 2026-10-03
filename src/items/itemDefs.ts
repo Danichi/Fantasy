@@ -317,6 +317,20 @@ export const ITEMS: Record<string, ItemDef> = {
       return g;
     },
   },
+  wreckLedger: {
+    id: 'wreckLedger', name: 'Waterlogged Ledger', kind: 'key', rarity: 'common',
+    desc: "A merchant's ledger from a wagon wrecked on the Crown Road, stamped with the seal of the Kingsmile.", stats: {},
+    build: () => {
+      const g = new THREE.Group();
+      const cover = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.3), new THREE.MeshStandardMaterial({ color: 0x5a2a1a, roughness: 0.9 }));
+      const pages = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.28), new THREE.MeshStandardMaterial({ color: 0xd8ccb0, roughness: 1 }));
+      pages.position.set(0.01, 0.005, 0);
+      const seal = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.01, 10), new THREE.MeshStandardMaterial({ color: 0x9a1a14 }));
+      seal.position.set(0, 0.03, 0.06);
+      g.add(cover, pages, seal);
+      return g;
+    },
+  },
   ...PRODUCE_ITEMS,
   ...HERB_ITEMS,
   ...FISH_ITEMS,

@@ -25,6 +25,8 @@ export class Wagon {
   private clip = '';
   private wheels: THREE.Mesh[] = [];
   s = 0;
+  /** the road this wagon travels */
+  route = 'kings';
   pos = new THREE.Vector3();
   yaw = 0;
   speed = 0;
@@ -76,9 +78,9 @@ export class Wagon {
     this.clip = n;
   }
 
-  /** Place the wagon at distance `s` along the King's Road, travelling `dir`. */
+  /** Place the wagon at distance `s` along its road, travelling `dir`. */
   place(s: number, dir: 1 | -1, dt: number) {
-    const kr = road('kings');
+    const kr = road(this.route);
     this.s = s;
     const p = pointAlong(kr, s);
     const side = new THREE.Vector2(-p.dir.y, p.dir.x).multiplyScalar(-dir * 1.6);
@@ -153,39 +155,47 @@ export class Follower {
 }
 
 /** The regular merchant caravans: abstract far away, a real wagon near the player. */
+/** The caravans: two merchant trains on the King's Road, a royal supply train on the Crown Road. */
+const LINES = [
+  { route: 'kings', phase: 0, hood: 0xb8402e, end: 180 },
+  { route: 'kings', phase: 0.5, hood: 0x2f5f9a, end: 180 },
+  { route: 'capital', phase: 0.25, hood: 0x24467e, end: 120 },
+];
+
 export class Caravans {
   private wagons = new Map<number, Wagon>();
   private riders = new Map<number, Follower[]>();
-  private len = roadLength(road('kings'));
 
   constructor(private scene: THREE.Scene, private m: WorldMats, private time: WorldTime) {}
 
-  /** Two caravans shuttle the whole road, each round trip taking a game day. */
+  /** Each caravan shuttles its whole road, a round trip taking a game day. */
   private where(k: number): { s: number; dir: 1 | -1; resting: boolean } {
-    const t = ((this.time.day * 24 + this.time.hour) / 24 + k * 0.5) % 1;
-    // Out 45% of the day, rest at Port Aurelle 5%, back 45%, rest in Elder Glen 5%.
-    if (t < 0.45) return { s: 120 + (t / 0.45) * (this.len - 300), dir: 1, resting: false };
-    if (t < 0.5) return { s: this.len - 180, dir: 1, resting: true };
-    if (t < 0.95) return { s: this.len - 180 - ((t - 0.5) / 0.45) * (this.len - 300), dir: -1, resting: false };
+    const line = LINES[k], len = roadLength(road(line.route));
+    const t = ((this.time.day * 24 + this.time.hour) / 24 + line.phase) % 1;
+    // Out 45% of the day, rest at the far end 5%, back 45%, rest at home 5%.
+    if (t < 0.45) return { s: 120 + (t / 0.45) * (len - 120 - line.end), dir: 1, resting: false };
+    if (t < 0.5) return { s: len - line.end, dir: 1, resting: true };
+    if (t < 0.95) return { s: len - line.end - ((t - 0.5) / 0.45) * (len - 120 - line.end), dir: -1, resting: false };
     return { s: 120, dir: -1, resting: true };
   }
 
   /** Where each caravan is (for the map, the economy, and quests). */
   positions() {
-    return [0, 1].map((k) => {
+    return LINES.map((line, k) => {
       const w = this.where(k);
-      const p = pointAlong(road('kings'), w.s);
-      return { id: k, x: p.x, z: p.z, ...w };
+      const p = pointAlong(road(line.route), w.s);
+      return { id: k, route: line.route, x: p.x, z: p.z, ...w };
     });
   }
 
   update(dt: number, player: THREE.Vector3) {
-    const kr = road('kings');
     for (const c of this.positions()) {
+      const kr = road(c.route);
       const near = Math.hypot(c.x - player.x, c.z - player.z) < 220 && !c.resting;
       let w = this.wagons.get(c.id);
       if (near && !w) {
-        w = new Wagon(this.scene, this.m, c.id ? 0x2f5f9a : 0xb8402e);
+        w = new Wagon(this.scene, this.m, LINES[c.id].hood);
+        w.route = c.route;
         this.wagons.set(c.id, w);
         const looks: Look[] = [
           { body: 'male', outfit: 'ranger', hair: 'buzzed', beard: true, hairColor: 0x3a2618, skin: 0xe0b894, cloth: 0x3a5f9e, pauldron: true, height: 1.82 },

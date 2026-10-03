@@ -105,6 +105,39 @@ export const ROAD_SPECS: RoadSpec[] = [
 
 export const ROAD_POLYS: P2[][] = ROAD_SPECS.map((r) => r.pts);
 
+/** A point `s` metres along a road and `lat` metres to its left (pure: the height worker and the map use it). */
+export function roadPoint(id: string, s: number, lat = 0): P2 {
+  const pts = ROAD_SPECS.find((r) => r.id === id)!.pts;
+  let acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, az] = pts[i - 1], [bx, bz] = pts[i];
+    const seg = Math.hypot(bx - ax, bz - az);
+    if (acc + seg >= s || i === pts.length - 1) {
+      const t = Math.max(0, Math.min(1, (s - acc) / seg));
+      const dx = (bx - ax) / seg, dz = (bz - az) / seg;
+      return [ax + (bx - ax) * t - dz * lat, az + (bz - az) * t + dx * lat];
+    }
+    acc += seg;
+  }
+  return pts[pts.length - 1];
+}
+
+/** What lies along the Crown Road: metres along it, and how far off it (+ left). */
+export const CROWN_SITES = {
+  outpost: { s: 640, lat: 16 },
+  shrine: { s: 1010, lat: -10 },
+  thornfield: { s: 1290, lat: 0 },
+  wreck: { s: 1520, lat: 7 },
+  watchtower: { s: 1690, lat: 78 },
+  wolfDen: { s: 1930, lat: -64 },
+  kingsmile: { s: 2170, lat: 24 },
+  cottage: { s: 2390, lat: -26 },
+  orcCamp: { s: 2530, lat: -112 },
+  barrow: { s: 2790, lat: 62 },
+  gateMarket: { s: 3073, lat: 0 },
+};
+export const crownSitePoint = (k: keyof typeof CROWN_SITES) => roadPoint('capital', CROWN_SITES[k].s, CROWN_SITES[k].lat);
+
 /** Half-widths (metres) of the travelled surface by kind. */
 export const ROAD_HALF: Record<RoadKind, number> = { kings: 3.2, lane: 2.2, trail: 1.2 };
 

@@ -68,6 +68,8 @@ import { setupDesertQuests } from './quests/desertQuests';
 import { RoyalCapital, CAPITAL_SPOTS } from './world/royalCapital';
 import { capitalResidents } from './world/capitalFolk';
 import { CAPITAL_QUESTS } from './quests/capitalQuests';
+import { buildCrownRoad, type CrownRoadHooks } from './world/crownRoad';
+import { CROWN_ROAD_QUESTS } from './quests/crownRoadQuests';
 import { QuestUI } from './ui/questUI';
 import { MenuBook } from './ui/menuBook';
 import { glenNamedFolk } from './npc/glenNamed';
@@ -182,13 +184,17 @@ async function boot() {
   mark('dressing');
   const kingsRoad = buildKingsRoad(r.scene, world.mats, fx);
   mark('kingsRoad');
+  // The Crown Road to the capital: its outpost, hamlet, inn, camps and barrow (hooks wired once the HUD exists).
+  const crownHooks: CrownRoadHooks = { toast: () => {}, bossBar: () => {}, flags: {}, give: () => {}, gold: () => {}, heal: () => {}, hour: () => 12, save: () => {} };
+  const crownRoad = buildCrownRoad(r.scene, world.mats, fx, slimes, crownHooks);
+  mark('crownRoad');
   const port = buildPortAurelle(r.scene, world.mats, fx);
   mark('port');
   // The Royal Capital: its skyline now, the city itself streamed in as you come near.
   const capital = new RoyalCapital(r.scene, world.mats, fx);
   mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...capital.clearings, Gravewood.clearing, MINE_CLEARING];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -237,7 +243,7 @@ async function boot() {
     const capFolk = capitalResidents();
     npcs.addSettlement(capFolk.settlement);
     for (const rec of capFolk.records) npcs.add(rec);
-    for (const k of kingsRoad.settlements) {
+    for (const k of [...kingsRoad.settlements, ...crownRoad.settlements]) {
       npcs.addSettlement(k.settlement);
       for (const rec of k.records) npcs.add(rec);
     }
@@ -252,6 +258,7 @@ async function boot() {
   fauna.addHerd('bull', 1, farm.ranges.cows);
   fauna.addHerd('sheep', 12, farm.ranges.sheep);
   fauna.addHerd('alpaca', 2, farm.ranges.sheep);
+  for (const h of crownRoad.herds) fauna.addHerd(h.species, h.count, h.range);
   fauna.addHerd('horse', 3, farm.ranges.horses);
   fauna.addHerd('horse_white', 1, farm.ranges.horses);
   fauna.addHerd('donkey', 1, farm.ranges.horses);
@@ -565,7 +572,7 @@ async function boot() {
     if (won) f?.();
   };
   quests.add(...PORT_QUESTS);
-  quests.add(...CAPITAL_QUESTS);
+  quests.add(...CAPITAL_QUESTS, ...CROWN_ROAD_QUESTS);
   // The Crown checkpoint lifts its barrier for anyone registered at the Academy (on load too).
   quests.hooks.set('academy-trial:done', () => roads.open('capital'));
   // The Crown's tourney: a bout with Ser Gawen in the Silver Lance's ring.
@@ -725,6 +732,7 @@ async function boot() {
     { id: 'portAurelle', name: 'Port Aurelle (West Gate)', pos: PORT_SPOTS.stable, along: distanceAlong(kr, 2690, 150) },
     // (The capital lies the other way from Elder Glen: the Logging Road, then the Crown Road.)
     { id: 'royalCapital', name: 'The Royal Capital (Crown Stables)', pos: CAPITAL_SPOTS.stable, along: -(roadLength(road('west')) + roadLength(road('capital'))) },
+    { id: 'kingsmile', name: 'The Kingsmile (Crown Road)', pos: crownRoad.stableYard, along: -(roadLength(road('west')) + distanceAlong(road('capital'), crownRoad.stableYard.x, crownRoad.stableYard.z)) },
   ];
   const coachOptions = (here: string, show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) => {
     const from = stops.find((s) => s.id === here)!;
@@ -762,6 +770,34 @@ async function boot() {
   folkServices.set('dunmore', stableFor('dunmore', kingsRoad.stableYard, 'waystation'));
   folkServices.set('hobbs', stableFor('hobbs', PORT_SPOTS.stable, 'portAurelle'));
   folkServices.set('capOstler', stableFor('capOstler', CAPITAL_SPOTS.stable, 'royalCapital'));
+  folkServices.set('rook', stableFor('rook', crownRoad.stableYard, 'kingsmile'));
+  Object.assign(crownHooks, {
+    toast: (m: string) => hud.toast(m),
+    bossBar: (t: { hp: number; maxHp: number; alive: boolean } | null, name?: string) => hud.bossBar(t, name),
+    give: (id: string, n: number) => giveItem(id, n),
+    gold: (n: number) => player.prog.addGold(n),
+    heal: () => { player.hp = player.maxHp; player.stamina = player.maxStamina; },
+    hour: () => time.hour,
+    save: () => save(),
+  });
+  Object.defineProperty(crownHooks, 'flags', { get: () => worldFlags }); // (declared further down)
+  realm.overworldInteractables.push(...crownRoad.interactables);
+  for (const [id, line] of [['tamsin', 'A bed under the eaves \u2014 10g'], ['oswin', 'A room at the Kingsmile \u2014 15g']] as [string, string][]) {
+    const fee = Number(line.match(/(\d+)g/)![1]);
+    folkServices.set(id, (show, back) => [{
+      label: line,
+      run: () => {
+        if (player.prog.gold < fee) return show(`${fee} gold, traveller. Coin first, pillow after.`, [{ label: 'Back.', run: back }]);
+        player.prog.addGold(-fee);
+        time.skipTo(7);
+        player.hp = player.maxHp;
+        player.mana = player.maxMana;
+        player.stamina = player.maxStamina;
+        save();
+        show('You sleep soundly, the road\u2019s dangers behind a stout door. It is seven in the morning.', [{ label: 'Good morning.', run: () => dialogue.close() }]);
+      },
+    }]);
+  }
   realm.overworldInteractables.push(encounters.interactable, ...roadQuests.interactables, horses.interactable, ...roads.interactables, foraging.interactable, ...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables, ...glenMore.interactables);
 
   // ---- Buildings you can walk into ----------------------------------------------------
@@ -1286,6 +1322,7 @@ async function boot() {
       slimes.update(STEP, player);
       frontier.update(STEP);
       encounters.update(STEP, time.hour, weather.p.rain);
+      crownRoad.update(STEP, player, time.state.night);
       duel.update(STEP);
       gravewood.update(STEP, player);
       desert?.update(STEP, player);
@@ -1502,6 +1539,7 @@ async function boot() {
       if (realm.mode === 'interior') await realm.leaveInterior();
       slimes.clear();
       encounters.clear();
+      crownRoad.threats.clear();
       quests.state = {};
       quests.tracked = null;
       for (const k of Object.keys(worldFlags)) delete worldFlags[k];
@@ -1521,7 +1559,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       perf,
       pause: (p: boolean) => (paused = p),
