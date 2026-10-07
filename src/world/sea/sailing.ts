@@ -12,6 +12,8 @@ import { FISH } from '../fishing';
 import { Gunnery, SHOT_NAMES, type ShotKind, type DeckFoe } from './gunnery';
 import { PirateShip, SeaSerpent, Shark, Consort, type PirateOpts } from './seaThreats';
 import { BLACK_TIDE_SCOUT, BLACK_TIDE_FLAG } from '../../quests/seaQuests';
+import { makeBeast, BEAST_NAMES, Leviathan, type SeaBeast, type BeastId, type BeastCtx } from './seaMonsters';
+import { regionAt } from '../worldMap';
 import { candidates, dayCrew, crewEffects, crewXp, ROLE_INFO, TRAIT_INFO, type CrewMember } from './crew';
 import { Bolts } from '../../enemies/bandit';
 import { SailingHud } from '../../ui/sailingHud';
@@ -62,6 +64,8 @@ export interface SailingSave {
   picks?: Record<string, number>;
   /** currents you've ridden */
   currents?: string[];
+  /** the great monsters you've beaten (trophies) */
+  trophies?: string[];
 }
 
 export interface SailingHooks {
@@ -92,6 +96,9 @@ const PORTS: Port[] = [
   { id: 'portAurelle', name: 'Port Aurelle', zone: new THREE.Vector3(QUAY_X + 50, 0, 200), r: 150, berths: [[QUAY_X + 64, 172, Math.PI / 2], [QUAY_X + 64, 196, Math.PI / 2], [QUAY_X + 64, 218, Math.PI / 2], [QUAY_X + 92, 184, Math.PI / 2], [QUAY_X + 92, 210, Math.PI / 2], [QUAY_X + 52, 318, Math.PI / 2]], landing: new THREE.Vector3(QUAY_X - 4, 0, 196) },
   { id: 'crownQuay', name: 'The Crown Quay', zone: new THREE.Vector3(-3990, 0, -1010), r: 90, berths: [[-3990, -1000, Math.PI], [-3985, -985, Math.PI]], landing: new THREE.Vector3(-3916, 0, -1010) },
 ];
+/** What the shipwright calls the monster materials an upgrade needs. */
+const NEED_NAMES: Record<string, string> = { serpentScale: 'sea serpent scales', moongrass: 'moongrass', wyrmScale: 'Storm Wyrm scales', colossusShell: 'colossus shells', leviathanBone: 'leviathan bones', krakenInk: 'gourds of kraken ink' };
+const needName = (id: string) => NEED_NAMES[id] ?? id;
 const SHIP_NAMES = ['Sea Lark', 'Dawn Runner', 'Gull’s Pride', 'Salt Rose', 'Wavecutter', 'Lucky Kettle', 'The Brave Herring', 'Morning Star', 'Tidewalker', 'Silver Wake', 'The Stubborn Mule', 'Kestrel'];
 const HULL_COLOURS: [string, number, number][] = [['Oak and gold', 0x5a3a24, 0xc9a25a], ['Crown blue', 0x24467e, 0xe8c060], ['Black and red', 0x1e1a1c, 0x8a1a1a], ['Sea green', 0x2f6a5a, 0xe8dcc0], ['White and blue', 0xd8d4cc, 0x24467e]];
 
@@ -178,6 +185,10 @@ export class Sailing {
   consortHired = false;
   /** quest stages that put ships and monsters on the sea (stage hooks) */
   readonly story = new Set<string>();
+  /** one great monster at a time (besides the serpent) */
+  beast: SeaBeast | null = null;
+  /** the great monsters you've beaten */
+  trophies = new Set<string>();
 
   constructor(private scene: THREE.Scene, private fx: FX, private player: Player, private input: Input, private cam: ThirdPersonCamera, private hooks: SailingHooks) {
     this.gunnery = new Gunnery(scene, fx);
@@ -783,7 +794,7 @@ export class Sailing {
       }
     }
     const foes: DeckFoe[] = this.pirates.flatMap((p) => p.fighters());
-    this.gunnery.update(dt, [...this.ships.values(), ...this.pirates.map((p) => p.ship), ...(this.consort ? [this.consort.ship] : [])], [...(this.serpent ? [this.serpent] : []), ...this.sharks], foes);
+    this.gunnery.update(dt, [...this.ships.values(), ...this.pirates.map((p) => p.ship), ...(this.consort ? [this.consort.ship] : [])], [...(this.serpent ? [this.serpent] : []), ...this.sharks, ...(this.beast ? this.beast.parts() : [])], foes);
     this.bolts.update(dt, this.player);
     this.updateOverboard(dt);
     this.updateInteractables();
@@ -911,6 +922,7 @@ export class Sailing {
     };
     for (const p of this.pirates) if (!p.ship.sunk) consider(p.ship.pos, new THREE.Vector3(Math.sin(p.ship.yaw) * p.ship.speed, 0, Math.cos(p.ship.yaw) * p.ship.speed));
     if (this.serpent?.alive) consider(this.serpent.pos, this.serpent.vel);
+    if (this.beast) for (const p of this.beast.parts()) consider(p.pos, p.vel);
     if (sharks) for (const s of this.sharks) if (s.alive) consider(s.pos, s.vel);
     return best as { pos: THREE.Vector3; vel?: THREE.Vector3 } | null;
   }
@@ -940,7 +952,8 @@ export class Sailing {
     this.monsterT -= dt;
     if (this.monsterT <= 0) {
       this.monsterT = 100 + Math.random() * 90;
-      const hunting = this.hooks.wants?.('serpent-slain') ? 3 : 1;
+      this.beastEncounter(ship, danger);
+      const hunting = this.beast ? 0 : this.hooks.wants?.('serpent-slain') ? 3 : 1;
       if (danger >= 2.3 && !this.serpent && Math.random() < (0.12 + (danger - 2.3) * 0.12) * hunting) {
         const a = Math.random() * Math.PI * 2;
         this.spawnSerpent(new THREE.Vector3(ship.pos.x + Math.cos(a) * 90, 0, ship.pos.z + Math.sin(a) * 90), danger);
@@ -1061,6 +1074,22 @@ export class Sailing {
           s.dispose();
           this.serpent = null;
         }
+      }
+    }
+    // The great monster of the moment.
+    const bst = this.beast;
+    if (bst) {
+      bst.update(dt, ship, this.player, this.beastCtx(ship));
+      const near = bst.alive && bst.pos.distanceTo(this.player.pos) < 260;
+      if (near) this.hooks.bossBar(bst, bst.name);
+      if (bst.beaten && !this.trophiesTaken.has(bst)) {
+        this.trophiesTaken.add(bst);
+        this.beastBeaten(bst);
+      }
+      if (bst.finished || bst.pos.distanceTo(this.player.pos) > 1200) {
+        this.hooks.bossBar(null);
+        bst.dispose();
+        this.beast = null;
       }
     }
     // Sharks circle anyone in the water out at sea.
@@ -1389,6 +1418,104 @@ export class Sailing {
     }
   }
 
+  // ---- the great monsters ---------------------------------------------------------------------
+
+  private trophiesTaken = new WeakSet<SeaBeast>();
+
+  /** Raise a great monster near the ship (encounters, quests, tests). */
+  spawnBeast(id: BeastId, at?: THREE.Vector3) {
+    const ship = this.current;
+    const base = ship ? ship.pos : this.player.pos;
+    this.beast?.dispose();
+    const danger = dangerAt(base.x, base.z);
+    let where = at;
+    if (!where) {
+      if (id === 'sirens') {
+        // Their rocks lie ahead, off the bow.
+        const yaw = ship ? ship.yaw : 0;
+        where = base.clone().add(new THREE.Vector3(Math.sin(yaw) * 230 + (Math.random() - 0.5) * 80, 0, Math.cos(yaw) * 230 + (Math.random() - 0.5) * 80));
+      } else if (id === 'leviathan') where = base.clone().add(new THREE.Vector3(140, 0, 60));
+      else if (id === 'wyrm') where = base.clone().add(new THREE.Vector3(60, 0, -40));
+      else if (id === 'oldTeeth') where = base.clone().add(new THREE.Vector3(30, 0, 30));
+      else where = base.clone();
+    }
+    const b = makeBeast(id, this.scene, this.fx, where, Math.max(1.5, danger));
+    if (b instanceof Leviathan) b.onBreach = (dir, size) => { const s = this.current; if (s && s.pos.distanceTo(b.pos) < 400) s.rogue(dir, size); };
+    this.beast = b;
+    const tell: Record<BeastId, string> = {
+      kraken: 'The sea goes black around the hull, and something vast moves beneath it…',
+      crab: 'Sand boils up through the shallows. The reef is moving.',
+      sirens: 'Fog gathers on the water ahead, and rocks rise out of it.',
+      wyrm: 'Something long and winged twists through the storm clouds above you!',
+      oldTeeth: 'A fin the size of a door cuts the water, and circles. Old Teeth.',
+      leviathan: 'The sea swells ahead as if an island were rising. It is not an island.',
+    };
+    this.hooks.toast(tell[id]);
+    return b;
+  }
+
+  /** Which great monster the sea throws at you here, if any. */
+  private beastEncounter(ship: Ship, danger: number) {
+    if (this.beast || this.serpent) return;
+    const depth = SEA_LEVEL - heightAt(ship.pos.x, ship.pos.z);
+    const storm = Math.max(SEA.storm, cellStormAt(ship.pos.x, ship.pos.z));
+    const hour = this.hooks.hours() % 24;
+    const region = regionAt(ship.pos.x, ship.pos.z);
+    const roll = Math.random();
+    let id: BeastId | null = null;
+    if (ship.pos.x > 8500 && danger >= 4.3 && roll < 0.35) id = 'leviathan';
+    else if (storm > 0.6 && danger >= 3 && roll < 0.3) id = 'wyrm';
+    else if (danger >= 4.1 && depth > 25 && roll < 0.12) id = 'kraken';
+    else if ((region === 'shatteredIsles' || danger >= 3.6) && (hour >= 18 || hour < 5) && roll < 0.22) id = 'sirens';
+    else if (depth > 3 && depth < 16 && danger >= 1.8 && roll < 0.16) id = 'crab';
+    else if (this.perks.oldTeeth && !this.trophies.has('oldTeeth') && danger >= 0.9 && danger <= 2.6 && roll < 0.2) id = 'oldTeeth';
+    if (!id) return;
+    this.spawnBeast(id);
+  }
+
+  private beastCtx(ship: Ship | null): BeastCtx {
+    return {
+      toast: (m) => this.hooks.toast(m),
+      shake: (n) => this.hooks.shake(n),
+      crewOverboard: (c) => this.crewOverboard(c),
+      crewLost: () => {
+        const aboard = this.crew.filter((c) => c.status === 'aboard');
+        if (!aboard.length || (this.perks.overboard < 1 && Math.random() < 0.5)) return null;
+        const c = aboard[Math.floor(Math.random() * aboard.length)];
+        c.status = 'lost';
+        this.crew = this.crew.filter((x) => x !== c);
+        this.spawnCrewActors();
+        return c.name;
+      },
+      weak: this.perks.weakPoint,
+      lore: this.perks.monsterLore,
+      earplugs: this.hooks.count('waxEarplugs') > 0,
+      monster: ship ? ship.stats.monster : 1,
+    };
+  }
+
+  /** A great monster beaten: its spoils, a trophy, Seamanship. */
+  private beastBeaten(b: SeaBeast) {
+    const first = !this.trophies.has(b.id);
+    this.trophies.add(b.id);
+    const loot: Record<BeastId, { items: [string, number][]; gold: number; xp: number; say: string }> = {
+      kraken: { items: [['krakenInk', 4]], gold: 2600, xp: 1600, say: 'The Kraken sinks into the deep, its eye dark. Its ink stains the sea for a mile: you fill four gourds.' },
+      crab: { items: [['colossusShell', 3]], gold: 900, xp: 700, say: 'The Crab Colossus is dead. You pry three great plates of shell from its back.' },
+      sirens: { items: [['sirenPearl', 3]], gold: 300, xp: 600, say: 'On the silent rocks you find the sirens\' hoard: pearls that hum when you hold them.' },
+      wyrm: { items: [['wyrmScale', 3]], gold: 1400, xp: 1200, say: 'The Storm Wyrm falls into the sea, and the storm loses its voice. You cut three scales from its hide.' },
+      oldTeeth: { items: first ? [['oldTeethJaw', 1]] : [], gold: 1500, xp: 1300, say: 'Old Teeth, the terror of the coastal shelf, is dead at last. Its jaw will hang in your cabin.' },
+      leviathan: { items: first ? [['leviathanBone', 2]] : [['leviathanBone', 1]], gold: 0, xp: first ? 3000 : 800, say: 'The barbs you tore from the Leviathan\'s back float up, pale as moonlight. You haul them aboard.' },
+    };
+    const l = loot[b.id];
+    for (const [id, n] of l.items) this.hooks.give(id, n);
+    if (l.gold) this.hooks.addGold(l.gold);
+    this.hooks.toast(l.say);
+    this.addXp(l.xp, `beat ${BEAST_NAMES[b.id]}`);
+    this.stats.monsters++;
+    this.hooks.signal?.('beast-' + b.id);
+    this.hooks.save();
+  }
+
   // ---- the craft: rogue waves, weather eye, star sights, currents, the trawl --------------------
 
   private seaCraft(dt: number, ship: Ship, storm: number, eff: ReturnType<typeof crewEffects>) {
@@ -1659,11 +1786,11 @@ export class Sailing {
         if (!next) return null;
         const fits = (next.minHull ?? 0) <= hullIdx && !(slot === 'guns' && HULLS[r.hull].guns === 0) && !(slot === 'harpoon' && HULLS[r.hull].harpoons === 0);
         return {
-          label: `${UPGRADES[slot].label}: ${next.name} — ${next.price}g${next.needs ? ` + ${next.needs[1]} ${next.needs[0] === 'serpentScale' ? 'serpent scales' : next.needs[0]}` : ''}${fits ? '' : ' (needs a bigger hull)'}`,
+          label: `${UPGRADES[slot].label}: ${next.name} — ${next.price}g${next.needs ? ` + ${next.needs[1]} ${needName(next.needs[0])}` : ''}${fits ? '' : ' (needs a bigger hull)'}`,
           run: () => {
             if (!fits) return show('She hasn\'t the frame for it. A bigger hull would.', [{ label: 'Back.', run: back }]);
             if (this.hooks.gold() < next.price) return show(`${next.price} gold for ${next.name}.`, [{ label: 'Back.', run: back }]);
-            if (next.needs && this.hooks.count(next.needs[0]) < next.needs[1]) return show(`I need ${next.needs[1]} ${next.needs[0] === 'serpentScale' ? 'sea serpent scales' : next.needs[0]} for that. Bring them and I'll fit it.`, [{ label: 'Back.', run: back }]);
+            if (next.needs && this.hooks.count(next.needs[0]) < next.needs[1]) return show(`I need ${next.needs[1]} ${needName(next.needs[0])} for that. Bring them and I'll fit it.`, [{ label: 'Back.', run: back }]);
             this.hooks.addGold(-next.price);
             if (next.needs) this.hooks.take(next.needs[0], next.needs[1]);
             r.fit = { ...r.fit, [slot]: r.fit[slot] + 1 } as Fit;
@@ -1754,6 +1881,21 @@ export class Sailing {
         ]),
       },
       {
+        label: 'Ship\'s stores',
+        run: () => show('Odds and ends a captain shouldn\'t sail without.', [
+          ...([['waxEarplugs', 'Wax earplugs for the crew (the sirens) — 15g', 15], ['waterBreathingDraught', 'A Draught of Gills (breathe underwater) — 60g', 60]] as [string, string, number][]).map(([id, label, cost]) => ({
+            label,
+            run: () => {
+              if (this.hooks.gold() < cost) return show('Coin first, Captain.', [{ label: 'Back.', run: back }]);
+              this.hooks.addGold(-cost);
+              this.hooks.give(id, 1);
+              this.hooks.toast(label.split(' — ')[0] + ': stowed.');
+            },
+          })),
+          { label: 'Back.', run: back },
+        ]),
+      },
+      {
         label: 'Hire a crew for one voyage',
         run: () => show('Deckhands for a single voyage, paid up front. They go home when you dock.', [
           ...([[2, 25], [4, 55], [8, 120]] as [number, number][]).map(([n, fee]) => ({
@@ -1820,7 +1962,7 @@ export class Sailing {
 
   toJSON(): SailingSave {
     for (const s of this.ships.values()) this.syncRecord(s);
-    return { ships: this.records, rental: this.rental, crew: this.crew, xp: Math.round(this.xp), mode: this.mode, wrecks: this.wrecks, stats: this.stats, paidDay: this.paidDay, picks: this.picks, currents: [...this.knownCurrents] };
+    return { ships: this.records, rental: this.rental, crew: this.crew, xp: Math.round(this.xp), mode: this.mode, wrecks: this.wrecks, stats: this.stats, paidDay: this.paidDay, picks: this.picks, currents: [...this.knownCurrents], trophies: [...this.trophies] };
   }
 
   fromJSON(d: SailingSave | undefined) {
@@ -1839,6 +1981,7 @@ export class Sailing {
     this.picks = { ...(d.picks ?? {}) };
     this.perkCache = seaPerks(this.picks);
     this.knownCurrents = new Set(d.currents ?? []);
+    this.trophies = new Set(d.trophies ?? []);
     for (const r of this.records) this.spawn(r);
     for (const w of this.wrecks) this.showWreck(w);
     if (d.rental) {
@@ -1870,6 +2013,9 @@ export class Sailing {
     this.consort?.dispose();
     this.consort = null;
     this.consortHired = false;
+    this.beast?.dispose();
+    this.beast = null;
+    this.trophies.clear();
     this.story.clear();
     this.shot = 'ball';
     this.serpent?.dispose();

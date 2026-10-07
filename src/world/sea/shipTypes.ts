@@ -109,17 +109,20 @@ export const UPGRADES: Record<Slot, { label: string; tiers: UpgradeTier[] }> = {
     { name: 'Tarred Canvas', price: 120, desc: 'Holds its shape in a blow. +8% speed, sails take 25% more punishment.', fx: { speed: 1.08, sails: 1.25 } },
     { name: 'Silk-weave', price: 650, desc: 'Light and strong. +16% speed, +10% handling.', minHull: 1, fx: { speed: 1.16, turn: 1.1, sails: 1.4 } },
     { name: 'Elven Sailcloth', price: 2400, desc: 'Woven in the Verdant Woods; it drinks the wind. +26% speed, +20% handling.', minHull: 2, needs: ['moongrass', 6], fx: { speed: 1.26, turn: 1.2, sails: 1.7 } },
+    { name: 'Stormwyrm Silk', price: 5200, desc: 'Sailcloth shot with Storm Wyrm scale. +34% speed, sails nearly untearable, storms throw her less.', minHull: 2, needs: ['wyrmScale', 3], fx: { speed: 1.34, turn: 1.22, sails: 2.4, seaworthy: 1.1 } },
   ] },
   hull: { label: 'Hull', tiers: [
     { name: 'Oak Planking', price: 0, desc: 'Good Cresha oak.', fx: {} },
     { name: 'Copper Sheathing', price: 260, desc: 'No barnacles, no worm. +25% hull, +4% speed.', fx: { hull: 1.25, speed: 1.04 } },
     { name: 'Iron-banded Hull', price: 1100, desc: 'Iron straps from keel to rail. +60% hull, a little slower.', minHull: 1, fx: { hull: 1.6, speed: 0.97, seaworthy: 1.08 } },
     { name: 'Serpent-scale Plating', price: 3600, desc: 'Plates from a sea serpent’s back. +110% hull, monsters do a third less.', minHull: 2, needs: ['serpentScale', 4], fx: { hull: 2.1, monster: 0.66, seaworthy: 1.12 } },
+    { name: 'Colossus-shell Armour', price: 6400, desc: 'Serpent plating, with a Crab Colossus\'s shell over the bow and waterline. +160% hull, monsters do half.', minHull: 3, needs: ['colossusShell', 4], fx: { hull: 2.6, monster: 0.5, seaworthy: 1.15, speed: 0.98 } },
   ] },
   keel: { label: 'Keel', tiers: [
     { name: 'Standard Keel', price: 0, desc: 'It keeps the boat upright, mostly.', fx: {} },
     { name: 'Deep Keel', price: 220, desc: 'Less sideways slip, steadier in a seaway. Waves throw you 20% less.', fx: { leeway: 0.6, seaworthy: 1.2 } },
     { name: 'Ballasted Keel', price: 900, desc: 'Lead in the keel. Waves throw you 45% less; slower to turn.', minHull: 1, fx: { leeway: 0.45, seaworthy: 1.45, turn: 0.93 } },
+    { name: 'Leviathan-bone Keel', price: 7000, desc: 'A keel of the Leviathan\'s barbs: she rides out seas twice what any hull should, and hardly slips at all.', minHull: 3, needs: ['leviathanBone', 2], fx: { leeway: 0.3, seaworthy: 2, turn: 0.97 } },
   ] },
   guns: { label: 'Guns', tiers: [
     { name: 'No guns', price: 0, desc: 'Peaceful, and helpless.', fx: { guns: 0 } },
@@ -142,6 +145,7 @@ export const UPGRADES: Record<Slot, { label: string; tiers: UpgradeTier[] }> = {
     { name: 'Mermaid', price: 200, desc: 'Sailors love her. Crew morale up.', fx: { morale: 0.15 } },
     { name: 'Kraken', price: 700, desc: 'The sea’s monsters think twice. 15% less monster damage.', minHull: 1, fx: { monster: 0.85 } },
     { name: 'Golden Lion', price: 1800, desc: 'Pirates think twice too; ports cheer. Morale and fame.', minHull: 2, fx: { morale: 0.25, fame: 1 } },
+    { name: 'The Kraken\'s Eye', price: 3000, desc: 'A great eye painted in kraken ink. Monsters do 40% less and pirates lose their nerve.', minHull: 2, needs: ['krakenInk', 3], fx: { monster: 0.6, morale: 0.2, fame: 1 } },
   ] },
   hold: { label: 'Hold', tiers: [
     { name: 'Standard hold', price: 0, desc: '', fx: {} },

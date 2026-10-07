@@ -29,7 +29,7 @@ const RARITY_RANK: Record<string, number> = { epic: 0, rare: 1, fine: 2, common:
 const KIND_RANK: Record<ItemKind, number> = { sword: 0, shield: 1, armor: 2, accessory: 3, spell: 4, consumable: 5, material: 6, key: 7 };
 const STAT_NAMES: Partial<Record<keyof ItemStats, string>> = {
   damage: 'Damage', speed: 'Speed', block: 'Block', stability: 'Stability', armor: 'Armour', poise: 'Poise',
-  manaCost: 'Mana cost', heal: 'Restores HP', restoreMana: 'Restores MP', restoreStamina: 'Restores stamina',
+  manaCost: 'Mana cost', heal: 'Restores HP', restoreMana: 'Restores MP', restoreStamina: 'Restores stamina', waterBreathing: 'Breathe underwater (s)',
 };
 
 function fmtStat(k: keyof ItemStats, v: number) {

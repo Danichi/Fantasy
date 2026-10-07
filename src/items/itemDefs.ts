@@ -26,6 +26,8 @@ export interface ItemStats {
   heal?: number;
   restoreMana?: number;
   restoreStamina?: number;
+  /** seconds you can breathe underwater */
+  waterBreathing?: number;
   // bonuses (armour and accessories)
   maxHp?: number;
   maxStamina?: number;
@@ -330,6 +332,50 @@ export const ITEMS: Record<string, ItemDef> = {
       g.add(pole, flag, wave);
       return g;
     },
+  },
+  krakenInk: {
+    id: 'krakenInk', name: 'Kraken Ink', kind: 'material', rarity: 'epic', stack: true,
+    desc: 'A sealed gourd of ink as black as the deep sea. The Aurelle Shipwrights paint a Kraken\'s Eye on a bow with it; monsters will not look at it.', stats: {},
+    build: () => new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), new THREE.MeshStandardMaterial({ color: 0x0a0a14, metalness: 0.6, roughness: 0.15 })),
+  },
+  colossusShell: {
+    id: 'colossusShell', name: 'Colossus Shell', kind: 'material', rarity: 'rare', stack: true,
+    desc: 'A plate of red crab-shell as thick as a door. Fitted to a bow, it shrugs off rams and reefs.', stats: {},
+    build: () => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xc8502a, roughness: 0.45 })); m.scale.set(1.3, 0.4, 1); return m; },
+  },
+  wyrmScale: {
+    id: 'wyrmScale', name: 'Storm Wyrm Scale', kind: 'material', rarity: 'epic', stack: true,
+    desc: 'A blue-grey scale that crackles when you touch it. Woven into sailcloth, it drinks the storm wind.', stats: {},
+    build: () => { const m = new THREE.Mesh(new THREE.CircleGeometry(0.14, 6), new THREE.MeshStandardMaterial({ color: 0x8aa8d0, emissive: 0x3a6aa0, emissiveIntensity: 0.6, side: THREE.DoubleSide })); return m; },
+  },
+  leviathanBone: {
+    id: 'leviathanBone', name: 'Leviathan Bone', kind: 'material', rarity: 'epic', stack: true,
+    desc: 'A barb torn from the Leviathan\'s back, pale and heavier than iron. A keel of it would ride out any sea in the world.', stats: {},
+    build: () => new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.5, 6), new THREE.MeshStandardMaterial({ color: 0xe8e0d0, roughness: 0.5 })),
+  },
+  sirenPearl: {
+    id: 'sirenPearl', name: 'Siren\'s Pearl', kind: 'material', rarity: 'rare', stack: true,
+    desc: 'A pearl that hums when you hold it to your ear. Jewellers in the capital pay a fortune for them.', stats: {},
+    build: () => new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), new THREE.MeshStandardMaterial({ color: 0xe8f0f8, emissive: 0x4a8aa0, emissiveIntensity: 0.4, metalness: 0.3, roughness: 0.1 })),
+  },
+  pearl: {
+    id: 'pearl', name: 'Pearl', kind: 'material', rarity: 'fine', stack: true,
+    desc: 'A sea pearl from an oyster bed. The merchants of Port Aurelle buy them gladly.', stats: {},
+    build: () => new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 10), new THREE.MeshStandardMaterial({ color: 0xf4f0e8, metalness: 0.3, roughness: 0.1 })),
+  },
+  oldTeethJaw: {
+    id: 'oldTeethJaw', name: 'Old Teeth\'s Jaw', kind: 'key', rarity: 'epic',
+    desc: 'The jaw of the great white of the coastal shelf, every tooth as long as your finger. Hang it in your cabin and every sailor who sees it will buy you a drink.', stats: {},
+    build: () => { const m = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.04, 6, 14, Math.PI * 1.4), new THREE.MeshStandardMaterial({ color: 0xe8e0d0 })); return m; },
+  },
+  waxEarplugs: {
+    id: 'waxEarplugs', name: 'Wax Earplugs', kind: 'key', rarity: 'common',
+    desc: 'Beeswax for the whole crew\'s ears. While you carry them, the sirens\' song can\'t pull your helm or charm your crew.', stats: {},
+    build: () => new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshStandardMaterial({ color: 0xe8c860, roughness: 0.6 })),
+  },
+  waterBreathingDraught: {
+    id: 'waterBreathingDraught', name: 'Draught of Gills', kind: 'consumable', rarity: 'fine', stack: true,
+    desc: 'Tastes of salt and kelp. For a minute and a half you can breathe underwater.', stats: { waterBreathing: 90 },
   },
   serpentScale: {
     id: 'serpentScale', name: 'Sea Serpent Scale', kind: 'material', rarity: 'rare',

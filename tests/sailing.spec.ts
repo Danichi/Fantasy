@@ -387,3 +387,61 @@ test('ship against ship: chain and grape, boarding, prizes and ransoms, the harp
   expect(res.cut).toBe(true);
   expect(res.scout).toEqual(['The Gallows Tide']);
 });
+
+test('the great monsters: each fights the ship its own way, and each yields its trophy', async ({ game }) => {
+  test.setTimeout(240_000 * SLOW);
+  const res = await game.page.evaluate(async (slow) => {
+    const g = window.__game, T = g.THREE, sl = g.sailing;
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    const errors: string[] = [];
+    const onErr = (e: ErrorEvent) => errors.push(String(e.message));
+    window.addEventListener('error', onErr);
+    const toasts: string[] = [];
+    const ot = g.hud.toast.bind(g.hud);
+    g.hud.toast = (m: string) => { toasts.push(m); ot(m); };
+    g.player.prog.addGold(100000);
+    sl.xp = 1e6;
+    const r = sl.buy('galleon');
+    const gal = sl.ships.get(r.id);
+    const out: Record<string, unknown> = {};
+    for (const [id, secs] of [['kraken', 12], ['crab', 8], ['sirens', 4], ['wyrm', 10], ['oldTeeth', 12], ['leviathan', 4]] as [string, number][]) {
+      gal.repairAll();
+      gal.pos.set(5600, 0, 900);
+      gal.yaw = 0;
+      gal.speed = 0;
+      gal.place();
+      if (!sl.current) sl.board(gal);
+      g.player.teleport(gal.toWorld(new T.Vector3(0, gal.def.deckY + 0.3, 0)));
+      const t0 = toasts.length;
+      const b = sl.spawnBeast(id);
+      const hull0 = gal.hullFrac;
+      for (let i = 0; i < secs * 2 && sl.beast; i++) await wait(500);
+      const fought = { toasts: toasts.length - t0, hurtShip: gal.hullFrac < hull0, parts: b.parts().length };
+      // Break every part it has (the Leviathan's barbs want the harpoon).
+      for (let k = 0; k < 8 && !b.beaten; k++) {
+        for (const p of b.parts()) p.hit(99999, p.only ?? 'harpoon');
+        await wait(500);
+      }
+      await wait(600);
+      out[id] = { ...fought, beaten: b.beaten, trophy: sl.trophies.has(id) };
+      g.player.hp = g.player.maxHp;
+      if (sl.beast) { sl.beast.dispose(); sl.beast = null; }
+    }
+    // Their spoils fit the shipwright's finest upgrades.
+    const shown: string[] = [];
+    let opts = sl.shipwrightOptions((_t: string, o: { label: string }[]) => { opts = o; shown.push(...o.map((x) => x.label)); }, () => {});
+    void opts;
+    out.counts = Object.fromEntries(['krakenInk', 'colossusShell', 'sirenPearl', 'wyrmScale', 'oldTeethJaw', 'leviathanBone'].map((i) => [i, g.inv.count?.(i) ?? g.player.equip.items.filter((x: { def: { id: string }; qty: number }) => x.def.id === i).reduce((a: number, x: { qty: number }) => a + x.qty, 0)]));
+    window.removeEventListener('error', onErr);
+    out.errors = errors;
+    return out;
+  }, SLOW);
+  console.log(JSON.stringify(res));
+  for (const id of ['kraken', 'crab', 'sirens', 'wyrm', 'oldTeeth', 'leviathan']) {
+    expect(res[id], id).toMatchObject({ beaten: true, trophy: true });
+    expect((res[id] as { toasts: number }).toasts, id).toBeGreaterThan(0);
+  }
+  const c = res.counts as Record<string, number>;
+  for (const k of ['krakenInk', 'colossusShell', 'sirenPearl', 'wyrmScale', 'oldTeethJaw', 'leviathanBone']) expect(c[k], k).toBeGreaterThan(0);
+  expect(res.errors).toEqual([]);
+});
