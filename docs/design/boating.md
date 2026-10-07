@@ -8,23 +8,34 @@ of the World Expansion plan (six ship types, sea encounters, ports, islands).
 
 ---
 
-## Built so far (2026-10-03)
+## Built so far (2026-10-07)
+
+Almost the whole plan is built. Still to come: the Iron Kettle voyage to the
+White Mountains (it needs the mountains' coastal landing, World Expansion
+phase 10), passengers, heaving to, and ship interiors you walk into (the
+captain's cabin is a menu for now).
 
 | Area | What works | Where |
 |---|---|---|
-| The sea | One Gerstner wave set shared by the shader and the physics (`waveAt`); ripples, subsurface glow on crests, fresnel sky, sun glitter, sunset path, whitecaps and wind streaks that grow with the wind, shore foam, storm tint | `src/world/sea/ocean.ts`, `seaState.ts` |
-| Danger | Tiers 0 to 5 (Sheltered, Coastal, Open, Wild, Perilous, Abyssal) by distance from Port Aurelle and by region (Emerald Isles, Azure Isles, Shattered Isles, Sunken Isles, Demon Continent); waves, wind, storms, pirates and monsters scale with it | `seaState.ts` (`dangerAt`, `SEA_REGIONS`) |
-| Storms | Drifting storm cells with storm swells (to about 11 m), veering gusts, rain and lightning; ships are kicked off course, drift downwind, broach, capsize, ship green water and lose crew overboard | `seaState.ts`, `ship.ts` |
-| Ships | Skiff, Fishing Sloop, Cutter, Brigantine, Galleon: speed, hull, sails, how big a sea each can take, crew needed, cargo, guns; Seamanship level gates which you may command | `shipTypes.ts`, `ship.ts` |
-| Sailing | Points of sail, trim (auto in assisted mode, Z/X by hand in full mode), reefing, anchor, rowing, heel, leeway, grounding; you walk the deck while she sails; the helm HUD | `ship.ts`, `sailing.ts`, `src/ui/sailingHud.ts` |
-| Owning | Buy at the Aurelle Shipwrights (Master Hale Barrow), rent from Mira or Maud Reeve's river ferry, fetch home, sell; up to four ships; saved | `sailing.ts` |
-| Upgrades | Sails, Hull, Keel, Guns, Harpoon, Pumps, Figurehead, Hold, each in tiers; top tiers need sea serpent scales; the hull caps what fits | `shipTypes.ts` (`UPGRADES`) |
-| Crew | Sailors on the quay and a broker (Sal Rigby): roles (bosun, navigator, gunner, shipwright, lookout, harpooner, cook, deckhand), traits, wages, morale, XP; one-voyage hands for hire | `crew.ts`, `sailing.ts` |
-| Damage and loss | Hull in three sections, canvas, water in the hold and pumps; a sunk ship is gone for good and leaves a wreck you can dive and search | `ship.ts`, `sailing.ts` |
-| Combat | Broadsides on the side you face (with lead), harpoons that lay onto the nearest target near your aim; pirates hunt, trade broadsides, grapple and board, strike and can be plundered; sea serpents stalk, dive, ram and rear up to bite; sharks circle swimmers | `gunnery.ts`, `seaThreats.ts` |
-| Swimming | Swim anywhere, dive (hold C), breath meter, drowning | `src/player/player.ts` |
+| The sea | One Gerstner wave set shared by the shader and the physics; crest glow, fresnel sky, sun and moon glitter, sunset path, whitecaps and wind streaks, shore foam, storm tint; dark water at night | `src/world/sea/ocean.ts`, `seaState.ts` |
+| Danger | Tiers 0 to 5 (Sheltered, Coastal, Open, Wild, Perilous, Abyssal) by distance from Port Aurelle and by region; sheltered water by every island quay | `seaState.ts` |
+| Storms | Drifting storm cells, 11 m storm swells, veering gusts, rain and lightning; ships kicked off course, drifted, broached, capsized and pitchpoled; rogue waves called out by bearing; a log of how far the storm blew you | `seaState.ts`, `ship.ts`, `sailing.ts` |
+| Currents | Five ocean currents between the islands carry ships; found ones are remembered | `seaState.ts` (`CURRENTS`) |
+| Ships | Skiff, Fishing Sloop, Cutter, Brigantine, Galleon; buy, rent, commission on the slipway, fetch, sell; up to four; paint, sail colour, pennant and name; monster-material upgrades at the top | `shipTypes.ts`, `ship.ts`, `sailing.ts` |
+| Sailing | Points of sail, trim, reefing, anchor, rowing; clean and slow tacks, crash jibes, in irons, surfing, leaning out (Shift), lash the wheel (L), spyglass (hold B); you walk the deck while she sails | `ship.ts`, `sailing.ts`, `src/ui/sailingHud.ts` |
+| Seamanship | The calling: 43 nodes in seven branches (Helmsman, Navigator, Rigger, Gunnery, Captain, Diver, Deep Angler), tiers by level, capstones at 25 (Wavebreaker, Windcaller, Full Press, Thunder Broadside, Fleet Signal, Child of the Tide, The One That Got Away); the N panel | `seamanship.ts`, `src/ui/seamanshipPanel.ts` |
+| Crew | Roles, traits, wages, morale, XP; wishes after a couple of voyages; mutiny when morale collapses; castaways may join | `crew.ts`, `sailing.ts` |
+| Damage | Hull sections, canvas, a sprung topmast, fire, water and pumps; pumps and plugs on deck; a sunk ship is gone for good and leaves a wreck to dive | `ship.ts`, `sailing.ts` |
+| Naval combat | Broadsides with lead in four shot types (round, chain, grape, fire pots), swivels, raking, ramming, harpoon tethers that tow; pirates with crews that strike their colours; boarding and fighting on their deck; plunder, ransom or a prize crew; a consort ship | `gunnery.ts`, `seaThreats.ts`, `sailing.ts` |
+| Monsters | Sea serpent, sharks, the Kraken, the Crab Colossus, the Siren Choir, the Storm Wyrm, Old Teeth, the Leviathan; trophies and materials | `seaThreats.ts`, `seaMonsters.ts` |
+| Ports | Port Aurelle, the Crown Quay, and five island harbours (Azure Haven, Emerald Cove, Wrecker's Rest, Sunken Spire, Ashen Port) with harbourmasters, traders, townsfolk and lighthouses to relight | `islandPorts.ts`, `islandPortsData.ts` |
+| Trade | Sixteen goods with sliding prices; cargo in the hold; Maritime Guild cargo and courier contracts; contraband, fences and the customs cutter | `trade.ts`, `sailing.ts` |
+| The voyage | Dolphins, whales, flotsam, bottles with treasure maps (dig or dive), waterspouts, glowing seas, castaways, shoals with great fish, passing merchantmen; pearl beds; the Port Aurelle Regatta against Captain Marisol Quint | `seaEvents.ts`, `regatta.ts` |
+| Quests | Sea Legs, The Serpent of the Open Sea, The Black Tide, Captain Rook Calloway | `src/quests/seaQuests.ts` |
+| Charts | Your ships, wrecks, lit lighthouses, storms, contract ports, treasure, sea routes and currents on the world map | `src/ui/worldMap.ts` |
+| Swimming | Swim anywhere, dive (hold C), breath, drowning, armour drag, floating wreckage, the Draught of Gills | `src/player/player.ts` |
 
-Tests: `tests/sailing.spec.ts`.
+Tests: `tests/sailing.spec.ts` (nine scenarios).
 
 ---
 

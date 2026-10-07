@@ -455,6 +455,20 @@ export class Ship {
         this.onEvent?.('broach', this.thrown);
       }
     }
+    // Pitchpoling: running too fast down a steep sea buries the bow: small boats somersault,
+    // big ones bury their bow and ship it green. (Reef, or slow down, when you're surfing.)
+    if (this.thrown > 0.4 && offWind > 140 && this.pitch < -0.3 && this.speed > this.stats.speed * 0.75 && Math.random() < dt * 0.5) {
+      if (this.def.capsize) {
+        this.capsized = true;
+        this.sailSet = 0;
+        this.onEvent?.('capsize');
+      } else {
+        this.water = Math.min(1, this.water + 0.08);
+        this.speed *= 0.4;
+        this.damage(0, this.stats.hull * 0.04);
+        this.onEvent?.('greenWater');
+      }
+    }
     if (this.def.capsize && !this.capsized && Math.abs(this.heel + this.knock) > this.def.capsize * pk.capsizeMargin && (!opts.assisted || this.thrown > 0.5)) {
       this.capsized = true;
       this.sailSet = 0;
