@@ -6,7 +6,7 @@ import { QUAY_X } from '../portCity';
 import { buildCharacter, type BuiltCharacter, type Look } from '../../npc/charBuilder';
 import { Ship, NO_CONTROL, POINT_NAMES, SECTION_NAMES, type ShipControls, type ShipPerks } from './ship';
 import { HULLS, HULL_ORDER, UPGRADES, SLOTS, STOCK_FIT, type HullId, type Fit } from './shipTypes';
-import { SEA, dangerAt, DANGER_NAMES, waveHeight, cellStormAt, STORMS, STORM_WAVES, BASE_WAVES, CURRENTS, windAt, type StormCell } from './seaState';
+import { SEA, dangerAt, DANGER_NAMES, waveHeight, cellStormAt, STORMS, STORM_WAVES, BASE_WAVES, CURRENTS, windAt, brewStorm, type StormCell } from './seaState';
 import { seaPerks, canBuy, type SeaPerks } from './seamanship';
 import { FISH } from '../fishing';
 import { Gunnery, SHOT_NAMES, type ShotKind, type DeckFoe } from './gunnery';
@@ -17,6 +17,8 @@ import { regionAt } from '../worldMap';
 import { GOODS, GOOD, MARKETS, price, shiftSupply, recoverSupply, offers, type Contract, type Supply } from './trade';
 import { CustomsCutter } from './seaThreats';
 import type { IslandPort } from './islandPorts';
+import { makeSeaEvent, treasureSite, Shoal, type SeaEvent, type SeaEventId, type EventCtx } from './seaEvents';
+import { Regatta } from './regatta';
 import { candidates, dayCrew, crewEffects, crewXp, ROLE_INFO, TRAIT_INFO, type CrewMember } from './crew';
 import { Bolts } from '../../enemies/bandit';
 import { SailingHud } from '../../ui/sailingHud';
@@ -76,7 +78,12 @@ export interface SailingSave {
   contracts?: Contract[];
   landfalls?: string[];
   lit?: string[];
+  /** treasure maps fished out of the sea, the regatta's cups, the pearl beds' last harvest */
+  treasures?: Treasure[];
+  regatta?: string[];
+  pearls?: Record<string, number>;
 }
+export interface Treasure { id: string; x: number; z: number; kind: 'dig' | 'dive'; found: boolean }
 
 export interface SailingHooks {
   toast(msg: string): void;
@@ -212,6 +219,14 @@ export class Sailing {
   customs: CustomsCutter | null = null;
   private customsChecked = false;
   private supplyHour = -1;
+  /** the sea event of the moment, treasure maps, the regatta, the pearl beds */
+  event: SeaEvent | null = null;
+  private eventT = 70;
+  treasures: Treasure[] = [];
+  private treasureMeshes = new Map<string, THREE.Object3D>();
+  readonly regatta: Regatta;
+  private pearlBeds: { id: string; pos: THREE.Vector3; mesh: THREE.Object3D }[] = [];
+  private pearlDay: Record<string, number> = {};
 
   constructor(private scene: THREE.Scene, private fx: FX, private player: Player, private input: Input, private cam: ThirdPersonCamera, private hooks: SailingHooks) {
     this.gunnery = new Gunnery(scene, fx);
@@ -248,6 +263,53 @@ export class Sailing {
       } else this.hooks.toast('The line parts with a crack like a pistol shot!');
     };
     this.buildInteractables();
+    const self = this;
+    this.regatta = new Regatta({
+      scene,
+      board: (s) => self.board(s),
+      takeHelm: () => self.takeHelm(),
+      leaveShip: (land) => self.leaveShip(land),
+      get current() { return self.current; },
+      toast: (m) => hooks.toast(m),
+      xp: (n, why) => self.addXp(n, why),
+      gold: (n) => hooks.addGold(n),
+      give: (id, n) => hooks.give(id, n),
+      level: () => self.level,
+      save: () => hooks.save(),
+    });
+    // Treasure: dig on the beach, or open the chest on the seabed.
+    const tPos = new THREE.Vector3(0, -999, 0);
+    const nearTreasure = () => self.treasures.find((t) => !t.found && Math.hypot(self.player.pos.x - t.x, self.player.pos.z - t.z) < (t.kind === 'dig' ? 4 : 7) && (t.kind === 'dig' ? !self.player.swimming : self.player.underwater)) ?? null;
+    this.interactables.push({
+      pos: tPos, radius: 8,
+      label: () => { const t = nearTreasure(); return t ? (t.kind === 'dig' ? 'Dig up the buried chest' : 'Open the sunken chest') : ''; },
+      enabled: () => !!nearTreasure(),
+      action: () => { const t = nearTreasure(); if (t) self.openTreasure(t); },
+    });
+    // The pearl beds: prise open the oysters (underwater).
+    const pPos = new THREE.Vector3(0, -999, 0);
+    const nearBed = () => (self.player.underwater ? self.pearlBeds.find((b) => b.pos.distanceTo(self.player.pos) < 7 && self.pearlDay[b.id] !== self.hooks.day()) ?? null : null);
+    this.interactables.push({
+      pos: pPos, radius: 8,
+      label: () => (nearBed() ? 'Prise open the oysters' : ''),
+      enabled: () => !!nearBed(),
+      action: () => {
+        const b = nearBed();
+        if (!b) return;
+        self.pearlDay[b.id] = self.hooks.day();
+        const n = 1 + (self.perks.pearls ? 1 + Math.floor(Math.random() * 2) : 0) + (Math.random() < 0.3 ? 1 : 0);
+        self.hooks.give('pearl', n);
+        if (self.perks.pearls && Math.random() < 0.15) self.hooks.give('sirenPearl', 1);
+        self.addXp(12);
+        self.hooks.toast(`You prise open the oysters: ${n} pearl${n > 1 ? 's' : ''}. The bed will grow back by tomorrow.`);
+      },
+    });
+    const prevUpdate = this.updateInteractables;
+    this.updateInteractables = () => {
+      prevUpdate();
+      tPos.copy(nearTreasure() ? self.player.pos : new THREE.Vector3(0, -999, 0));
+      pPos.copy(nearBed() ? self.player.pos : new THREE.Vector3(0, -999, 0));
+    };
   }
 
   // ---- what the player knows -------------------------------------------------------------
@@ -732,6 +794,8 @@ export class Sailing {
       this.supplyHour = hourNow;
     }
     this.updateCustoms(dt, ship);
+    this.regatta.update(dt);
+    this.updateEvent(dt, ship);
     // Lit lighthouses shine at night.
     const night = this.hooks.hours() % 24;
     const dark = night > 19 || night < 6;
@@ -816,10 +880,17 @@ export class Sailing {
       const storm = Math.max(SEA.storm, cellStormAt(ship.pos.x, ship.pos.z));
       if (storm > 0.45 && !this.wasStorm) {
         this.wasStorm = true;
+        ship.driftLog.set(0, 0);
         this.hooks.toast('A storm is on you! Reef the sails (R) and meet the waves on the bow quarter.');
       } else if (storm < 0.2 && this.wasStorm) {
         this.wasStorm = false;
         this.stats.storms++;
+        const km = ship.driftLog.length() / 1000;
+        if (km > 0.01) {
+          const dirs = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+          const b = Math.atan2(ship.driftLog.x, -ship.driftLog.y);
+          this.hooks.toast(`You came through the storm. It blew you ${km >= 1 ? km.toFixed(1) + ' km' : Math.round(km * 1000) + ' m'} to the ${dirs[(Math.round(b / (Math.PI / 4)) + 8) % 8]}.`);
+        }
         this.addXp(Math.round(50 + ship.def.length * 2), 'weathered a storm');
       }
       if (!this.wasStorm && eff.lookout > 1.2) {
@@ -838,7 +909,7 @@ export class Sailing {
       }
     }
     const foes: DeckFoe[] = this.pirates.flatMap((p) => p.fighters());
-    this.gunnery.update(dt, [...this.ships.values(), ...this.pirates.map((p) => p.ship), ...(this.consort ? [this.consort.ship] : [])], [...(this.serpent ? [this.serpent] : []), ...this.sharks, ...(this.beast ? this.beast.parts() : [])], foes);
+    this.gunnery.update(dt, [...this.ships.values(), ...this.pirates.map((p) => p.ship), ...(this.consort ? [this.consort.ship] : [])], [...(this.serpent ? [this.serpent] : []), ...this.sharks, ...(this.beast ? this.beast.parts() : []), ...(this.event ? this.event.parts.filter((p) => p.alive) : [])], foes);
     this.bolts.update(dt, this.player);
     this.updateOverboard(dt);
     this.updateInteractables();
@@ -968,6 +1039,7 @@ export class Sailing {
     if (this.serpent?.alive) consider(this.serpent.pos, this.serpent.vel);
     if (this.beast) for (const p of this.beast.parts()) consider(p.pos, p.vel);
     if (sharks) for (const s of this.sharks) if (s.alive) consider(s.pos, s.vel);
+    if (sharks && this.event instanceof Shoal && this.event.fish?.alive) consider(this.event.fish.pos, this.event.fish.vel);
     return best as { pos: THREE.Vector3; vel?: THREE.Vector3 } | null;
   }
 
@@ -1470,6 +1542,7 @@ export class Sailing {
       if (PORTS.some((p) => p.id === ip.def.id)) continue;
       PORTS.push({ id: ip.def.id, name: ip.def.name, zone: ip.zone, r: 110, berths: ip.berths, landing: ip.landing });
       this.lighthouses.set(ip.def.id, ip.lighthouse);
+      if (ip.def.style === 'azure' || ip.def.style === 'sunken' || ip.def.style === 'emerald') this.seedPearlBeds(ip);
       const self = this;
       const at = ip.lighthouse.pos.clone();
       this.interactables.push({
@@ -1634,6 +1707,169 @@ export class Sailing {
     this.hooks.save();
   }
 
+  // ---- life on the sea: events, treasure, pearl beds ----------------------------------------------
+
+  /** Raise a sea event (encounters; tests). */
+  startEvent(id: SeaEventId) {
+    const ship = this.current;
+    if (!ship) return null;
+    this.event?.dispose();
+    this.event = makeSeaEvent(id, this.scene, this.fx, ship, this.perks.bigGame, () => new Ship(this.scene, 'brigantine', STOCK_FIT(), { name: ['Fair Winds', 'The Merchant Prince', 'Golden Hind', 'Cresha Trader', 'Bounty of Aurelle'][Math.floor(Math.random() * 5)], hullColor: 0x6a4a2a, trim: 0xd8b060 }));
+    return this.event;
+  }
+
+  private updateEvent(dt: number, ship: Ship | null) {
+    const ev = this.event;
+    if (ev) {
+      ev.update(dt, ship, this.eventCtx());
+      if (ev.done || (ship === null && ev.id !== 'whale')) {
+        ev.dispose();
+        this.event = null;
+      }
+      return;
+    }
+    if (!ship || this.regatta.race || Math.abs(ship.speed) < 1 || this.portAt(ship.pos)) return;
+    if (this.pirates.some((p) => !p.ship.sunk && p.state !== 'flee') || this.beast || this.serpent) return;
+    this.eventT -= dt;
+    if (this.eventT > 0) return;
+    const danger = dangerAt(ship.pos.x, ship.pos.z);
+    this.eventT = 60 + Math.random() * 60 - Math.min(20, danger * 4);
+    const storm = Math.max(SEA.storm, cellStormAt(ship.pos.x, ship.pos.z));
+    const hour = this.hooks.hours() % 24;
+    const night = hour > 20.5 || hour < 5;
+    const weights: [SeaEventId, number][] = [
+      ['dolphins', danger < 3.5 && storm < 0.3 ? 3 : 0],
+      ['whale', danger >= 1.2 ? 2 : 0],
+      ['flotsam', 2.5],
+      ['bottle', 1.2],
+      ['waterspout', storm > 0.3 || danger >= 2.5 ? 1.5 : 0],
+      ['bloom', night && danger >= 1 && danger <= 4.5 ? 2.5 : 0],
+      ['survivors', danger >= 1 ? 1.2 : 0],
+      ['shoal', this.perks.shoalSight ? 4 : 2],
+      ['merchant', danger < 3 ? 1.5 : 0],
+    ];
+    let r = Math.random() * weights.reduce((a, [, w]) => a + w, 0);
+    const pick = weights.find(([, w]) => (r -= w) <= 0)?.[0] ?? 'flotsam';
+    this.startEvent(pick);
+  }
+
+  private eventCtx(): EventCtx {
+    return {
+      toast: (m) => this.hooks.toast(m),
+      shake: (n) => this.hooks.shake(n),
+      xp: (n, why) => this.addXp(n, why),
+      gold: (n) => this.hooks.addGold(n),
+      give: (id, n) => this.hooks.give(id, n),
+      stow: (good, n) => {
+        const s = this.current;
+        if (!s) return 0;
+        const k = Math.max(0, Math.min(n, s.stats.cargo - this.holdUsed(s)));
+        if (k) { const h = this.holdOf(s); h[good] = (h[good] ?? 0) + k; }
+        return k;
+      },
+      rescue: () => {
+        const room = this.current ? HULLS[this.current.hull].crewMax + this.perks.berths : 0;
+        if (this.crew.filter((c) => c.hire === 'permanent').length < room && Math.random() < 0.6) {
+          const c = candidates(this.hooks.day() * 7 + Math.floor(Math.random() * 99), 1)[0];
+          this.crew.push({ ...c, status: 'aboard', morale: 0.95, wage: Math.round(c.wage * 0.6) });
+          this.spawnCrewActors();
+          return `${c.name}, a ${ROLE_INFO[c.role].name.toLowerCase()}, swears to sail with you for half pay.`;
+        }
+        this.hooks.addGold(140);
+        return 'A merchant and his clerk: they press 140 gold on you when you reach port.';
+      },
+      treasure: (near) => {
+        const site = treasureSite(near);
+        const t: Treasure = { id: 't-' + Date.now().toString(36), ...site, found: false };
+        this.treasures.push(t);
+        this.showTreasure(t);
+        const d = Math.hypot(t.x - near.x, t.z - near.z);
+        const b = Math.round(((Math.atan2(t.x - near.x, -(t.z - near.z)) * 180) / Math.PI + 360) % 360);
+        this.hooks.toast(`The map marks ${t.kind === 'dig' ? 'a beach' : 'a spot on the seabed'} ${(d / 1000).toFixed(1)} km away, bearing ${b}°. It's on your chart now.`);
+      },
+      angered: () => {
+        const s = this.current;
+        if (s) brewStorm(s.pos.x, s.pos.z, 700, 0.9);
+        for (const c of this.crew) c.morale = Math.max(0, c.morale - 0.15);
+        this.hooks.toast('The crew go pale. "You don\'t harm them, Captain. The sea remembers." The sky darkens fast.');
+      },
+      bigGame: this.perks.bigGame,
+      shoalSight: this.perks.shoalSight,
+    };
+  }
+
+  private showTreasure(t: Treasure) {
+    if (t.found || this.treasureMeshes.has(t.id)) return;
+    const g = new THREE.Group();
+    if (t.kind === 'dig') {
+      // An X of stones on the sand.
+      for (const a of [0.785, -0.785]) {
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.15, 0.35), new THREE.MeshStandardMaterial({ color: 0x8a8070 }));
+        bar.rotation.y = a;
+        g.add(bar);
+      }
+      g.position.set(t.x, heightAt(t.x, t.z) + 0.05, t.z);
+    } else {
+      const chest = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 0.8), new THREE.MeshStandardMaterial({ color: 0x6a4a2a }));
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.2, 10, 1, false, 0, Math.PI), new THREE.MeshStandardMaterial({ color: 0x5a3a22 }));
+      lid.rotation.z = Math.PI / 2;
+      lid.position.y = 0.4;
+      g.add(chest, lid);
+      g.position.set(t.x, heightAt(t.x, t.z) + 0.4, t.z);
+    }
+    this.scene.add(g);
+    this.treasureMeshes.set(t.id, g);
+  }
+
+  private clearTreasures() {
+    for (const m of this.treasureMeshes.values()) this.scene.remove(m);
+    this.treasureMeshes.clear();
+  }
+
+  private openTreasure(t: Treasure) {
+    t.found = true;
+    const m = this.treasureMeshes.get(t.id);
+    if (m) this.scene.remove(m);
+    this.treasureMeshes.delete(t.id);
+    const gold = 220 + Math.floor(Math.random() * 380);
+    this.hooks.addGold(gold);
+    const items: [string, number][] = [['greaterHealthPotion', 1], ['waterBreathingDraught', 1], ['pearl', 3], ['sirenPearl', 1]];
+    const [id, n] = items[Math.floor(Math.random() * items.length)];
+    this.hooks.give(id, n);
+    this.addXp(70, 'found buried treasure');
+    this.hooks.toast(t.kind === 'dig' ? `Your spade strikes wood: a sea chest! ${gold} gold and more inside.` : `The chest's lock is rusted through. Inside, ${gold} gold and more.`);
+    this.hooks.save();
+  }
+
+  /** Oyster beds in the warm shallows round a harbour. */
+  private seedPearlBeds(ip: IslandPort) {
+    const [lx, lz] = ip.def.land;
+    let n = 0;
+    for (let r = 70; r < 320 && n < 3; r += 25) {
+      for (let k = 0; k < 16 && n < 3; k++) {
+        const a = (k / 16) * Math.PI * 2 + r * 0.37;
+        const x = lx + Math.cos(a) * r, z = lz + Math.sin(a) * r;
+        const depth = SEA_LEVEL - heightAt(x, z);
+        if (depth < 3.5 || depth > 12) continue;
+        if (this.pearlBeds.some((b) => Math.hypot(b.pos.x - x, b.pos.z - z) < 60)) continue;
+        const g = new THREE.Group();
+        const shell = new THREE.MeshStandardMaterial({ color: 0xd8cfc0, roughness: 0.6 });
+        for (let j = 0; j < 7; j++) {
+          const s = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), shell);
+          s.scale.set(1, 0.4, 0.8);
+          s.position.set((Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);
+          s.rotation.y = Math.random() * 6;
+          g.add(s);
+        }
+        const y = heightAt(x, z);
+        g.position.set(x, y + 0.1, z);
+        this.scene.add(g);
+        this.pearlBeds.push({ id: `${ip.def.id}-${n}`, pos: new THREE.Vector3(x, y, z), mesh: g });
+        n++;
+      }
+    }
+  }
+
   // ---- the customs cutter -----------------------------------------------------------------------
 
   private contrabandIn(ship: Ship) {
@@ -1708,6 +1944,7 @@ export class Sailing {
     for (const id of this.lit) { const l = this.lighthouses.get(id); if (l) out.push({ x: l.pos.x, z: l.pos.z, kind: 'light', label: `${this.portName(id)} light` }); }
     if (this.perks.weatherEye) for (const c of STORMS) out.push({ x: c.x, z: c.z, kind: 'storm', label: 'Storm' });
     for (const c of this.contracts) { const p = PORTS.find((x) => x.id === c.to); if (p) out.push({ x: p.zone.x, z: p.zone.z, kind: 'dest', label: this.contractLabel(c) }); }
+    for (const t of this.treasures) if (!t.found) out.push({ x: t.x, z: t.z, kind: 'treasure', label: t.kind === 'dig' ? 'Buried treasure' : 'Sunken chest' });
     return out;
   }
 
@@ -1907,8 +2144,7 @@ export class Sailing {
 
   /** A shoal under the keel fills the trawl three times as fast (sea events add shoals). */
   shoalBoost(ship: Ship) {
-    void ship;
-    return 1;
+    return this.event instanceof Shoal && this.event.contains(ship.pos) ? 3 : 1;
   }
 
   // ---- the HUD (every rendered frame) --------------------------------------------------------
@@ -1957,6 +2193,7 @@ export class Sailing {
       const off = Math.abs(rel) * (180 / Math.PI);
       out.push(off >= 25 && off <= 50 ? 'Seas on the bow quarter: well met.' : off < 25 ? 'Seas dead ahead: bear off a little.' : `Seas ${off > 120 ? 'astern' : 'abeam'}: turn ${rel > 0 ? 'left (A)' : 'right (D)'} to meet them.`);
     }
+    out.push(...this.regatta.notes(ship));
     if (ship.surge > 0.1) out.push(`Surfing +${Math.round(ship.surge * 100)}%`);
     if (ship.currentSpeed > 0.4) out.push(`In ${CURRENTS.find((c) => c.id === ship.currentId)?.name ?? 'a current'} (${(ship.currentSpeed * 1.94).toFixed(1)} kn)`);
     if (this.windT > 0) out.push(`Called wind: ${Math.ceil(this.windT)}s`);
@@ -1994,6 +2231,7 @@ export class Sailing {
     } else {
       out.push({ label: 'About my hired boat…', run: () => show(`Due back by 8 on day ${Math.floor(this.rental!.until / 24)}. Sail her into the harbour and dock (E) and I'll give you your deposit back.`, [{ label: 'Right.', run: back }]) });
     }
+    out.push(...this.regatta.options(show, back));
     out.push({ label: 'Sailing lessons', run: () => show('W and S set and take in the sail. A and D steer. You can\'t sail straight into the wind: zig-zag across it. Fastest with the wind on your beam. Reef (R) when it blows hard, and meet big waves on the bow quarter, never side-on. The further out you go the rougher it gets: past the harbour mouth you\'re in Coastal Waters, then the Open Sea, and beyond that, well. Upgrade your boat or learn your trade before you go far.', [{ label: 'Thanks, Mira.', run: back }]) });
     return out;
   }
@@ -2273,7 +2511,7 @@ export class Sailing {
 
   toJSON(): SailingSave {
     for (const s of this.ships.values()) this.syncRecord(s);
-    return { ships: this.records, rental: this.rental, crew: this.crew, xp: Math.round(this.xp), mode: this.mode, wrecks: this.wrecks, stats: this.stats, paidDay: this.paidDay, picks: this.picks, currents: [...this.knownCurrents], trophies: [...this.trophies], supply: this.supply, contracts: this.contracts, landfalls: [...this.landfalls], lit: [...this.lit] };
+    return { ships: this.records, rental: this.rental, crew: this.crew, xp: Math.round(this.xp), mode: this.mode, wrecks: this.wrecks, stats: this.stats, paidDay: this.paidDay, picks: this.picks, currents: [...this.knownCurrents], trophies: [...this.trophies], supply: this.supply, contracts: this.contracts, landfalls: [...this.landfalls], lit: [...this.lit], treasures: this.treasures, regatta: this.regatta.toJSON(), pearls: this.pearlDay };
   }
 
   fromJSON(d: SailingSave | undefined) {
@@ -2298,6 +2536,11 @@ export class Sailing {
     this.landfalls = new Set(d.landfalls ?? []);
     this.lit = new Set(d.lit ?? []);
     for (const id of this.lit) this.lightUp(id);
+    this.clearTreasures();
+    this.treasures = d.treasures ?? [];
+    for (const t of this.treasures) this.showTreasure(t);
+    this.regatta.fromJSON(d.regatta);
+    this.pearlDay = d.pearls ?? {};
     for (const r of this.records) this.spawn(r);
     for (const w of this.wrecks) this.showWreck(w);
     if (d.rental) {
@@ -2339,6 +2582,12 @@ export class Sailing {
     this.customs = null;
     for (const id of [...this.lit]) this.lightUp(id, false);
     this.lit.clear();
+    this.event?.dispose();
+    this.event = null;
+    this.clearTreasures();
+    this.treasures = [];
+    this.regatta.fromJSON(undefined);
+    this.pearlDay = {};
     this.story.clear();
     this.shot = 'ball';
     this.serpent?.dispose();

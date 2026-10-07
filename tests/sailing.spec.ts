@@ -540,3 +540,105 @@ test('the island harbours: landfall, trade by the hold, Guild contracts, the cus
   expect(res.lit).toBe(true);
   expect(res.marks).toEqual(expect.arrayContaining(['ship', 'light']));
 });
+
+test('life on the sea: events, a treasure map, pearl beds, the storm log and the regatta', async ({ game }) => {
+  test.setTimeout(200_000 * SLOW);
+  const res = await game.page.evaluate(async (slow) => {
+    const g = window.__game, T = g.THREE, sl = g.sailing, inp = g.input, SS = g.seaState;
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    const errors: string[] = [];
+    const onErr = (e: ErrorEvent) => errors.push(String(e.message));
+    window.addEventListener('error', onErr);
+    const toasts: string[] = [];
+    const ot = g.hud.toast.bind(g.hud);
+    g.hud.toast = (m: string) => { toasts.push(m); ot(m); };
+    const out: Record<string, unknown> = {};
+    g.player.prog.addGold(100000);
+    sl.xp = 1e6;
+    for (const id of ['trawl', 'baitLore', 'shoalSight', 'bigGame', 'pearlDiver']) sl.learn(id);
+    const r = sl.buy('brigantine');
+    const ship = sl.ships.get(r.id);
+    ship.pos.set(4600, 0, 900);
+    ship.yaw = 0.5;
+    ship.place();
+    sl.board(ship);
+    sl.takeHelm();
+    await wait(300);
+    // Every event announces itself once.
+    const told: Record<string, number> = {};
+    for (const id of ['dolphins', 'whale', 'waterspout', 'bloom', 'shoal', 'merchant']) {
+      const t0 = toasts.length;
+      sl.startEvent(id);
+      await wait(1200);
+      told[id] = toasts.slice(t0).filter((t) => !/Seamanship|Pearl|current/.test(t)).length;
+      sl.event?.dispose();
+      sl.event = null;
+    }
+    out.told = told;
+    // Floating cargo comes aboard; a bottle holds a treasure map.
+    for (const id of ['flotsam', 'bottle']) {
+      const ev = sl.startEvent(id);
+      await wait(300);
+      ship.speed = 0;
+      ship.pos.copy(ev.pos);
+      await wait(500);
+      out[id] = ev.done;
+    }
+    out.hold = sl.holdUsed(ship);
+    const t = sl.treasures[0];
+    out.treasure = t ? t.kind : null;
+    // Dig it up (or dive for it).
+    if (t) {
+      sl.leaveShip(new T.Vector3(2940, 0, 196));
+      const { heightAt } = await import('/src/world/terrainHeight.ts');
+      g.player.teleport(new T.Vector3(t.x, t.kind === 'dig' ? heightAt(t.x, t.z) + 1 : -3, t.z));
+      await wait(800);
+      if (t.kind === 'dive') { inp.press('KeyC'); await wait(2500); }
+      sl.interactables.find((i: { label: () => string }) => /Dig up|sunken chest/.test(i.label()))?.action();
+      inp.release('KeyC');
+      out.found = t.found;
+    }
+    // Pearl beds lie in the shallows round the warm-water harbours.
+    out.beds = sl.pearlBeds.length;
+    // The storm log: how far a storm blew you.
+    ship.pos.set(5200, 0, 300);
+    ship.place();
+    sl.board(ship);
+    SS.brewStorm(5200, 300, 900, 1);
+    await wait(2500);
+    out.drifting = ship.driftLog.length() > 0;
+    // (as if it had raged a while: then it blows itself out)
+    ship.driftLog.set(700, -500);
+    SS.STORMS.length = 0;
+    SS.SEA.storm = 0;
+    await wait(1500);
+    out.log = toasts.find((x) => /blew you/.test(x)) ?? null;
+    // The Harbour Cup: round the marks in order after the gun.
+    sl.leaveShip(new T.Vector3(2930, 0, 300));
+    sl.regatta.start('harbourCup');
+    for (let i = 0; i < 60 && sl.regatta.race && sl.regatta.race.countdown > 0; i++) await wait(200);
+    const race = sl.regatta.race;
+    out.racing = !!race && sl.current === race.mine;
+    for (const [x, z] of race.course.buoys) {
+      race.mine.pos.set(x + 4, 0, z);
+      await wait(400);
+    }
+    await wait(400);
+    out.race = { over: !sl.regatta.race, won: sl.regatta.wins.has('harbourCup'), ashore: !sl.current };
+    window.removeEventListener('error', onErr);
+    out.errors = errors;
+    return out;
+  }, SLOW);
+  console.log(JSON.stringify(res));
+  for (const [id, n] of Object.entries(res.told as Record<string, number>)) expect(n, id).toBe(1);
+  expect(res.flotsam).toBe(true);
+  expect(res.bottle).toBe(true);
+  expect(res.treasure).toBeTruthy();
+  expect(res.found).toBe(true);
+  expect(res.beds as number).toBeGreaterThan(3);
+  expect(res.drifting).toBe(true);
+  expect(res.log).toMatch(/blew you [\d.]+ k?m/);
+  expect(res.racing).toBe(true);
+  expect(res.race).toEqual({ over: true, won: true, ashore: true });
+  expect(res.errors).toEqual([]);
+});

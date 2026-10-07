@@ -333,6 +333,11 @@ export const ITEMS: Record<string, ItemDef> = {
       return g;
     },
   },
+  regattaPennant: {
+    id: 'regattaPennant', name: 'Quint\'s Pennant', kind: 'key', rarity: 'epic',
+    desc: 'The champion\'s pennant of the Port Aurelle Regatta, red and gold, given up by Captain Marisol Quint with good grace. Fly it from your masthead.', stats: {},
+    build: () => { const m = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.6, 3), new THREE.MeshStandardMaterial({ color: 0xc82a2a, side: THREE.DoubleSide })); m.rotation.z = Math.PI / 2; return m; },
+  },
   krakenInk: {
     id: 'krakenInk', name: 'Kraken Ink', kind: 'material', rarity: 'epic', stack: true,
     desc: 'A sealed gourd of ink as black as the deep sea. The Aurelle Shipwrights paint a Kraken\'s Eye on a bow with it; monsters will not look at it.', stats: {},

@@ -144,6 +144,8 @@ export class Ship {
   windOverride: { dir: THREE.Vector2; speed: number } | null = null;
   pressT = 0;
   lean = 0;
+  /** how far storms have carried her (m), for the log after a storm */
+  driftLog = new THREE.Vector2();
   /** fire aboard (0..1) and a sprung mast (sails can't pass this share) */
   fire = 0;
   mastCap = 1;
@@ -373,6 +375,8 @@ export class Ship {
     const sideTarget = this.speed * leeway * -windSide;
     this.side += (sideTarget - this.side) * Math.min(1, dt);
     const drift = (localStorm * 2.2 + this.thrown * 1.4) * (this.anchored ? 0.25 : 1);
+    this.driftLog.x += SEA.windDir.x * drift * dt;
+    this.driftLog.y += SEA.windDir.y * drift * dt;
     // The current carries her (riding it with Current Lore, twice as hard).
     const cur = currentAt(this.pos.x, this.pos.z);
     this.currentSpeed = Math.hypot(cur.x, cur.z) * pk.current;
