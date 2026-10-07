@@ -46,6 +46,24 @@ export class Discovery {
   /** how far you see (at sea, from a deck, further; with charts, three times as far) */
   revealScale = 1;
 
+  /** Chart everything within `r` metres of a point (a relit lighthouse, a chart bought). */
+  revealAround(x: number, z: number, r: number) {
+    const gx = Math.floor((x - WORLD_X0) / CELL), gz = Math.floor((z - WORLD_Z0) / CELL);
+    const n = Math.ceil(r / CELL);
+    let revealed = 0;
+    for (let dz = -n; dz <= n; dz++) for (let dx = -n; dx <= n; dx++) {
+      if (dx * dx + dz * dz > n * n) continue;
+      const cx = gx + dx, cz = gz + dz;
+      if (cx < 0 || cz < 0 || cx >= GW || cz >= GH) continue;
+      const k = cz * GW + cx;
+      if (!(this.cells[k >> 3] & (1 << (k & 7)))) {
+        this.cells[k >> 3] |= 1 << (k & 7);
+        revealed++;
+      }
+    }
+    if (revealed) events.emit('mapRevealed', { cells: revealed });
+  }
+
   /** Call every frame (cheap: only does work when the player changes cell). */
   update(pos: THREE.Vector3) {
     const gx = Math.floor((pos.x - WORLD_X0) / CELL), gz = Math.floor((pos.z - WORLD_Z0) / CELL);

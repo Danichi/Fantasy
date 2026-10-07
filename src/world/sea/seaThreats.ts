@@ -663,3 +663,58 @@ export class Consort {
     this.ship.dispose();
   }
 }
+
+// ---- the Crown's customs cutter ------------------------------------------------------------
+
+/**
+ * A fast navy cutter that runs down ships coming into a Crown port and
+ * signals them to heave to for inspection. It never fires: it simply won't
+ * be shaken off easily. Lose it (open water, 600 m) or let it alongside.
+ */
+export class CustomsCutter {
+  readonly ship: Ship;
+  state: 'chase' | 'alongside' | 'gone' = 'chase';
+  private t = 0;
+  constructor(scene: THREE.Scene, at: THREE.Vector3) {
+    this.ship = new Ship(scene, 'cutter', { ...STOCK_FIT(), sails: 2, guns: 1 }, { name: 'HMS Vigilant', hullColor: 0x24467e, trim: 0xe8e8e8 });
+    this.ship.owner = 'npc';
+    this.ship.crew = this.ship.def.crewMax;
+    this.ship.pos.copy(at);
+    this.ship.anchored = false;
+    this.ship.sailSet = 1;
+    this.ship.place();
+  }
+
+  update(dt: number, prey: Ship | null) {
+    const s = this.ship;
+    this.t += dt;
+    const ctl: ShipControls = { ...NO_CONTROL(), sail: 1 };
+    if (!prey || prey.sunk || this.state === 'gone') {
+      this.state = 'gone';
+      s.update(dt, ctl, { skill: 0.7, assisted: true });
+      return;
+    }
+    const to = prey.pos.clone().sub(s.pos).setY(0);
+    const dist = to.length();
+    if (dist > 600) this.state = 'gone';
+    let want = Math.atan2(to.x, to.z);
+    if (dist < 40) {
+      // Run alongside, matching her.
+      want = prey.yaw;
+      ctl.sail = Math.max(0.2, Math.min(1, Math.abs(prey.speed) / Math.max(1, s.stats.speed)));
+      if (dist < 28) this.state = 'alongside';
+    }
+    // A customs crew rows like the devil to close the last stretch.
+    if (dist < 120 && dist > 30) s.pos.addScaledVector(to.normalize(), dt * 2.2);
+    const w = windAt(s.pos.x, s.pos.z);
+    const from = Math.atan2(-w.dir.x, -w.dir.y);
+    const intoWind = wrap(want - from);
+    if (Math.abs(intoWind) < 0.8) want = from + Math.sign(intoWind || 1) * 0.85;
+    ctl.rudder = Math.max(-1, Math.min(1, -wrap(want - s.yaw) * 2));
+    s.update(dt, ctl, { skill: 0.7, assisted: true });
+  }
+
+  dispose() {
+    this.ship.dispose();
+  }
+}

@@ -5,6 +5,7 @@ import { shapeDesert } from './desert/desertLayout';
 import { ROAD_POLYS, CREEK } from './roadData';
 import { cityHeight } from './portCity';
 import { capitalHeight } from './capitalCity';
+import { islandPadHeight } from './sea/islandPortsData';
 
 // ---------------------------------------------------------------------------
 // Terrain heights for the whole world (pure: no rendering, no physics, so the
@@ -195,6 +196,9 @@ export function worldHeightFn(x: number, z: number) {
   // The Royal Capital: a walled pad rising in terraces to the palace on Crown Hill.
   const cap = x < -3000 ? capitalHeight(x, z) : null;
   if (cap) return h * (1 - cap[1]) + cap[0] * cap[1];
+  // The island harbours stand on small level pads (and their quays).
+  const isl = x > 3500 ? islandPadHeight(x, z) : null;
+  if (isl) return h * (1 - isl[1]) + isl[0] * isl[1];
   // Roads keep a gentle grade outside town too.
   if (r > LOCAL_R0 * 0.8) {
     const rd = roadDist(x, z);

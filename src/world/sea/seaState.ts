@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { regionAt, SEA_LEVEL } from '../worldMap';
 import { PORT_AURELLE } from '../terrainHeight';
+import { ISLAND_PORTS } from './islandPortsData';
 
 // The state of the sea (docs/design/boating.md §5–6): one set of Gerstner
 // waves that the ocean shader draws and the ships float on (so what you see
@@ -118,7 +119,13 @@ export function dangerAt(x: number, z: number) {
   // Inland water (rivers, lakes): gentle, whatever its distance from the harbour.
   if (!SEA_REGIONS.has(id)) return 0.3;
   const region = REGION_DANGER[id] ?? 1;
-  return Math.max(0, Math.min(5, Math.max(byDistance, region * 0.85 + byDistance * 0.15)));
+  let danger = Math.max(0, Math.min(5, Math.max(byDistance, region * 0.85 + byDistance * 0.15)));
+  // The island harbours are sheltered water: calm by the quays, wild again a few hundred metres out.
+  for (const p of ISLAND_PORTS) {
+    const dp = Math.hypot(x - p.land[0], z - p.land[1]);
+    if (dp < 450) danger *= 0.3 + 0.7 * Math.max(0, Math.min(1, (dp - 120) / 330));
+  }
+  return danger;
 }
 
 /** Everyday wave multiplier for a danger tier (before the wind). */

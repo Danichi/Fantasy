@@ -95,6 +95,7 @@ import * as seaState from './world/sea/seaState';
 const { updateSea } = seaState;
 import { Sailing, harbourFolk, HARBOUR_SAILORS, seamanshipLevel } from './world/sea/sailing';
 import { SeamanshipPanel } from './ui/seamanshipPanel';
+import { buildIslandPorts } from './world/sea/islandPorts';
 import { GroundWindow } from './world/groundWindow';
 import { SkillsUI } from './ui/skills';
 import { DISC } from './paths/data';
@@ -197,12 +198,14 @@ async function boot() {
   const crownRoad = buildCrownRoad(r.scene, world.mats, fx, slimes, crownHooks);
   mark('crownRoad');
   const port = buildPortAurelle(r.scene, world.mats, fx);
+  // The island harbours across the Grand Ocean.
+  const islands = buildIslandPorts(r.scene, world.mats);
   mark('port');
   // The Royal Capital: its skyline now, the city itself streamed in as you come near.
   const capital = new RoyalCapital(r.scene, world.mats, fx);
   mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -260,6 +263,8 @@ async function boot() {
       for (const rec of k.records) npcs.add(rec);
     }
     // The Golden Expanse: Ghagrabba's citizens and court, and the scavengers outside its walls.
+    for (const s of islands.settlements) npcs.addSettlement(s);
+    for (const rec of islands.records) npcs.add(rec);
     const desertFolk = sunspireResidents();
     for (const s of desertFolk.settlements) npcs.addSettlement(s);
     for (const rec of desertFolk.records) npcs.add(rec);
@@ -697,6 +702,8 @@ async function boot() {
     shake: (n) => cam.shake(n),
     waypoint: () => worldMap.pins[worldMap.pins.length - 1] ?? null,
     signal: (id) => { quests.signal(id); },
+    reveal: (x, z, rr) => discovery.revealAround(x, z, rr),
+    dayLengthSec: () => time.dayLengthMin * 60,
     wants: (id) => quests.wants(id),
     dismount: () => { if (player.mounted) horses.dismount(); },
   });
@@ -704,7 +711,12 @@ async function boot() {
   realm.overworldInteractables.push(...sailing.interactables);
   folkServices.set('shipwright', (show, back) => sailing.shipwrightOptions(show, back));
   folkServices.set('rigby', (show, back) => sailing.brokerOptions(show, back));
-  folkServices.set('tallow', (show, back) => sailing.harbourOptions(show, back));
+  folkServices.set('tallow', (show, back) => [...sailing.harbourOptions(show, back), ...sailing.tradeOptions('portAurelle', show, back)]);
+  sailing.addPorts(islands.ports);
+  for (const ip of islands.ports) {
+    folkServices.set(ip.harbourmaster, (show, back) => sailing.harbourOptions(show, back, ip.def.id));
+    folkServices.set(ip.trader, (show, back) => sailing.tradeOptions(ip.def.id, show, back));
+  }
   // Sea quests put ships and monsters on the water while their stage is current.
   for (const [hook, tag] of [['sea:serpentHunt', 'serpentHunt'], ['sea:btScout', 'btScout'], ['sea:btFlag', 'btFlag']] as const) quests.hooks.set(hook, () => sailing.story.add(tag));
   for (const c of HARBOUR_SAILORS) folkServices.set(c.id, (show, back) => sailing.sailorOptions(c.id, show, back));
@@ -760,7 +772,7 @@ async function boot() {
       show('There: the Crown lands, from the Kingsbridge to the coast. Mind the parts marked \u201chere be wolves\u201d. They mean it.', [{ label: 'Thank you.', run: () => dialogue.close() }]);
     },
   }]);
-  folkServices.set('ferrywoman', (show, back) => [...sailing.ferryOptions(show, back), {
+  folkServices.set('ferrywoman', (show, back) => [...sailing.ferryOptions(show, back), ...sailing.tradeOptions('crownQuay', show, back), ...sailing.harbourOptions(show, back, 'crownQuay').filter((o) => /Guild|Deliver/.test(o.label)), {
     label: 'Buy a fishing rod \u2014 25g',
     run: () => {
       if (player.prog.gold < 25) return show('Twenty-five, dear. Rods don\u2019t grow on the riverbank. Well. Willow does. Not good willow.', [{ label: 'Farewell.', run: () => dialogue.close() }]);
@@ -1076,6 +1088,9 @@ async function boot() {
   const discovery = new Discovery();
   if (saveData) discovery.fromJSON(saveData.world?.discovery);
   const worldMap = new WorldMapUI(discovery);
+  // The sea's marks: your ships, wrecks, lit lighthouses, storms, sea routes and currents.
+  worldMap.seaMarkers = () => sailing.seaMarkers();
+  worldMap.seaLines = () => sailing.seaLines();
   worldMap.questMarkers = () => {
     const tracked = quests.tracked ?? quests.active()[0]?.id;
     // Only the tracked quest's next steps: the map is for following a quest, not

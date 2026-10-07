@@ -14,6 +14,9 @@ import { PirateShip, SeaSerpent, Shark, Consort, type PirateOpts } from './seaTh
 import { BLACK_TIDE_SCOUT, BLACK_TIDE_FLAG } from '../../quests/seaQuests';
 import { makeBeast, BEAST_NAMES, Leviathan, type SeaBeast, type BeastId, type BeastCtx } from './seaMonsters';
 import { regionAt } from '../worldMap';
+import { GOODS, GOOD, MARKETS, price, shiftSupply, recoverSupply, offers, type Contract, type Supply } from './trade';
+import { CustomsCutter } from './seaThreats';
+import type { IslandPort } from './islandPorts';
 import { candidates, dayCrew, crewEffects, crewXp, ROLE_INFO, TRAIT_INFO, type CrewMember } from './crew';
 import { Bolts } from '../../enemies/bandit';
 import { SailingHud } from '../../ui/sailingHud';
@@ -48,9 +51,11 @@ export interface ShipRecord {
   yaw: number;
   /** the port it's berthed at, or null when anchored somewhere else */
   port: string | null;
+  /** goods in the hold */
+  cargo?: Record<string, number>;
 }
 export interface WreckRecord { id: string; name: string; hull: HullId; x: number; z: number; gold: number; items: [string, number][]; searched: boolean }
-export interface Rental { hull: HullId; until: number; deposit: number; port: string; x: number; z: number; yaw: number; sections: number[]; water: number }
+export interface Rental { hull: HullId; until: number; deposit: number; port: string; x: number; z: number; yaw: number; sections: number[]; water: number; cargo?: Record<string, number> }
 export interface SailingSave {
   ships: ShipRecord[];
   rental: Rental | null;
@@ -66,6 +71,11 @@ export interface SailingSave {
   currents?: string[];
   /** the great monsters you've beaten (trophies) */
   trophies?: string[];
+  /** the markets, your Maritime Guild contracts, first landfalls, relit lighthouses */
+  supply?: Supply;
+  contracts?: Contract[];
+  landfalls?: string[];
+  lit?: string[];
 }
 
 export interface SailingHooks {
@@ -86,15 +96,19 @@ export interface SailingHooks {
   waypoint?(): { x: number; z: number } | null;
   /** quest signals (quests.signal / quests.wants) */
   signal?(id: string): void;
+  /** chart the map around a point (a relit lighthouse) */
+  reveal?(x: number, z: number, r: number): void;
+  /** real seconds in a game day */
+  dayLengthSec?(): number;
   wants?(id: string): boolean;
   shake(n: number): void;
   dismount(): void;
 }
 
-interface Port { id: string; name: string; zone: THREE.Vector3; r: number; berths: [number, number, number][]; landing: THREE.Vector3 }
+interface Port { id: string; name: string; zone: THREE.Vector3; r: number; berths: [number, number, number][]; landing: THREE.Vector3; crown?: boolean }
 const PORTS: Port[] = [
-  { id: 'portAurelle', name: 'Port Aurelle', zone: new THREE.Vector3(QUAY_X + 50, 0, 200), r: 150, berths: [[QUAY_X + 64, 172, Math.PI / 2], [QUAY_X + 64, 196, Math.PI / 2], [QUAY_X + 64, 218, Math.PI / 2], [QUAY_X + 92, 184, Math.PI / 2], [QUAY_X + 92, 210, Math.PI / 2], [QUAY_X + 52, 318, Math.PI / 2]], landing: new THREE.Vector3(QUAY_X - 4, 0, 196) },
-  { id: 'crownQuay', name: 'The Crown Quay', zone: new THREE.Vector3(-3990, 0, -1010), r: 90, berths: [[-3990, -1000, Math.PI], [-3985, -985, Math.PI]], landing: new THREE.Vector3(-3916, 0, -1010) },
+  { id: 'portAurelle', name: 'Port Aurelle', crown: true, zone: new THREE.Vector3(QUAY_X + 50, 0, 200), r: 150, berths: [[QUAY_X + 64, 172, Math.PI / 2], [QUAY_X + 64, 196, Math.PI / 2], [QUAY_X + 64, 218, Math.PI / 2], [QUAY_X + 92, 184, Math.PI / 2], [QUAY_X + 92, 210, Math.PI / 2], [QUAY_X + 52, 318, Math.PI / 2]], landing: new THREE.Vector3(QUAY_X - 4, 0, 196) },
+  { id: 'crownQuay', name: 'The Crown Quay', crown: true, zone: new THREE.Vector3(-3990, 0, -1010), r: 90, berths: [[-3990, -1000, Math.PI], [-3985, -985, Math.PI]], landing: new THREE.Vector3(-3916, 0, -1010) },
 ];
 /** What the shipwright calls the monster materials an upgrade needs. */
 const NEED_NAMES: Record<string, string> = { serpentScale: 'sea serpent scales', moongrass: 'moongrass', wyrmScale: 'Storm Wyrm scales', colossusShell: 'colossus shells', leviathanBone: 'leviathan bones', krakenInk: 'gourds of kraken ink' };
@@ -189,6 +203,15 @@ export class Sailing {
   beast: SeaBeast | null = null;
   /** the great monsters you've beaten */
   trophies = new Set<string>();
+  /** the markets' gluts and shortages, your contracts, ports you've reached, lighthouses you've relit */
+  supply: Supply = {};
+  contracts: Contract[] = [];
+  landfalls = new Set<string>();
+  lit = new Set<string>();
+  private lighthouses = new Map<string, IslandPort['lighthouse']>();
+  customs: CustomsCutter | null = null;
+  private customsChecked = false;
+  private supplyHour = -1;
 
   constructor(private scene: THREE.Scene, private fx: FX, private player: Player, private input: Input, private cam: ThirdPersonCamera, private hooks: SailingHooks) {
     this.gunnery = new Gunnery(scene, fx);
@@ -354,6 +377,7 @@ export class Sailing {
     this.lastPos.copy(ship.pos);
     this.voyageFrom.copy(ship.pos);
     this.wavebroken = false;
+    this.customsChecked = false;
     ship.perks = this.shipPerks();
     // A hired consort joins you off the quarter.
     if (this.consortHired && !this.consort && ship.def.model !== 'skiff') {
@@ -429,6 +453,15 @@ export class Sailing {
     if (rec) rec.port = port.id;
     this.addXp(10, 'docked');
     this.hooks.signal?.('sea-dock');
+    if (!this.landfalls.has(port.id)) {
+      this.landfalls.add(port.id);
+      if (port.id !== 'portAurelle') {
+        this.addXp(150, 'first landfall');
+        this.hooks.toast(`First landfall at ${port.name}!`);
+      }
+    }
+    // The customs cutter on your heels catches you at the quay.
+    if (this.customs && this.customs.state !== 'gone' && this.customs.ship.pos.distanceTo(ship.pos) < 300) this.inspect(ship);
     // The crew learn from every voyage.
     const sailed = Math.hypot(ship.pos.x - this.voyageFrom.x, ship.pos.z - this.voyageFrom.z);
     for (const c of this.crew) if (c.status === 'aboard' && c.hire === 'permanent') crewXp(c, Math.round(15 + sailed / 40));
@@ -692,6 +725,17 @@ export class Sailing {
     }
     this.windCd = Math.max(0, this.windCd - dt);
     this.pressCd = Math.max(0, this.pressCd - dt);
+    // The markets settle back, hour by hour.
+    const hourNow = Math.floor(this.hooks.hours());
+    if (hourNow !== this.supplyHour) {
+      if (this.supplyHour >= 0) recoverSupply(this.supply, hourNow - this.supplyHour);
+      this.supplyHour = hourNow;
+    }
+    this.updateCustoms(dt, ship);
+    // Lit lighthouses shine at night.
+    const night = this.hooks.hours() % 24;
+    const dark = night > 19 || night < 6;
+    for (const [id, l] of this.lighthouses) if (this.lit.has(id)) (l.glow.material as THREE.SpriteMaterial).opacity = dark ? 0.9 : 0.25;
     // Ships nobody sails ride at anchor (only the near ones need updating).
     for (const s of this.ships.values()) {
       if (s === ship) continue;
@@ -1418,6 +1462,266 @@ export class Sailing {
     }
   }
 
+  // ---- the island harbours, trade and the Maritime Guild ------------------------------------------
+
+  /** The island harbours join the ports you can dock at (and their lighthouses can be relit). */
+  addPorts(ports: IslandPort[]) {
+    for (const ip of ports) {
+      if (PORTS.some((p) => p.id === ip.def.id)) continue;
+      PORTS.push({ id: ip.def.id, name: ip.def.name, zone: ip.zone, r: 110, berths: ip.berths, landing: ip.landing });
+      this.lighthouses.set(ip.def.id, ip.lighthouse);
+      const self = this;
+      const at = ip.lighthouse.pos.clone();
+      this.interactables.push({
+        pos: at, radius: 5,
+        label: () => (self.lit.has(ip.def.id) ? '' : `Relight the lighthouse of ${ip.def.name}`),
+        enabled: () => !self.lit.has(ip.def.id),
+        action: () => {
+          self.lightUp(ip.def.id);
+          self.addXp(80, 'relit a lighthouse');
+          self.hooks.reveal?.(at.x, at.z, 1600);
+          self.hooks.toast(`The lamp of ${ip.def.name} burns again. Ships will see it for leagues, and so will you: the waters around are charted.`);
+          self.hooks.save();
+        },
+      });
+    }
+  }
+
+  /** Light (or put out) a lighthouse. */
+  lightUp(id: string, on = true) {
+    const l = this.lighthouses.get(id);
+    if (on) this.lit.add(id);
+    if (!l) return;
+    l.lamp.emissiveIntensity = on ? 2.6 : 0;
+    (l.glow.material as THREE.SpriteMaterial).opacity = on ? 0.9 : 0;
+  }
+
+  portName(id: string) {
+    return PORTS.find((p) => p.id === id)?.name ?? id;
+  }
+
+  /** Your ships (and a hired one) in a port's harbour. */
+  shipsInPort(portId: string) {
+    const port = PORTS.find((p) => p.id === portId);
+    if (!port) return [];
+    return [...this.ships.values()].filter((s) => !s.sunk && (s.owner === 'player' || s.owner === 'rental') && Math.hypot(s.pos.x - port.zone.x, s.pos.z - port.zone.z) < port.r + 40);
+  }
+
+  /** A ship's hold (goods -> count). */
+  holdOf(ship: Ship): Record<string, number> {
+    if (ship.owner === 'rental' && this.rental) return (this.rental.cargo ??= {});
+    const rec = this.records.find((r) => this.ships.get(r.id) === ship);
+    return rec ? (rec.cargo ??= {}) : {};
+  }
+  holdUsed(ship: Ship) {
+    return Object.values(this.holdOf(ship)).reduce((a, n) => a + n, 0);
+  }
+
+  /** A trader: buy and sell by the shipload. */
+  tradeOptions(portId: string, show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) {
+    if (!MARKETS[portId]) return [];
+    const ships = this.shipsInPort(portId);
+    if (!ships.length) return [{ label: 'Trade cargo', run: () => show('My goods go by the shipload, Captain. Bring your ship into the harbour and we\'ll talk.', [{ label: 'Back.', run: back }]) }];
+    return [{
+      label: 'Trade cargo',
+      run: () => ships.length === 1 ? this.tradeMenu(portId, ships[0], show, back) : show('Which ship\'s hold?', [...ships.map((sh) => ({ label: `${sh.name} (${this.holdUsed(sh)}/${sh.stats.cargo})`, run: () => this.tradeMenu(portId, sh, show, back) })), { label: 'Back.', run: back }]),
+    }];
+  }
+
+  tradeMenu(portId: string, ship: Ship, show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) {
+    const hold = this.holdOf(ship);
+    const opts = GOODS.map((g) => {
+      const b = price(portId, g.id, this.supply, 'buy');
+      const sl = price(portId, g.id, this.supply, 'sell');
+      const n = hold[g.id] ?? 0;
+      if (b === null && (sl === null || !n)) return null;
+      return { label: `${g.name}: ${b !== null ? `buy ${b}g` : '—'} / ${sl !== null ? `sell ${sl}g` : 'no market'}${n ? ` · ${n} aboard` : ''}`, run: () => this.goodMenu(portId, ship, g.id, show, back) };
+    }).filter((x): x is { label: string; run: () => void } => !!x);
+    show(`The ${ship.name}'s hold: ${this.holdUsed(ship)} of ${ship.stats.cargo}. What's made here is cheap; what's wanted here is dear.`, [...opts, { label: 'Done.', run: back }]);
+  }
+
+  private goodMenu(portId: string, ship: Ship, good: string, show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) {
+    const hold = this.holdOf(ship);
+    const g = GOOD[good];
+    const b = price(portId, good, this.supply, 'buy');
+    const sl = price(portId, good, this.supply, 'sell');
+    const n = hold[good] ?? 0;
+    const room = ship.stats.cargo - this.holdUsed(ship);
+    const again = () => this.goodMenu(portId, ship, good, show, back);
+    const buy = (k: number) => {
+      const cost = (b ?? 0) * k;
+      if (k > room) return show(`She hasn't the room: ${room} left in the hold.`, [{ label: 'Back.', run: again }]);
+      if (this.hooks.gold() < cost) return show(`That's ${cost}g.`, [{ label: 'Back.', run: again }]);
+      this.hooks.addGold(-cost);
+      hold[good] = n + k;
+      shiftSupply(this.supply, portId, good, k);
+      again();
+    };
+    const sell = (k: number) => {
+      const got = (sl ?? 0) * k;
+      this.hooks.addGold(got);
+      hold[good] = n - k;
+      if (hold[good] <= 0) delete hold[good];
+      shiftSupply(this.supply, portId, good, -k);
+      this.hooks.toast(`Sold ${k} ${g.name} for ${got}g.`);
+      again();
+    };
+    const opts: { label: string; run: () => void }[] = [];
+    if (b !== null) for (const k of [1, 5, 10]) if (k <= Math.max(1, room)) opts.push({ label: `Buy ${k} — ${b * k}g`, run: () => buy(k) });
+    if (sl !== null && n > 0) {
+      opts.push({ label: `Sell 1 — ${sl}g`, run: () => sell(1) });
+      if (n > 1) opts.push({ label: `Sell all ${n} — ${sl * n}g`, run: () => sell(n) });
+    }
+    show(`${g.name}${g.contraband ? ' (contraband: the Crown\'s customs will take it)' : ''}. ${b !== null ? `${b}g each to buy` : 'Not sold here'}; ${sl !== null ? `${sl}g each to sell` : 'nobody here buys it'}. ${n} aboard, room for ${room}.`, [...opts, { label: 'Back.', run: () => this.tradeMenu(portId, ship, show, back) }]);
+  }
+
+  private contractLabel(c: Contract) {
+    const left = c.due - this.hooks.hours();
+    const mins = Math.round(left * 60);
+    const time = left > 0 ? `${Math.floor(mins / 60)}h ${mins % 60}m left` : 'overdue';
+    return c.kind === 'courier' ? `sealed letters to ${this.portName(c.to)} — ${c.pay}g (${time})` : `${c.n} ${GOOD[c.good!].name} to ${this.portName(c.to)} — ${c.pay}g (${time})`;
+  }
+
+  /** The Maritime Guild's board at a port: today's offers and your contracts. */
+  contractsMenu(portId: string, show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) {
+    const now = this.hooks.hours();
+    const ids = PORTS.map((p) => p.id);
+    const dist = (a: string, b: string) => {
+      const pa = PORTS.find((p) => p.id === a)!, pb = PORTS.find((p) => p.id === b)!;
+      return Math.hypot(pa.zone.x - pb.zone.x, pa.zone.z - pb.zone.z);
+    };
+    // Game hours per metre at a steady 6 m/s.
+    const hpm = 24 / (this.hooks.dayLengthSec?.() ?? 2880) / 6;
+    const list = offers(portId, this.hooks.day(), now, ids, dist, hpm).filter((c) => !this.contracts.some((x) => x.id === c.id) && !this.doneContracts.has(c.id));
+    const opts: { label: string; run: () => void }[] = list.map((c) => ({
+      label: `Take it: ${this.contractLabel(c)}`,
+      run: () => {
+        if (this.contracts.length >= 4) return show('Four contracts is all the Guild trusts one captain with.', [{ label: 'Back.', run: back }]);
+        if (c.kind === 'cargo') {
+          const sh = this.shipsInPort(portId).find((x) => x.stats.cargo - this.holdUsed(x) >= c.n!);
+          if (!sh) return show(`The cargo goes aboard here: you need a ship in the harbour with room for ${c.n}.`, [{ label: 'Back.', run: back }]);
+          const hold = this.holdOf(sh);
+          hold[c.good!] = (hold[c.good!] ?? 0) + c.n!;
+          this.hooks.toast(`${c.n} ${GOOD[c.good!].name} loaded into the ${sh.name}, bound for ${this.portName(c.to)}.`);
+        } else this.hooks.toast(`Sealed letters for ${this.portName(c.to)}. The Guild pays half again if they're early.`);
+        this.contracts.push(c);
+        this.hooks.save();
+        this.contractsMenu(portId, show, back);
+      },
+    }));
+    for (const c of this.contracts) opts.push({ label: `Abandon: ${this.contractLabel(c)}`, run: () => { this.contracts = this.contracts.filter((x) => x !== c); this.doneContracts.add(c.id); this.hooks.toast('The Guild notes it. Your name is a little less good with them.'); this.contractsMenu(portId, show, back); } });
+    show(list.length ? 'The Maritime Guild pays for cargo delivered on time, and half again for early. Cargo is loaded here, into a ship of yours in the harbour.' : 'Nothing more on the board today. Come back tomorrow.', [...opts, { label: 'Back.', run: back }]);
+  }
+  private doneContracts = new Set<string>();
+
+  /** Hand over a contract's cargo (or letters) here. */
+  deliver(c: Contract, show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) {
+    const now = this.hooks.hours();
+    if (c.kind === 'cargo') {
+      const sh = this.shipsInPort(c.to).find((x) => (this.holdOf(x)[c.good!] ?? 0) >= c.n!);
+      if (!sh) return show(`Where's the cargo? Bring a ship into the harbour with ${c.n} ${GOOD[c.good!].name} aboard.`, [{ label: 'Back.', run: back }]);
+      const hold = this.holdOf(sh);
+      hold[c.good!] -= c.n!;
+      if (hold[c.good!] <= 0) delete hold[c.good!];
+    }
+    const pay = now <= c.early ? Math.round(c.pay * 1.5) : now <= c.due ? c.pay : now <= c.due + 24 ? Math.round(c.pay * 0.5) : 0;
+    this.hooks.addGold(pay);
+    this.contracts = this.contracts.filter((x) => x !== c);
+    this.doneContracts.add(c.id);
+    this.addXp(pay ? Math.round(30 + pay / 10) : 5, 'a contract delivered');
+    this.hooks.signal?.('contract-done');
+    show(pay > c.pay ? `Early! The Guild pays ${pay}g, half again for the speed.` : pay ? `On time. ${pay}g, as agreed.` : 'A full day late? The Guild pays nothing for that, Captain.', [{ label: 'Back.', run: back }]);
+    this.hooks.save();
+  }
+
+  // ---- the customs cutter -----------------------------------------------------------------------
+
+  private contrabandIn(ship: Ship) {
+    const hold = this.holdOf(ship);
+    return Object.entries(hold).filter(([g, n]) => n > 0 && GOOD[g]?.contraband);
+  }
+
+  private updateCustoms(dt: number, ship: Ship | null) {
+    if (ship && !this.customs && !this.customsChecked) {
+      const crown = PORTS.find((p) => p.crown && Math.hypot(ship.pos.x - p.zone.x, ship.pos.z - p.zone.z) < 750);
+      if (crown && this.contrabandIn(ship).length) {
+        this.customsChecked = true;
+        const hour = this.hooks.hours() % 24;
+        const chance = 0.7 * (ship.fit.hold >= 2 ? 0.4 : 1) * (hour > 20 || hour < 5 ? 0.55 : 1);
+        if (Math.random() < chance) {
+          const dir = new THREE.Vector3(crown.zone.x - ship.pos.x, 0, crown.zone.z - ship.pos.z).normalize();
+          this.customs = new CustomsCutter(this.scene, ship.pos.clone().addScaledVector(dir, 220));
+          this.hooks.toast('A navy cutter puts out from the harbour flying the customs flag. Heave to for inspection, or run for it!');
+        }
+      }
+    }
+    const cu = this.customs;
+    if (!cu) return;
+    cu.update(dt, ship);
+    if (ship && cu.state === 'alongside' && Math.abs(ship.speed) < 3) this.inspect(ship);
+    if (cu.state === 'gone') {
+      if (!cu.ship.sunk && ship && cu.ship.pos.distanceTo(ship.pos) > 590 && !this.lostCustoms) {
+        this.lostCustoms = true;
+        this.hooks.toast('You\'ve shaken off the customs cutter.');
+      }
+      if (!ship || cu.ship.pos.distanceTo(this.player.pos) > 900) {
+        cu.dispose();
+        this.customs = null;
+        this.lostCustoms = false;
+      }
+    }
+  }
+  private lostCustoms = false;
+
+  /** The customs men come aboard. */
+  inspect(ship: Ship) {
+    const cu = this.customs;
+    if (cu) {
+      cu.state = 'gone';
+      this.lostCustoms = true;
+    }
+    const found = this.contrabandIn(ship);
+    if (!found.length) return this.hooks.toast('The customs men poke about the hold and find nothing amiss. They wish you good day.');
+    if (ship.fit.hold >= 2 && Math.random() < 0.75) return this.hooks.toast('The customs men search her stem to stern and find nothing. Your smuggler\'s hold keeps its secrets.');
+    const hold = this.holdOf(ship);
+    let value = 0;
+    for (const [g, n] of found) {
+      value += GOOD[g].base * n;
+      delete hold[g];
+    }
+    const fine = Math.min(this.hooks.gold(), Math.round(value * 0.3));
+    this.hooks.addGold(-fine);
+    this.hooks.toast(`The customs men find your contraband and seize it all, and fine you ${fine}g.`);
+    this.hooks.save();
+  }
+
+  // ---- the chart: what the sea shows on your map --------------------------------------------------
+
+  /** Map marks: your ships, wrecks, lit lighthouses, storms (Weather Eye), contract ports. */
+  seaMarkers() {
+    const out: { x: number; z: number; kind: 'ship' | 'wreck' | 'light' | 'storm' | 'dest' | 'treasure'; label?: string }[] = [];
+    for (const r of this.records) {
+      const sh = this.ships.get(r.id);
+      if (sh && !sh.sunk) out.push({ x: sh.pos.x, z: sh.pos.z, kind: 'ship', label: r.name });
+    }
+    for (const w of this.wrecks) if (!w.searched || this.perks.starReckoning) out.push({ x: w.x, z: w.z, kind: 'wreck', label: `Wreck of the ${w.name}` });
+    for (const id of this.lit) { const l = this.lighthouses.get(id); if (l) out.push({ x: l.pos.x, z: l.pos.z, kind: 'light', label: `${this.portName(id)} light` }); }
+    if (this.perks.weatherEye) for (const c of STORMS) out.push({ x: c.x, z: c.z, kind: 'storm', label: 'Storm' });
+    for (const c of this.contracts) { const p = PORTS.find((x) => x.id === c.to); if (p) out.push({ x: p.zone.x, z: p.zone.z, kind: 'dest', label: this.contractLabel(c) }); }
+    return out;
+  }
+
+  /** Map lines: sea routes between ports you've reached (Charts), currents (Current Lore). */
+  seaLines() {
+    const out: { pts: [number, number][]; kind: 'route' | 'current' }[] = [];
+    if (this.perks.charts) {
+      const known = PORTS.filter((p) => p.id === 'portAurelle' || this.landfalls.has(p.id));
+      for (let i = 0; i < known.length; i++) for (let j = i + 1; j < known.length; j++) out.push({ pts: [[known[i].zone.x, known[i].zone.z], [known[j].zone.x, known[j].zone.z]], kind: 'route' });
+    }
+    if (this.perks.currentLore) for (const c of CURRENTS) out.push({ pts: c.pts, kind: 'current' });
+    return out;
+  }
+
   // ---- the great monsters ---------------------------------------------------------------------
 
   private trophiesTaken = new WeakSet<SeaBeast>();
@@ -1806,10 +2110,16 @@ export class Sailing {
     ]);
   }
 
-  /** Harbourmaster: your ships, fetching one home, selling one. */
-  harbourOptions(show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) {
+  /** A harbourmaster (any port): contracts, your ships, fetching one here, selling one, consorts. */
+  harbourOptions(show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void, portId = 'portAurelle') {
     const out: { label: string; run: () => void }[] = [];
-    if (this.perks.fleetSignal && !this.consortHired && !this.consort) {
+    const port = PORTS.find((p) => p.id === portId) ?? PORTS[0];
+    // The Maritime Guild's board, and anything due here.
+    for (const c of this.contracts.filter((c) => c.to === portId)) {
+      out.push({ label: `Deliver: ${this.contractLabel(c)}`, run: () => this.deliver(c, show, back) });
+    }
+    out.push({ label: 'The Maritime Guild\'s contracts', run: () => this.contractsMenu(portId, show, back) });
+    if (portId === 'portAurelle' && this.perks.fleetSignal && !this.consortHired && !this.consort) {
       out.push({
         label: 'Hire a consort ship for your next voyage — 450g',
         run: () => {
@@ -1825,41 +2135,42 @@ export class Sailing {
     out.push({
       label: 'My ships',
       run: () => show(this.records.map((r) => {
-        const s = this.ships.get(r.id);
-        const where = r.port ? PORTS.find((p) => p.id === r.port)?.name : `at anchor ${Math.round(Math.hypot((s?.pos.x ?? r.x) - PORTS[0].zone.x, (s?.pos.z ?? r.z) - PORTS[0].zone.z))} m out`;
-        return `${r.name} (${HULLS[r.hull].name}): ${where}, hull ${Math.round((s?.hullFrac ?? 1) * 100)}%`;
+        const sh = this.ships.get(r.id);
+        const at = PORTS.find((p) => p.id === r.port);
+        const where = at ? at.name : `at anchor ${(Math.hypot((sh?.pos.x ?? r.x) - port.zone.x, (sh?.pos.z ?? r.z) - port.zone.z) / 1000).toFixed(1)} km from here`;
+        const h = r.cargo ? Object.values(r.cargo).reduce((x, y) => x + y, 0) : 0;
+        return `${r.name} (${HULLS[r.hull].name}): ${where}, hull ${Math.round((sh?.hullFrac ?? 1) * 100)}%${h ? `, ${h} cargo aboard` : ''}`;
       }).join('. '), [{ label: 'Back.', run: back }]),
     });
-    const away = this.records.filter((r) => r.port !== 'portAurelle');
-    for (const r of away) {
-      const s = this.ships.get(r.id);
-      if (!s || s === this.current) continue;
-      const fee = Math.round(40 + Math.hypot(s.pos.x - PORTS[0].zone.x, s.pos.z - PORTS[0].zone.z) / 25);
+    for (const r of this.records.filter((r) => r.port !== portId)) {
+      const sh = this.ships.get(r.id);
+      if (!sh || sh === this.current) continue;
+      const fee = Math.round(40 + Math.hypot(sh.pos.x - port.zone.x, sh.pos.z - port.zone.z) / 25);
       out.push({
-        label: `Send a crew to sail the ${r.name} home — ${fee}g`,
+        label: `Send a crew to sail the ${r.name} here — ${fee}g`,
         run: () => {
           if (this.hooks.gold() < fee) return show('They won\'t row out for less.', [{ label: 'Back.', run: back }]);
           this.hooks.addGold(-fee);
-          const [x, z, yaw] = this.freeBerth(PORTS[0]);
-          s.pos.set(x, 0, z);
-          s.yaw = yaw;
-          s.place();
-          s.place();
-          r.port = 'portAurelle';
-          this.syncRecord(s);
+          const [x, z, yaw] = this.freeBerth(port);
+          sh.pos.set(x, 0, z);
+          sh.yaw = yaw;
+          sh.place();
+          sh.place();
+          r.port = port.id;
+          this.syncRecord(sh);
           this.hooks.close();
-          this.hooks.toast(`The ${r.name} is berthed in Port Aurelle.`);
+          this.hooks.toast(`The ${r.name} is berthed at ${port.name}.`);
         },
       });
     }
     for (const r of this.records) {
-      const s = this.ships.get(r.id);
-      if (!s || s === this.current) continue;
-      const value = Math.round(HULLS[r.hull].price * 0.55 * s.hullFrac);
+      const sh = this.ships.get(r.id);
+      if (!sh || sh === this.current) continue;
+      const value = Math.round(HULLS[r.hull].price * 0.55 * sh.hullFrac);
       out.push({
         label: `Sell the ${r.name} — ${value}g`,
         run: () => show(`Sell the ${r.name} for ${value}g? She won't come back.`, [
-          { label: 'Sell her.', run: () => { this.hooks.addGold(value); s.dispose(); this.ships.delete(r.id); this.records = this.records.filter((x) => x !== r); this.hooks.close(); this.hooks.save(); } },
+          { label: 'Sell her.', run: () => { this.hooks.addGold(value); sh.dispose(); this.ships.delete(r.id); this.records = this.records.filter((x) => x !== r); this.hooks.close(); this.hooks.save(); } },
           { label: 'No.', run: back },
         ]),
       });
@@ -1962,7 +2273,7 @@ export class Sailing {
 
   toJSON(): SailingSave {
     for (const s of this.ships.values()) this.syncRecord(s);
-    return { ships: this.records, rental: this.rental, crew: this.crew, xp: Math.round(this.xp), mode: this.mode, wrecks: this.wrecks, stats: this.stats, paidDay: this.paidDay, picks: this.picks, currents: [...this.knownCurrents], trophies: [...this.trophies] };
+    return { ships: this.records, rental: this.rental, crew: this.crew, xp: Math.round(this.xp), mode: this.mode, wrecks: this.wrecks, stats: this.stats, paidDay: this.paidDay, picks: this.picks, currents: [...this.knownCurrents], trophies: [...this.trophies], supply: this.supply, contracts: this.contracts, landfalls: [...this.landfalls], lit: [...this.lit] };
   }
 
   fromJSON(d: SailingSave | undefined) {
@@ -1982,11 +2293,16 @@ export class Sailing {
     this.perkCache = seaPerks(this.picks);
     this.knownCurrents = new Set(d.currents ?? []);
     this.trophies = new Set(d.trophies ?? []);
+    this.supply = d.supply ?? {};
+    this.contracts = d.contracts ?? [];
+    this.landfalls = new Set(d.landfalls ?? []);
+    this.lit = new Set(d.lit ?? []);
+    for (const id of this.lit) this.lightUp(id);
     for (const r of this.records) this.spawn(r);
     for (const w of this.wrecks) this.showWreck(w);
     if (d.rental) {
       this.rental = d.rental;
-      const ship = this.spawn({ id: 'rental', hull: d.rental.hull, name: 'Hired Boat', fit: STOCK_FIT(), hullColor: 0x6a4a2a, trim: 0x2f7f86, sections: d.rental.sections, sails: HULLS[d.rental.hull].sails, water: d.rental.water, x: d.rental.x, z: d.rental.z, yaw: d.rental.yaw, port: d.rental.port });
+      const ship = this.spawn({ id: 'rental', hull: d.rental.hull, name: 'Hired Boat', fit: STOCK_FIT(), hullColor: 0x6a4a2a, trim: 0x2f7f86, sections: d.rental.sections, sails: HULLS[d.rental.hull].sails, water: d.rental.water, x: d.rental.x, z: d.rental.z, yaw: d.rental.yaw, port: d.rental.port, cargo: d.rental.cargo });
       ship.owner = 'rental';
     }
   }
@@ -2016,6 +2332,13 @@ export class Sailing {
     this.beast?.dispose();
     this.beast = null;
     this.trophies.clear();
+    this.supply = {};
+    this.contracts = [];
+    this.landfalls.clear();
+    this.customs?.dispose();
+    this.customs = null;
+    for (const id of [...this.lit]) this.lightUp(id, false);
+    this.lit.clear();
     this.story.clear();
     this.shot = 'ball';
     this.serpent?.dispose();

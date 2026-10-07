@@ -78,6 +78,7 @@ export class Ocean {
     uHeight: { value: 1 },
     uWind: { value: new THREE.Vector3(1, 0, 0.4) },
     uDim: { value: 0 },
+    uNight: { value: 0 },
   };
 
   constructor(scene: THREE.Scene, sunDir: THREE.Vector3) {
@@ -109,7 +110,7 @@ export class Ocean {
         }`,
       fragmentShader: /* glsl */ `
         uniform sampler2D tMacro; uniform vec4 uWorld; uniform vec3 uSunDir, uSky, uHorizon, uWind;
-        uniform float uTime, uDim, uAmp, uStorm, uHeight;
+        uniform float uTime, uDim, uAmp, uStorm, uHeight, uNight;
         varying vec3 vW; varying vec3 vN; varying float vCalm; varying float vCrest;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -157,6 +158,8 @@ export class Ocean {
           water += vec3(0.03, 0.36, 0.32) * sss * 0.35;
           // Shallow water shows a little of the bright sand beneath.
           water = mix(water, vec3(0.5, 0.62, 0.5), smoothstep(1.2, 0.2, depth) * 0.25);
+          // The water's own colour is daylight in it: at night it goes dark, lit only by the sky it mirrors.
+          water *= mix(1.0, 0.14, uNight);
 
           // ---- reflection: Fresnel to the sky, a horizon haze ----
           vec3 R = reflect(-V, N);
@@ -211,6 +214,7 @@ export class Ocean {
     this.uniforms.uSky.value.copy(zenith);
     this.uniforms.uHorizon.value.copy(horizon);
     this.uniforms.uDim.value = Math.min(1, overcast * 0.7 + night * 0.6);
+    this.uniforms.uNight.value = night;
     void wind;
   }
 

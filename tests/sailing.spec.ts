@@ -445,3 +445,98 @@ test('the great monsters: each fights the ship its own way, and each yields its 
   for (const k of ['krakenInk', 'colossusShell', 'sirenPearl', 'wyrmScale', 'oldTeethJaw', 'leviathanBone']) expect(c[k], k).toBeGreaterThan(0);
   expect(res.errors).toEqual([]);
 });
+
+test('the island harbours: landfall, trade by the hold, Guild contracts, the customs cutter and the lighthouses', async ({ game }) => {
+  test.setTimeout(150_000 * SLOW);
+  const res = await game.page.evaluate(async (slow) => {
+    const g = window.__game, T = g.THREE, sl = g.sailing;
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    type Opt = { label: string; run: () => void };
+    let menu: { t: string; o: Opt[] } = { t: '', o: [] };
+    const show = (t: string, o: Opt[]) => { menu = { t, o }; };
+    const back = () => {};
+    const pick = (re: RegExp) => { const o = menu.o.find((x) => re.test(x.label)); o?.run(); return o?.label ?? null; };
+    const toasts: string[] = [];
+    const ot = g.hud.toast.bind(g.hud);
+    g.hud.toast = (m: string) => { toasts.push(m); ot(m); };
+    const out: Record<string, unknown> = {};
+    g.player.prog.addGold(100000);
+    sl.xp = 1e6;
+    const r = sl.buy('brigantine');
+    const ship = sl.ships.get(r.id);
+    // Off Azure Haven's pier head: dock, step ashore, first landfall.
+    ship.pos.set(8149, 0, -3759);
+    ship.yaw = 0;
+    ship.place();
+    sl.board(ship);
+    await wait(400);
+    ship.speed = 0;
+    const dock = sl.interactables.find((i: { label: () => string }) => /Dock at Azure Haven/.test(i.label()));
+    out.dock = dock?.label() ?? null;
+    dock?.action();
+    await wait(400);
+    out.ashore = { swimming: g.player.swimming, landfall: sl.landfalls.has('azureHaven') };
+    // Spices are cheap here, and dearer once you've bought a load.
+    sl.tradeOptions('azureHaven', show, back)[0].run();
+    const before = menu.o.find((x) => /Spices/.test(x.label))?.label;
+    pick(/Spices/);
+    pick(/Buy 10/);
+    out.hold = { ...sl.holdOf(ship) };
+    sl.tradeOptions('azureHaven', show, back)[0].run();
+    out.prices = [before, menu.o.find((x) => /Spices/.test(x.label))?.label];
+    // A Guild contract: the cargo goes into the hold here and is paid for there.
+    sl.harbourOptions(show, back, 'azureHaven').find((o: Opt) => /Maritime/.test(o.label))!.run();
+    const offer = menu.o.find((x) => /^Take it: \d+/.test(x.label));
+    out.offer = offer?.label ?? null;
+    offer?.run();
+    const c = sl.contracts[0];
+    out.contract = c ? { kind: c.kind, to: c.to, n: c.n, loaded: sl.holdOf(ship)[c.good] } : null;
+    if (c) {
+      // Fetch her to the destination and deliver.
+      sl.leaveShip(new T.Vector3(8091, 0, -3783));
+      const dest = sl.harbourOptions(show, back, c.to);
+      dest.find((o: Opt) => /Send a crew to sail/.test(o.label))?.run();
+      await wait(200);
+      const gold = g.player.prog.gold;
+      sl.harbourOptions(show, back, c.to).find((o: Opt) => /^Deliver/.test(o.label))?.run();
+      out.delivered = { paid: g.player.prog.gold - gold, open: sl.contracts.length, text: menu.t };
+    }
+    // Contraband near Port Aurelle brings out the customs cutter.
+    sl.holdOf(ship).demonGlass = 2;
+    ship.pos.set(3300, 0, 250);
+    ship.place();
+    sl.board(ship);
+    sl.customsChecked = false;
+    const rnd = Math.random;
+    Math.random = () => 0.01;
+    await wait(500);
+    Math.random = rnd;
+    out.customs = !!sl.customs;
+    if (sl.customs) {
+      ship.speed = 0;
+      sl.customs.ship.pos.copy(ship.pos).add(new T.Vector3(18, 0, 0));
+    }
+    for (let i = 0; i < 12 && sl.customs && sl.customs.state !== 'gone'; i++) await wait(300);
+    out.seized = !sl.holdOf(ship).demonGlass;
+    // Relight a lighthouse: it's charted, and it shows on the map.
+    const lh = sl.interactables.find((i: { label: () => string }) => /Relight the lighthouse of Emerald/.test(i.label()));
+    lh?.action();
+    out.lit = sl.lit.has('emeraldCove');
+    out.marks = [...new Set(sl.seaMarkers().map((m: { kind: string }) => m.kind))];
+    return out;
+  }, SLOW);
+  console.log(JSON.stringify(res));
+  expect(res.dock).toBe('Dock at Azure Haven');
+  expect(res.ashore).toEqual({ swimming: false, landfall: true });
+  expect((res.hold as Record<string, number>).spices).toBe(10);
+  const [a, b] = res.prices as string[];
+  expect(Number(/buy (\d+)g/.exec(b)![1])).toBeGreaterThan(Number(/buy (\d+)g/.exec(a)![1]));
+  expect(res.offer).toBeTruthy();
+  expect((res.contract as { loaded: number }).loaded).toBeGreaterThan(0);
+  expect((res.delivered as { paid: number; open: number }).paid).toBeGreaterThan(0);
+  expect((res.delivered as { open: number }).open).toBe(0);
+  expect(res.customs).toBe(true);
+  expect(res.seized).toBe(true);
+  expect(res.lit).toBe(true);
+  expect(res.marks).toEqual(expect.arrayContaining(['ship', 'light']));
+});

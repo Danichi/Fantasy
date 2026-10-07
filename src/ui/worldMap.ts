@@ -51,6 +51,9 @@ export class WorldMapUI {
   onToggle?: (open: boolean) => void;
   /** Quest markers (supplied by the quest system). */
   questMarkers: () => MapMarker[] = () => [];
+  /** The sea: your ships, wrecks, lit lighthouses, storms, contract ports; routes and currents. */
+  seaMarkers: () => { x: number; z: number; kind: string; label?: string }[] = () => [];
+  seaLines: () => { pts: [number, number][]; kind: 'route' | 'current' }[] = () => [];
   pins: MapMarker[] = [];
   private el: HTMLDivElement;
   private canvas: HTMLCanvasElement;
@@ -240,6 +243,40 @@ export class WorldMapUI {
     this.fogDirty = false;
   }
 
+  /** Sea routes (dashed gold), currents (dashed blue), and the sea's marks. */
+  private drawSea(g: CanvasRenderingContext2D) {
+    const toS = (x: number, z: number) => this.mapToScreen(x / 14.8 + 620, z / 14.8 + 445);
+    g.save();
+    for (const l of this.seaLines()) {
+      g.setLineDash(l.kind === 'route' ? [8, 6] : [3, 5]);
+      g.strokeStyle = l.kind === 'route' ? 'rgba(242, 214, 138, 0.8)' : 'rgba(140, 220, 255, 0.85)';
+      g.lineWidth = l.kind === 'route' ? 2 : 3;
+      g.beginPath();
+      l.pts.forEach(([x, z], i) => { const p = toS(x, z); if (i) g.lineTo(p.x, p.y); else g.moveTo(p.x, p.y); });
+      g.stroke();
+    }
+    g.setLineDash([]);
+    const STYLE: Record<string, [string, string]> = { ship: ['⛵', '#9fdcff'], wreck: ['✕', '#d8c8b0'], light: ['✸', '#ffe08a'], storm: ['☁', '#b8c0d8'], dest: ['⚓', '#ffd76a'], treasure: ['✖', '#ff6a4a'] };
+    g.textAlign = 'center';
+    for (const m of this.seaMarkers()) {
+      const p = toS(m.x, m.z);
+      const [glyph, color] = STYLE[m.kind] ?? ['•', '#fff'];
+      g.font = m.kind === 'storm' ? '22px serif' : '16px serif';
+      g.lineWidth = 3;
+      g.strokeStyle = 'rgba(0,0,0,0.75)';
+      g.strokeText(glyph, p.x, p.y + 6);
+      g.fillStyle = color;
+      g.fillText(glyph, p.x, p.y + 6);
+      if (m.label && this.zoom > 2.2) {
+        g.font = '600 11px Inter, sans-serif';
+        g.strokeText(m.label, p.x, p.y + 22);
+        g.fillStyle = '#fff4d8';
+        g.fillText(m.label, p.x, p.y + 22);
+      }
+    }
+    g.restore();
+  }
+
   /** Painted map, fog, roads, places, quests, pins, the player and a compass. */
   draw() {
     if (!this.open) return;
@@ -354,6 +391,7 @@ export class WorldMapUI {
         g.fillText(m.label, p.x, p.y + 30);
       }
     }
+    this.drawSea(g);
     if (this.obscured > 0.01) this.drawMist(g, W, H, this.obscuredText);
     // The player.
     const pp = worldToPx(this.player.x, this.player.z);
