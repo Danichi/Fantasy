@@ -19,7 +19,7 @@ import { CustomsCutter } from './seaThreats';
 import type { IslandPort } from './islandPorts';
 import { makeSeaEvent, treasureSite, Shoal, type SeaEvent, type SeaEventId, type EventCtx } from './seaEvents';
 import { Regatta } from './regatta';
-import { candidates, dayCrew, crewEffects, crewXp, ROLE_INFO, TRAIT_INFO, type CrewMember } from './crew';
+import { candidates, dayCrew, crewEffects, crewXp, wishFor, ROLE_INFO, TRAIT_INFO, type CrewMember } from './crew';
 import { Bolts } from '../../enemies/bandit';
 import { SailingHud } from '../../ui/sailingHud';
 import type { Player } from '../../player/player';
@@ -55,6 +55,9 @@ export interface ShipRecord {
   port: string | null;
   /** goods in the hold */
   cargo?: Record<string, number>;
+  /** sail and flag colours */
+  sail?: number;
+  flag?: number;
 }
 export interface WreckRecord { id: string; name: string; hull: HullId; x: number; z: number; gold: number; items: [string, number][]; searched: boolean }
 export interface Rental { hull: HullId; until: number; deposit: number; port: string; x: number; z: number; yaw: number; sections: number[]; water: number; cargo?: Record<string, number> }
@@ -82,6 +85,8 @@ export interface SailingSave {
   treasures?: Treasure[];
   regatta?: string[];
   pearls?: Record<string, number>;
+  /** a hull on the slipway */
+  commission?: { hull: HullId; colour: number; ready: number } | null;
 }
 export interface Treasure { id: string; x: number; z: number; kind: 'dig' | 'dive'; found: boolean }
 
@@ -107,6 +112,9 @@ export interface SailingHooks {
   reveal?(x: number, z: number, r: number): void;
   /** real seconds in a game day */
   dayLengthSec?(): number;
+  /** sleep until morning (the cabin bed), open the map (the chart table) */
+  sleep?(): void;
+  openMap?(): void;
   wants?(id: string): boolean;
   shake(n: number): void;
   dismount(): void;
@@ -227,6 +235,12 @@ export class Sailing {
   readonly regatta: Regatta;
   private pearlBeds: { id: string; pos: THREE.Vector3; mesh: THREE.Object3D }[] = [];
   private pearlDay: Record<string, number> = {};
+  /** a hull on the slipway, the crew's mood, damage control */
+  commission: { hull: HullId; colour: number; ready: number } | null = null;
+  private slipModel: Ship | null = null;
+  mutiny = false;
+  private moraleHour = -1;
+  private plugT = [0, 0, 0];
 
   constructor(private scene: THREE.Scene, private fx: FX, private player: Player, private input: Input, private cam: ThirdPersonCamera, private hooks: SailingHooks) {
     this.gunnery = new Gunnery(scene, fx);
@@ -304,10 +318,54 @@ export class Sailing {
         self.hooks.toast(`You prise open the oysters: ${n} pearl${n > 1 ? 's' : ''}. The bed will grow back by tomorrow.`);
       },
     });
+    // Below decks: the captain's cabin, the pumps, and plugging the holes.
+    const deckPos = new THREE.Vector3(0, -999, 0);
+    const onMyDeck = () => !!self.current && !self.atHelm && self.current.def.model !== 'skiff' && self.current.onDeck(self.player.pos);
+    const nearStern = () => onMyDeck() && self.current!.hull !== 'sloop' && self.current!.toLocal(self.player.pos).z < -self.current!.length * 0.12;
+    const worstSection = () => {
+      const s = self.current;
+      if (!s) return -1;
+      let i = -1, lo = 0.6;
+      s.sections.forEach((h, k) => { if (h / s.stats.hull < lo && self.plugT[k] <= 0) { lo = h / s.stats.hull; i = k; } });
+      return i;
+    };
+    this.interactables.push(
+      {
+        pos: deckPos, radius: 40,
+        label: () => (nearStern() ? 'Go below to the captain\'s cabin' : ''),
+        enabled: () => nearStern(),
+        action: () => self.openCabin(),
+      },
+      {
+        pos: deckPos, radius: 40,
+        label: () => (onMyDeck() && self.current!.water > 0.05 ? `Man the pumps (${Math.round(self.current!.water * 100)}% water in the hold)` : ''),
+        enabled: () => onMyDeck() && self.current!.water > 0.05,
+        action: () => {
+          const s = self.current!;
+          s.water = Math.max(0, s.water - 0.07 * s.stats.pump);
+          self.hooks.toast(s.water > 0.05 ? 'You heave at the pump handle. Keep at it!' : 'The pumps suck dry. She\'s sound.');
+        },
+      },
+      {
+        pos: deckPos, radius: 40,
+        label: () => { const k = onMyDeck() ? worstSection() : -1; return k >= 0 ? `Plug the leak in the ${SECTION_NAMES[k]}` : ''; },
+        enabled: () => onMyDeck() && worstSection() >= 0,
+        action: () => {
+          const s = self.current!;
+          const k = worstSection();
+          if (k < 0) return;
+          // A sailcloth patch and a plank nailed over: good enough to reach port.
+          s.sections[k] = Math.min(s.stats.hull * 0.7, s.sections[k] + s.stats.hull * 0.12);
+          self.plugT[k] = 4;
+          self.hooks.toast(`You nail a plank over the worst of the ${SECTION_NAMES[k]}. It'll hold till port.`);
+        },
+      },
+    );
     const prevUpdate = this.updateInteractables;
     this.updateInteractables = () => {
       prevUpdate();
       tPos.copy(nearTreasure() ? self.player.pos : new THREE.Vector3(0, -999, 0));
+      deckPos.copy(onMyDeck() ? self.player.pos : new THREE.Vector3(0, -999, 0));
       pPos.copy(nearBed() ? self.player.pos : new THREE.Vector3(0, -999, 0));
     };
   }
@@ -351,7 +409,7 @@ export class Sailing {
   // ---- ships in the world ------------------------------------------------------------------
 
   private spawn(r: ShipRecord) {
-    const ship = new Ship(this.scene, r.hull, r.fit, { name: r.name, hullColor: r.hullColor, trim: r.trim });
+    const ship = new Ship(this.scene, r.hull, r.fit, { name: r.name, hullColor: r.hullColor, trim: r.trim, sail: r.sail, flag: r.flag });
     ship.pos.set(r.x, 0, r.z);
     ship.yaw = r.yaw;
     ship.sections = r.sections.map((h) => Math.min(h, ship.stats.hull));
@@ -526,7 +584,21 @@ export class Sailing {
     if (this.customs && this.customs.state !== 'gone' && this.customs.ship.pos.distanceTo(ship.pos) < 300) this.inspect(ship);
     // The crew learn from every voyage.
     const sailed = Math.hypot(ship.pos.x - this.voyageFrom.x, ship.pos.z - this.voyageFrom.z);
-    for (const c of this.crew) if (c.status === 'aboard' && c.hire === 'permanent') crewXp(c, Math.round(15 + sailed / 40));
+    for (const c of this.crew) if (c.status === 'aboard' && c.hire === 'permanent') {
+      crewXp(c, Math.round(15 + sailed / 40));
+      // After a couple of voyages a crewman asks something of you.
+      c.voyages = (c.voyages ?? 0) + (sailed > 300 ? 1 : 0);
+      if (!c.wish && c.voyages >= 2) {
+        c.wish = wishFor(c);
+        this.hooks.toast(`${c.name} would like a word (in the captain's cabin, or ask Rigby).`);
+      }
+    }
+    this.wishProgress('visit', port.id);
+    if (this.mutiny) {
+      this.mutiny = false;
+      for (const c of this.crew) c.morale = Math.max(c.morale, 0.4);
+      this.hooks.toast('In port the crew\'s anger cools. Shore leave and a hot meal.');
+    }
     this.leaveShip(port.landing);
     if (ship.owner === 'rental' && this.rental) this.endRental(true);
   }
@@ -794,6 +866,7 @@ export class Sailing {
       this.supplyHour = hourNow;
     }
     this.updateCustoms(dt, ship);
+    this.updateSlipway();
     this.regatta.update(dt);
     this.updateEvent(dt, ship);
     // Lit lighthouses shine at night.
@@ -807,6 +880,8 @@ export class Sailing {
     }
     if (ship) {
       ship.perks = this.shipPerks();
+      for (let k = 0; k < 3; k++) this.plugT[k] = Math.max(0, this.plugT[k] - dt);
+      this.crewMood(ship);
       if (this.atHelm) this.readHelm(dt, ship);
       else if (this.lashed !== null) {
         // The lashed wheel: she holds the heading you left her on.
@@ -825,7 +900,7 @@ export class Sailing {
         ship.sailHp = Math.min(ship.stats.sails, ship.sailHp + ship.stats.sails * 0.004 * dt);
         for (let i = 0; i < 3; i++) ship.sections[i] = Math.min(ship.stats.hull, ship.sections[i] + ship.stats.hull * 0.0015 * dt);
       }
-      ship.crew = eff.hands + (this.atHelm ? 0 : 1);
+      ship.crew = this.mutiny ? 0 : eff.hands + (this.atHelm ? 0 : 1);
       ship.pumping = this.atHelm ? 0 : 0.5;
       ship.stats.speed = ship.stats.speed; // (crew's bosun applies below)
       const skill = Math.min(1, this.skill + eff.seaSense);
@@ -885,6 +960,8 @@ export class Sailing {
       } else if (storm < 0.2 && this.wasStorm) {
         this.wasStorm = false;
         this.stats.storms++;
+        this.wishProgress('storms');
+        this.cheer(0.05);
         const km = ship.driftLog.length() / 1000;
         if (km > 0.01) {
           const dirs = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
@@ -1107,6 +1184,8 @@ export class Sailing {
       this.addXp(Math.round(220 + danger * 80), 'slew a sea serpent');
       this.stats.monsters++;
       this.hooks.signal?.('serpent-slain');
+      this.wishProgress('beast');
+      this.cheer(0.1);
     };
     this.serpent = s;
     return s;
@@ -1123,6 +1202,8 @@ export class Sailing {
     if (pr.plundered) return;
     this.storyBeaten(pr, true);
     this.stats.pirates++;
+    this.wishProgress('pirates');
+    this.cheer(0.08);
     this.addXp(Math.round(80 + pr.danger * 50), 'sank a pirate');
     // Floating cargo where she went down, and her wreck to dive.
     for (let k = 0; k < 3; k++) this.dropLoot(pr.ship.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 14, 0, (Math.random() - 0.5) * 14)), Math.round(pr.bounty / 4), k === 0 ? [['healthPotion', 1]] : []);
@@ -1435,6 +1516,8 @@ export class Sailing {
       this.plunderBy = null;
       this.stats.pirates++;
       this.storyBeaten(pr, false);
+      this.wishProgress('pirates');
+      this.cheer(0.08);
       if (this.boarding === pr) {
         const c = this.current;
         this.boarding = null;
@@ -1705,6 +1788,174 @@ export class Sailing {
     this.hooks.signal?.('contract-done');
     show(pay > c.pay ? `Early! The Guild pays ${pay}g, half again for the speed.` : pay ? `On time. ${pay}g, as agreed.` : 'A full day late? The Guild pays nothing for that, Captain.', [{ label: 'Back.', run: back }]);
     this.hooks.save();
+  }
+
+  // ---- the ship as home: the cabin, the crew's mood, the slipway, paint ------------------------------
+
+  /** The captain's cabin: the bed, the trophy wall, the chart table, the log, the hold, the crew. */
+  openCabin() {
+    const ship = this.current;
+    if (!ship) return;
+    const back = () => this.openCabin();
+    const show = (t: string, o: { label: string; run: () => void }[]) => this.hooks.talk('The Captain\'s Cabin', ship.name, t, o);
+    const storm = Math.max(SEA.storm, cellStormAt(ship.pos.x, ship.pos.z));
+    const threat = this.pirates.some((p) => !p.ship.sunk && p.state !== 'flee' && p.state !== 'struck') || !!this.beast || !!this.serpent;
+    const opts: { label: string; run: () => void }[] = [];
+    opts.push({
+      label: 'Sleep in your bunk until morning',
+      run: () => {
+        if (threat) return show('Sleep? With that out there? Not likely.', [{ label: 'Back.', run: back }]);
+        if (storm > 0.3) return show('The cabin pitches like a bucket. Nobody sleeps in a storm.', [{ label: 'Back.', run: back }]);
+        if (!ship.anchored && !this.portAt(ship.pos)) return show('Drop anchor first (F at the helm), or she\'ll wander off while you snore.', [{ label: 'Back.', run: back }]);
+        this.hooks.close();
+        this.hooks.sleep?.();
+        this.hooks.toast('You sleep to the creak of timber and the slap of water, and wake rested.');
+      },
+    });
+    opts.push({
+      label: 'Look at the trophy wall',
+      run: () => {
+        const names: Record<string, string> = { kraken: 'a gourd of the Kraken\'s ink, sealed in wax', crab: 'a claw of the Crab Colossus over the door', sirens: 'a siren\'s pearl that still hums', wyrm: 'a Storm Wyrm\'s scale that crackles in the dark', oldTeeth: 'Old Teeth\'s jaw, every tooth a finger long', leviathan: 'a barb torn from the Leviathan\'s back' };
+        const t = [...this.trophies].map((id) => names[id]).filter(Boolean);
+        if (this.hooks.count('regattaPennant')) t.push('Quint\'s red-and-gold pennant');
+        if (this.stats.pirates) t.push(`${this.stats.pirates} pirate flag${this.stats.pirates > 1 ? 's' : ''}`);
+        show(t.length ? `On the wall: ${t.join('; ')}.` : 'The wall is bare. The sea will fill it, if you let it.', [{ label: 'Back.', run: back }]);
+      },
+    });
+    opts.push({ label: 'Study the chart table', run: () => { this.hooks.close(); this.hooks.openMap?.(); } });
+    opts.push({
+      label: 'Read the ship\'s log',
+      run: () => {
+        const st = this.stats;
+        const ports = [...this.landfalls].map((id) => this.portName(id));
+        show(`${(st.metres / 1000).toFixed(1)} km sailed. ${st.storms} storm${st.storms === 1 ? '' : 's'} weathered, ${st.pirates} pirate${st.pirates === 1 ? '' : 's'} beaten, ${st.monsters} monster${st.monsters === 1 ? '' : 's'} slain. Landfalls: ${ports.length ? ports.join(', ') : 'none yet'}. Contracts open: ${this.contracts.length}. Seamanship ${this.level}.`, [{ label: 'Back.', run: back }]);
+      },
+    });
+    const hold = this.holdOf(ship);
+    const goods = Object.entries(hold).filter(([, n]) => n > 0);
+    opts.push({
+      label: `The hold (${this.holdUsed(ship)}/${ship.stats.cargo})`,
+      run: () => show(goods.length ? goods.map(([g, n]) => `${n} ${GOOD[g]?.name ?? g}`).join(', ') + '.' : 'Empty, and echoing.', [
+        ...goods.map(([g, n]) => ({ label: `Jettison the ${GOOD[g]?.name ?? g} (${n})`, run: () => { delete hold[g]; this.hooks.toast(`Over the side it goes: ${n} ${GOOD[g]?.name ?? g}.`); back(); } })),
+        { label: 'Back.', run: back },
+      ]),
+    });
+    const aboard = this.crew.filter((c) => c.status === 'aboard' && c.hire === 'permanent');
+    if (aboard.length) {
+      opts.push({
+        label: `Talk to the crew (morale ${Math.round(crewEffects(this.crew, 0).morale * 100)}%${this.mutiny ? ', MUTINOUS' : ''})`,
+        run: () => show(aboard.map((c) => `${c.name} (${ROLE_INFO[c.role].name}): ${c.wish && !c.wish.done ? `"${c.wish.say}" (${c.wish.got}/${c.wish.need})` : c.morale < 0.3 ? '"I\'ve had better captains."' : c.morale > 0.8 ? '"Fair winds, Captain!"' : '"Aye, Captain."'}`).join(' '), [
+          { label: `Pay them a bonus — ${aboard.length * 20}g`, run: () => {
+            if (this.hooks.gold() < aboard.length * 20) return show('You haven\'t the coin.', [{ label: 'Back.', run: back }]);
+            this.hooks.addGold(-aboard.length * 20);
+            for (const c of aboard) c.morale = Math.min(1, c.morale + 0.35);
+            if (this.mutiny) this.hooks.toast('The crew take the silver and go back to their stations, grumbling less.');
+            this.mutiny = false;
+            back();
+          } },
+          { label: 'Back.', run: back },
+        ]),
+      });
+    }
+    show('Charts, a bunk, a lamp swinging on its chain. Your own small kingdom.', [...opts, { label: 'Back on deck.', run: () => this.hooks.close() }]);
+  }
+
+  /** A crewman's wish moves on (a port reached, a monster slain, a storm weathered, a pirate beaten). */
+  private wishProgress(kind: 'visit' | 'beast' | 'storms' | 'pirates', target?: string) {
+    for (const c of this.crew) {
+      const w = c.wish;
+      if (!w || w.done || w.kind !== kind || c.status !== 'aboard' || (w.target && w.target !== target)) continue;
+      w.got++;
+      if (w.got >= w.need) {
+        w.done = true;
+        crewXp(c, 200);
+        c.morale = 1;
+        c.wage = Math.max(1, Math.round(c.wage * 0.8));
+        this.addXp(60, 'a crewman\'s wish');
+        this.hooks.toast(`${c.name}'s wish is granted. "I'll sail with you to the end of the world, Captain." (They'll work for less, too.)`);
+      }
+    }
+  }
+
+  /** Good news lifts the crew. */
+  private cheer(n: number) {
+    for (const c of this.crew) if (c.status === 'aboard') c.morale = Math.min(1, c.morale + n);
+  }
+
+  /** Hour by hour at sea: a cook keeps spirits up; without one they sag. Too low and they mutiny. */
+  private crewMood(ship: Ship) {
+    const hour = Math.floor(this.hooks.hours());
+    if (hour === this.moraleHour) return;
+    const first = this.moraleHour < 0;
+    this.moraleHour = hour;
+    if (first || this.portAt(ship.pos)) return;
+    const aboard = this.crew.filter((c) => c.status === 'aboard');
+    if (!aboard.length) return;
+    const cook = aboard.some((c) => c.role === 'cook');
+    for (const c of aboard) c.morale = Math.max(0, Math.min(1, c.morale + (cook ? 0.02 : -0.015) + this.perks.morale * 0.2 + ship.stats.morale * 0.02));
+    const avg = aboard.reduce((a, c) => a + c.morale, 0) / aboard.length;
+    if (!this.mutiny && avg < 0.22 && aboard.filter((c) => c.hire === 'permanent').length >= 2) {
+      this.mutiny = true;
+      this.hooks.toast('The crew have downed tools! Nobody will touch a rope until they\'re paid a bonus (the cabin) or brought into port.');
+    }
+  }
+
+  /** The hull on the slipway, and her launch. */
+  private showSlip() {
+    if (this.slipModel && !this.commission) {
+      this.slipModel.dispose();
+      this.slipModel = null;
+    }
+    if (!this.commission || this.slipModel) return;
+    const [, hc, tc] = HULL_COLOURS[this.commission.colour];
+    const s = new Ship(this.scene, this.commission.hull, STOCK_FIT(), { name: 'On the slipway', hullColor: hc, trim: tc });
+    s.owner = 'npc';
+    s.sailSet = 0;
+    s.yaw = Math.PI / 2 - 0.05;
+    s.pos.set(QUAY_X - 16, 0, 48);
+    s.place();
+    s.group.position.y = heightAt(QUAY_X - 16, 48) + 1.2;
+    this.slipModel = s;
+  }
+
+  private updateSlipway() {
+    const c = this.commission;
+    if (!c || this.hooks.hours() < c.ready) return;
+    this.commission = null;
+    this.showSlip();
+    if (this.records.length >= 4) {
+      this.hooks.toast('Barrow has launched your new hull, but your fleet is full: he\'ll hold her for you. (Sell a ship and ask him.)');
+      this.commission = { ...c, ready: this.hooks.hours() + 1 };
+      return;
+    }
+    const r = this.buy(c.hull, c.colour);
+    this.hooks.toast(`Your new ${HULLS[c.hull].name}, the ${r.name}, slides down the slipway to cheers! She's waiting at a berth in Port Aurelle.`);
+    this.hooks.save();
+  }
+
+  private paintMenu(r: ShipRecord, ship: Ship, show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) {
+    const SAILS: [string, number][] = [['Plain canvas', 0xece0c4], ['Snow white', 0xf8f6f0], ['Crimson', 0xb83a2e], ['Sable black', 0x2a2a2e], ['Crown blue', 0x3a5a9a], ['Saffron', 0xe0b040], ['Sea green', 0x4a8a6a]];
+    const FLAGS: [string, number][] = [['Cresha red', 0xb8402e], ['Aurelle gold', 0xd8b060], ['Crown blue', 0x2f5f9a], ['Black', 0x141414], ['Emerald', 0x3a8a4a]];
+    const NAMES = ['Sea Lark', 'Dawn Runner', 'Gull\'s Pride', 'Salt Rose', 'Wavecutter', 'Tidewalker', 'Silver Wake', 'Kestrel', 'Morning Star', 'The Brave Herring', 'Stormpetrel', 'Lady of the Isles', 'Fortune\'s Favour', 'The Wandering Star', 'Cresha\'s Hope', 'The Sea Wolf\'s Bane'];
+    const pay = () => {
+      if (this.hooks.gold() < 60) { show('Sixty gold for the paint and the men\'s time.', [{ label: 'Back.', run: back }]); return false; }
+      this.hooks.addGold(-60);
+      return true;
+    };
+    const apply = () => {
+      ship.repaint(r.hullColor, r.trim, r.sail, r.flag);
+      ship.name = r.name;
+      this.syncRecord(ship);
+      this.hooks.save();
+      this.paintMenu(r, ship, show, back);
+    };
+    show(`The ${r.name}. What'll it be?`, [
+      { label: 'Hull paint', run: () => show('Her hull?', [...HULL_COLOURS.map(([name, hc, tc]) => ({ label: name, run: () => { if (pay()) { r.hullColor = hc; r.trim = tc; apply(); } } })), { label: 'Back.', run: () => this.paintMenu(r, ship, show, back) }]) },
+      { label: 'Sail colour', run: () => show('Her canvas?', [...SAILS.map(([name, c]) => ({ label: name, run: () => { if (pay()) { r.sail = c; apply(); } } })), { label: 'Back.', run: () => this.paintMenu(r, ship, show, back) }]) },
+      { label: 'Pennant', run: () => show('Her pennant?', [...FLAGS.map(([name, c]) => ({ label: name, run: () => { if (pay()) { r.flag = c; apply(); } } })), { label: 'Back.', run: () => this.paintMenu(r, ship, show, back) }]) },
+      { label: 'A new name on her stern', run: () => show('What shall I letter on her stern?', [...NAMES.filter((n) => !this.records.some((x) => x.name === n)).slice(0, 9).map((n) => ({ label: n, run: () => { if (pay()) { r.name = n; apply(); } } })), { label: 'Back.', run: () => this.paintMenu(r, ship, show, back) }]) },
+      { label: 'Done.', run: back },
+    ]);
   }
 
   // ---- life on the sea: events, treasure, pearl beds ----------------------------------------------
@@ -2054,6 +2305,8 @@ export class Sailing {
     this.addXp(l.xp, `beat ${BEAST_NAMES[b.id]}`);
     this.stats.monsters++;
     this.hooks.signal?.('beast-' + b.id);
+    this.wishProgress('beast');
+    this.cheer(0.1);
     this.hooks.save();
   }
 
@@ -2284,7 +2537,42 @@ export class Sailing {
         { label: 'Not today.', run: back },
       ]),
     });
+    if (!this.commission) {
+      out.push({
+        label: 'Commission a new hull (15% off, launched in a day)',
+        run: () => show('Build her on my slipway, to your order. Pay now; she\'s launched by this time tomorrow.', [
+          ...HULL_ORDER.filter((h) => h !== 'skiff').map((h) => {
+            const d = HULLS[h];
+            const cost = Math.round(d.price * 0.85);
+            return {
+              label: `${d.name} — ${cost}g${this.level < d.level ? ` (Seamanship ${d.level})` : ''}`,
+              run: () => {
+                if (this.level < d.level) return show(`Come back at Seamanship ${d.level}.`, [{ label: 'Back.', run: back }]);
+                if (this.records.length >= 4) return show('Four ships is a fleet. Sell one first.', [{ label: 'Back.', run: back }]);
+                if (this.hooks.gold() < cost) return show(`${cost} gold, Captain.`, [{ label: 'Back.', run: back }]);
+                show('And her colours?', HULL_COLOURS.map(([name], i) => ({
+                  label: name,
+                  run: () => {
+                    this.hooks.addGold(-cost);
+                    this.commission = { hull: h, colour: i, ready: this.hooks.hours() + 24 };
+                    this.showSlip();
+                    this.hooks.close();
+                    this.hooks.toast(`Barrow's men lay the keel of your ${d.name} on the slipway. She'll be launched by this time tomorrow.`);
+                    this.hooks.save();
+                  },
+                })));
+              },
+            };
+          }),
+          { label: 'Back.', run: back },
+        ]),
+      });
+    } else out.push({ label: `Your ${HULLS[this.commission.hull].name} on the slipway`, run: () => show(`She'll be launched in about ${Math.max(1, Math.ceil(this.commission!.ready - this.hooks.hours()))} hours. The planking's nearly done.`, [{ label: 'Good.', run: back }]) });
     if (here.length) {
+      out.push({
+        label: 'Paint, canvas and colours — 60g',
+        run: () => show('Which ship?', [...here.map(({ r, ship }) => ({ label: r.name, run: () => this.paintMenu(r, ship!, show, back) })), { label: 'Back.', run: back }]),
+      });
       out.push({
         label: 'Upgrade a ship',
         run: () => show('Which ship?', [...here.map(({ r, ship }) => ({ label: `${r.name} (${HULLS[r.hull].name})`, run: () => this.upgradeMenu(r, ship!, show, back) })), { label: 'Back.', run: back }]),
@@ -2464,7 +2752,7 @@ export class Sailing {
         label: 'My crew',
         run: () => {
           if (!this.crew.length) return show('You haven\'t got one, captain.', [{ label: 'Back.', run: back }]);
-          show(this.crew.map((c) => `${c.name}, ${ROLE_INFO[c.role].name} ${c.level} (morale ${Math.round(c.morale * 100)}%${c.hire === 'voyage' ? ', this voyage only' : `, ${c.wage}g/day`})`).join('. '), [
+          show(this.crew.map((c) => `${c.name}, ${ROLE_INFO[c.role].name} ${c.level} (morale ${Math.round(c.morale * 100)}%${c.hire === 'voyage' ? ', this voyage only' : `, ${c.wage}g/day`})${c.wish && !c.wish.done ? `: "${c.wish.say}" (${c.wish.got}/${c.wish.need})` : ''}`).join(' '), [
             ...this.crew.filter((c) => c.hire === 'permanent').map((c) => ({ label: `Let ${c.name} go`, run: () => { this.crew = this.crew.filter((x) => x !== c); this.hooks.toast(`${c.name} shoulders their sea-bag and goes.`); back(); } })),
             { label: 'Back.', run: back },
           ]);
@@ -2511,7 +2799,7 @@ export class Sailing {
 
   toJSON(): SailingSave {
     for (const s of this.ships.values()) this.syncRecord(s);
-    return { ships: this.records, rental: this.rental, crew: this.crew, xp: Math.round(this.xp), mode: this.mode, wrecks: this.wrecks, stats: this.stats, paidDay: this.paidDay, picks: this.picks, currents: [...this.knownCurrents], trophies: [...this.trophies], supply: this.supply, contracts: this.contracts, landfalls: [...this.landfalls], lit: [...this.lit], treasures: this.treasures, regatta: this.regatta.toJSON(), pearls: this.pearlDay };
+    return { ships: this.records, rental: this.rental, crew: this.crew, xp: Math.round(this.xp), mode: this.mode, wrecks: this.wrecks, stats: this.stats, paidDay: this.paidDay, picks: this.picks, currents: [...this.knownCurrents], trophies: [...this.trophies], supply: this.supply, contracts: this.contracts, landfalls: [...this.landfalls], lit: [...this.lit], treasures: this.treasures, regatta: this.regatta.toJSON(), pearls: this.pearlDay, commission: this.commission };
   }
 
   fromJSON(d: SailingSave | undefined) {
@@ -2541,6 +2829,8 @@ export class Sailing {
     for (const t of this.treasures) this.showTreasure(t);
     this.regatta.fromJSON(d.regatta);
     this.pearlDay = d.pearls ?? {};
+    this.commission = d.commission ?? null;
+    this.showSlip();
     for (const r of this.records) this.spawn(r);
     for (const w of this.wrecks) this.showWreck(w);
     if (d.rental) {
@@ -2588,6 +2878,9 @@ export class Sailing {
     this.treasures = [];
     this.regatta.fromJSON(undefined);
     this.pearlDay = {};
+    this.commission = null;
+    this.showSlip();
+    this.mutiny = false;
     this.story.clear();
     this.shot = 'ball';
     this.serpent?.dispose();

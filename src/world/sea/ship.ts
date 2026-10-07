@@ -167,7 +167,7 @@ export class Ship {
   private lightningT = 8;
   private broachT = 0;
 
-  constructor(private scene: THREE.Scene, readonly hull: HullId, public fit: Fit, opts: { name: string; hullColor?: number; trim?: number } = { name: 'Boat' }) {
+  constructor(private scene: THREE.Scene, readonly hull: HullId, public fit: Fit, opts: { name: string; hullColor?: number; trim?: number; sail?: number; flag?: number } = { name: 'Boat' }) {
     this.def = HULLS[hull];
     this.stats = shipStats(hull, fit);
     this.name = opts.name;
@@ -178,7 +178,7 @@ export class Ship {
       this.model = s.group;
       this.sails = s.sails;
     } else {
-      const s = buildShip(this.def.model, opts.hullColor ?? 0x5a3a24, opts.trim ?? 0xc9a25a, { rigged: true });
+      const s = buildShip(this.def.model, opts.hullColor ?? 0x5a3a24, opts.trim ?? 0xc9a25a, { rigged: true, sail: opts.sail, flag: opts.flag });
       this.model = s.group;
       this.sails = s.sails;
     }
@@ -191,6 +191,25 @@ export class Ship {
   get beam() { return this.def.beam; }
   get maxHull() { return this.stats.hull; }
   get hullFrac() { return (this.sections[0] + this.sections[1] + this.sections[2]) / (3 * this.stats.hull); }
+
+  /** New paint, canvas and colours: the model is rebuilt. */
+  repaint(hullColor: number, trim: number, sail?: number, flag?: number) {
+    this.group.remove(this.model);
+    this.model.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); });
+    if (this.def.model === 'skiff') {
+      const s = buildSkiff(hullColor);
+      this.model = s.group;
+      this.sails = s.sails;
+    } else {
+      const s = buildShip(this.def.model, hullColor, trim, { rigged: true, sail, flag });
+      this.model = s.group;
+      this.sails = s.sails;
+    }
+    this.group.add(this.model);
+    this.cannons = [];
+    this.buildCannons();
+    this.place();
+  }
 
   /** Re-fit (shipyard upgrades): new numbers, new guns. */
   refit(fit: Fit) {

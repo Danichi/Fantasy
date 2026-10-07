@@ -114,7 +114,7 @@ const M4 = (x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1)
   new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz));
 
 /** A docked ship of one of the Grand Ocean's six types. */
-export function buildShip(kind: ShipKind, hullColor = 0x5a3a24, trim = 0xc9a25a, opts: { rigged?: boolean } = {}) {
+export function buildShip(kind: ShipKind, hullColor = 0x5a3a24, trim = 0xc9a25a, opts: { rigged?: boolean; sail?: number; flag?: number } = {}) {
   const g = new THREE.Group();
   const L = { fishing: 7, sloop: 12, merchant: 18, galleon: 26, naval: 22, expedition: 16 }[kind];
   const B = L * (kind === 'fishing' ? 0.34 : 0.3), D = L * 0.16;
@@ -261,8 +261,8 @@ export function buildShip(kind: ShipKind, hullColor = 0x5a3a24, trim = 0xc9a25a,
   // ---- masts, yards, sails, pennants, rigging ----------------------------------------
   const masts = kind === 'fishing' ? [0.12] : kind === 'sloop' ? [0.08] : kind === 'merchant' || kind === 'expedition' ? [-0.16, 0.2] : [-0.26, 0.04, 0.3];
   const H = L * (kind === 'fishing' ? 0.7 : kind === 'sloop' ? 1.05 : 0.95);
-  const sailC = kind === 'naval' ? new THREE.Color(0xf4f0e6) : kind === 'expedition' ? new THREE.Color(0xd8c8a0) : new THREE.Color(0xece0c4);
-  const flagC = kind === 'naval' ? 0x2f5f9a : kind === 'expedition' ? 0x8a3f22 : 0xb8402e;
+  const sailC = opts.sail !== undefined ? new THREE.Color(opts.sail) : kind === 'naval' ? new THREE.Color(0xf4f0e6) : kind === 'expedition' ? new THREE.Color(0xd8c8a0) : new THREE.Color(0xece0c4);
+  const flagC = opts.flag ?? (kind === 'naval' ? 0x2f5f9a : kind === 'expedition' ? 0x8a3f22 : 0xb8402e);
   /** A billowing sail: a segmented sheet pushed forward in the middle, `stripe` across. */
   const sail = (w: number, h: number, m: THREE.Matrix4, belly: number, taper = 0, stripe?: THREE.Color) => {
     const geo = new THREE.PlaneGeometry(w, h, 8, 8);

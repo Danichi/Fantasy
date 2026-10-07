@@ -704,6 +704,14 @@ async function boot() {
     signal: (id) => { quests.signal(id); },
     reveal: (x, z, rr) => discovery.revealAround(x, z, rr),
     dayLengthSec: () => time.dayLengthMin * 60,
+    sleep: () => {
+      time.skipTo(7);
+      player.hp = player.maxHp;
+      player.mana = player.maxMana;
+      player.stamina = player.maxStamina;
+      save();
+    },
+    openMap: () => book.show('map'),
     wants: (id) => quests.wants(id),
     dismount: () => { if (player.mounted) horses.dismount(); },
   });

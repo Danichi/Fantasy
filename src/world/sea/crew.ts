@@ -45,6 +45,9 @@ export interface CrewMember {
   status: 'aboard' | 'ashore' | 'overboard' | 'lost';
   /** where a candidate waits to be met (harbour, tavern) */
   haunt?: 'harbour' | 'tavern' | 'wharf';
+  /** voyages sailed with you, and the wish they make after a couple */
+  voyages?: number;
+  wish?: CrewWish;
 }
 
 const FIRST = ['Anselm', 'Brigid', 'Corwin', 'Dagny', 'Ewan', 'Freya', 'Gulliver', 'Hild', 'Ishmael', 'Jory', 'Kestrel', 'Lowen', 'Morwenna', 'Nils', 'Oona', 'Piran', 'Rhoswen', 'Silas', 'Tegan', 'Ulf', 'Wenna', 'Yorick'];
@@ -123,4 +126,33 @@ export function crewXp(c: CrewMember, xp: number) {
     c.xp -= c.level * 100;
     c.level++;
   }
+}
+
+// ---- a crewman's wish -------------------------------------------------------------------------
+
+/** After a couple of voyages, a crewman asks something of you; do it and they're yours for life. */
+export interface CrewWish {
+  kind: 'visit' | 'beast' | 'storms' | 'pirates';
+  /** a port id (visit) */
+  target?: string;
+  need: number;
+  got: number;
+  done: boolean;
+  say: string;
+}
+
+const WISH_PORTS: [string, string][] = [['azureHaven', 'Azure Haven'], ['emeraldCove', 'Emerald Cove'], ['sunkenSpire', 'Sunken Spire'], ['wreckersRest', 'Wrecker\'s Rest']];
+
+/** The wish a crewman will make (steady for a given crewman). */
+export function wishFor(c: CrewMember): CrewWish {
+  let h = 0;
+  for (const ch of c.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const k = h % 4;
+  if (k === 0) {
+    const [id, name] = WISH_PORTS[(h >> 3) % WISH_PORTS.length];
+    return { kind: 'visit', target: id, need: 1, got: 0, done: false, say: `My sister keeps a tavern in ${name}. I haven't seen her in eleven years. Could we put in there, Captain?` };
+  }
+  if (k === 1) return { kind: 'beast', need: 1, got: 0, done: false, say: 'Something out of the deep took my brother\'s boat, years back. I want to see one of those monsters dead before I die.' };
+  if (k === 2) return { kind: 'storms', need: 3, got: 0, done: false, say: 'My da said you\'re not a real sailor till you\'ve come through three storms. I want to be a real sailor, Captain.' };
+  return { kind: 'pirates', need: 3, got: 0, done: false, say: 'Pirates burned my village when I was a girl. Sink three of the devils for me and I\'ll follow you anywhere.' };
 }

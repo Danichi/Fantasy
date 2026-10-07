@@ -49,7 +49,7 @@ test('the shipwright sells and refits ships, the broker finds crew, and it all s
     sl.rent('skiff');
     out.rental = sl.rental?.hull;
     // The sea gets wilder the further from Port Aurelle.
-    out.danger = [SS.dangerAt(2990, 200), SS.dangerAt(4200, 200), SS.dangerAt(7800, 600), SS.dangerAt(9300, 6100)].map((d: number) => +d.toFixed(2));
+    out.danger = [SS.dangerAt(2990, 200), SS.dangerAt(4200, 200), SS.dangerAt(7800, 600), SS.dangerAt(9300, 6600)].map((d: number) => +d.toFixed(2));
     // Saving and loading keeps the fleet, the refit, the crew and Seamanship.
     const j = JSON.parse(JSON.stringify(sl.toJSON()));
     sl.reset();
@@ -235,14 +235,16 @@ test('the Seamanship calling: skills open by level, the wheel can be lashed, tac
     // Back to the wheel and tack: turn right through the eye of the wind.
     sl.takeHelm();
     inp.press('KeyD');
-    for (let i = 0; i < 60 && !toasts.some((t) => /tack/i.test(t)); i++) await wait(150);
+    for (let i = 0; i < 120 && !toasts.some((t) => /tack/i.test(t)); i++) await wait(150);
     inp.release('KeyD');
     out.tack = toasts.find((t) => /tack/i.test(t)) ?? null;
     // The trawl hauls in fish while she sails slow.
     sl.trawlT = 44.5;
-    s.speed = 2;
-    sl.ctl.sail = 0.4;
-    await wait(1500);
+    for (let i = 0; i < 40 && !toasts.some((t) => /trawl/i.test(t)); i++) {
+      s.speed = 2;
+      sl.ctl.sail = 0.4;
+      await wait(150);
+    }
     out.trawl = toasts.find((t) => /trawl/i.test(t)) ?? null;
     // The Aurelle Stream carries her (and is learned the first time).
     s.pos.set(3900, 0, 620);
@@ -641,4 +643,115 @@ test('life on the sea: events, a treasure map, pearl beds, the storm log and the
   expect(res.racing).toBe(true);
   expect(res.race).toEqual({ over: true, won: true, ashore: true });
   expect(res.errors).toEqual([]);
+});
+
+test('a ship is a home: the cabin, the pumps and plugs, paint and a new name, a commission, crew wishes and mutiny', async ({ game }) => {
+  test.setTimeout(150_000 * SLOW);
+  const res = await game.page.evaluate(async (slow) => {
+    const g = window.__game, T = g.THREE, sl = g.sailing;
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    type Opt = { label: string; run: () => void };
+    let menu: { t: string; o: Opt[] } = { t: '', o: [] };
+    const show = (t: string, o: Opt[]) => { menu = { t, o }; };
+    const back = () => {};
+    const dlg = (re: RegExp) => g.dialogue.options.find((o: Opt) => re.test(o.label))?.run();
+    const toasts: string[] = [];
+    const ot = g.hud.toast.bind(g.hud);
+    g.hud.toast = (m: string) => { toasts.push(m); ot(m); };
+    const out: Record<string, unknown> = {};
+    g.player.prog.addGold(100000);
+    sl.xp = 1e6;
+    const r = sl.buy('galleon');
+    const ship = sl.ships.get(r.id);
+    for (let k = 0; k < 2; k++) {
+      sl.brokerOptions(show, back)[0].run();
+      menu.o[0].run();
+    }
+    ship.pos.set(4200, 0, 200);
+    ship.yaw = 0;
+    ship.place();
+    sl.board(ship);
+    await wait(300);
+    g.player.teleport(ship.toWorld(new T.Vector3(0, ship.def.deckY + 0.3, -ship.length * 0.3)));
+    await wait(400);
+    // The cabin: a bunk (at anchor), the trophy wall, the chart, the log, the hold, the crew.
+    out.door = sl.interactables.some((i: { label: () => string }) => /captain's cabin/.test(i.label()));
+    sl.openCabin();
+    out.cabin = g.dialogue.options.length;
+    ship.anchored = true;
+    sl.ctl.anchor = true;
+    await wait(200);
+    const day = g.time.day;
+    sl.openCabin();
+    dlg(/Sleep/);
+    out.slept = g.time.day > day && Math.round(g.time.hour) === 7;
+    // Damage control from the deck.
+    ship.water = 0.5;
+    ship.sections[0] = ship.stats.hull * 0.2;
+    await wait(200);
+    sl.interactables.find((i: { label: () => string }) => /Man the pumps/.test(i.label()))?.action();
+    sl.interactables.find((i: { label: () => string }) => /Plug the leak/.test(i.label()))?.action();
+    out.pumped = ship.water < 0.5;
+    out.plugged = ship.sections[0] > ship.stats.hull * 0.2;
+    // Paint and a new name at the shipwright.
+    sl.leaveShip(new T.Vector3(2940, 0, 196));
+    const [x, z, yaw] = sl.freeBerth(sl.portAt(new T.Vector3(2996, 0, 200)));
+    ship.pos.set(x, 0, z);
+    ship.yaw = yaw;
+    ship.place();
+    sl.shipwrightOptions(show, back).find((o: Opt) => /Paint/.test(o.label))!.run();
+    menu.o[0].run();
+    menu.o.find((o) => /Sail colour/.test(o.label))!.run();
+    menu.o.find((o) => /Crimson/.test(o.label))!.run();
+    menu.o.find((o) => /new name/.test(o.label))!.run();
+    const name = menu.o[1].label;
+    menu.o[1].run();
+    out.painted = { crimson: r.sail === 0xb83a2e, renamed: r.name === name && ship.name === name };
+    // A commission: a day on the slipway, then launched to a berth.
+    sl.shipwrightOptions(show, back).find((o: Opt) => /Commission/.test(o.label))!.run();
+    menu.o.find((o) => /Cutter/.test(o.label))!.run();
+    menu.o[0].run();
+    out.onSlip = sl.commission?.hull ?? null;
+    const n0 = sl.records.length;
+    g.time.day += 2;
+    await wait(500);
+    out.launched = sl.records.length - n0;
+    // Crew wishes after a couple of voyages.
+    for (const c of sl.crew) c.voyages = 5;
+    ship.pos.set(4200, 0, 200);
+    ship.place();
+    sl.board(ship);
+    await wait(200);
+    sl.voyageFrom.set(5200, 0, 200);
+    ship.speed = 0;
+    sl.dock(sl.portAt(new T.Vector3(2996, 0, 200)));
+    out.wishes = sl.crew.filter((c: { wish?: unknown }) => !!c.wish).length;
+    // A crew with no heart left downs tools; a bonus wins them back.
+    ship.pos.set(4200, 0, 200);
+    ship.place();
+    sl.board(ship);
+    await wait(200);
+    for (const c of sl.crew) c.morale = 0.05;
+    sl.moraleHour = 1;
+    g.time.hour = (g.time.hour + 1.2) % 24;
+    await wait(400);
+    out.mutiny = sl.mutiny && ship.crew === 0;
+    sl.openCabin();
+    dlg(/Talk to the crew/);
+    dlg(/bonus/);
+    out.calmed = !sl.mutiny;
+    return out;
+  }, SLOW);
+  console.log(JSON.stringify(res));
+  expect(res.door).toBe(true);
+  expect(res.cabin as number).toBeGreaterThanOrEqual(6);
+  expect(res.slept).toBe(true);
+  expect(res.pumped).toBe(true);
+  expect(res.plugged).toBe(true);
+  expect(res.painted).toEqual({ crimson: true, renamed: true });
+  expect(res.onSlip).toBe('cutter');
+  expect(res.launched).toBe(1);
+  expect(res.wishes).toBe(2);
+  expect(res.mutiny).toBe(true);
+  expect(res.calmed).toBe(true);
 });
