@@ -317,6 +317,20 @@ export const ITEMS: Record<string, ItemDef> = {
       return g;
     },
   },
+  blackTideColours: {
+    id: 'blackTideColours', name: 'The Black Tide\'s Colours', kind: 'key', rarity: 'rare',
+    desc: 'A black flag with a white wave across it, torn from Rook Calloway\'s mast. Harbourmaster Tallow will want to see it.', stats: {},
+    build: () => {
+      const g = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.6, 6), new THREE.MeshStandardMaterial({ color: 0x5a3a22 }));
+      const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.26), new THREE.MeshStandardMaterial({ color: 0x141416, side: THREE.DoubleSide }));
+      flag.position.set(0.2, 0.17, 0);
+      const wave = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.05), new THREE.MeshStandardMaterial({ color: 0xe8e8e8, side: THREE.DoubleSide }));
+      wave.position.set(0.2, 0.17, 0.002);
+      g.add(pole, flag, wave);
+      return g;
+    },
+  },
   serpentScale: {
     id: 'serpentScale', name: 'Sea Serpent Scale', kind: 'material', rarity: 'rare',
     desc: 'A plate of scale the size of a shield, green-black and hard as bronze. The Aurelle Shipwrights make hull plating of it.', stats: {},

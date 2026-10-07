@@ -113,7 +113,7 @@ export const PORT_QUESTS: QuestDef[] = [
     summary: 'Old Nell swears a sea serpent took three fishing boats off the Shattered Isles. The harbourmaster says it is nonsense.',
     offer: 'You hear what took the Gull and the Brightwater? Serpent. Long as a street, eyes like lanterns. Harbourmaster Tallow says it was a squall. Ask him yourself — and watch his face when you do.',
     stages: [{ note: 'Ask Harbourmaster Tallow about the lost boats.', objectives: [{ type: 'talk', npc: 'tallow', text: 'Ask Harbourmaster Tallow about the serpent', reply: 'What really happened to the Gull and the Brightwater?', say: '…A squall. That\'s what the report says, and that\'s what you\'ll say too, if anyone asks. The Admiralty is sending a naval ship to look. When they\'re back — maybe we\'ll talk.' }] }],
-    done: 'The harbourmaster is hiding something about the Shattered Isles. (The Grand Ocean opens in a later chapter.)',
+    done: 'The harbourmaster is hiding something about the Shattered Isles. Ask him again when you\'ve a ship of your own.',
     rewards: { gold: 20, xp: 80 },
   },
   {

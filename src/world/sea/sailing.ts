@@ -9,8 +9,9 @@ import { HULLS, HULL_ORDER, UPGRADES, SLOTS, STOCK_FIT, type HullId, type Fit } 
 import { SEA, dangerAt, DANGER_NAMES, waveHeight, cellStormAt, STORMS, STORM_WAVES, BASE_WAVES, CURRENTS, windAt, type StormCell } from './seaState';
 import { seaPerks, canBuy, type SeaPerks } from './seamanship';
 import { FISH } from '../fishing';
-import { Gunnery } from './gunnery';
-import { PirateShip, SeaSerpent, Shark } from './seaThreats';
+import { Gunnery, SHOT_NAMES, type ShotKind, type DeckFoe } from './gunnery';
+import { PirateShip, SeaSerpent, Shark, Consort, type PirateOpts } from './seaThreats';
+import { BLACK_TIDE_SCOUT, BLACK_TIDE_FLAG } from '../../quests/seaQuests';
 import { candidates, dayCrew, crewEffects, crewXp, ROLE_INFO, TRAIT_INFO, type CrewMember } from './crew';
 import { Bolts } from '../../enemies/bandit';
 import { SailingHud } from '../../ui/sailingHud';
@@ -79,6 +80,9 @@ export interface SailingHooks {
   hours(): number;
   /** where the player's map pin is, if they've set one */
   waypoint?(): { x: number; z: number } | null;
+  /** quest signals (quests.signal / quests.wants) */
+  signal?(id: string): void;
+  wants?(id: string): boolean;
   shake(n: number): void;
   dismount(): void;
 }
@@ -161,16 +165,53 @@ export class Sailing {
   private fovWas = 62;
   private tackSaid = 0;
   private surfSaid = false;
+  /** the shot in the guns, the last thunder broadside, the swivel's reload, a ram's cooldown */
+  shot: ShotKind = 'ball';
+  private thunderAt = -999;
+  private swivelT = 0;
+  private ramT = 0;
+  private rakeSaid = 0;
+  /** the pirate ship you've boarded (you're fighting on, or have taken, her deck) */
+  boarding: PirateShip | null = null;
+  /** a hired consort (Fleet Signal) and whether one sails with your next voyage */
+  consort: Consort | null = null;
+  consortHired = false;
+  /** quest stages that put ships and monsters on the sea (stage hooks) */
+  readonly story = new Set<string>();
 
   constructor(private scene: THREE.Scene, private fx: FX, private player: Player, private input: Input, private cam: ThirdPersonCamera, private hooks: SailingHooks) {
     this.gunnery = new Gunnery(scene, fx);
     this.bolts = new Bolts(scene);
-    this.gunnery.onShipHit = (ship, section, dmg, by) => {
+    this.gunnery.onShipHit = (ship, section, dmg, by, kind) => {
       if (ship === this.current) {
         hooks.shake(0.25);
-        if (dmg > 20 && Math.random() < 0.3) this.hooks.toast(`A ball smashes into the ${SECTION_NAMES[section]}!`);
+        if (kind === 'fire') this.hooks.toast('Fire pots! She\'s burning! Your crew run for the buckets (E on deck to help).');
+        else if (kind === 'chain' && ship.sailHp < ship.stats.sails * 0.3 && ship.mastCap === 1) {
+          ship.mastCap = 0.6;
+          this.hooks.toast('Chain shot brings down the topmast! She can\'t carry full sail until the shipwright sees to it.');
+        } else if (dmg > 20 && Math.random() < 0.3) this.hooks.toast(`A ball smashes into the ${SECTION_NAMES[section]}!`);
       }
       void by;
+    };
+    this.gunnery.onCrewHit = (ship, n, by) => {
+      const pr = this.pirates.find((p) => p.ship === ship);
+      if (pr) pr.loseCrew(n);
+      else if (ship === this.current) for (const c of this.crew) if (c.status === 'aboard') c.morale = Math.max(0, c.morale - 0.02 * n);
+      void by;
+    };
+    this.gunnery.onRake = (ship, by) => {
+      if (by === this.current && performance.now() - this.rakeSaid > 8000) {
+        this.rakeSaid = performance.now();
+        this.hooks.toast(`Raked her! The shot runs the length of the ${ship.name}.`);
+        this.addXp(10);
+      }
+    };
+    this.gunnery.onTether = (t, ev) => {
+      if (t.ship !== this.current) return;
+      if (ev === 'hold') {
+        t.tow = this.perks.tow;
+        this.hooks.toast('The harpoon bites and the line goes taut! Hold right click to reel it in; O cuts the line.');
+      } else this.hooks.toast('The line parts with a crack like a pistol shot!');
     };
     this.buildInteractables();
   }
@@ -303,6 +344,14 @@ export class Sailing {
     this.voyageFrom.copy(ship.pos);
     this.wavebroken = false;
     ship.perks = this.shipPerks();
+    // A hired consort joins you off the quarter.
+    if (this.consortHired && !this.consort && ship.def.model !== 'skiff') {
+      const back = new THREE.Vector3(-Math.sin(ship.yaw), 0, -Math.cos(ship.yaw));
+      const at = ship.pos.clone().addScaledVector(back, 50);
+      this.consort = new Consort(this.scene, at, ship.yaw, 'HMS Steadfast');
+      this.consortHired = false;
+      this.hooks.toast('Your consort, the Steadfast, falls in astern.');
+    }
   }
   private voyageFrom = new THREE.Vector3();
 
@@ -336,6 +385,12 @@ export class Sailing {
     ship.anchored = true;
     this.ctl = { ...NO_CONTROL(), anchor: true };
     this.lashed = null;
+    this.endBoarding();
+    if (this.consort) {
+      this.consort.dispose();
+      this.consort = null;
+      this.hooks.toast('Your consort fires a gun in salute and makes for port.');
+    }
     ship.windOverride = null;
     ship.lean = 0;
     ship.disableDeck();
@@ -362,6 +417,7 @@ export class Sailing {
     const rec = this.records.find((r) => this.ships.get(r.id) === ship);
     if (rec) rec.port = port.id;
     this.addXp(10, 'docked');
+    this.hooks.signal?.('sea-dock');
     // The crew learn from every voyage.
     const sailed = Math.hypot(ship.pos.x - this.voyageFrom.x, ship.pos.z - this.voyageFrom.z);
     for (const c of this.crew) if (c.status === 'aboard' && c.hire === 'permanent') crewXp(c, Math.round(15 + sailed / 40));
@@ -445,6 +501,9 @@ export class Sailing {
     const lootPos = new THREE.Vector3(0, -999, 0);
     const plunderPos = new THREE.Vector3(0, -999, 0);
     const rescuePos = new THREE.Vector3(0, -999, 0);
+    const boardEnemyPos = new THREE.Vector3(0, -999, 0);
+    const returnPos = new THREE.Vector3(0, -999, 0);
+    const firePos = new THREE.Vector3(0, -999, 0);
     this.interactables.push(
       {
         pos: boardPos, radius: 7,
@@ -519,20 +578,32 @@ export class Sailing {
       },
       {
         pos: plunderPos, radius: 18,
-        label: () => (self.plunderBy ? `Plunder the ${self.plunderBy.ship.name}` : ''),
+        label: () => (self.plunderBy ? `Decide the fate of the ${self.plunderBy.ship.name}` : ''),
         enabled: () => !!self.plunderBy,
+        action: () => { if (self.plunderBy) self.parley(self.plunderBy); },
+      },
+      {
+        pos: boardEnemyPos, radius: 16,
+        label: () => { const pr = self.boardable(); return pr ? `Grapple and board the ${pr.ship.name}!` : ''; },
+        enabled: () => !!self.boardable(),
+        action: () => { const pr = self.boardable(); if (pr) self.boardEnemy(pr); },
+      },
+      {
+        pos: returnPos, radius: 6,
+        label: () => (self.boarding && self.current && !self.current.onDeck(self.player.pos) && self.boarding.ship.onDeck(self.player.pos) ? `Back aboard the ${self.current.name}` : ''),
+        enabled: () => !!self.boarding && !!self.current && self.boarding.ship.onDeck(self.player.pos),
+        action: () => { const c = self.current; if (c) self.player.teleport(c.toWorld(new THREE.Vector3(0, c.def.deckY + 0.3, 0))); },
+      },
+      {
+        pos: firePos, radius: 30,
+        label: () => (self.current && self.current.fire > 0 && self.current.onDeck(self.player.pos) ? 'Fight the fire!' : ''),
+        enabled: () => !!self.current && self.current.fire > 0 && self.current.onDeck(self.player.pos),
         action: () => {
-          const pr = self.plunderBy;
-          if (!pr) return;
-          pr.plundered = true;
-          self.hooks.addGold(pr.bounty);
-          self.hooks.give('healthPotion', 2);
-          if (pr.danger > 2.5) self.hooks.give('greaterHealthPotion', 1);
-          self.hooks.toast(`The ${pr.ship.name} strikes her colours. You take ${pr.bounty} gold and her stores; her crew row for the horizon.`);
-          self.addXp(Math.round(60 + pr.danger * 40), 'a pirate taken');
-          self.stats.pirates++;
-          pr.ship.sunk = true; // scuttled
-          self.plunderBy = null;
+          const c = self.current;
+          if (!c) return;
+          c.fire = Math.max(0, c.fire - 0.3);
+          self.fx.alpha.spawn({ pos: self.player.pos.clone().setY(self.player.pos.y + 1), spread: 1.5, count: 12, life: [0.6, 1.2], size: [0.4, 1.2], color: 0xd8d4cc, alpha: 0.6, upBias: 0.4 });
+          self.hooks.toast(c.fire > 0 ? 'A bucket on the flames: keep at it!' : 'The fire\'s out.');
         },
       },
       {
@@ -561,6 +632,9 @@ export class Sailing {
       lootPos.copy(self.nearLoot() ? p.pos : new THREE.Vector3(0, -999, 0));
       plunderPos.copy(self.plunderBy ? p.pos : new THREE.Vector3(0, -999, 0));
       rescuePos.copy(self.player.swimming && self.lastShipNear() ? p.pos : new THREE.Vector3(0, -999, 0));
+      boardEnemyPos.copy(self.boardable() ? p.pos : new THREE.Vector3(0, -999, 0));
+      returnPos.copy(self.boarding ? p.pos : new THREE.Vector3(0, -999, 0));
+      firePos.copy(self.current && self.current.fire > 0 ? p.pos : new THREE.Vector3(0, -999, 0));
     };
   }
   private updateInteractables = () => {};
@@ -646,6 +720,30 @@ export class Sailing {
       else if (ship.onDeck(this.player.pos)) {
         // Whoever stands on the deck moves with it, exactly.
         this.player.carry(ship.carry(this.player.pos), ship.carryYaw());
+      } else if (this.boarding && this.boarding.ship.onDeck(this.player.pos)) {
+        // Fighting on the enemy's deck: it carries you just the same.
+        const s2 = this.boarding.ship;
+        this.player.carry(s2.carry(this.player.pos), s2.carryYaw());
+      }
+      // Your crew fight the fire, and the ram.
+      if (ship.fire > 0) ship.fire = Math.max(0, ship.fire - dt * 0.012 * Math.min(6, eff.hands));
+      this.ramT = Math.max(0, this.ramT - dt);
+      if (Math.abs(ship.speed) > 3 && this.ramT <= 0) {
+        const bow = ship.toWorld(new THREE.Vector3(0, ship.def.deckY * 0.3, ship.length * 0.5));
+        for (const pr of this.pirates) {
+          if (pr.ship.sunk || !pr.ship.contains(bow, 0.6)) continue;
+          // Ramming: her bow stove into the pirate's side; it costs you some planking too.
+          const hit = Math.abs(ship.speed) * ship.length * 3.2;
+          const sec = pr.ship.sectionOf(pr.ship.toLocal(bow));
+          pr.ship.damage(sec, hit);
+          pr.loseCrew(2);
+          ship.damage(0, hit * (ship.fit.hull >= 2 ? 0.15 : 0.3));
+          ship.speed *= 0.3;
+          this.ramT = 3;
+          this.hooks.shake(0.9);
+          this.hooks.toast(`You ram the ${pr.ship.name} in the ${SECTION_NAMES[sec]}!`);
+          this.addXp(15);
+        }
       }
       // Seamanship for sailing well: distance on a good trim.
       const moved = Math.hypot(ship.pos.x - this.lastPos.x, ship.pos.z - this.lastPos.z);
@@ -677,7 +775,15 @@ export class Sailing {
       this.seaCraft(dt, ship, storm, eff);
     } else this.cam.extra = 0;
     this.updateThreats(dt, ship, eff);
-    this.gunnery.update(dt, [...this.ships.values(), ...this.pirates.map((p) => p.ship)], [...(this.serpent ? [this.serpent] : []), ...this.sharks]);
+    if (this.consort) {
+      this.consort.update(dt, ship, this.pirates, this.gunnery);
+      if (this.consort.ship.sunk && this.consort.ship.sinkT > 30) {
+        this.consort.dispose();
+        this.consort = null;
+      }
+    }
+    const foes: DeckFoe[] = this.pirates.flatMap((p) => p.fighters());
+    this.gunnery.update(dt, [...this.ships.values(), ...this.pirates.map((p) => p.ship), ...(this.consort ? [this.consort.ship] : [])], [...(this.serpent ? [this.serpent] : []), ...this.sharks], foes);
     this.bolts.update(dt, this.player);
     this.updateOverboard(dt);
     this.updateInteractables();
@@ -751,17 +857,45 @@ export class Sailing {
     const look = this.cam.forward();
     const right = new THREE.Vector3(-Math.cos(ship.yaw), 0, Math.sin(ship.yaw));
     const side = (look.dot(right) > 0 ? 1 : -1) as -1 | 1;
-    if (inp.wasPressed('attack') && ship.stats.guns && this.reload[side] <= 0) {
+    // T: the shot in the guns (round always; chain and grape, and fire pots, are learned).
+    if (inp.pressedKey('KeyT') && ship.stats.guns) {
+      const kinds = this.shotKinds();
+      this.shot = kinds[(kinds.indexOf(this.shot) + 1) % kinds.length];
+      this.hooks.toast(`${SHOT_NAMES[this.shot]} in the guns.`);
+    }
+    if (!this.shotKinds().includes(this.shot)) this.shot = 'ball';
+    this.swivelT = Math.max(0, this.swivelT - dt);
+    const swivels = ship.fit.guns === 1;
+    if (inp.wasPressed('attack') && swivels && this.swivelT <= 0) {
+      // Swivel guns: one at a time, aimed freely from the rail.
+      this.gunnery.swivel(ship, look, this.nearestEnemy(ship, look, 0.96, 120, true) ?? undefined, this.perks.ballDmg);
+      this.swivelT = 2.4 * this.perks.reload;
+      this.hooks.shake(0.15);
+    } else if (inp.wasPressed('attack') && ship.stats.guns && !swivels && this.reload[side] <= 0) {
       const beam = new THREE.Vector3(-Math.cos(ship.yaw) * side, 0, Math.sin(ship.yaw) * side);
       const target = this.nearestEnemy(ship, beam, 0.75);
       const range = target ? target.pos.distanceTo(ship.pos) : 60;
-      this.gunnery.broadside(ship, side, range, target?.pos, target?.vel);
+      // Thunder Broadside: every ninety seconds, every gun as one.
+      const thunder = this.perks.thunder && performance.now() / 1000 - this.thunderAt > 90;
+      if (thunder) {
+        this.thunderAt = performance.now() / 1000;
+        this.hooks.toast('Thunder broadside!');
+      }
+      this.gunnery.broadside(ship, side, range, target?.pos, target?.vel, { shot: this.shot, dmg: this.perks.ballDmg * (thunder ? 2 : 1), spread: this.perks.spread * (thunder ? 0.3 : 1) });
       this.reload[side] = Gunnery.reload(ship, eff.gunner) * this.perks.reload;
-      this.hooks.shake(0.35);
+      this.hooks.shake(thunder ? 0.7 : 0.35);
     }
-    if (inp.wasPressed('offhand') && ship.stats.harpoon && this.harpoonT <= 0) {
+    const line = this.gunnery.tetheredTo(ship);
+    if (line) {
+      // On the line: hold right click to reel in, O to cut it loose.
+      if (inp.held('offhand')) this.gunnery.reel(ship, dt);
+      if (inp.pressedKey('KeyO')) {
+        this.gunnery.cut(ship);
+        this.hooks.toast('You cut the line.');
+      }
+    } else if (inp.wasPressed('offhand') && ship.stats.harpoon && this.harpoonT <= 0) {
       // The harpooner lays it on whatever's near where you're looking.
-      this.gunnery.harpoon(ship, look, ship.stats.harpoon >= 2, this.nearestEnemy(ship, look, 0.94, 90, true) ?? undefined);
+      this.gunnery.harpoon(ship, look, ship.stats.harpoon >= 2, this.nearestEnemy(ship, look, 0.94, 90, true) ?? undefined, this.perks.harpoonDmg);
       this.harpoonT = 4 / eff.harpoon;
     }
   }
@@ -785,6 +919,7 @@ export class Sailing {
 
   private encounters(dt: number, ship: Ship, lookout: number) {
     const danger = dangerAt(ship.pos.x, ship.pos.z);
+    this.storyEncounters(ship);
     // Pirates in open water, more the wilder it gets.
     this.pirateT -= dt;
     if (this.pirateT <= 0) {
@@ -805,7 +940,8 @@ export class Sailing {
     this.monsterT -= dt;
     if (this.monsterT <= 0) {
       this.monsterT = 100 + Math.random() * 90;
-      if (danger >= 2.3 && !this.serpent && Math.random() < 0.12 + (danger - 2.3) * 0.12) {
+      const hunting = this.hooks.wants?.('serpent-slain') ? 3 : 1;
+      if (danger >= 2.3 && !this.serpent && Math.random() < (0.12 + (danger - 2.3) * 0.12) * hunting) {
         const a = Math.random() * Math.PI * 2;
         this.spawnSerpent(new THREE.Vector3(ship.pos.x + Math.cos(a) * 90, 0, ship.pos.z + Math.sin(a) * 90), danger);
         this.hooks.toast('The water heaves. Something huge is circling the ship…');
@@ -815,6 +951,7 @@ export class Sailing {
 
   spawnSerpent(at: THREE.Vector3, danger: number) {
     const s = new SeaSerpent(this.scene, this.fx, at, danger);
+    s.weakMul = this.perks.weakPoint;
     s.onRam = (sec) => {
       const ship = this.current;
       if (!ship) return;
@@ -840,13 +977,14 @@ export class Sailing {
       this.hooks.toast(`The sea serpent sinks, dead. You cut ${n} great scales from its back.`);
       this.addXp(Math.round(220 + danger * 80), 'slew a sea serpent');
       this.stats.monsters++;
+      this.hooks.signal?.('serpent-slain');
     };
     this.serpent = s;
     return s;
   }
 
-  spawnPirate(at: THREE.Vector3, danger: number) {
-    const pr = new PirateShip(this.scene, this.fx, this.bolts, at, danger);
+  spawnPirate(at: THREE.Vector3, danger: number, opts?: PirateOpts) {
+    const pr = new PirateShip(this.scene, this.fx, this.bolts, at, danger, opts);
     pr.ship.onEvent = (e) => { if (e === 'sinking') this.pirateSunk(pr); };
     this.pirates.push(pr);
     return pr;
@@ -854,6 +992,7 @@ export class Sailing {
 
   private pirateSunk(pr: PirateShip) {
     if (pr.plundered) return;
+    this.storyBeaten(pr, true);
     this.stats.pirates++;
     this.addXp(Math.round(80 + pr.danger * 50), 'sank a pirate');
     // Floating cargo where she went down, and her wreck to dive.
@@ -890,13 +1029,21 @@ export class Sailing {
     for (const pr of this.pirates) {
       pr.update(dt, ship, this.gunnery, !!ship);
       pr.updateBoarders(dt, this.player);
-      // Your crew fight boarders: they wear them down.
-      if (ship && pr.grappled) for (const b of pr.boarders) if (!b.dead && Math.random() < dt * 0.25 * eff.fighters / 3) b.takeHit({ damage: 18, poise: 10, dir: new THREE.Vector3(1, 0, 0), at: b.center.clone(), crit: false, source: 'melee' });
+      // Your crew fight boarders (and defenders when you board her): they wear them down.
+      const fierce = eff.fighters * (this.perks.boardingParty ? 2 : 1);
+      if (ship && (pr.grappled || pr.state === 'boarded')) for (const b of pr.fighters()) if (Math.random() < dt * 0.25 * fierce / 3) b.takeHit({ damage: 18, poise: 10, dir: new THREE.Vector3(1, 0, 0), at: b.center.clone(), crit: false, source: 'melee' });
       if (pr.state === 'struck' && !pr.plundered && ship && pr.ship.pos.distanceTo(ship.pos) < 30) this.plunderBy = pr;
+      if (pr === this.boarding && pr.won) {
+        pr.state = 'taken';
+        this.plunderBy = pr;
+        this.hooks.toast(`The ${pr.ship.name} is yours! Her last defender falls. Decide her fate (E).`);
+        this.addXp(Math.round(80 + pr.danger * 40), 'took a ship by boarding');
+      }
     }
     if (this.plunderBy && (this.plunderBy.plundered || !ship)) this.plunderBy = null;
     // Pack up what's sunk, fled or far behind.
     this.pirates = this.pirates.filter((pr) => {
+      if (pr === this.boarding) return true;
       const far = pr.ship.pos.distanceTo(this.player.pos) > 1100;
       const gone = (pr.ship.sunk && pr.ship.sinkT > 30) || far;
       if (gone) pr.dispose();
@@ -948,6 +1095,7 @@ export class Sailing {
     }
     if (e === 'tack' && mine) {
       if (d) {
+        this.hooks.signal?.('sea-tack');
         this.addXp(this.assisted ? 5 : 8);
         if (performance.now() - this.tackSaid > 30000) { this.tackSaid = performance.now(); this.hooks.toast('A clean tack: she comes through the wind and keeps her way.'); }
       } else this.hooks.toast('A slow tack: she hung in the wind and lost her way.');
@@ -1093,6 +1241,154 @@ export class Sailing {
     }
   }
 
+  // ---- ship against ship: shot, boarding, prizes, parley, the Black Tide -----------------------
+
+  /** The shot you can load: round always; chain and grape, then fire pots, by Gunnery. */
+  shotKinds(): ShotKind[] {
+    const k: ShotKind[] = ['ball'];
+    if (this.perks.chainShot) k.push('chain', 'grape');
+    if (this.perks.firePots) k.push('fire');
+    return k;
+  }
+
+  /** A pirate alongside you can board: beaten, grappled to you, or (Boarding Party) below half her hull. */
+  boardable() {
+    const ship = this.current;
+    if (!ship || this.boarding || this.atHelm || !ship.onDeck(this.player.pos)) return null;
+    return this.pirates.find((pr) => !pr.ship.sunk && !pr.plundered && pr.state !== 'taken' && pr.state !== 'boarded'
+      && pr.ship.pos.distanceTo(ship.pos) < (pr.ship.beam + ship.beam) / 2 + 9
+      && (pr.state === 'struck' || pr.grappled || (this.perks.boardingParty && pr.ship.hullFrac < 0.5))) ?? null;
+  }
+
+  /** Grapples over, and over the rail onto her deck: her crew make their stand. */
+  boardEnemy(pr: PirateShip) {
+    const ship = this.current;
+    if (!ship) return;
+    this.boarding = pr;
+    if (pr.state === 'struck') {
+      // She has struck: her crew throw down their arms.
+      pr.yieldTo(ship);
+      this.plunderBy = pr;
+    } else pr.defend(ship);
+    this.player.teleport(pr.ship.toWorld(new THREE.Vector3(0, pr.ship.def.deckY + 0.4, 0)));
+    this.hooks.toast(pr.state === 'taken' ? `You board the ${pr.ship.name}. Her crew throw down their arms.` : `Over the rail! ${pr.captain} and the crew of the ${pr.ship.name} stand to meet you.`);
+  }
+
+  private endBoarding() {
+    const pr = this.boarding;
+    if (!pr) return;
+    this.boarding = null;
+    if (!pr.ship.sunk && pr.state !== 'taken') pr.state = 'flee';
+    pr.ship.disableDeck();
+  }
+
+  /** What to do with a beaten pirate: plunder and scuttle her, ransom her crew, or sail her home. */
+  parley(pr: PirateShip) {
+    const opts: { label: string; run: () => void }[] = [];
+    const finish = () => {
+      pr.plundered = true;
+      this.plunderBy = null;
+      this.stats.pirates++;
+      this.storyBeaten(pr, false);
+      if (this.boarding === pr) {
+        const c = this.current;
+        this.boarding = null;
+        if (c) this.player.teleport(c.toWorld(new THREE.Vector3(0, c.def.deckY + 0.3, 0)));
+      }
+      this.hooks.close();
+      this.hooks.save();
+    };
+    opts.push({
+      label: `Plunder her and scuttle her (${pr.bounty}g and her stores)`,
+      run: () => {
+        this.hooks.addGold(pr.bounty);
+        this.hooks.give('healthPotion', 2);
+        if (pr.danger > 2.5) this.hooks.give('greaterHealthPotion', 1);
+        this.addXp(Math.round(60 + pr.danger * 40), 'a pirate taken');
+        this.hooks.toast(`You take ${pr.bounty} gold and her stores, put her crew in the boats and fire her magazine. The ${pr.ship.name} goes down.`);
+        pr.ship.sunk = true;
+        this.addWreck(pr.ship, Math.round(pr.bounty / 4), []);
+        finish();
+      },
+    });
+    const ransom = Math.round(pr.bounty * 1.35);
+    opts.push({
+      label: `Ransom her crew and let them sail (${ransom}g)`,
+      run: () => {
+        this.hooks.addGold(ransom);
+        this.addXp(Math.round(40 + pr.danger * 30), 'a pirate ransomed');
+        this.hooks.toast(`${pr.captain} pays ${ransom}g in Crown silver and the ${pr.ship.name} limps away, chastened.`);
+        pr.state = 'flee';
+        pr.release();
+        if (pr.ship.hasDeck) pr.ship.disableDeck();
+        finish();
+      },
+    });
+    if (this.perks.prizeCrew) {
+      opts.push({
+        label: this.records.length >= 4 ? 'Take her as a prize (your fleet is full)' : `Put a prize crew aboard: sail her to Port Aurelle as yours (a ${HULLS[pr.ship.hull].name})`,
+        run: () => {
+          if (this.records.length >= 4) return;
+          this.takePrize(pr);
+          finish();
+        },
+      });
+    }
+    this.hooks.talk(pr.captain, pr.ship.name, pr.state === 'taken' ? `"Mercy, Captain. The ship is yours. Do with her what you will."` : `"We strike! We strike!" The ${pr.ship.name}'s colours come down.`, [...opts, { label: 'Not yet.', run: () => this.hooks.close() }]);
+  }
+
+  /** A captured ship joins your fleet: her prize crew sails her home to a berth. */
+  private takePrize(pr: PirateShip) {
+    const s = pr.ship;
+    pr.release();
+    this.pirates = this.pirates.filter((p) => p !== pr);
+    s.disableDeck();
+    s.owner = 'player';
+    s.anchored = true;
+    s.fire = 0;
+    s.name = 'The ' + ['Redemption', 'Second Chance', 'Prize', 'Turncoat', 'Fortune'][this.records.length % 5];
+    const port = PORTS[0];
+    const [x, z, yaw] = this.freeBerth(port);
+    s.pos.set(x, 0, z);
+    s.yaw = yaw;
+    s.speed = 0;
+    s.place();
+    s.place();
+    s.onEvent = (e, d) => this.shipEvent(s, e, d);
+    const r: ShipRecord = { id: 'ship-' + Date.now().toString(36) + Math.floor(Math.random() * 1e4), hull: s.hull, name: s.name, fit: { ...s.fit }, hullColor: 0x1e1a1c, trim: 0x8a1a1a, sections: [...s.sections], sails: s.sailHp, water: 0, x, z, yaw, port: port.id };
+    this.records.push(r);
+    this.ships.set(r.id, s);
+    this.hooks.toast(`A prize crew sails her into Port Aurelle. She's yours now: ${s.name}, a ${HULLS[s.hull].name}. Barrow can refit her.`);
+    this.addXp(120, 'a prize taken');
+  }
+
+  /** Quest stages that put named ships on the sea. */
+  private storyEncounters(ship: Ship) {
+    const near = (at: [number, number], r: number) => Math.hypot(ship.pos.x - at[0], ship.pos.z - at[1]) < r;
+    if (this.story.has('btScout') && this.hooks.wants?.('bt-scout') !== false && !this.pirates.some((p) => p.tag === 'scout') && near(BLACK_TIDE_SCOUT, 900)) {
+      const at = new THREE.Vector3(BLACK_TIDE_SCOUT[0], 0, BLACK_TIDE_SCOUT[1]);
+      this.spawnPirate(at, 3, { name: 'The Gallows Tide', captain: 'Captain Ysolde Marr', hull: 'brigantine', fit: { ...STOCK_FIT(), guns: 2, hull: 1, sails: 1 }, bounty: 420, tag: 'scout' });
+      this.hooks.toast('Sail ho! A black brigantine with a white wave on her flag: the Gallows Tide!');
+    }
+    if (this.story.has('btFlag') && this.hooks.wants?.('bt-calloway') !== false && !this.pirates.some((p) => p.tag === 'calloway') && near(BLACK_TIDE_FLAG, 1000)) {
+      const at = new THREE.Vector3(BLACK_TIDE_FLAG[0], 0, BLACK_TIDE_FLAG[1]);
+      this.spawnPirate(at, 4.2, { name: 'The Widow\'s Wake', captain: 'Captain Rook Calloway', hull: 'galleon', fit: { ...STOCK_FIT(), guns: 3, hull: 2, sails: 2, keel: 1 }, bounty: 1400, tag: 'calloway' });
+      this.spawnPirate(at.clone().add(new THREE.Vector3(60, 0, -40)), 3, { name: 'The Black Gull', hull: 'cutter', fit: { ...STOCK_FIT(), guns: 1, sails: 2 }, tag: 'escort' });
+      this.hooks.toast('The Widow\'s Wake! Calloway\'s black galleon, with a cutter running escort. Clear for action!');
+    }
+  }
+
+  /** A story pirate beaten (sunk, scuttled, ransomed or taken). */
+  private storyBeaten(pr: PirateShip, sunk: boolean) {
+    if (pr.tag === 'scout') this.hooks.signal?.('bt-scout');
+    if (pr.tag === 'calloway') {
+      this.hooks.signal?.('bt-calloway');
+      if (sunk) this.dropLoot(pr.ship.pos.clone(), 300, [['blackTideColours', 1]]);
+      else this.hooks.give('blackTideColours', 1);
+      this.hooks.toast(sunk ? 'Calloway\'s colours float free of the wreck: haul them in!' : 'You strike the Black Tide\'s colours from Calloway\'s mast with your own hands.');
+    }
+  }
+
   // ---- the craft: rogue waves, weather eye, star sights, currents, the trawl --------------------
 
   private seaCraft(dt: number, ship: Ship, storm: number, eff: ReturnType<typeof crewEffects>) {
@@ -1202,7 +1498,7 @@ export class Sailing {
       guns: ship.stats.guns, reload: [this.reload[-1], this.reload[1]], harpoon: ship.stats.harpoon > 0, crew: eff.hands, crewMin: ship.def.crewMin, morale: eff.morale,
       courseError: ship.kick, atHelm: this.atHelm, level: lvl.level, xpFrac: lvl.frac,
       notes: this.helmNotes(ship), skiff: ship.hull === 'skiff' || ship.hull === 'sloop',
-      extraKeys: [this.perks.windcaller ? `Y call the wind${this.windCd > 0 ? ` (${Math.ceil(this.windCd / 60)}m)` : ''}` : '', this.perks.fullPress ? `U full press${this.pressCd > 0 ? ` (${Math.ceil(this.pressCd)}s)` : ''}` : ''].filter(Boolean).join(' · '),
+      extraKeys: [this.shotKinds().length > 1 && ship.fit.guns > 1 ? 'T change shot' : '', this.perks.windcaller ? `Y call the wind${this.windCd > 0 ? ` (${Math.ceil(this.windCd / 60)}m)` : ''}` : '', this.perks.fullPress ? `U full press${this.pressCd > 0 ? ` (${Math.ceil(this.pressCd)}s)` : ''}` : ''].filter(Boolean).join(' · '),
     });
   }
 
@@ -1235,6 +1531,12 @@ export class Sailing {
     if (this.windT > 0) out.push(`Called wind: ${Math.ceil(this.windT)}s`);
     if (ship.pressT > 0) out.push(`Full press: ${Math.ceil(ship.pressT)}s`);
     if (this.lashed !== null && !this.atHelm) out.push('Helm lashed: holding her course.');
+    if (ship.stats.guns && ship.fit.guns > 1) out.push(`Guns loaded with ${SHOT_NAMES[this.shot].toLowerCase()}`);
+    if (ship.fit.guns === 1) out.push(`Swivel guns: ${this.swivelT > 0 ? this.swivelT.toFixed(1) + 's' : 'ready'} (aim and click)`);
+    const line = this.gunnery.tetheredTo(ship);
+    if (line) out.push(`<span class="${line.strain > 0.5 ? 'warn' : ''}">On the line: ${Math.round(line.len)} m${line.strain > 0.5 ? ', straining!' : ''} · hold right click to reel, O to cut</span>`);
+    if (ship.mastCap < 1) out.push('<span class="warn">Topmast down: sails limited</span>');
+    if (this.consort) out.push(`Consort ${this.consort.name}: hull ${Math.round(this.consort.ship.hullFrac * 100)}%`);
     if (ship.fire > 0) out.push('<span class="warn">FIRE ABOARD!</span>');
     if (this.rogueWarn > 0) out.push('<span class="warn">ROGUE WAVE!</span>');
     return out;
@@ -1324,7 +1626,7 @@ export class Sailing {
           const jobs = here.map(({ r, ship }) => {
             const s = ship!;
             const dmg = 1 - (s.hullFrac * 3 + s.sailHp / s.stats.sails) / 4;
-            const cost = Math.round(dmg * HULLS[r.hull].price * 0.2 + s.water * 30);
+            const cost = Math.round(dmg * HULLS[r.hull].price * 0.2 + s.water * 30 + (s.mastCap < 1 ? HULLS[r.hull].price * 0.05 : 0));
             return { r, s, cost };
           }).filter((j) => j.cost > 0);
           if (!jobs.length) return show('Not a plank out of place. Off you go.', [{ label: 'Back.', run: back }]);
@@ -1334,6 +1636,8 @@ export class Sailing {
               if (this.hooks.gold() < j.cost) return show('Gold first, then nails.', [{ label: 'Back.', run: back }]);
               this.hooks.addGold(-j.cost);
               j.s.repairAll();
+              j.s.mastCap = 1;
+              j.s.fire = 0;
               this.syncRecord(j.s);
               this.hooks.close();
               this.hooks.toast(`The ${j.r.name} is sound again.`);
@@ -1378,6 +1682,18 @@ export class Sailing {
   /** Harbourmaster: your ships, fetching one home, selling one. */
   harbourOptions(show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) {
     const out: { label: string; run: () => void }[] = [];
+    if (this.perks.fleetSignal && !this.consortHired && !this.consort) {
+      out.push({
+        label: 'Hire a consort ship for your next voyage — 450g',
+        run: () => {
+          if (this.hooks.gold() < 450) return show('The Steadfast\'s captain wants his fee first.', [{ label: 'Back.', run: back }]);
+          this.hooks.addGold(-450);
+          this.consortHired = true;
+          this.hooks.close();
+          this.hooks.toast('The brigantine Steadfast will sail with you on your next voyage.');
+        },
+      });
+    }
     if (!this.records.length) return out;
     out.push({
       label: 'My ships',
@@ -1549,6 +1865,13 @@ export class Sailing {
     this.cam.extra = 0;
     for (const p of this.pirates) p.dispose();
     this.pirates = [];
+    this.boarding = null;
+    this.plunderBy = null;
+    this.consort?.dispose();
+    this.consort = null;
+    this.consortHired = false;
+    this.story.clear();
+    this.shot = 'ball';
     this.serpent?.dispose();
     this.serpent = null;
     for (const s of this.sharks) s.dispose();

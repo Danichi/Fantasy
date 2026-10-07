@@ -3,7 +3,7 @@ import { SEA_LEVEL } from '../worldMap';
 import { waveAt, windAt } from './seaState';
 import { Ship, NO_CONTROL, type ShipControls } from './ship';
 import { STOCK_FIT, type HullId, type Fit } from './shipTypes';
-import { Gunnery, type SeaTarget } from './gunnery';
+import { Gunnery, type SeaTarget, type ShotKind } from './gunnery';
 import { Bandit, type Bolts } from '../../enemies/bandit';
 import { newTargetId, targets, type HitInfo, type Target } from '../../combat/targets';
 import { events } from '../../core/events';
@@ -38,27 +38,54 @@ export function pirateFit(danger: number): { hull: HullId; fit: Fit } {
   return { hull: 'galleon', fit: { ...fit, guns: 3, hull: 2, sails: 2, keel: 2 } };
 }
 
+export interface PirateOpts { name?: string; captain?: string; hull?: HullId; fit?: Fit; bounty?: number; colours?: [number, number]; tag?: string }
+
 export class PirateShip {
   readonly ship: Ship;
-  state: 'hunt' | 'broadside' | 'board' | 'flee' | 'struck' | 'sunk' = 'hunt';
+  state: 'hunt' | 'broadside' | 'board' | 'flee' | 'struck' | 'boarded' | 'taken' | 'sunk' = 'hunt';
+  /** pirates sent onto your deck */
   readonly boarders: Bandit[] = [];
+  /** pirates holding their own deck when you board her */
+  readonly defenders: Bandit[] = [];
   grappled = false;
   plundered = false;
+  /** hands aboard: grapeshot thins them; a ship with too few strikes her colours */
+  crew: number;
+  readonly crewStart: number;
+  readonly captain: string;
+  /** a story pirate (the Black Tide) */
+  readonly tag: string;
   private reload = { [-1]: 2, [1]: 4 } as Record<number, number>;
   private side: -1 | 1 = 1;
   private t = 0;
   readonly bounty: number;
 
-  constructor(private scene: THREE.Scene, private fx: FX, private bolts: Bolts, at: THREE.Vector3, readonly danger: number) {
-    const { hull, fit } = pirateFit(danger);
-    this.ship = new Ship(scene, hull, fit, { name: PIRATE_NAMES[Math.floor(Math.random() * PIRATE_NAMES.length)], hullColor: 0x1e1a1c, trim: 0x8a1a1a });
+  constructor(private scene: THREE.Scene, private fx: FX, private bolts: Bolts, at: THREE.Vector3, readonly danger: number, opts: PirateOpts = {}) {
+    const pf = pirateFit(danger);
+    const hull = opts.hull ?? pf.hull, fit = opts.fit ?? pf.fit;
+    const [hc, tc] = opts.colours ?? [0x1e1a1c, 0x8a1a1a];
+    this.ship = new Ship(scene, hull, fit, { name: opts.name ?? PIRATE_NAMES[Math.floor(Math.random() * PIRATE_NAMES.length)], hullColor: hc, trim: tc });
     this.ship.owner = 'pirate';
     this.ship.crew = this.ship.def.crewMax;
     this.ship.pos.copy(at);
     this.ship.yaw = Math.random() * Math.PI * 2;
     this.ship.anchored = false;
     this.ship.sailSet = 1;
-    this.bounty = Math.round(60 + danger * 90 + this.ship.def.length * 6);
+    this.crew = this.crewStart = Math.round(this.ship.def.crewMax * 2 + 4 + danger * 3);
+    this.captain = opts.captain ?? `Captain of ${this.ship.name}`;
+    this.tag = opts.tag ?? '';
+    this.bounty = opts.bounty ?? Math.round(60 + danger * 90 + this.ship.def.length * 6);
+  }
+
+  /** Grapeshot and blades: hands lost. */
+  loseCrew(n: number) {
+    this.crew = Math.max(0, this.crew - n);
+    this.ship.crew = Math.max(0, Math.min(this.ship.def.crewMax, Math.round(this.crew / 2)));
+  }
+
+  /** Beaten enough to strike: her hull shot through, or too few hands to fight her. */
+  get beaten() {
+    return this.ship.hullFrac < 0.28 || this.crew < this.crewStart * 0.3;
   }
 
   /** Steering, sailing and gunnery against the player's ship. */
@@ -71,8 +98,17 @@ export class PirateShip {
       s.update(dt, NO_CONTROL(), { skill: 0.3, assisted: true });
       return;
     }
-    if (this.state !== 'struck' && s.hullFrac < 0.3) this.state = 'flee';
-    if (!prey || prey.sunk) this.state = this.state === 'struck' ? 'struck' : 'flee';
+    if (this.state === 'boarded' || this.state === 'taken') {
+      // Lashed alongside the ship that boarded her: she goes where it goes.
+      if (prey) this.lashTo(prey, dt);
+      s.update(dt, { ...NO_CONTROL(), sail: 0 }, { skill: 0.3, assisted: true });
+      this.carryCrew(prey);
+      return;
+    }
+    // Beaten: strike the colours (most do; the proud and the desperate run).
+    if (this.state !== 'struck' && !this.grappled && this.beaten) this.state = this.tag || Math.random() < 0.25 ? 'flee' : 'struck';
+    if (this.state === 'flee' && this.beaten && this.crew < this.crewStart * 0.2) this.state = 'struck';
+    if ((!prey || prey.sunk) && this.state !== 'struck') this.state = 'flee';
     let want = s.yaw;
     if (prey && !prey.sunk) {
       const to = prey.pos.clone().sub(s.pos).setY(0);
@@ -80,7 +116,7 @@ export class PirateShip {
       const bearing = Math.atan2(to.x, to.z);
       if (this.state === 'hunt' || this.state === 'broadside') {
         // Board a crippled or becalmed prey; otherwise hold it abeam at gun range.
-        if ((prey.hullFrac < 0.55 || Math.abs(prey.speed) < 1.2) && dist < 80 && playerAboard) this.state = 'board';
+        if ((prey.hullFrac < 0.55 || Math.abs(prey.speed) < 1.2) && dist < 80 && playerAboard && this.crew > 6) this.state = 'board';
         else this.state = dist < 75 ? 'broadside' : 'hunt';
       }
       if (this.state === 'hunt') want = bearing;
@@ -90,13 +126,15 @@ export class PirateShip {
         this.side = rel < 0 ? 1 : -1;
         const close = dist > 55 ? 0.45 : dist < 30 ? -0.45 : 0;
         want = bearing + this.side * (Math.PI / 2 - close);
-        // Fire when the prey is in the arc of the loaded side.
+        // Fire when the prey is in the arc of the loaded side: chain to cripple
+        // a fast ship's sails, fire pots in the wildest water, round shot otherwise.
         for (const side of [-1, 1] as const) {
           this.reload[side] -= dt;
           const beamYaw = s.yaw - side * (Math.PI / 2);
           const off = Math.abs(wrap(bearing - beamYaw));
           if (this.reload[side] <= 0 && off < 0.5 && dist < 110) {
-            gunnery.broadside(s, side, dist, prey.pos);
+            const shot: ShotKind = this.danger > 3.4 && Math.random() < 0.2 ? 'fire' : this.danger > 1.8 && prey.sailHp > prey.stats.sails * 0.5 && Math.random() < 0.3 ? 'chain' : 'ball';
+            gunnery.broadside(s, side, dist, prey.pos, undefined, { shot });
             this.reload[side] = Gunnery.reload(s, 2) + Math.random() * 2;
           }
         }
@@ -104,18 +142,14 @@ export class PirateShip {
         want = bearing;
         // The last stretch under sweeps (oars): close alongside whatever the wind.
         if (dist < 34 && !this.grappled) {
-          const beside = prey.pos.clone().add(new THREE.Vector3(Math.cos(prey.yaw), 0, -Math.sin(prey.yaw)).multiplyScalar(this.side * (prey.beam / 2 + s.beam / 2 + 1)));
+          const beside = this.besidePoint(prey);
           const step = beside.sub(s.pos).setY(0);
           const len = step.length();
           if (len > 0.01) s.pos.addScaledVector(step, Math.min(len, dt * (3.5 + Math.abs(prey.speed))) / len);
         }
         if (dist < 14 && !this.grappled) this.grapple(prey);
         if (this.grappled) {
-          // Lashed alongside: drift with the prey.
-          const beside = prey.pos.clone().add(new THREE.Vector3(Math.cos(prey.yaw), 0, -Math.sin(prey.yaw)).multiplyScalar(this.side * (prey.beam / 2 + s.beam / 2 + 1)));
-          s.pos.lerp(beside, Math.min(1, dt * 1.5));
-          s.yaw = prey.yaw;
-          s.speed = prey.speed;
+          this.lashTo(prey, dt);
           ctl.sail = 0;
           if (!this.boarders.some((b) => !b.dead)) {
             // Boarders beaten: the pirates strike their colours.
@@ -135,38 +169,108 @@ export class PirateShip {
     if (Math.abs(intoWind) < 0.8) want = from + Math.sign(intoWind || 1) * 0.85;
     if (!this.grappled) ctl.rudder = Math.max(-1, Math.min(1, -wrap(want - s.yaw) * 2));
     s.update(dt, ctl, { skill: 0.3 + this.danger * 0.08, assisted: true });
-    // Boarders on the prey's deck ride with it.
+    this.carryCrew(prey);
+  }
+
+  /** The point alongside the prey where she lies when lashed to it. */
+  private besidePoint(prey: Ship) {
+    return prey.pos.clone().add(new THREE.Vector3(Math.cos(prey.yaw), 0, -Math.sin(prey.yaw)).multiplyScalar(this.side * (prey.beam / 2 + this.ship.beam / 2 + 1)));
+  }
+
+  private lashTo(prey: Ship, dt: number) {
+    const s = this.ship;
+    s.pos.lerp(this.besidePoint(prey), Math.min(1, dt * 1.5));
+    s.yaw = prey.yaw;
+    s.speed = prey.speed;
+  }
+
+  /** Boarders on the prey's deck ride with it; defenders ride their own. */
+  private carryCrew(prey: Ship | null) {
     if (prey) for (const b of this.boarders) {
       if (b.dead || !prey.onDeck(b.position)) continue;
       const d = prey.carry(b.position.clone()).sub(b.position);
       b.carry(d.x, d.y, d.z);
     }
+    for (const b of this.defenders) {
+      if (b.dead || !this.ship.onDeck(b.position)) continue;
+      const d = this.ship.carry(b.position.clone()).sub(b.position);
+      b.carry(d.x, d.y, d.z);
+    }
+  }
+
+  private pirate(i: number, at: THREE.Vector3, captain: boolean) {
+    const b = new Bandit(i % 3 === 2 ? 'crossbow' : 'sword', at, this.scene, this.bolts, undefined, PIRATE_LOOKS[i % PIRATE_LOOKS.length]);
+    b.kind = 'pirate';
+    b.name = captain ? this.captain : i % 3 === 2 ? 'Pirate Gunner' : 'Pirate Cutthroat';
+    if (captain) b.hp = b.maxHp = 220 + this.danger * 40 + (this.tag ? 160 : 0);
+    b.alerted = true;
+    return b;
   }
 
   /** Throw grapples and send boarders onto the prey's deck. */
   private grapple(prey: Ship) {
     this.grappled = true;
     prey.enableDeck();
-    const n = Math.min(6, 2 + Math.round(this.danger));
+    const n = Math.max(2, Math.min(6, Math.round(this.crew / 4), 2 + Math.round(this.danger)));
     for (let i = 0; i < n; i++) {
       const local = new THREE.Vector3((Math.random() - 0.5) * prey.beam * 0.5, prey.def.deckY + 0.4, -prey.length * 0.3 + (i / Math.max(1, n - 1)) * prey.length * 0.6);
-      const at = prey.toWorld(local);
-      const b = new Bandit(i % 3 === 2 ? 'crossbow' : 'sword', at, this.scene, this.bolts, undefined, PIRATE_LOOKS[i % PIRATE_LOOKS.length]);
-      b.kind = 'pirate';
-      b.name = i === 0 ? `Captain of ${this.ship.name}` : i % 3 === 2 ? 'Pirate Gunner' : 'Pirate Cutthroat';
-      if (i === 0) b.hp = b.maxHp = 220 + this.danger * 40;
-      b.alerted = true;
-      this.boarders.push(b);
+      this.boarders.push(this.pirate(i, prey.toWorld(local), i === 0));
     }
     this.fx.alpha.spawn({ pos: prey.pos.clone().setY(prey.pos.y + 3), spread: 3, count: 12, life: [0.6, 1.2], size: [0.4, 1.2], color: 0xd8d4cc, alpha: 0.5 });
   }
 
+  /** Lash her to the boarding ship on whichever side she lies (besidePoint's side, in its frame). */
+  private lashSide(by: Ship) {
+    const port = new THREE.Vector3(Math.cos(by.yaw), 0, -Math.sin(by.yaw));
+    this.side = (this.ship.pos.clone().sub(by.pos).dot(port) > 0 ? 1 : -1) as -1 | 1;
+    this.grappled = false;
+    this.ship.place();
+    this.ship.enableDeck();
+  }
+
+  /** She has struck and you board her: her crew throw down their arms. */
+  yieldTo(by: Ship) {
+    this.lashSide(by);
+    this.state = 'taken';
+  }
+
+  /** You board her: her crew make their stand on their own deck. */
+  defend(by: Ship) {
+    this.lashSide(by);
+    this.state = 'boarded';
+    const s = this.ship;
+    const n = Math.max(1, Math.min(7, Math.round(this.crew / 3)));
+    for (let i = 0; i < n; i++) {
+      const local = new THREE.Vector3((Math.random() - 0.5) * s.beam * 0.45, s.def.deckY + 0.4, -s.length * 0.3 + (i / Math.max(1, n - 1)) * s.length * 0.6);
+      this.defenders.push(this.pirate(i, s.toWorld(local), i === 0));
+    }
+  }
+
+  /** Every defender down: she's yours to plunder, ransom or sail home. */
+  get won() {
+    return this.state === 'boarded' && this.defenders.length > 0 && this.defenders.every((b) => !b.alive);
+  }
+
   updateBoarders(dt: number, player: Player) {
     for (const b of this.boarders) if (!b.dead) b.update(dt, player);
+    for (const b of this.defenders) if (!b.dead) b.update(dt, player);
+  }
+
+  /** Every pirate fighting (for grapeshot and your crew's blades). */
+  fighters() {
+    return [...this.boarders, ...this.defenders].filter((b) => b.alive);
+  }
+
+  /** Hand her over (a prize): the hull is no longer a pirate's. */
+  release() {
+    for (const b of this.boarders) b.dispose();
+    for (const b of this.defenders) b.dispose();
+    this.boarders.length = 0;
+    this.defenders.length = 0;
   }
 
   dispose() {
-    for (const b of this.boarders) b.dispose();
+    this.release();
     this.ship.dispose();
   }
 }
@@ -183,6 +287,11 @@ export class SeaSerpent implements Target, SeaTarget {
   maxHp: number;
   radius = 1.4;
   vel = new THREE.Vector3();
+  /** a harpoon line can hold it; while held it's slower, it bleeds, and it can be hauled up */
+  tetherable = true;
+  held = false;
+  /** Monster Lore: its head (when it rears) takes this much more */
+  weakMul = 1;
   halfHeight = 1.2;
   center = new THREE.Vector3();
   position = new THREE.Vector3();
@@ -256,8 +365,9 @@ export class SeaSerpent implements Target, SeaTarget {
     this.hurt(h.damage);
     this.fx.alpha.spawn({ pos: h.at, spread: 3, count: 12, life: [0.4, 0.9], size: [0.18, 0.05], color: 0x2a6a4a, alpha: 0.9, gravity: 6 });
   }
-  hitBy(dmg: number) {
-    this.hurt(dmg);
+  hitBy(dmg: number, _from?: THREE.Vector3, kind?: string) {
+    // Its rearing head is the weak point; chain shot tangles the coils.
+    this.hurt(dmg * (this.state === 'rear' ? 1.3 * this.weakMul : 1) * (kind === 'chain' ? 1.15 : 1));
   }
   /** The head or any coil of the body. */
   hitTest(p: THREE.Vector3, pad: number) {
@@ -298,6 +408,16 @@ export class SeaSerpent implements Target, SeaTarget {
     }
     const sea = surface(this.pos.x, this.pos.z);
     let goal = this.pos.clone(), speed = 9, y = sea - 0.3;
+    if (this.held) {
+      // On the line: it bleeds, and hauled in close it's dragged up beside the hull.
+      this.hurt(dt * 5);
+      if (!this.alive) return;
+      if (this.state !== 'rear' && this.pos.distanceTo(ship.pos) < ship.length * 0.5 + 12) {
+        this.state = 'rear';
+        this.st = 0;
+        this.bit = false;
+      }
+    }
     if (this.state === 'stalk') {
       this.circle += dt * 0.32;
       goal = ship.pos.clone().add(new THREE.Vector3(Math.cos(this.circle) * 34, 0, Math.sin(this.circle) * 34));
@@ -344,6 +464,7 @@ export class SeaSerpent implements Target, SeaTarget {
       if (this.st > 6.5) { this.state = 'stalk'; this.st = 0; }
     }
     // Swim toward the goal.
+    if (this.held) speed *= 0.55;
     const to = goal.clone().sub(this.pos).setY(0);
     if (to.lengthSq() > 1) this.yaw += wrap(Math.atan2(to.x, to.z) - this.yaw) * Math.min(1, dt * 2.2);
     this.pos.x += Math.sin(this.yaw) * speed * dt;
@@ -476,5 +597,69 @@ export class Shark implements Target, SeaTarget {
   dispose() {
     targets.delete(this);
     this.scene.remove(this.group);
+  }
+}
+
+// ---- a consort (Seamanship: Fleet Signal) ---------------------------------------------------
+
+/** A hired ship that keeps station off your quarter and engages any pirate that comes near. */
+export class Consort {
+  readonly ship: Ship;
+  private reload = { [-1]: 3, [1]: 5 } as Record<number, number>;
+  constructor(scene: THREE.Scene, at: THREE.Vector3, yaw: number, readonly name: string, hull: HullId = 'brigantine') {
+    this.ship = new Ship(scene, hull, { ...STOCK_FIT(), guns: 2, hull: 1, sails: 1 }, { name, hullColor: 0x24467e, trim: 0xe8c060 });
+    this.ship.owner = 'npc';
+    this.ship.crew = this.ship.def.crewMax;
+    this.ship.pos.copy(at);
+    this.ship.yaw = yaw;
+    this.ship.anchored = false;
+    this.ship.sailSet = 1;
+    this.ship.place();
+  }
+
+  update(dt: number, leader: Ship | null, foes: PirateShip[], gunnery: Gunnery) {
+    const s = this.ship;
+    if (s.sunk) return s.update(dt, NO_CONTROL(), { skill: 0.5, assisted: true });
+    const ctl: ShipControls = { ...NO_CONTROL(), sail: 1 };
+    let want = s.yaw;
+    const foe = foes.filter((p) => !p.ship.sunk && p.state !== 'struck' && p.state !== 'taken' && p.state !== 'boarded' && leader && p.ship.pos.distanceTo(leader.pos) < 320)
+      .sort((a, b) => a.ship.pos.distanceTo(s.pos) - b.ship.pos.distanceTo(s.pos))[0];
+    if (foe) {
+      // Engage: hold the pirate abeam and fire as she bears.
+      const to = foe.ship.pos.clone().sub(s.pos).setY(0);
+      const dist = to.length();
+      const bearing = Math.atan2(to.x, to.z);
+      const side = wrap(bearing - s.yaw) < 0 ? 1 : -1;
+      want = dist > 90 ? bearing : bearing + side * (Math.PI / 2 - (dist > 55 ? 0.4 : dist < 30 ? -0.4 : 0));
+      for (const sd of [-1, 1] as const) {
+        this.reload[sd] -= dt;
+        const off = Math.abs(wrap(bearing - (s.yaw - sd * (Math.PI / 2))));
+        if (this.reload[sd] <= 0 && off < 0.5 && dist < 110) {
+          gunnery.broadside(s, sd, dist, foe.ship.pos);
+          this.reload[sd] = Gunnery.reload(s, 2) + 1;
+        }
+      }
+    } else if (leader) {
+      // Keep station 45 m off the leader's quarter, matching her speed.
+      const port = new THREE.Vector3(Math.cos(leader.yaw), 0, -Math.sin(leader.yaw));
+      const back = new THREE.Vector3(-Math.sin(leader.yaw), 0, -Math.cos(leader.yaw));
+      const station = leader.pos.clone().addScaledVector(port, 30).addScaledVector(back, 35);
+      const to = station.sub(s.pos).setY(0);
+      const d = to.length();
+      want = d > 12 ? Math.atan2(to.x, to.z) : leader.yaw;
+      ctl.sail = d > 60 ? 1 : d < 15 ? Math.max(0.3, Math.min(1, Math.abs(leader.speed) / Math.max(1, s.stats.speed))) : 0.8;
+      // Falling far behind, she crowds on sail and catches up (a consort's crew rows hard).
+      if (d > 220) s.pos.addScaledVector(to.normalize(), Math.min(d - 200, dt * 6));
+    }
+    const w = windAt(s.pos.x, s.pos.z);
+    const from = Math.atan2(-w.dir.x, -w.dir.y);
+    const intoWind = wrap(want - from);
+    if (Math.abs(intoWind) < 0.8) want = from + Math.sign(intoWind || 1) * 0.85;
+    ctl.rudder = Math.max(-1, Math.min(1, -wrap(want - s.yaw) * 2));
+    s.update(dt, ctl, { skill: 0.6, assisted: true });
+  }
+
+  dispose() {
+    this.ship.dispose();
   }
 }

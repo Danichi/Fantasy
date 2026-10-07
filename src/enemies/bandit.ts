@@ -127,7 +127,7 @@ export class Bandit implements Target {
     const cur = this.rb.translation();
     const next = { x: cur.x + dx, y: cur.y + dy, z: cur.z + dz };
     this.rb.setTranslation(next, true);
-    this.col.setTranslation(next);
+    if (this.alive) this.col.setTranslation(next); // (a dead one has no collider left)
     this.position.set(next.x, next.y - 0.86, next.z);
     this.home.add(new THREE.Vector3(dx, dy, dz));
   }

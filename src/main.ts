@@ -53,6 +53,7 @@ import { Rat } from './enemies/vermin';
 import { Boats } from './world/boats';
 import { RiverLife } from './world/riverLife';
 import { PORT_QUESTS } from './quests/portQuests';
+import { SEA_QUESTS } from './quests/seaQuests';
 import { RIVER_LEVEL } from './world/terrainHeight';
 import { road, distanceAlong, roadLength } from './world/roadNetwork';
 import { buildGlenLandmarks, LANDMARK_CLEARINGS } from './world/glenLandmarks';
@@ -607,6 +608,7 @@ async function boot() {
     if (won) f?.();
   };
   quests.add(...PORT_QUESTS);
+  quests.add(...SEA_QUESTS);
   quests.add(...CAPITAL_QUESTS, ...CROWN_ROAD_QUESTS);
   // The Crown checkpoint lifts its barrier for anyone registered at the Academy (on load too).
   quests.hooks.set('academy-trial:done', () => roads.open('capital'));
@@ -694,12 +696,17 @@ async function boot() {
     hours: () => time.day * 24 + time.hour,
     shake: (n) => cam.shake(n),
     waypoint: () => worldMap.pins[worldMap.pins.length - 1] ?? null,
+    signal: (id) => { quests.signal(id); },
+    wants: (id) => quests.wants(id),
     dismount: () => { if (player.mounted) horses.dismount(); },
   });
   sailing.fromJSON(saveData?.world?.sailing);
   realm.overworldInteractables.push(...sailing.interactables);
   folkServices.set('shipwright', (show, back) => sailing.shipwrightOptions(show, back));
   folkServices.set('rigby', (show, back) => sailing.brokerOptions(show, back));
+  folkServices.set('tallow', (show, back) => sailing.harbourOptions(show, back));
+  // Sea quests put ships and monsters on the water while their stage is current.
+  for (const [hook, tag] of [['sea:serpentHunt', 'serpentHunt'], ['sea:btScout', 'btScout'], ['sea:btFlag', 'btFlag']] as const) quests.hooks.set(hook, () => sailing.story.add(tag));
   for (const c of HARBOUR_SAILORS) folkServices.set(c.id, (show, back) => sailing.sailorOptions(c.id, show, back));
   boats.onFish = (spot) => fishing.start(spot);
   realm.overworldInteractables.push(...boats.interactables);
