@@ -24,6 +24,10 @@ interface FishDef {
   price: number; // gold per kg
   color: number;
   desc: string;
+  /** only from the trawl's deep tables (Seamanship: Deep Tables) */
+  deep?: boolean;
+  /** a great fish taken with the harpoon (Seamanship: Big Game) */
+  bigGame?: boolean;
 }
 
 export const FISH: FishDef[] = [
@@ -36,6 +40,12 @@ export const FISH: FishDef[] = [
   { id: 'rainbowWrasse', name: 'Rainbow Wrasse', water: ['sea'], hours: [8, 17], weather: ['clear'], rarity: 3, size: [0.4, 1.6], fight: 1.3, price: 18, color: 0x3ab0c0, desc: 'Every colour of the reef in one fish. Only bites on bright days.' },
   { id: 'moonfish', name: 'Moonfish', water: ['sea'], hours: [22, 4], rarity: 1.2, size: [3, 12], fight: 1.5, price: 26, color: 0xd8dcf0, desc: 'A pale, round deep-water fish that rises to the moonlight.' },
   { id: 'stormjaw', name: 'Stormjaw Eel', water: ['sea', 'harbour'], weather: ['storm', 'rain'], rarity: 2, size: [2, 9], fight: 1.9, price: 24, color: 0x2a3a4a, desc: 'Sailors say it only feeds when the sea is angry.' },
+  // The open ocean's great fish (never on a rod: the harpoon or the trawl).
+  { id: 'bluefin', name: 'Bluefin Tuna', water: ['sea'], rarity: 0, size: [60, 240], fight: 2, price: 3, color: 0x2a4a8a, bigGame: true, desc: 'A torpedo of muscle that follows the mackerel shoals. A whole village could eat for a week.' },
+  { id: 'marlin', name: 'Sailfin Marlin', water: ['sea'], rarity: 0, size: [80, 300], fight: 2, price: 3, color: 0x3a6aaa, bigGame: true, desc: 'A spear-billed giant with a sail on its back. Captains hang the bills over their doors.' },
+  { id: 'lanternjaw', name: 'Lanternjaw', water: ['sea'], rarity: 0, size: [2, 8], fight: 1.4, price: 30, color: 0x1a2a3a, deep: true, desc: 'A black fish with a little lamp on a stalk. It glows in the hold for days.' },
+  { id: 'ghostRay', name: 'Ghost Ray', water: ['sea'], rarity: 0, size: [6, 30], fight: 1.6, price: 14, color: 0xd0d8e0, deep: true, desc: 'A pale ray from the deep water, near transparent. Alchemists pay well for its skin.' },
+  { id: 'kingCrab', name: 'King Crab', water: ['sea'], rarity: 0, size: [3, 9], fight: 1, price: 16, color: 0xa83a2a, deep: true, desc: 'Spiny, red and as wide as a shield. Worth its weight in silver at the Salty Anchor.' },
   { id: 'oldBoot', name: 'Old Boot', water: ['river', 'lake', 'harbour', 'sea'], rarity: 1.5, size: [0.6, 0.6], fight: 0.3, price: 0, color: 0x4a3a2a, desc: 'Someone, somewhere, is walking with one foot wet.' },
 ];
 
@@ -194,7 +204,7 @@ export class Fishing {
     const w = this.weather();
     const sky = w.storm > 0.4 ? 'storm' : w.rain > 0.3 ? 'rain' : 'clear';
     const kind = this.spot!.kind;
-    const pool = FISH.filter((f) => f.water.includes(kind)
+    const pool = FISH.filter((f) => f.rarity > 0 && f.water.includes(kind)
       && (!f.hours || (f.hours[0] <= f.hours[1] ? h >= f.hours[0] && h < f.hours[1] : h >= f.hours[0] || h < f.hours[1]))
       && (!f.weather || f.weather.includes(sky as 'clear')));
     let total = 0;

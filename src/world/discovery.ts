@@ -43,6 +43,9 @@ export class Discovery {
     return (this.cells[k >> 3] & (1 << (k & 7))) !== 0;
   }
 
+  /** how far you see (at sea, from a deck, further; with charts, three times as far) */
+  revealScale = 1;
+
   /** Call every frame (cheap: only does work when the player changes cell). */
   update(pos: THREE.Vector3) {
     const gx = Math.floor((pos.x - WORLD_X0) / CELL), gz = Math.floor((pos.z - WORLD_Z0) / CELL);
@@ -50,7 +53,7 @@ export class Discovery {
     const cell = gz * GW + gx;
     if (cell === this.lastCell) return;
     this.lastCell = cell;
-    const r = Math.ceil(REVEAL_R / CELL);
+    const r = Math.ceil((REVEAL_R * this.revealScale) / CELL);
     let revealed = 0;
     for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
       if (dx * dx + dz * dz > r * r + 1) continue;

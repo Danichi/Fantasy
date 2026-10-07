@@ -90,8 +90,10 @@ import { PerfOverlay } from './ui/perfOverlay';
 import { regionAt, reliefAt, RELIEF } from './world/worldMap';
 import { targets } from './combat/targets';
 import { Ocean } from './world/sea/ocean';
-import { updateSea } from './world/sea/seaState';
-import { Sailing, harbourFolk, HARBOUR_SAILORS } from './world/sea/sailing';
+import * as seaState from './world/sea/seaState';
+const { updateSea } = seaState;
+import { Sailing, harbourFolk, HARBOUR_SAILORS, seamanshipLevel } from './world/sea/sailing';
+import { SeamanshipPanel } from './ui/seamanshipPanel';
 import { GroundWindow } from './world/groundWindow';
 import { SkillsUI } from './ui/skills';
 import { DISC } from './paths/data';
@@ -691,6 +693,7 @@ async function boot() {
     day: () => time.day,
     hours: () => time.day * 24 + time.hour,
     shake: (n) => cam.shake(n),
+    waypoint: () => worldMap.pins[worldMap.pins.length - 1] ?? null,
     dismount: () => { if (player.mounted) horses.dismount(); },
   });
   sailing.fromJSON(saveData?.world?.sailing);
@@ -1003,11 +1006,19 @@ async function boot() {
     return f && !f.hidden ? f.pos.clone().setY(f.pos.y + (f.rec.look.height ?? 1.75)) : null;
   }, () => questNpcIds);
   questUI.attachScene(r.scene);
+  // The Seamanship calling (N): the sea's skill tree.
+  const seaPanel = new SeamanshipPanel(() => ({ level: sailing.level, xpFrac: seamanshipLevel(sailing.xp).frac, picks: sailing.picks, stats: sailing.stats, learn: (id) => sailing.learn(id) }));
+  seaPanel.onToggle = (open) => {
+    input.uiMode = open || inv.open || mapUI.open || dialogue.open;
+    if (open) input.exitLock();
+    else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
+  };
   // The book: the menus as tabbed pages, opened from the corner button or their keys.
   const book = new MenuBook([
     { id: 'inventory', label: 'Inventory', key: 'I', isOpen: () => inv.open, open: () => inv.toggle(true), close: () => inv.toggle(false) },
     { id: 'skills', label: 'Skills', key: 'K', isOpen: () => skills.open, open: () => skills.toggle(true), close: () => skills.toggle(false) },
     { id: 'journal', label: 'Journal', key: 'J', isOpen: () => questUI.open, open: () => questUI.toggle(true), close: () => questUI.toggle(false) },
+    { id: 'seamanship', label: 'Seamanship', key: 'N', isOpen: () => seaPanel.open, open: () => seaPanel.toggle(true), close: () => seaPanel.toggle(false) },
     {
       id: 'map', label: 'Map', key: 'M',
       isOpen: () => worldMap.open || mapUI.open,
@@ -1374,6 +1385,7 @@ async function boot() {
     simSteps++;
     if (input.wasPressed('inventory')) inv.toggle();
     if (input.wasPressed('skills')) skills.toggle();
+    if (input.pressedKey('KeyN')) seaPanel.toggle();
     if (input.wasPressed('help')) overlays.toggleHelp();
     if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
     if (input.wasPressed('map')) {
@@ -1540,6 +1552,8 @@ async function boot() {
     hud.update(dt, player.lock?.id ?? null);
     book.update();
     mapUI.update();
+    // From a deck you see further; with charts, three times as far.
+    discovery.revealScale = sailing.aboard ? (sailing.perks.charts ? 3 : 1.6) : 1;
     if (realm.mode === 'overworld') discovery.update(player.pos);
     const storm = realm.mode === 'overworld' ? desert?.storm ?? 0 : 0;
     worldMap.obscured = realm.mode === 'overworld' ? Math.max(gravewood.curse, storm) : 0;
@@ -1633,7 +1647,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       perf,
       pause: (p: boolean) => (paused = p),

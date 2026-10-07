@@ -198,3 +198,66 @@ test('broadsides hit, pirates grapple and board, and the harpoon finds a sea ser
   const s = res.serpent as { hp0: number; hp: number };
   expect(s.hp).toBeLessThan(s.hp0);
 });
+
+test('the Seamanship calling: skills open by level, the wheel can be lashed, tacks, currents and the trawl', async ({ game }) => {
+  test.setTimeout(150_000 * SLOW);
+  const res = await game.page.evaluate(async (slow) => {
+    const g = window.__game, sl = g.sailing, inp = g.input, SS = g.seaState;
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    const toasts: string[] = [];
+    const ot = g.hud.toast.bind(g.hud);
+    g.hud.toast = (m: string) => { toasts.push(m); ot(m); };
+    const out: Record<string, unknown> = {};
+    g.player.prog.addGold(100000);
+    out.tooEarly = sl.learn('stormHand');
+    sl.xp = 1e6;
+    for (const id of ['lungs', 'lungs', 'trawl', 'steadyHand', 'compass']) out['learn_' + id] = sl.learn(id);
+    // A cutter on a beam reach: lash the wheel and she holds her heading.
+    const r = sl.buy('cutter');
+    const s = sl.ships.get(r.id);
+    s.pos.set(4200, 0, -600);
+    s.yaw = 0;
+    sl.board(s);
+    sl.takeHelm();
+    const wind = SS.windAt(s.pos.x, s.pos.z);
+    const into = Math.atan2(-wind.dir.x, -wind.dir.y);
+    s.yaw = into + 0.95;
+    s.sailSet = 1;
+    sl.ctl.sail = 1;
+    await wait(2500);
+    inp.press('KeyL');
+    await wait(150);
+    inp.release('KeyL');
+    const y0 = s.yaw;
+    await wait(2500);
+    out.breathTime = g.player.breathTime;
+    out.lashed = { atHelm: sl.atHelm, held: Math.abs(Math.atan2(Math.sin(s.yaw - y0), Math.cos(s.yaw - y0))) < 0.05 };
+    // Back to the wheel and tack: turn right through the eye of the wind.
+    sl.takeHelm();
+    inp.press('KeyD');
+    for (let i = 0; i < 60 && !toasts.some((t) => /tack/i.test(t)); i++) await wait(150);
+    inp.release('KeyD');
+    out.tack = toasts.find((t) => /tack/i.test(t)) ?? null;
+    // The trawl hauls in fish while she sails slow.
+    sl.trawlT = 44.5;
+    s.speed = 2;
+    sl.ctl.sail = 0.4;
+    await wait(1500);
+    out.trawl = toasts.find((t) => /trawl/i.test(t)) ?? null;
+    // The Aurelle Stream carries her (and is learned the first time).
+    s.pos.set(3900, 0, 620);
+    await wait(800);
+    out.current = { id: s.currentId, speed: +s.currentSpeed.toFixed(2), known: sl.knownCurrents.has('aurelleStream') };
+    out.hud = (document.querySelector('.helm') as HTMLElement | null)?.innerText ?? '';
+    return out;
+  }, SLOW);
+  console.log(JSON.stringify(res));
+  expect(res.tooEarly).toBe('Seamanship 10');
+  expect(res.learn_lungs).toBeNull();
+  expect(res.breathTime).toBeCloseTo(25 * 1.6, 1);
+  expect(res.lashed).toEqual({ atHelm: false, held: true });
+  expect(res.tack).toMatch(/tack/);
+  expect(res.trawl).toMatch(/trawl/);
+  expect(res.current).toMatchObject({ id: 'aurelleStream', known: true });
+  expect(res.hud).toMatch(/Heading \d+°/);
+});

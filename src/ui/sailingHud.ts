@@ -35,6 +35,11 @@ export interface HelmReadout {
   atHelm: boolean;
   level: number;
   xpFrac: number;
+  /** extra lines: heading, bearing to the pin, the safe angle, surfing, a current, timers */
+  notes?: string[];
+  /** extra keys learned (Y windcaller, U full press, T shot) */
+  extraKeys?: string;
+  skiff?: boolean;
 }
 
 const CSS = `
@@ -51,6 +56,7 @@ const CSS = `
 .helm .ship{position:absolute;left:50%;top:50%;width:10px;height:26px;margin:-13px 0 0 -5px;background:#efe3c2;clip-path:polygon(50% 0,100% 35%,85% 100%,15% 100%,0 35%)}
 .helm .keys{margin-top:6px;color:#9a947f;font-size:10px;line-height:1.45}
 .helm .warn{color:#ff8a6a;font-weight:600}
+.helm .note{color:#bfe3f2;font-size:11.5px}
 .breath{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);width:220px;height:8px;border:1px solid #c9a55a;border-radius:4px;background:rgba(10,20,40,.7);display:none;z-index:30}
 .breath i{display:block;height:100%;background:linear-gradient(90deg,#7ad8ff,#e8f8ff);border-radius:3px}
 .underwater{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(20,90,110,.25),rgba(4,30,46,.72));opacity:0;transition:opacity .4s;z-index:5}
@@ -124,9 +130,10 @@ export class SailingHud {
       <div class="row"><span class="${over ? 'warn' : ''}">Waves ${r.waves.toFixed(1)} m / hull ${r.rated.toFixed(1)} m</span>${r.storm > 0.3 ? '<span class="warn">STORM</span>' : ''}</div>
       ${Math.abs(r.courseError) > 0.08 ? `<div class="row warn"><span>Thrown off course ${r.courseError > 0 ? '◀' : '▶'} ${deg(Math.abs(r.courseError)).toFixed(0)}°/s</span></div>` : ''}
       ${r.guns ? `<div class="row">${gun(r.reload[0], '◀ Port')}${gun(r.reload[1], 'Starboard ▶')}</div>` : ''}
+      ${(r.notes ?? []).map((n) => `<div class="row note"><span>${n}</span></div>`).join('')}
       <div class="row"><span>Crew ${r.crew}${r.crewMin ? ' / ' + r.crewMin + ' needed' : ''}</span><span>Morale ${pct(r.morale)}</span></div>
       <div class="keys">${r.atHelm
-        ? 'A/D helm · W/S sail · R reef · F anchor · C row · ' + (r.assisted ? 'G: full sailing' : 'Z/X trim · G: assisted') + (r.guns ? '<br>Left click: fire the broadside you face' : '') + (r.harpoon ? ' · Right click: harpoon' : '') + '<br>E leave the helm'
+        ? 'A/D helm · W/S sail · R reef · F anchor · C row · ' + (r.assisted ? 'G: full sailing' : 'Z/X trim · G: assisted') + (r.skiff ? ' · Shift lean out' : '') + (r.guns ? '<br>Left click: fire the broadside you face' : '') + (r.harpoon ? ' · Right click: harpoon' : '') + (r.extraKeys ? '<br>' + r.extraKeys : '') + '<br>E leave the helm' + (r.skiff ? '' : ' · L lash it') + ' · hold B spyglass'
         : 'On deck · E at the wheel to take the helm'}</div>`;
   }
 }

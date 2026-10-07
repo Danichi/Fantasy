@@ -134,7 +134,7 @@ export class HUD {
       void this.levelEl.offsetWidth;
       this.levelEl.classList.add('show');
     });
-    el('div', 'hint', this.root, '<b>I</b> inventory &nbsp;·&nbsp; <b>K</b> skills &nbsp;·&nbsp; <b>H</b> controls');
+    el('div', 'hint', this.root, '<b>I</b> inventory &nbsp;·&nbsp; <b>K</b> skills &nbsp;·&nbsp; <b>N</b> seamanship &nbsp;·&nbsp; <b>H</b> controls');
     this.questEl = el('div', 'quest-tracker', this.root);
 
     events.on('equipmentChanged', () => (this.hotbarDirty = true));

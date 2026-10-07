@@ -225,6 +225,14 @@ export class Player {
   breathTime = 25;
   private diveHeld = false;
   private breathT = 0;
+  /** swimming, from the Seamanship Diver branch: speed, stamina drain, armour drag, can't drown while stamina lasts */
+  swimSpeedMul = 1;
+  swimStaminaMul = 1;
+  armourDrag = true;
+  tideChild = false;
+  /** holding floating wreckage (no stamina drain), and water-breathing (no breath drain) seconds */
+  buoyed = false;
+  waterBreathT = 0;
   get underwater() {
     return this.swimming && this.diveDepth > 0.8;
   }
@@ -616,7 +624,7 @@ export class Player {
       // Wading slows you down; deep water means swimming.
       const wade = waterDepthAt(this.pos.x, this.pos.z);
       if (wade > 0.25) targetSpeed *= 0.5;
-      if (this.swimming) targetSpeed = this.sprinting ? 3.6 : 2.3;
+      if (this.swimming) targetSpeed = (this.sprinting ? 3.6 : 2.3) * this.swimSpeedMul;
     }
     // Swimming: float with the chest at the waterline, tire, and drown if spent.
     // (At sea you float on the waves themselves.)
@@ -627,9 +635,11 @@ export class Player {
     const inWater = surface !== null && this.pos.y < surface - (this.swimming ? -0.4 : 0.6);
     this.swimming = !this.dead && depth > 1.35 && inWater;
     if (this.swimming) {
-      this.stamina = Math.max(0, this.stamina - (this.sprinting ? 7 : 2.2) * dt);
+      // Armour drags you down: every point of it makes swimming harder (unless you've learned to carry it).
+      const drag = this.armourDrag ? 1 + (this.equip?.armorValue ?? 0) / 18 : 1;
+      if (!this.buoyed) this.stamina = Math.max(0, this.stamina - (this.sprinting ? 7 : 2.2) * dt * this.swimStaminaMul * drag);
       this.staminaDelay = 0.6;
-      if (this.stamina <= 0) {
+      if (this.stamina <= 0 && !this.buoyed) {
         this.drownT += dt;
         if (this.drownT > 1) {
           this.drownT = 0;
@@ -642,9 +652,14 @@ export class Player {
       const room = Math.max(0, depth - 2.2);
       this.diveDepth = Math.max(0, Math.min(room, this.diveDepth + (this.diveHeld ? 2.4 : -3.2) * dt));
     } else this.diveDepth = 0;
+    this.waterBreathT = Math.max(0, this.waterBreathT - dt);
     if (this.underwater) {
-      this.breath = Math.max(0, this.breath - dt / this.breathTime);
-      if (this.breath <= 0) {
+      if (this.waterBreathT <= 0) this.breath = Math.max(0, this.breath - dt / this.breathTime);
+      if (this.breath <= 0 && this.tideChild && this.stamina > 0) {
+        // The sea won't take its own: you burn stamina instead of air.
+        this.stamina = Math.max(0, this.stamina - 12 * dt);
+        this.staminaDelay = 0.6;
+      } else if (this.breath <= 0) {
         this.breathT += dt;
         if (this.breathT > 1) {
           this.breathT = 0;

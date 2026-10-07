@@ -4,9 +4,11 @@ import { SEA_LEVEL } from '../worldMap';
 import { waterSurfaceAt } from '../waterLevel';
 import { QUAY_X } from '../portCity';
 import { buildCharacter, type BuiltCharacter, type Look } from '../../npc/charBuilder';
-import { Ship, NO_CONTROL, POINT_NAMES, SECTION_NAMES, type ShipControls } from './ship';
+import { Ship, NO_CONTROL, POINT_NAMES, SECTION_NAMES, type ShipControls, type ShipPerks } from './ship';
 import { HULLS, HULL_ORDER, UPGRADES, SLOTS, STOCK_FIT, type HullId, type Fit } from './shipTypes';
-import { SEA, dangerAt, DANGER_NAMES, waveHeight, cellStormAt, STORMS } from './seaState';
+import { SEA, dangerAt, DANGER_NAMES, waveHeight, cellStormAt, STORMS, STORM_WAVES, BASE_WAVES, CURRENTS, windAt, type StormCell } from './seaState';
+import { seaPerks, canBuy, type SeaPerks } from './seamanship';
+import { FISH } from '../fishing';
 import { Gunnery } from './gunnery';
 import { PirateShip, SeaSerpent, Shark } from './seaThreats';
 import { candidates, dayCrew, crewEffects, crewXp, ROLE_INFO, TRAIT_INFO, type CrewMember } from './crew';
@@ -55,6 +57,10 @@ export interface SailingSave {
   wrecks: WreckRecord[];
   stats: { metres: number; pirates: number; monsters: number; storms: number };
   paidDay?: number;
+  /** the Seamanship tree: node id -> ranks */
+  picks?: Record<string, number>;
+  /** currents you've ridden */
+  currents?: string[];
 }
 
 export interface SailingHooks {
@@ -71,6 +77,8 @@ export interface SailingHooks {
   day(): number;
   /** game hours since the start (day * 24 + hour) */
   hours(): number;
+  /** where the player's map pin is, if they've set one */
+  waypoint?(): { x: number; z: number } | null;
   shake(n: number): void;
   dismount(): void;
 }
@@ -133,6 +141,26 @@ export class Sailing {
   private loot: { pos: THREE.Vector3; mesh: THREE.Object3D; gold: number; items: [string, number][] }[] = [];
   private wreckMeshes = new Map<string, THREE.Object3D>();
   private plunderBy: PirateShip | null = null;
+  /** the Seamanship tree */
+  picks: Record<string, number> = {};
+  private perkCache: SeaPerks = seaPerks({});
+  /** a lashed helm holds this heading while you're away from the wheel */
+  lashed: number | null = null;
+  knownCurrents = new Set<string>();
+  private windT = 0;
+  private windCd = 0;
+  private pressCd = 0;
+  private rogueT = 70;
+  private rogueWarn = 0;
+  private rogueDir = new THREE.Vector2();
+  private wavebroken = false;
+  private starDay = -1;
+  private eyeWarned = new WeakSet<StormCell>();
+  private trawlT = 0;
+  private spyglass = false;
+  private fovWas = 62;
+  private tackSaid = 0;
+  private surfSaid = false;
 
   constructor(private scene: THREE.Scene, private fx: FX, private player: Player, private input: Input, private cam: ThirdPersonCamera, private hooks: SailingHooks) {
     this.gunnery = new Gunnery(scene, fx);
@@ -150,6 +178,23 @@ export class Sailing {
   // ---- what the player knows -------------------------------------------------------------
 
   get level() { return seamanshipLevel(this.xp).level; }
+  get perks() { return this.perkCache; }
+
+  /** Learn a node of the Seamanship tree (null on success, else why not). */
+  learn(id: string): string | null {
+    const why = canBuy(id, this.picks, this.level);
+    if (why) return why;
+    this.picks[id] = (this.picks[id] ?? 0) + 1;
+    this.perkCache = seaPerks(this.picks);
+    this.hooks.save();
+    return null;
+  }
+
+  /** The helm's share of the tree: what it does to the ship you command. */
+  private shipPerks(): ShipPerks {
+    const p = this.perks;
+    return { tackWindow: p.tackWindow, turn: p.turn, thrown: p.thrown, kick: p.kick, groundDmg: p.groundDmg, surf: p.surf, trimWidth: p.trimWidth, sailDrive: p.sailDrive, setRate: p.setRate, reefSpeed: p.reefSpeed, capsizeMargin: p.capsizeMargin, irons: p.irons, current: p.current };
+  }
   get skill() { return (this.level - 1) / 29; }
   get assisted() { return this.mode === 'assisted'; }
   get aboard() { return !!this.current; }
@@ -256,6 +301,8 @@ export class Sailing {
     }
     this.lastPos.copy(ship.pos);
     this.voyageFrom.copy(ship.pos);
+    this.wavebroken = false;
+    ship.perks = this.shipPerks();
   }
   private voyageFrom = new THREE.Vector3();
 
@@ -264,7 +311,8 @@ export class Sailing {
     if (!ship) return;
     this.atHelm = true;
     this.player.vehicle = this.helm;
-    this.ctl = { ...NO_CONTROL(), sail: ship.sailSet, anchor: false };
+    this.lashed = null;
+    this.ctl = { ...NO_CONTROL(), sail: ship.sailSet, anchor: false, reef: ship.reefed };
     this.placeHelm();
   }
 
@@ -287,6 +335,9 @@ export class Sailing {
     if (this.atHelm) { this.atHelm = false; this.player.vehicle = null; this.cam.extra = 0; }
     ship.anchored = true;
     this.ctl = { ...NO_CONTROL(), anchor: true };
+    this.lashed = null;
+    ship.windOverride = null;
+    ship.lean = 0;
     ship.disableDeck();
     this.current = null;
     this.player.teleport(land.clone().setY(heightAt(land.x, land.z) + 0.4));
@@ -537,13 +588,50 @@ export class Sailing {
   preStep(dt: number) {
     const ship = this.current;
     const eff = crewEffects(this.crew, ship ? ship.thrown : 0);
+    const pk = this.perks;
+    // The Diver's craft, and floating wreckage to cling to.
+    this.player.breathTime = 25 * pk.breath;
+    this.player.swimSpeedMul = pk.swimSpeed;
+    this.player.swimStaminaMul = pk.swimStamina;
+    this.player.armourDrag = !pk.weighted;
+    this.player.tideChild = pk.childOfTide;
+    this.player.buoyed = this.player.swimming && this.loot.some((l) => Math.hypot(l.pos.x - this.player.pos.x, l.pos.z - this.player.pos.z) < 3);
+    // The spyglass: hold B to look far.
+    const glass = this.input.heldKey('KeyB');
+    if (glass !== this.spyglass) {
+      this.spyglass = glass;
+      if (glass) {
+        this.fovWas = this.cam.fovBase;
+        this.cam.fovBase = 16;
+      } else this.cam.fovBase = this.fovWas;
+    }
+    this.windCd = Math.max(0, this.windCd - dt);
+    this.pressCd = Math.max(0, this.pressCd - dt);
     // Ships nobody sails ride at anchor (only the near ones need updating).
     for (const s of this.ships.values()) {
       if (s === ship) continue;
       if (Math.hypot(s.pos.x - this.player.pos.x, s.pos.z - this.player.pos.z) < 700) s.update(dt, { ...NO_CONTROL(), anchor: true }, { skill: 0, assisted: true });
     }
     if (ship) {
+      ship.perks = this.shipPerks();
       if (this.atHelm) this.readHelm(dt, ship);
+      else if (this.lashed !== null) {
+        // The lashed wheel: she holds the heading you left her on.
+        const err = Math.atan2(Math.sin(ship.yaw - this.lashed), Math.cos(ship.yaw - this.lashed));
+        this.ctl.rudder = Math.max(-1, Math.min(1, err * 3));
+      }
+      ship.lean = this.atHelm && (ship.hull === 'skiff' || ship.hull === 'sloop') && this.input.held('sprint') ? 1 : 0;
+      if (this.windT > 0) {
+        this.windT -= dt;
+        if (this.windT <= 0) {
+          ship.windOverride = null;
+          this.hooks.toast('The called wind dies away.');
+        }
+      }
+      if (pk.mend && !ship.sunk) {
+        ship.sailHp = Math.min(ship.stats.sails, ship.sailHp + ship.stats.sails * 0.004 * dt);
+        for (let i = 0; i < 3; i++) ship.sections[i] = Math.min(ship.stats.hull, ship.sections[i] + ship.stats.hull * 0.0015 * dt);
+      }
       ship.crew = eff.hands + (this.atHelm ? 0 : 1);
       ship.pumping = this.atHelm ? 0 : 0.5;
       ship.stats.speed = ship.stats.speed; // (crew's bosun applies below)
@@ -586,6 +674,7 @@ export class Sailing {
         if (near && Math.random() < dt * 0.02) this.hooks.toast('Your lookout sees a storm building on the horizon.');
       }
       this.encounters(dt, ship, eff.lookout);
+      this.seaCraft(dt, ship, storm, eff);
     } else this.cam.extra = 0;
     this.updateThreats(dt, ship, eff);
     this.gunnery.update(dt, [...this.ships.values(), ...this.pirates.map((p) => p.ship)], [...(this.serpent ? [this.serpent] : []), ...this.sharks]);
@@ -628,6 +717,32 @@ export class Sailing {
       if (inp.heldKey('KeyX')) c.sheet = Math.min(1.5, c.sheet + dt * 0.8);
     } else c.sheet = null;
     c.row = inp.held('jump') ? 1 : 0;
+    if (inp.pressedKey('KeyL') && ship.def.model !== 'skiff') {
+      // Lash the wheel and walk away: she holds this heading.
+      this.leaveHelm();
+      this.lashed = ship.yaw;
+      this.hooks.toast('Helm lashed. She\'ll hold this heading; the wind and waves still have their say.');
+      return;
+    }
+    if (inp.pressedKey('KeyY') && this.perks.windcaller) {
+      if (this.windCd > 0) this.hooks.toast(`The wind won't answer again for ${Math.ceil(this.windCd / 60)} minutes.`);
+      else {
+        // A fair wind on the quarter, whatever the sky was doing.
+        const a = ship.yaw + (Math.random() < 0.5 ? 1 : -1) * 0.95;
+        ship.windOverride = { dir: new THREE.Vector2(Math.sin(a), Math.cos(a)), speed: Math.max(11, ship.windSpeed) };
+        this.windT = 60;
+        this.windCd = 600;
+        this.hooks.toast('You call the wind, and it comes: fair on the quarter.');
+      }
+    }
+    if (inp.pressedKey('KeyU') && this.perks.fullPress) {
+      if (this.pressCd > 0) this.hooks.toast(`The crew are spent: ${Math.ceil(this.pressCd)}s.`);
+      else {
+        ship.pressT = 30;
+        this.pressCd = 300;
+        this.hooks.toast('Full press! Every stitch of canvas, and she points higher.');
+      }
+    }
     // Guns: fire the broadside on the side you're looking at.
     const eff = crewEffects(this.crew, ship.thrown);
     this.reload[-1] = Math.max(0, this.reload[-1] - dt);
@@ -641,7 +756,7 @@ export class Sailing {
       const target = this.nearestEnemy(ship, beam, 0.75);
       const range = target ? target.pos.distanceTo(ship.pos) : 60;
       this.gunnery.broadside(ship, side, range, target?.pos, target?.vel);
-      this.reload[side] = Gunnery.reload(ship, eff.gunner);
+      this.reload[side] = Gunnery.reload(ship, eff.gunner) * this.perks.reload;
       this.hooks.shake(0.35);
     }
     if (inp.wasPressed('offhand') && ship.stats.harpoon && this.harpoonT <= 0) {
@@ -822,6 +937,41 @@ export class Sailing {
 
   private shipEvent(ship: Ship, e: string, d?: number) {
     const mine = ship === this.current;
+    // Wavebreaker: once a voyage, a knockdown is shrugged off.
+    if ((e === 'broach' || e === 'capsize') && mine && this.perks.wavebreaker && !this.wavebroken) {
+      this.wavebroken = true;
+      ship.capsized = false;
+      ship.water = Math.max(0, ship.water - 0.12);
+      (ship as unknown as { knock: number }).knock = 0;
+      this.hooks.toast('Wavebreaker! You throw your weight and the wheel over, and she rights herself.');
+      return;
+    }
+    if (e === 'tack' && mine) {
+      if (d) {
+        this.addXp(this.assisted ? 5 : 8);
+        if (performance.now() - this.tackSaid > 30000) { this.tackSaid = performance.now(); this.hooks.toast('A clean tack: she comes through the wind and keeps her way.'); }
+      } else this.hooks.toast('A slow tack: she hung in the wind and lost her way.');
+      return;
+    }
+    if (e === 'jibe' && mine) {
+      if (d) this.hooks.toast('Crash jibe! The boom slams across and tears the canvas. Reef or slow down to jibe.');
+      else this.addXp(4);
+      return;
+    }
+    if (e === 'irons' && mine) {
+      this.hooks.toast('In irons: you can\'t sail into the wind. Bear away (A/D), or row out (C).');
+      return;
+    }
+    if (e === 'surf' && mine) {
+      this.addXp(3);
+      if (!this.surfSaid) { this.surfSaid = true; this.hooks.toast('Surfing! She catches the face of a wave and flies.'); }
+      return;
+    }
+    if (e === 'shallows' && mine) {
+      if (this.perks.rockSense || crewEffects(this.crew, 0).lookout > 1.2) this.hooks.toast('"Shoal water ahead!" Bear away or slow down.');
+      return;
+    }
+    if (e === 'rogue') return;
     if (e === 'broach' && mine) {
       this.hooks.shake(1);
       this.hooks.toast('A sea breaks over the side and knocks her flat!');
@@ -890,7 +1040,7 @@ export class Sailing {
   private crewOverboard(chance: number) {
     const aboard = this.crew.filter((c) => c.status === 'aboard');
     const ship = this.current;
-    if (!ship || !aboard.length || Math.random() > chance) return;
+    if (!ship || !aboard.length || Math.random() > chance * this.perks.overboard) return;
     const c = aboard[Math.floor(Math.random() * aboard.length)];
     c.status = 'overboard';
     const right = new THREE.Vector3(-Math.cos(ship.yaw), 0, Math.sin(ship.yaw));
@@ -929,7 +1079,7 @@ export class Sailing {
     const day = this.hooks.day();
     if (this.paidDay === day || this.hooks.hours() % 24 < 8) return;
     this.paidDay = day;
-    const owed = this.crew.filter((c) => c.hire === 'permanent').reduce((a, c) => a + c.wage, 0);
+    const owed = Math.round(this.crew.filter((c) => c.hire === 'permanent').reduce((a, c) => a + c.wage, 0) * this.perks.wages);
     if (!owed) return;
     if (this.hooks.gold() >= owed) {
       this.hooks.addGold(-owed);
@@ -941,6 +1091,97 @@ export class Sailing {
       this.crew = this.crew.filter((c) => c.morale > 0.05);
       this.hooks.toast(`You can't pay your crew. Morale falls${left.length ? `; ${left.map((c) => c.name).join(', ')} walked off` : ''}.`);
     }
+  }
+
+  // ---- the craft: rogue waves, weather eye, star sights, currents, the trawl --------------------
+
+  private seaCraft(dt: number, ship: Ship, storm: number, eff: ReturnType<typeof crewEffects>) {
+    const pk = this.perks;
+    // Rogue waves: in a big storm, now and then a wall of water twice the rest.
+    if (storm > 0.5 && !ship.sunk) {
+      if (this.rogueWarn > 0) {
+        this.rogueWarn -= dt;
+        if (this.rogueWarn <= 0) {
+          const beam = ship.rogue(this.rogueDir, waveHeight(SEA.amp, storm) * 2);
+          this.hooks.shake(beam > 0.55 ? 1 : 0.6);
+          const right = new THREE.Vector3(-Math.cos(ship.yaw), 0, Math.sin(ship.yaw));
+          for (let k = -3; k <= 3; k++) this.fx.alpha.spawn({ pos: ship.pos.clone().addScaledVector(right, k * 3).setY(SEA_LEVEL + 1), vel: new THREE.Vector3(this.rogueDir.x * 4, 9, this.rogueDir.y * 4), spread: 3, count: 14, life: [0.8, 1.6], size: [0.8, 0.3], color: 0xeef6fa, alpha: 0.85, gravity: 9 });
+          if (beam <= 0.55) this.hooks.toast('She climbs the rogue wave and slams down its back. Well met!');
+          if (beam <= 0.55) this.addXp(20, 'met a rogue wave');
+          else this.crewOverboard(0.6);
+        }
+      } else {
+        this.rogueT -= dt;
+        if (this.rogueT <= 0) {
+          this.rogueT = 60 + Math.random() * 70;
+          const big = STORM_WAVES[0];
+          const d = new THREE.Vector2(big[0], big[1]).normalize();
+          this.rogueDir.copy(d);
+          this.rogueWarn = 4 + (pk.waveReader ? 2 : 0);
+          // Where it comes from, relative to the bow.
+          const rel = Math.atan2(Math.sin(Math.atan2(-d.x, -d.y) - ship.yaw), Math.cos(Math.atan2(-d.x, -d.y) - ship.yaw));
+          const where = Math.abs(rel) < 0.5 ? 'dead ahead' : Math.abs(rel) > 2.6 ? 'astern' : `off the ${rel > 0 ? 'port' : 'starboard'} ${Math.abs(rel) < 1.6 ? 'bow' : 'quarter'}`;
+          this.hooks.toast(`A rogue wave rears out of the storm, ${where}! Turn your bow into it!`);
+        }
+      }
+    } else this.rogueWarn = 0;
+    // Weather Eye: you feel a storm coming long before it arrives.
+    if (pk.weatherEye) for (const c of STORMS) {
+      if (this.eyeWarned.has(c)) continue;
+      const d = Math.hypot(c.x - ship.pos.x, c.z - ship.pos.z);
+      if (d < c.r + 1400 && d > c.r) {
+        this.eyeWarned.add(c);
+        const b = Math.atan2(c.x - ship.pos.x, -(c.z - ship.pos.z));
+        const dirs = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+        const name = dirs[(Math.round(b / (Math.PI / 4)) + 8) % 8];
+        const closing = (c.vx * (ship.pos.x - c.x) + c.vz * (ship.pos.z - c.z)) > 0;
+        this.hooks.toast(`Weather Eye: a storm builds to the ${name}, ${closing ? 'drifting your way' : 'drifting off'}.`);
+      }
+    }
+    // A star sight at night: where you are, by the heavens.
+    const hour = this.hooks.hours() % 24;
+    const day = this.hooks.day();
+    if (pk.starReckoning && (hour > 21 || hour < 4.5) && this.starDay !== day && this.atHelm) {
+      this.starDay = day;
+      const km = (Math.hypot(ship.pos.x - PORTS[0].zone.x, ship.pos.z - PORTS[0].zone.z) / 1000).toFixed(1);
+      this.hooks.toast(`A star sight: ${km} km from Port Aurelle, and true to your reckoning.`);
+      this.addXp(15);
+    }
+    // Currents: the first time you ride one, it's yours.
+    if (ship.currentId && !this.knownCurrents.has(ship.currentId)) {
+      this.knownCurrents.add(ship.currentId);
+      const c = CURRENTS.find((x) => x.id === ship.currentId);
+      this.hooks.toast(`You've found ${c?.name ?? 'a current'}: the sea itself carries you here.`);
+      this.addXp(30, 'found a current');
+    }
+    if (ship.currentSpeed > 0.4 && Math.random() < dt * (pk.currentLore ? 6 : 2)) {
+      // Streaks on the water where it runs.
+      const a = Math.random() * Math.PI * 2, r = 10 + Math.random() * 40;
+      this.fx.alpha.spawn({ pos: new THREE.Vector3(ship.pos.x + Math.cos(a) * r, SEA_LEVEL + 0.15, ship.pos.z + Math.sin(a) * r), spread: 1.5, count: pk.currentLore ? 6 : 3, life: [1.2, 2.2], size: [0.5, 0.2], color: 0xeaf6fa, alpha: 0.5, gravity: 0 });
+    }
+    // The trawl: sail slow with the net out and the sea fills it.
+    if (pk.trawl && ship.hull !== 'skiff' && ship.sailSet > 0.2 && Math.abs(ship.speed) > 0.6 && Math.abs(ship.speed) < 4.5) {
+      this.trawlT += dt * (pk.baitLore ? 1.4 : 1) * this.shoalBoost(ship);
+      if (this.trawlT > 45) {
+        this.trawlT = 0;
+        const pool = FISH.filter((f) => f.water.includes('sea') && !f.bigGame && (f.rarity > 0 || (pk.deepTables && f.deep && dangerAt(ship.pos.x, ship.pos.z) > 1.5)));
+        const w = pool.map((f) => (f.deep ? 1.2 : f.rarity));
+        let r = Math.random() * w.reduce((a, b) => a + b, 0);
+        const fish = pool.find((_, i) => (r -= w[i]) <= 0) ?? pool[0];
+        this.hooks.give(fish.id, 1);
+        this.hooks.toast(`The trawl comes up heavy: a ${fish.name}.`);
+        this.addXp(4);
+      }
+    }
+    void eff;
+    void BASE_WAVES;
+    void windAt;
+  }
+
+  /** A shoal under the keel fills the trawl three times as fast (sea events add shoals). */
+  shoalBoost(ship: Ship) {
+    void ship;
+    return 1;
   }
 
   // ---- the HUD (every rendered frame) --------------------------------------------------------
@@ -960,7 +1201,43 @@ export class Sailing {
       waves: waveHeight(SEA.amp, Math.max(SEA.storm, cellStormAt(ship.pos.x, ship.pos.z))), rated: ship.stats.seaworthy * (1 + this.skill * 0.35), storm: Math.max(SEA.storm, cellStormAt(ship.pos.x, ship.pos.z)),
       guns: ship.stats.guns, reload: [this.reload[-1], this.reload[1]], harpoon: ship.stats.harpoon > 0, crew: eff.hands, crewMin: ship.def.crewMin, morale: eff.morale,
       courseError: ship.kick, atHelm: this.atHelm, level: lvl.level, xpFrac: lvl.frac,
+      notes: this.helmNotes(ship), skiff: ship.hull === 'skiff' || ship.hull === 'sloop',
+      extraKeys: [this.perks.windcaller ? `Y call the wind${this.windCd > 0 ? ` (${Math.ceil(this.windCd / 60)}m)` : ''}` : '', this.perks.fullPress ? `U full press${this.pressCd > 0 ? ` (${Math.ceil(this.pressCd)}s)` : ''}` : ''].filter(Boolean).join(' · '),
     });
+  }
+
+  /** The helm's extra lines: what the Navigator and Helmsman know, and what's happening. */
+  private helmNotes(ship: Ship) {
+    const out: string[] = [];
+    const pk = this.perks;
+    const deg = (a: number) => Math.round(((a * 180) / Math.PI + 360) % 360);
+    // Bearing on the map: 0 is north (-z), 90 east (+x).
+    const bearing = (dx: number, dz: number) => deg(Math.atan2(dx, -dz));
+    if (pk.compass) {
+      out.push(`Heading ${bearing(Math.sin(ship.yaw), Math.cos(ship.yaw))}°`);
+      const wp = this.hooks.waypoint?.();
+      if (wp) {
+        const d = Math.hypot(wp.x - ship.pos.x, wp.z - ship.pos.z);
+        out.push(`Pin bears ${bearing(wp.x - ship.pos.x, wp.z - ship.pos.z)}°, ${d > 1000 ? (d / 1000).toFixed(1) + ' km' : Math.round(d) + ' m'}`);
+      }
+    }
+    const storm = Math.max(SEA.storm, cellStormAt(ship.pos.x, ship.pos.z));
+    if (pk.waveReader && ship.thrown > 0.1) {
+      // Meet the seas on the bow quarter: 30-45 degrees off where they come from.
+      const big = storm > 0.3 ? STORM_WAVES[0] : BASE_WAVES[0];
+      const from = Math.atan2(-big[0], -big[1]);
+      const rel = Math.atan2(Math.sin(from - ship.yaw), Math.cos(from - ship.yaw));
+      const off = Math.abs(rel) * (180 / Math.PI);
+      out.push(off >= 25 && off <= 50 ? 'Seas on the bow quarter: well met.' : off < 25 ? 'Seas dead ahead: bear off a little.' : `Seas ${off > 120 ? 'astern' : 'abeam'}: turn ${rel > 0 ? 'left (A)' : 'right (D)'} to meet them.`);
+    }
+    if (ship.surge > 0.1) out.push(`Surfing +${Math.round(ship.surge * 100)}%`);
+    if (ship.currentSpeed > 0.4) out.push(`In ${CURRENTS.find((c) => c.id === ship.currentId)?.name ?? 'a current'} (${(ship.currentSpeed * 1.94).toFixed(1)} kn)`);
+    if (this.windT > 0) out.push(`Called wind: ${Math.ceil(this.windT)}s`);
+    if (ship.pressT > 0) out.push(`Full press: ${Math.ceil(ship.pressT)}s`);
+    if (this.lashed !== null && !this.atHelm) out.push('Helm lashed: holding her course.');
+    if (ship.fire > 0) out.push('<span class="warn">FIRE ABOARD!</span>');
+    if (this.rogueWarn > 0) out.push('<span class="warn">ROGUE WAVE!</span>');
+    return out;
   }
 
   // ---- port services (dialogue options) -----------------------------------------------------
@@ -1199,7 +1476,7 @@ export class Sailing {
   private signOn(c: CrewMember, show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) {
     if (!this.records.length && !this.rental) return show('Sign on to what, a rowing boat? Come back when you\'ve a ship.', [{ label: 'Fair.', run: back }]);
     const room = Math.max(...this.records.map((r) => HULLS[r.hull].crewMax), this.rental ? HULLS[this.rental.hull].crewMax : 0);
-    if (this.crew.filter((x) => x.hire === 'permanent').length >= Math.max(room, 2)) return show('Your ship\'s full up. Bigger hull, bigger crew.', [{ label: 'Back.', run: back }]);
+    if (this.crew.filter((x) => x.hire === 'permanent').length >= Math.max(room, 2) + this.perks.berths) return show('Your ship\'s full up. Bigger hull, bigger crew.', [{ label: 'Back.', run: back }]);
     this.crew.push({ ...c, status: 'ashore', morale: 0.75 });
     this.hooks.close();
     this.hooks.toast(`${c.name} signs on as your ${ROLE_INFO[c.role].name.toLowerCase()} (${c.wage}g a day): ${ROLE_INFO[c.role].does}.`);
@@ -1227,7 +1504,7 @@ export class Sailing {
 
   toJSON(): SailingSave {
     for (const s of this.ships.values()) this.syncRecord(s);
-    return { ships: this.records, rental: this.rental, crew: this.crew, xp: Math.round(this.xp), mode: this.mode, wrecks: this.wrecks, stats: this.stats, paidDay: this.paidDay };
+    return { ships: this.records, rental: this.rental, crew: this.crew, xp: Math.round(this.xp), mode: this.mode, wrecks: this.wrecks, stats: this.stats, paidDay: this.paidDay, picks: this.picks, currents: [...this.knownCurrents] };
   }
 
   fromJSON(d: SailingSave | undefined) {
@@ -1243,6 +1520,9 @@ export class Sailing {
     this.wrecks = d.wrecks ?? [];
     this.stats = d.stats ?? this.stats;
     this.paidDay = d.paidDay ?? -1;
+    this.picks = { ...(d.picks ?? {}) };
+    this.perkCache = seaPerks(this.picks);
+    this.knownCurrents = new Set(d.currents ?? []);
     for (const r of this.records) this.spawn(r);
     for (const w of this.wrecks) this.showWreck(w);
     if (d.rental) {
@@ -1260,6 +1540,11 @@ export class Sailing {
     this.crew = [];
     this.xp = 0;
     this.mode = 'assisted';
+    this.picks = {};
+    this.perkCache = seaPerks({});
+    this.knownCurrents.clear();
+    this.lashed = null;
+    if (this.spyglass) { this.spyglass = false; this.cam.fovBase = this.fovWas; }
     this.player.vehicle = null;
     this.cam.extra = 0;
     for (const p of this.pirates) p.dispose();

@@ -191,3 +191,43 @@ export function updateSea(dt: number, camera: THREE.Vector3, weather: { wind: nu
 export function brewStorm(x: number, z: number, r = 500, power = 1) {
   STORMS.push({ x, z, r, vx: SEA.windDir.x * 4, vz: SEA.windDir.y * 4, power, life: 600 });
 }
+
+// ---- ocean currents ------------------------------------------------------------------------
+
+/**
+ * Fast lanes of water between the islands (docs/design/boating.md §5.6): ride
+ * one and the ship is carried along; buck it and you crawl. Polylines in world
+ * metres, with the flow speed (m/s) at the lane's heart and its half-width.
+ */
+export interface Current { id: string; name: string; pts: [number, number][]; speed: number; width: number }
+export const CURRENTS: Current[] = [
+  { id: 'aurelleStream', name: 'the Aurelle Stream', pts: [[3300, 300], [3900, 620], [4500, 1000], [5200, 1600]], speed: 2.2, width: 140 },
+  { id: 'northReach', name: 'the North Reach', pts: [[3400, -200], [4200, -900], [5000, -1600], [6000, -2500], [7000, -3300]], speed: 2.5, width: 150 },
+  { id: 'shatterGut', name: 'the Shatter Gut', pts: [[4000, 3300], [4200, 4100], [4400, 4800], [4500, 5500]], speed: 3, width: 120 },
+  { id: 'sunkenDrift', name: 'the Sunken Drift', pts: [[6700, 4100], [7300, 4600], [7900, 5000], [8300, 5500]], speed: 2, width: 160 },
+  { id: 'abyssRun', name: 'the Abyss Run', pts: [[7400, 2100], [8100, 1700], [8800, 1400], [9500, 1200]], speed: 2.8, width: 150 },
+];
+
+/** The current's flow at a point (m/s, world x/z), and which current it is. */
+export function currentAt(x: number, z: number) {
+  const out = { x: 0, z: 0, id: '' as string };
+  for (const c of CURRENTS) {
+    for (let i = 0; i < c.pts.length - 1; i++) {
+      const [ax, az] = c.pts[i], [bx, bz] = c.pts[i + 1];
+      const dx = bx - ax, dz = bz - az;
+      const len2 = dx * dx + dz * dz;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2));
+      const px = ax + dx * t, pz = az + dz * t;
+      const d = Math.hypot(x - px, z - pz);
+      if (d >= c.width) continue;
+      const len = Math.sqrt(len2);
+      const s = c.speed * (1 - (d / c.width) ** 2);
+      if (s > Math.hypot(out.x, out.z)) {
+        out.x = (dx / len) * s;
+        out.z = (dz / len) * s;
+        out.id = c.id;
+      }
+    }
+  }
+  return out;
+}

@@ -398,6 +398,7 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon' | n
       <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span><span><kbd>V</kbd> Origin ability</span>
       <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory · <kbd>K</kbd> Skills</span>
       <span><kbd>E</kbd> Interact (doors, chests, gates)</span><span><kbd>M</kbd> World map · draw the map in dungeons</span>
+      <span><kbd>N</kbd> Seamanship · <kbd>B</kbd> hold for the spyglass</span><span>At a ship's helm: <kbd>A</kbd>/<kbd>D</kbd> steer · <kbd>W</kbd>/<kbd>S</kbd> sail · <kbd>L</kbd> lash the wheel</span>
     </div>`;
   const start = document.createElement('div');
   start.className = 'overlay';
