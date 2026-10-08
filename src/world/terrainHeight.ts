@@ -6,6 +6,7 @@ import { ROAD_POLYS, CREEK } from './roadData';
 import { cityHeight } from './portCity';
 import { capitalHeight } from './capitalCity';
 import { islandPadHeight } from './sea/islandPortsData';
+import { mountainShape } from './mountains/mountainData';
 
 // ---------------------------------------------------------------------------
 // Terrain heights for the whole world (pure: no rendering, no physics, so the
@@ -199,6 +200,8 @@ export function worldHeightFn(x: number, z: number) {
   // The island harbours stand on small level pads (and their quays).
   const isl = x > 3500 ? islandPadHeight(x, z) : null;
   if (isl) return h * (1 - isl[1]) + isl[0] * isl[1];
+  // The White Mountains: the dwarf road's cuttings and the level yards of its villages and forts.
+  if (z < -4200) h = mountainShape(x, z, h);
   // Roads keep a gentle grade outside town too.
   if (r > LOCAL_R0 * 0.8) {
     const rd = roadDist(x, z);

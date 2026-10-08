@@ -29,6 +29,8 @@ export const GOODS: Good[] = [
   { id: 'rum', name: 'Black rum', base: 16 },
   { id: 'relics', name: 'Drowned relics', base: 70 },
   { id: 'ashSilk', name: 'Ash silk', base: 90 },
+  { id: 'mountainOre', name: 'Mountain ore', base: 24 },
+  { id: 'gems', name: 'Rough gems', base: 65 },
   { id: 'plunder', name: 'Plunder (no questions)', base: 45, contraband: true },
   { id: 'demonGlass', name: 'Demon-glass', base: 120, contraband: true },
 ];
@@ -52,6 +54,7 @@ export const MARKETS: Record<string, Market> = {
   emeraldCove: { produce: ['timber', 'dyes', 'herbs'], want: ['ironware', 'saltFish', 'wine', 'sugar', 'cloth'] },
   wreckersRest: { produce: ['rum', 'plunder'], want: ['ironware', 'wine', 'grain', 'cloth'], fence: true },
   sunkenSpire: { produce: ['relics', 'nacre'], want: ['grain', 'wine', 'cloth', 'herbs', 'rum'] },
+  kettleCove: { produce: ['mountainOre', 'ironware', 'gems'], want: ['grain', 'saltFish', 'timber', 'cloth', 'wine'] },
   ashenPort: { produce: ['demonGlass', 'ashSilk'], want: ['wine', 'grain', 'timber', 'ironware', 'spices', 'sugar'] },
 };
 

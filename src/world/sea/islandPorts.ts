@@ -35,6 +35,7 @@ const STYLE: Record<PortStyle, { roof: 'slate' | 'thatch' | 'tile'; wood: number
   pirate: { roof: 'slate', wood: 0x3a2e26, flag: 0x141416, floors: [1, 2, 1, 1] },
   sunken: { roof: 'slate', wood: 0x5a5a5a, flag: 0x2a7a8a, floors: [1, 1, 1, 2] },
   demon: { roof: 'slate', wood: 0x2a1a1a, flag: 0xa02020, floors: [2, 1, 2, 1] },
+  dwarf: { roof: 'slate', wood: 0x4a3a2e, flag: 0x8a3f22, floors: [1, 2, 1, 1] },
 };
 
 const FOLK: Record<string, { hm: [string, string, Look]; tr: [string, string, Look]; folk: Look[]; lines: { hm: string[]; tr: string[]; folk: string[] } }> = {
@@ -61,6 +62,12 @@ const FOLK: Record<string, { hm: [string, string, Look]; tr: [string, string, Lo
     tr: ['Scholar Aldous Penhallow', 'Antiquarian · Drowned Relics', { body: 'male', outfit: 'peasant', hair: 'simpleparted', beard: true, hairColor: 0xb8b4ae, skin: 0xe0b894, linen: 0xd8d0c0, cloth: 0x2a5a7a, height: 1.76 }],
     folk: [{ body: 'male', outfit: 'ranger', hair: 'buzzed', skin: 0x8a5a3a, cloth: 0x2a7a8a }, { body: 'female', outfit: 'ranger', hair: 'long', skin: 0xe0b894, cloth: 0x2a5a7a }],
     lines: { hm: ['The ruins go down further than any diver has. The carvings are the same as the ones in Elder Glen\'s crypt.', 'Dive the shallows, but mind the deep water. Something lives there.'], tr: ['Every relic the divers bring up is older than Cresha. Older than the elves, maybe.', 'The Sunwheel again. It\'s everywhere down there.'], folk: ['I held my breath for three minutes yesterday. A record!', 'There are lights in the water at night. Nobody knows why.'] },
+  },
+  kettleCove: {
+    hm: ['Harbourmaster Dagna Saltbraid', 'Harbourmaster of Kettle Cove · Berths and Contracts', { body: 'female', outfit: 'ranger', hair: 'buns', hairColor: 0xb8562a, skin: 0xe0b894, cloth: 0x8a3f22, pauldron: true, height: 1.38 }],
+    tr: ['Orsk Ironfist', 'Ore-factor · Ore, Ironware and Gems', { body: 'male', outfit: 'ranger', hair: 'buzzed', beard: true, hairColor: 0x3a2a1e, skin: 0xd8a888, cloth: 0x5a5a62, pauldron: true, height: 1.36 }],
+    folk: [{ body: 'male', outfit: 'peasant', hair: 'buzzed', beard: true, skin: 0xe0b894, linen: 0x9a8a72, cloth: 0x6a4a2a, height: 1.34 }, { body: 'female', outfit: 'ranger', hair: 'long', hairColor: 0x6a3a1e, skin: 0xf0d0b0, cloth: 0x4a5a6a, height: 1.4 }],
+    lines: { hm: ['Mind the cliff wind when you come about. It knocks the unwary flat.', 'Every ton of ore in the White Mountains leaves by this quay, or it doesn’t leave at all.'], tr: ['Iron, copper, and the odd gem out of the high seams. Bring me grain and timber; the holds eat both.', 'Mountain ore’s worth twice the Cresha stuff. Ask any smith.'], folk: ['The winch-lift squeals. It always squeals. It hasn’t dropped anyone in years.', 'Cold up top. Pack a cloak.'] },
   },
   ashenPort: {
     hm: ['Portwarden Vashka Emberhorn', 'Portwarden of Ashen Port · Berths and Contracts', { body: 'female', outfit: 'ranger', hood: false, hair: 'long', hairColor: 0x1a0a0a, skin: 0xb05040, cloth: 0xa02020, height: 1.9 }],

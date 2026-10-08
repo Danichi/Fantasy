@@ -5,6 +5,7 @@ import { PRODUCE_ITEMS } from './produce';
 import { HERB_ITEMS, HERB_MODELS } from './herbs';
 import { FISH_ITEMS } from '../world/fishing';
 import { DESERT_ITEMS } from './desertItems';
+import { MOUNTAIN_ITEMS } from './mountainItems';
 
 export type Slot =
   | 'main' | 'off'
@@ -12,7 +13,7 @@ export type Slot =
   | 'amulet' | 'ring1' | 'ring2' | 'belt' | 'trinket';
 export const ARMOR_SLOTS: Slot[] = ['head', 'shoulders', 'chest', 'cloak', 'hands', 'legs', 'feet'];
 export const ACCESSORY_SLOTS: Slot[] = ['amulet', 'ring1', 'ring2', 'belt', 'trinket'];
-export type ItemKind = 'sword' | 'shield' | 'armor' | 'accessory' | 'spell' | 'consumable' | 'key' | 'material';
+export type ItemKind = 'sword' | 'shield' | 'armor' | 'accessory' | 'spell' | 'consumable' | 'key' | 'material' | 'crossbow';
 export type Rarity = 'common' | 'fine' | 'rare' | 'epic';
 
 export interface ItemStats {
@@ -409,6 +410,7 @@ export const ITEMS: Record<string, ItemDef> = {
   ...HERB_ITEMS,
   ...FISH_ITEMS,
   ...DESERT_ITEMS,
+  ...MOUNTAIN_ITEMS,
 };
 
 // The four original herbs use the foraging models for their icons too.

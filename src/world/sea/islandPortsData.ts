@@ -3,7 +3,7 @@
 // level pad its houses stand on. Plain numbers only: the terrain (and its
 // worker) reads the pads.
 
-export type PortStyle = 'azure' | 'emerald' | 'pirate' | 'sunken' | 'demon';
+export type PortStyle = 'azure' | 'emerald' | 'pirate' | 'sunken' | 'demon' | 'dwarf';
 
 export interface IslandPortDef {
   id: string;
@@ -24,6 +24,8 @@ export const ISLAND_PORTS: IslandPortDef[] = [
   { id: 'emeraldCove', name: 'Emerald Cove', land: [6800, 2690], dir: 0, shore: 35, padH: 1.6, style: 'emerald', blurb: 'A timber town under green hills, where the Emerald Isles\' timber, herbs and dyes go out to the world.' },
   { id: 'wreckersRest', name: 'Wrecker\'s Rest', land: [4334, 5132], dir: 0.785, shore: 25, padH: 4.2, style: 'pirate', blurb: 'A haven of wreckers and pirates on the Shattered Isles. Stolen goods change hands here, and nobody asks.' },
   { id: 'sunkenSpire', name: 'Sunken Spire', land: [9404, 5948], dir: 0.785, shore: 20, padH: 1.3, style: 'sunken', blurb: 'An outpost of divers and scholars among drowned ruins, where the old carvings go down under the sea.' },
+  // Kettle Cove (the White and Deep Mountains, feat/mountains): cut into the cliffs where the White Mountains meet deep water.
+  { id: 'kettleCove', name: 'Kettle Cove', land: [5250, -4830], dir: 1.571, shore: 30, padH: 3.2, style: 'dwarf', blurb: 'A dwarven harbour hewn into the cliffs of the White Mountains, where the ore of the high holds comes down to the sea.' },
   { id: 'ashenPort', name: 'Ashen Port', land: [9844, 190], dir: 3.534, shore: 15, padH: 2.8, style: 'demon', blurb: 'The black harbour of the Demon Continent. Only a great ship can cross to it.' },
 ];
 
