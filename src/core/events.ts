@@ -31,6 +31,8 @@ export interface GameEvents {
   regionEntered: { id: string; name: string; subtitle: string; first: boolean };
   placeDiscovered: { id: string; name: string; kind: string };
   questChanged: { id: string; status: 'active' | 'done' };
+  /** a great deed (a named boss, a legendary beast, a first landfall...): Renown for the Legendary Hero */
+  deed: { id: string; renown: number; label: string };
 }
 
 type Handler<T> = (payload: T) => void;
