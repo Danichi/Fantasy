@@ -305,7 +305,7 @@ export function buildRoadFurniture(scene: THREE.Scene, m: WorldMats, talk: (who:
     scene.add(g);
     // Block the road (and a little either side) with a wall of colliders.
     const collider = physics.addBox(new THREE.Vector3(p.x, y + 1.2, p.z), new THREE.Vector3(half + 6, 1.4, 0.5), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)));
-    barriers.set(r.id, { bars: g.children.filter((c) => (c as THREE.Mesh).geometry?.type === 'BoxGeometry' && Math.abs(c.position.x) < 0.01), collider, half });
+    barriers.set(r.id, { bars: r.id === 'forest' ? g.children.slice(0, 1) : g.children.filter((c) => (c as THREE.Mesh).geometry?.type === 'BoxGeometry' && Math.abs(c.position.x) < 0.01), collider, half });
     const pos = new THREE.Vector3(p.x - p.dir.x * 2.5, y, p.z - p.dir.y * 2.5);
     const gate = { pos, reason: r.gate.reason, road: r.id, open: false };
     gates.push(gate);
@@ -314,7 +314,7 @@ export function buildRoadFurniture(scene: THREE.Scene, m: WorldMats, talk: (who:
       label: () => (r.id === 'forest' ? 'Read the marker stone' : 'Read the notice'),
       enabled: () => true,
       action: () => talk(r.name, r.id === 'capital' ? 'Crown checkpoint' : r.id === 'forest' ? 'Elven marker stone' : 'Closed road',
-        gate.open ? 'The barrier is lifted aside. A Crown Guard waves you through: registered at the Academy, the Crown Road is yours.' : r.gate!.reason),
+        gate.open ? (r.id === 'forest' ? 'The trunk has been rolled aside. The runes on the marker stone glow a welcoming green: the elves have given you leave to walk the Greenwood Road.' : 'The barrier is lifted aside. A Crown Guard waves you through: registered at the Academy, the Crown Road is yours.') : r.gate!.reason),
     });
   }
   return {
@@ -324,6 +324,11 @@ export function buildRoadFurniture(scene: THREE.Scene, m: WorldMats, talk: (who:
       if (!gate || !b || gate.open) return;
       gate.open = true;
       physics.removeStatic(b.collider);
+      // The elves' fallen trunk is rolled to the roadside.
+      if (id === 'forest') {
+        for (const t of b.bars) (t.rotation.set(Math.PI / 2, 0, 0), t.position.set(-(b.half + 2.2), 0.6, 0));
+        return;
+      }
       // The bars are raised: they stand upright beside one post, like a lifted boom.
       b.bars.forEach((bar, i) => {
         bar.rotation.z = Math.PI / 2;

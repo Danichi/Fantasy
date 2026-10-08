@@ -8,6 +8,7 @@ import { fbm, mulberry32, smoothstep } from '../core/math';
 import { physics } from '../physics/physics';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { WIND } from './grass';
+import { elvenTreeDensity } from './elves/elvenForestData';
 
 // Trees and understory for the whole world (docs/ART-DIRECTION.md §5).
 //
@@ -537,6 +538,8 @@ export class StylizedNature {
     const alpine = region === 'whiteMountains' || region === 'deepMountains' || region === 'frostedPeaks';
     // Ancient forests grow taller the further north into the elven woods.
     const giant = region === 'verdantElves' ? 1.2 + smoothstep(-2200, -3600, z) * 0.9 : region === 'deepWilderness' ? 1.35 : 1;
+    // The elven woods thicken and grow taller layer by layer (world/elves/elvenForestData.ts).
+    if (region === 'verdantElves' && rel !== RELIEF.mountain && rel !== RELIEF.snow) { const elf = elvenTreeDensity(x, z, grove); if (elf) return elf; }
     switch (rel) {
       case RELIEF.forest: return [0.5 + grove * 0.3, alpine || z < -4200 ? 'pine' : 'mix', giant];
       // Plains: groves and copses with lone trees between (Zelda-style open country, not an empty lawn).

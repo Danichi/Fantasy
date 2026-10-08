@@ -72,7 +72,13 @@ export const ROAD_SPECS: RoadSpec[] = [
     // The northern forest road toward the elven woods.
     id: 'forest', name: 'The Greenwood Road', kind: 'lane',
     pts: [[0, -300], [-20, -380], [-70, -520], [-160, -700], [-300, -900], [-520, -1150], [-900, -1500], [-1500, -2000], [-2100, -2500], [-2800, -3000]],
-    gate: { at: [-160, -700], reason: 'An elven marker stone stands across the road: none pass into the Verdant Woods without a guide.' },
+    // (The elves' marker stone stands past Thornwick, where the Inner Forest begins: world/elves/.)
+    gate: { at: [-1716, -2180], reason: 'An elven marker stone stands across the road, and a fallen trunk with it: none pass into the Verdant Woods without the elves’ leave. The woodcutters of Thornwick might know how to get it.' },
+  },
+  {
+    // The Oldest Way: the elven path from the Sanctum through the Ancient Forest to the Temple of Starfall.
+    id: 'oldestWay', name: 'The Oldest Way', kind: 'trail',
+    pts: [[-2800, -3000], [-2730, -3120], [-2640, -3240], [-2560, -3330], [-2500, -3420], [-2456, -3496]],
   },
   {
     // Off the logging road, south through the fields into the dead wood.

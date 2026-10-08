@@ -6,6 +6,7 @@ import { ROAD_POLYS, CREEK } from './roadData';
 import { cityHeight } from './portCity';
 import { capitalHeight } from './capitalCity';
 import { islandPadHeight } from './sea/islandPortsData';
+import { elvenPadHeight } from './elves/elvenForestData';
 
 // ---------------------------------------------------------------------------
 // Terrain heights for the whole world (pure: no rendering, no physics, so the
@@ -199,6 +200,9 @@ export function worldHeightFn(x: number, z: number) {
   // The island harbours stand on small level pads (and their quays).
   const isl = x > 3500 ? islandPadHeight(x, z) : null;
   if (isl) return h * (1 - isl[1]) + isl[0] * isl[1];
+  // The Verdant Elves: Thornwick, Silverbough, the Sanctum, the Temple's court and Moonlight Glade stand on level pads.
+  const elf = z < -1900 ? elvenPadHeight(x, z) : null;
+  if (elf) return h * (1 - elf[1]) + elf[0] * elf[1];
   // Roads keep a gentle grade outside town too.
   if (r > LOCAL_R0 * 0.8) {
     const rd = roadDist(x, z);
