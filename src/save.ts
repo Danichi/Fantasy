@@ -38,6 +38,8 @@ export interface WorldSave {
   fishing?: { trophies?: Record<string, number>; held?: Record<string, number> };
   /** ships, crew, rentals, wrecks and Seamanship */
   sailing?: import('./world/sea/sailing').SailingSave;
+  /** Arms and Crafting (feat/arms): known recipes, depleted gathering nodes, buffs, crafting settings */
+  arms?: import('./crafting/crafting').ArmsSave;
 }
 
 export interface SaveData {
@@ -53,7 +55,7 @@ export interface SaveData {
   };
   /** disciplines and attributes; missing in saves from before XP was a currency */
   paths?: PathsSave;
-  items: { id: string; qty: number }[];
+  items: { id: string; qty: number; q?: number; rune?: string }[];
   equipped: Partial<Record<Slot, number>>; // slot -> index into items
   quick: (number | null)[];
   moves: (number | string | null)[];
@@ -133,7 +135,7 @@ export function buildSave(player: Player, seed: number, maps: Record<string, Map
       level: player.prog.level, xp: player.prog.xp, gold: player.prog.gold, total: player.prog.totalXp, origin: player.prog.origin,
     },
     paths: player.paths.serialize(),
-    items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty })),
+    items: eq.items.map((i) => ({ id: i.def.id, qty: i.qty, ...(i.q !== undefined ? { q: i.q } : {}), ...(i.rune ? { rune: i.rune } : {}) })),
     equipped,
     quick: cleanItems(eq.quick),
     moves: cleanMoves(eq.moves),
@@ -182,7 +184,7 @@ export function applySave(player: Player, d: SaveData) {
       continue;
     }
     // add() merges stacks; saved stacks are already whole so add them directly.
-    const inst = eq.add(it.id, it.qty);
+    const inst = eq.add(it.id, it.qty, it.q, it.rune);
     uids.push(inst.uid);
   }
   const uid = (k: number | null) => (k == null || k < 0 || uids[k] < 0 ? null : uids[k]);

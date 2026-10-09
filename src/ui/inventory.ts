@@ -5,10 +5,12 @@ import { events } from '../core/events';
 import { iconFor, wideIconFor } from './icons';
 import type { CharPreview } from './charPreview';
 import { DISC } from '../paths/data';
+import { qualityLine, RUNES } from '../crafting/quality';
 
 const SLOT_LABEL: Record<Slot, string> = {
   main: 'Main hand', off: 'Off hand', head: 'Head', shoulders: 'Shoulders', chest: 'Chest', cloak: 'Cloak',
   hands: 'Hands', legs: 'Legs', feet: 'Feet', amulet: 'Amulet', ring1: 'Ring', ring2: 'Ring', belt: 'Belt', trinket: 'Trinket',
+  quiver: 'Quiver',
 };
 
 type View = 'items' | 'stats';
@@ -16,17 +18,18 @@ type Category = 'all' | 'weapons' | 'shields' | 'armour' | 'accessories' | 'spel
 type Sort = 'recent' | 'name' | 'rarity' | 'type';
 const CATEGORIES: [Category, string, string, ItemKind[]][] = [
   ['all', 'All items', '✧', []],
-  ['weapons', 'Weapons', '⚔', ['sword']],
+  ['weapons', 'Weapons', '⚔', ['sword', 'spear', 'greatsword', 'axe', 'mace', 'dagger', 'bow', 'crossbow', 'staff', 'ammo']],
   ['shields', 'Shields', '◈', ['shield']],
   ['armour', 'Armour', '⬟', ['armor']],
   ['accessories', 'Accessories', '◇', ['accessory']],
   ['spells', 'Spells', '✦', ['spell']],
-  ['usables', 'Usables', '●', ['consumable']],
+  ['usables', 'Usables', '●', ['consumable', 'tool']],
   ['materials', 'Materials', '❖', ['material']],
   ['quest', 'Quest items', '⌘', ['key']],
 ];
 const RARITY_RANK: Record<string, number> = { epic: 0, rare: 1, fine: 2, common: 3 };
-const KIND_RANK: Record<ItemKind, number> = { sword: 0, shield: 1, armor: 2, accessory: 3, spell: 4, consumable: 5, material: 6, key: 7 };
+const KIND_RANK: Record<ItemKind, number> = { sword: 0, shield: 1, armor: 2, accessory: 3, spell: 4, consumable: 5, material: 6, key: 7,
+  spear: 0, greatsword: 0, axe: 0, mace: 0, dagger: 0, bow: 0, crossbow: 0, staff: 0, ammo: 1, tool: 5 };
 const STAT_NAMES: Partial<Record<keyof ItemStats, string>> = {
   damage: 'Damage', speed: 'Speed', block: 'Block', stability: 'Stability', armor: 'Armour', poise: 'Poise',
   manaCost: 'Mana cost', heal: 'Restores HP', restoreMana: 'Restores MP', restoreStamina: 'Restores stamina', waterBreathing: 'Breathe underwater (s)',
@@ -191,7 +194,7 @@ export class InventoryUI {
     const eq = this.player.equip, p = this.player;
     this.armorCol.replaceChildren(...ARMOR_SLOTS.map((s) => this.slotEl(s)));
     this.accCol.replaceChildren(...ACCESSORY_SLOTS.map((s) => this.slotEl(s)));
-    this.weaponRow.replaceChildren(this.slotEl('main', true), this.slotEl('off', true));
+    this.weaponRow.replaceChildren(this.slotEl('main', true), this.slotEl('off', true), ...(eq.mainWeapon?.def.ammo || eq.equipped.quiver != null ? [this.slotEl('quiver')] : []));
     const block = eq.hasShield ? `${eq.offItem!.def.stats.block ?? 0}%` : '—';
     this.summary.innerHTML = `
       <span><b>${eq.mainWeapon?.def.stats.damage ?? 0}${eq.dualWield ? ' + ' + (eq.offItem?.def.stats.damage ?? 0) : ''}</b>Attack</span>
@@ -297,7 +300,7 @@ export class InventoryUI {
     if (it.def.kind === 'consumable') this.player.useConsumable(it.uid);
     else if (it.def.kind === 'spell') eq.equip(it.uid);
     else if (slot) eq.unequip(slot);
-    else if (it.def.kind !== 'material' && it.def.kind !== 'key') eq.equip(it.uid, it.def.kind === 'sword' && alt ? 'off' : undefined);
+    else if (it.def.kind !== 'material' && it.def.kind !== 'key' && it.def.kind !== 'tool') eq.equip(it.uid, (it.def.kind === 'sword' || eq.canEquip(it, 'off')) && it.def.kind !== 'shield' && alt ? 'off' : undefined);
     events.emit('equipmentChanged', {});
     this.render();
   }
@@ -340,17 +343,18 @@ export class InventoryUI {
       actions.push('<button data-act="use">Use</button>');
       for (let i = 0; i < eq.quick.length; i++) actions.push(`<button data-act="quick" data-slot="${i}" class="small">Quick ${i + 1}</button>`);
     } else if (d.kind === 'spell') actions.push(`<button data-act="use">${eq.activeSpell === it.uid ? 'Attuned (R to cast)' : 'Attune (R to cast)'}</button>`);
-    else if (d.kind === 'material' || d.kind === 'key') actions.push(`<span class="dim">${d.kind === 'key' ? 'Kept for a quest.' : 'Used in crafting, cooking and trade.'}</span>`);
+    else if (d.kind === 'material' || d.kind === 'key' || d.kind === 'tool') actions.push(`<span class="dim">${d.kind === 'key' ? 'Kept for a quest.' : d.kind === 'tool' ? 'A gathering tool: keep it in your pack.' : 'Used in crafting, cooking and trade.'}</span>`);
     else if (slot) actions.push('<button data-act="use">Take off</button>');
     else {
       actions.push('<button data-act="use">Equip</button>');
-      if (d.kind === 'sword') actions.push('<button data-act="off">Equip in off hand</button>');
+      if (d.kind === 'sword' || (d.kind !== 'shield' && eq.canEquip(it, 'off'))) actions.push('<button data-act="off">Equip in off hand</button>');
     }
     box.innerHTML = `
       <div class="dhead"><img class="big" src="${iconFor(d.id)}" alt=""><div><div class="name">${esc(d.name)}</div><div class="rar r-${d.rarity}">${d.rarity} ${d.kind === 'armor' ? 'armour' : d.kind === 'key' ? 'quest item' : d.kind}${d.stack ? ` · ×${it.qty}` : ''}</div></div></div>
       <p>${esc(d.desc)}</p>
       ${rows.length ? `<div class="stats">${rows.join('')}</div>` : ''}
       ${traitLines(d.stats).map((t) => `<div class="trait">✦ ${t}</div>`).join('')}
+      ${it.q !== undefined ? `<div class="trait">⚒ ${qualityLine(it.q)}</div>` : ''}${it.rune && RUNES[it.rune] ? `<div class="trait">ᚱ ${RUNES[it.rune].line}</div>` : ''}
       ${worn ? `<div class="cmp">Compared with your <b>${esc(worn.def.name)}</b></div>` : slot ? `<div class="cmp">Worn: ${SLOT_LABEL[slot]}</div>` : ''}
       <div class="dact">${actions.join('')}</div>`;
     box.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((b) =>

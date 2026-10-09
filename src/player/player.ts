@@ -149,6 +149,21 @@ export class Player {
   cheatDeath?: () => boolean;
   /** per-target bonus for blade hits (brands, forced crits) */
   meleeBonus?: (t: Target) => { mult: number; crit: boolean };
+  // ---- Arms and Crafting (feat/arms): the weapon families (combat/armsRuntime.ts) ----
+  /** the equipped weapon family's version of an action (same id, its own clip, timing and reach) */
+  actionFor?: (id: string) => ActionDef | undefined;
+  /** last word on the procedural pose (two-handed holds, weapon guards, the bow's draw) */
+  poseHook?: (pose: ProcPose, act: { def: ActionDef; t: number } | null, at: number) => ProcPose;
+  /** extra hyper-armour (a greatsword's whole heavy) */
+  hyperArmour?: () => boolean;
+  /** a two-handed weapon held up as a guard: its block and stability (null: can't guard) */
+  weaponGuard?: () => { block: number; stability: number } | null;
+  /** a consumable was used (meals and elixirs start their buffs) */
+  onConsume?: (def: import('../items/itemDefs').ItemDef) => void;
+  /** aiming a bow or crossbow: walk slowly, face where the camera looks, no melee */
+  aiming = false;
+  /** how far round a block reaches (cos of the angle from straight ahead; a greatsword's Boundary guard covers 180 degrees) */
+  blockFacing = 0.3;
 
   async init(scene: THREE.Scene, spawn: THREE.Vector3) {
     // The stylised hero (docs/ART-DIRECTION.md §7), playing the Mixamo clips.
@@ -337,13 +352,13 @@ export class Player {
 
     const now = performance.now() / 1000;
     const buf = (a: Buffered) => (this.buffer = { a, t: now });
-    if (input.wasPressed('attack')) buf('attack');
+    if (input.wasPressed('attack') && !this.aiming) buf('attack');
     if (input.wasPressed('offhand') && this.equip.dualWield) buf('offhand');
     if (input.wasPressed('parry')) buf('parry');
     if (input.wasPressed('dodge')) buf('dodge');
     if (input.wasPressed('cast')) buf('cast');
     if (input.wasPressed('originAbility')) buf('originAbility');
-    this.blocking = input.held('offhand') && this.equip.hasShield && this.mods.canBlock && (!this.act || this.act.def.id === 'parryShield');
+    this.blocking = input.held('offhand') && (this.equip.hasShield || !!this.weaponGuard?.()) && this.mods.canBlock && (!this.act || this.act.def.id === 'parryShield' || this.act.def.id === 'parryWeapon');
     this.diveHeld = input.held('jump');
     if (input.wasPressed('jump') && this.grounded && !this.act) {
       this.vel.y = JUMP_V;
@@ -356,7 +371,7 @@ export class Player {
 
   // ---- actions --------------------------------------------------------------
   private startAction(id: string, t0?: number): boolean {
-    const raw = ACTIONS[id];
+    const raw = this.actionFor?.(id) ?? ACTIONS[id];
     if (!raw) return false;
     const usingClip = !!raw.clip && this.char.has(raw.clip);
     const def = resolveAction(raw, usingClip);
@@ -412,7 +427,7 @@ export class Player {
       if (b.a === 'attack' && eq.mainWeapon) next = !this.grounded ? 'airAttack' : this.sprinting ? 'sprintAttack' : 'slash1';
       else if (b.a === 'offhand' && eq.dualWield) next = 'offslash1';
       else if (b.a === 'dodge') next = this.grounded ? (this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep') : null;
-      else if (b.a === 'parry') next = eq.hasShield ? 'parryShield' : eq.dualWield ? 'parryDual' : null;
+      else if (b.a === 'parry') next = eq.hasShield ? 'parryShield' : eq.dualWield ? 'parryDual' : this.actionFor?.('parryWeapon') ? 'parryWeapon' : null;
       else if (b.a === 'cast') next = this.spellAction();
       if (next === null && b.a === 'dodge' && !this.grounded) return; // keep it for landing
     } else {
@@ -421,7 +436,7 @@ export class Player {
       if (b.a === 'attack' && eq.mainWeapon && comboOpen) next = mainCombo(d) && d.combo ? d.combo.next : 'slash1';
       else if (b.a === 'offhand' && eq.dualWield && comboOpen) next = offCombo(d) && d.combo ? d.combo.next : 'offslash1';
       else if (b.a === 'dodge' && a.t >= d.cancel && this.grounded) next = this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep';
-      else if (b.a === 'parry' && a.t >= d.cancel) next = eq.hasShield ? 'parryShield' : eq.dualWield ? 'parryDual' : null;
+      else if (b.a === 'parry' && a.t >= d.cancel) next = eq.hasShield ? 'parryShield' : eq.dualWield ? 'parryDual' : this.actionFor?.('parryWeapon') ? 'parryWeapon' : null;
       else return; // keep buffering
     }
     this.buffer = null;
@@ -455,7 +470,8 @@ export class Player {
 
     // A light attack held long enough turns into a charged heavy.
     if (d.id === 'slash1' && d.hit && a.t < d.hit.from && input.held('attack') && input.heldFor('attack') > 0.28) {
-      const heavy = resolveAction(ACTIONS.heavy, !!ACTIONS.heavy.clip && this.char.has(ACTIONS.heavy.clip));
+      const hv = this.actionFor?.('heavy') ?? ACTIONS.heavy;
+      const heavy = resolveAction(hv, !!hv.clip && this.char.has(hv.clip));
       this.startAction('heavy', heavy.chargeAt !== undefined ? heavy.chargeAt * heavy.dur * 0.6 : 0.3);
       return;
     }
@@ -619,7 +635,7 @@ export class Player {
     let targetSpeed = 0;
     if (!a && intent.lengthSq() > 0) {
       const ms = this.mountStats ?? { canter: 11.5, gallop: 15, accel: 8 };
-      targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
+      targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking || this.aiming ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
       // Wading slows you down; deep water means swimming.
       const wade = waterDepthAt(this.pos.x, this.pos.z);
@@ -706,6 +722,8 @@ export class Player {
         const want = toLock ?? toSoft ?? (intent.lengthSq() > 0 ? Math.atan2(intent.x, intent.z) : this.yaw);
         this.turnToward(want, dt, 220);
       } else this.yawVel *= Math.exp(-20 * dt);
+    } else if (this.aiming) {
+      this.turnToward(Math.atan2(this.aimDir.x, this.aimDir.z), dt, 400, 18);
     } else if (toLock !== null && !this.sprinting) {
       this.turnToward(toLock, dt, 200);
     } else if (intent.lengthSq() > 0) {
@@ -945,6 +963,7 @@ export class Player {
       this.poseFade = Math.min(1, this.poseFade + dt / 0.18);
       pose = blendPose(this.poseFrom, pose, smoothstep(0, 1, this.poseFade));
     }
+    if (this.poseHook && !this.dead) pose = this.poseHook(pose, a, at);
     this.lastPose = pose;
 
     // Procedural roll: rotate the tucked body around its middle.
@@ -1115,8 +1134,9 @@ export class Player {
       this.onShake?.(0.25);
       return 'parried';
     }
-    if (this.blocking && this.equip.hasShield && facing > 0.3 && this.blockW > 0.5) {
-      const st = this.equip.offItem!.def.stats;
+    const guard = this.equip.hasShield ? null : this.weaponGuard?.() ?? null;
+    if (this.blocking && (this.equip.hasShield || guard) && facing > this.blockFacing && this.blockW > 0.5) {
+      const st = guard ?? this.equip.offItem!.def.stats;
       const cost = (att.damage * (1 - (st.stability ?? 0.4)) * 1.7 + 6) * this.mods.blockCost;
       this.stamina -= cost;
       this.staminaDelay = 0.8;
@@ -1145,7 +1165,7 @@ export class Player {
       this.burn = { dps: att.burn * burnScale, left: 3 };
     }
     // Hyper-armour through the middle of heavy swings.
-    const heavyArmor = (a?.def.id === 'heavy' || a?.def.id === 'airAttack') && a.def.hit && a.t > a.def.hit.from - 0.2 && a.t < a.def.hit.to;
+    const heavyArmor = ((a?.def.id === 'heavy' || a?.def.id === 'airAttack') && a.def.hit && a.t > a.def.hit.from - 0.2 && a.t < a.def.hit.to) || !!this.hyperArmour?.();
     if (!this.dead && !heavyArmor && att.poise > this.equip.poise * 0.8) {
       this.startAction('stagger');
       this.vel.addScaledVector(toAtt, -3.5);
@@ -1220,6 +1240,7 @@ export class Player {
       this.waterBreathT = st.waterBreathing;
       this.breath = 1;
     }
+    this.onConsume?.(it.def);
     this.equip.consume(uid);
     this.onSpell?.(st.heal ? 'potionHeal' : 'potionMana', this.center, this.forward, null);
   }

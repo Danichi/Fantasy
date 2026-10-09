@@ -76,6 +76,8 @@ export class Character {
   /** built from the stylised kits (Mixamo clips are retargeted onto it) */
   built = false;
   private hipsTrack = 'mixamorigHips.position';
+  /** the built hero's rest pose (bone names of the kit rig), for retargeting extra clips later */
+  restPose: ReturnType<typeof captureRest> | null = null;
 
   /**
    * `body`: another model on the hero's Mixamo skeleton (tools/rig-orcs.mjs).
@@ -156,6 +158,7 @@ export class Character {
     const hipsY = this.bones.get('Hips')?.getWorldPosition(new THREE.Vector3()).y ?? 1;
     this.hipsHeight = hipsY;
     const heroRest = this.built ? captureRest(this.model) : null;
+    this.restPose = heroRest; // Arms and Crafting (feat/arms): extra clips are retargeted onto this rest pose
     for (const [key, entry] of Object.entries(manifest.clips)) {
       if (body?.clips && !body.clips.includes(key)) continue;
       try {

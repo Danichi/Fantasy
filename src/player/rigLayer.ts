@@ -32,6 +32,8 @@ export interface ProcPose {
   legTuck?: number;
   right?: HandPose;
   left?: HandPose;
+  /** two-handed grips (feat/arms): the left hand takes the weapon in the right fist, `off` metres along it */
+  leftFollows?: { off: number; w: number; slide?: V3 };
 }
 
 type Side = 'Right' | 'Left';
@@ -176,10 +178,30 @@ export class RigLayer {
       if (pose.legTuck) this.tuckLegs(pose.legTuck, left);
       else if (pose.hipsDrop) this.dropHips(pose.hipsDrop, fwd);
       if (pose.right) this.solveHand(this.hands.Right, pose.right, root, rootQ);
-      if (pose.left) this.solveHand(this.hands.Left, pose.left, root, rootQ);
+      if (pose.leftFollows && pose.leftFollows.w > 0.001) this.solveHand(this.hands.Left, this.followRight(pose.leftFollows, root, rootQ), root, rootQ);
+      else if (pose.left) this.solveHand(this.hands.Left, pose.left, root, rootQ);
     }
     this.curlFingers(this.hands.Right);
     this.curlFingers(this.hands.Left);
+  }
+
+  /**
+   * Where the left hand goes to share the right hand's grip: `off` metres
+   * along the held weapon from the right fist (as the right hand actually is
+   * now, clip or IK), palm facing the other way. With `slide`, the hand stays
+   * as near that point as the shaft allows (spears slide through it).
+   */
+  private followRight(f: { off: number; w: number; slide?: V3 }, root: THREE.Object3D, rootQ: THREE.Quaternion): HandPose {
+    const h = this.hands.Right;
+    h.hand.updateMatrixWorld(true);
+    const gq = this.gripWorldQuat('Right');
+    const inv = rootQ.clone().invert();
+    const p = root.worldToLocal(h.socket.getWorldPosition(new THREE.Vector3()));
+    const d = new THREE.Vector3(0, 1, 0).applyQuaternion(gq).applyQuaternion(inv);
+    const nrm = new THREE.Vector3(0, 0, 1).applyQuaternion(gq).applyQuaternion(inv);
+    let k = f.off;
+    if (f.slide) k = Math.max(0.22, Math.min(0.95, (f.slide[0] - p.x) * d.x + (f.slide[1] - p.y) * d.y + (f.slide[2] - p.z) * d.z));
+    return { grip: [p.x + d.x * k, p.y + d.y * k, p.z + d.z * k], dir: [d.x, d.y, d.z], normal: [-nrm.x, -nrm.y, -nrm.z], w: f.w };
   }
 
   /** Lower the hips and re-plant the feet with leg IK so the knees bend. */

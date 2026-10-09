@@ -5,14 +5,19 @@ import { PRODUCE_ITEMS } from './produce';
 import { HERB_ITEMS, HERB_MODELS } from './herbs';
 import { FISH_ITEMS } from '../world/fishing';
 import { DESERT_ITEMS } from './desertItems';
+import { ARMS_ITEMS } from './armsItems';
+import { isWeaponKind } from './weapons/kinds';
 
 export type Slot =
   | 'main' | 'off'
   | 'head' | 'shoulders' | 'chest' | 'cloak' | 'hands' | 'legs' | 'feet'
-  | 'amulet' | 'ring1' | 'ring2' | 'belt' | 'trinket';
+  | 'amulet' | 'ring1' | 'ring2' | 'belt' | 'trinket'
+  | 'quiver';
 export const ARMOR_SLOTS: Slot[] = ['head', 'shoulders', 'chest', 'cloak', 'hands', 'legs', 'feet'];
 export const ACCESSORY_SLOTS: Slot[] = ['amulet', 'ring1', 'ring2', 'belt', 'trinket'];
-export type ItemKind = 'sword' | 'shield' | 'armor' | 'accessory' | 'spell' | 'consumable' | 'key' | 'material';
+export type ItemKind = 'sword' | 'shield' | 'armor' | 'accessory' | 'spell' | 'consumable' | 'key' | 'material'
+  // Arms and Crafting (feat/arms): the weapon families, arrows and bolts, gathering tools
+  | 'spear' | 'greatsword' | 'axe' | 'mace' | 'dagger' | 'bow' | 'crossbow' | 'staff' | 'ammo' | 'tool';
 export type Rarity = 'common' | 'fine' | 'rare' | 'epic';
 
 export interface ItemStats {
@@ -41,6 +46,10 @@ export interface ItemStats {
   lifesteal?: number; // fraction of damage dealt returned as health
   crit?: number; // extra critical-hit chance
   stagger?: number; // multiplier on the poise damage of every blow
+  // Arms and Crafting (feat/arms)
+  bleed?: number; // bleed damage per second for 4 s after a hit (axes)
+  pierce?: number; // fraction of the target's guard and armour ignored (crossbows, stilettos)
+  focus?: number; // staffs: faster spell casting (0.15 = +15% cast speed)
 }
 
 export const STAT_LABEL: Partial<Record<keyof ItemStats, string>> = {
@@ -56,6 +65,9 @@ export function traitLines(s: ItemStats): string[] {
   if (s.lifesteal) out.push(`Bloodthirst: heals ${Math.round(s.lifesteal * 100)}% of damage dealt`);
   if (s.crit) out.push(`Keen: +${Math.round(s.crit * 100)}% critical chance`);
   if (s.stagger && s.stagger > 1) out.push(`Crushing: +${Math.round((s.stagger - 1) * 100)}% stagger`);
+  if (s.bleed) out.push(`Bleeding: ${s.bleed} damage a second for 4 s`);
+  if (s.pierce) out.push(`Piercing: ignores ${Math.round(s.pierce * 100)}% of guard and armour`);
+  if (s.focus) out.push(`Spell focus: +${Math.round(s.focus * 100)}% cast speed`);
   return out;
 }
 
@@ -64,7 +76,7 @@ export function itemValue(def: ItemDef) {
   const base = { common: 8, fine: 30, rare: 90, epic: 220 }[def.rarity];
   const s = def.stats;
   let v = base;
-  if (def.kind === 'sword') v += (s.damage ?? 0) * 3 + ((s.burn ?? 0) + (s.frost ?? 0) * 100 + (s.lifesteal ?? 0) * 300 + (s.crit ?? 0) * 200) * 2;
+  if (def.kind === 'sword' || isWeaponKind(def.kind)) v += (s.damage ?? 0) * 3 + ((s.burn ?? 0) + (s.frost ?? 0) * 100 + (s.lifesteal ?? 0) * 300 + (s.crit ?? 0) * 200) * 2;
   if (def.kind === 'shield') v += (s.block ?? 0) * 0.8;
   if (def.kind === 'armor') v += (s.armor ?? 0) * 8;
   if (def.kind === 'accessory') v += 40;
@@ -87,6 +99,17 @@ export interface ItemDef {
   /** armour pieces: which bones get which parts */
   armor?: ArmorPieceId;
   stack?: boolean;
+  // ---- Arms and Crafting (feat/arms) ----
+  /** weapons: 1 or 2 hands, when it differs from the family's (axes and maces come in both) */
+  hands?: 1 | 2;
+  /** launchers: what they shoot; ammo: what it is */
+  ammo?: 'arrow' | 'bolt';
+  /** materials: tier 1 (iron, oak, leather) to 6 (dragonbone) */
+  tier?: number;
+  /** meals and elixirs: a timed buff (mods are CombatMods fields, added as fractions or flat) */
+  buff?: { id: string; sec: number; label: string; m?: Record<string, number> };
+  /** gathering tools */
+  tool?: 'pick' | 'hatchet';
 }
 
 const longsword = { bladeLen: 0.86, bladeWidth: 0.025, thickness: 0.0042, fullerLen: 0.66, gripLen: 0.15, guardSpan: 0.115, guardStyle: 'curved' as const, pommel: 'pear' as const };
@@ -409,6 +432,7 @@ export const ITEMS: Record<string, ItemDef> = {
   ...HERB_ITEMS,
   ...FISH_ITEMS,
   ...DESERT_ITEMS,
+  ...ARMS_ITEMS,
 };
 
 // The four original herbs use the foraging models for their icons too.

@@ -23,6 +23,8 @@ export class ThirdPersonCamera {
   lockTarget: THREE.Vector3 | null = null;
   /** debug: leave the camera wherever it was put */
   frozen = false;
+  /** aiming a bow or crossbow (feat/arms), 0..1: a close over-the-shoulder view */
+  aim = 0;
 
   constructor(readonly camera: THREE.PerspectiveCamera, private input: Input) {}
 
@@ -75,10 +77,10 @@ export class ThirdPersonCamera {
     const side = physics.castRay(this.pivot, right, 0.9);
     const wantShoulder = side !== null ? Math.max(0, side - 0.4) : 0.48;
     this.shoulder = wantShoulder < this.shoulder ? wantShoulder : damp(this.shoulder, wantShoulder, 3, dt);
-    const shoulder = this.shoulder;
+    const shoulder = this.shoulder * (1 + this.aim * 0.9);
     const origin = this.pivot.clone().addScaledVector(right, shoulder * 0.5);
     const back = fwd.clone().negate();
-    const want = origin.clone().addScaledVector(right, shoulder * 0.5).addScaledVector(back, this.distance + this.extra);
+    const want = origin.clone().addScaledVector(right, shoulder * 0.5).addScaledVector(back, (this.distance + this.extra) * (1 - this.aim) + 2.1 * this.aim);
 
     // Spring arm: a bundle of rays (centre plus a 0.25 m ring) approximates a
     // sphere sweep, so the camera never ends up hugging a wall face.
@@ -111,7 +113,7 @@ export class ThirdPersonCamera {
     this.camera.lookAt(look);
     if (s > 0) this.camera.rotateZ((valueNoise(this.time * 20, 3.3) - 0.5) * 0.06 * s);
 
-    this.fov = damp(this.fov, this.fovBase + (sprinting ? 5 : 0), 4, dt);
+    this.fov = damp(this.fov, this.fovBase + (sprinting ? 5 : 0) - this.aim * 12, 4, dt);
     if (Math.abs(this.camera.fov - this.fov) > 0.01) {
       this.camera.fov = this.fov;
       this.camera.updateProjectionMatrix();

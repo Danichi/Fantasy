@@ -5,11 +5,16 @@ import { basisQuat } from '../player/ik';
 import { ITEMS, ARMOR_SLOTS, ACCESSORY_SLOTS, type ItemDef, type ItemStats, type Slot } from './itemDefs';
 import { buildArmorParts, type ArmorPart, type LimbFit } from './armorModels';
 import { events } from '../core/events';
+import { mainHandKind, offHandWeapon, twoHanded } from './weapons/kinds';
+import { qualityDef } from '../crafting/quality';
 
 export interface ItemInstance {
   uid: number;
   def: ItemDef;
   qty: number;
+  /** crafted quality (0 crude .. 5 legendary; absent = common) and an inscribed rune (feat/arms) */
+  q?: number;
+  rune?: string;
 }
 
 
@@ -77,17 +82,20 @@ export class Equipment implements LimbFit {
   }
 
   // ---- inventory ----------------------------------------------------------
-  add(id: string, qty = 1) {
-    const def = ITEMS[id];
-    if (!def) throw new Error('unknown item ' + id);
+  add(id: string, qty = 1, q?: number, rune?: string) {
+    const base = ITEMS[id];
+    if (!base) throw new Error('unknown item ' + id);
+    const def = qualityDef(base, q, rune);
     if (def.stack) {
-      const ex = this.items.find((i) => i.def.id === id);
+      const ex = this.items.find((i) => i.def.id === id && i.q === q && i.rune === rune);
       if (ex) {
         ex.qty += qty;
         return ex;
       }
     }
-    const inst = { uid: nextUid++, def, qty };
+    const inst: ItemInstance = { uid: nextUid++, def, qty };
+    if (q !== undefined) inst.q = q;
+    if (rune) inst.rune = rune;
     this.items.push(inst);
     return inst;
   }
@@ -107,8 +115,9 @@ export class Equipment implements LimbFit {
 
   canEquip(item: ItemInstance, slot: Slot) {
     const k = item.def.kind;
-    if (slot === 'main') return k === 'sword';
-    if (slot === 'off') return k === 'sword' || k === 'shield';
+    if (slot === 'main') return k === 'sword' || mainHandKind(k);
+    if (slot === 'off') return k === 'sword' || k === 'shield' || offHandWeapon(item.def);
+    if (slot === 'quiver') return k === 'ammo';
     if (slot === 'ring1' || slot === 'ring2') return k === 'accessory' && (item.def.slot === 'ring1' || item.def.slot === 'ring2');
     return (k === 'armor' || k === 'accessory') && item.def.slot === slot;
   }
@@ -143,6 +152,12 @@ export class Equipment implements LimbFit {
     if (from && displaced != null) {
       const d = this.get(displaced)!;
       if (this.canEquip(d, from)) this.equipped[from] = displaced;
+    }
+    // A two-handed weapon empties the off hand, and an off-hand item puts it away.
+    const other = target === 'main' ? 'off' : target === 'off' ? 'main' : null;
+    if (other && this.equipped[other] != null && (twoHanded(item.def) || twoHanded(this.inSlot(other)?.def))) {
+      this.detach(other);
+      delete this.equipped[other];
     }
     this.refreshModels();
     events.emit('equipmentChanged', {});
@@ -203,7 +218,8 @@ export class Equipment implements LimbFit {
     return this.offItem?.def.kind === 'shield';
   }
   get dualWield() {
-    return this.offItem?.def.kind === 'sword' && !!this.mainWeapon;
+    const off = this.offItem?.def;
+    return !!off && (off.kind === 'sword' || offHandWeapon(off)) && !!this.mainWeapon;
   }
   /** Sum of a stat across everything equipped (armour, accessories, weapons). */
   bonus(stat: keyof ItemStats) {
