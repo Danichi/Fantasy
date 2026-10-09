@@ -144,9 +144,9 @@ export const DISCIPLINES: DisciplineDef[] = [
     id: 'dungeoneering', fam: 'calling', name: 'Dungeoneering', color: '--c-gold', mentor: 'Ser Corvin, the north road', mentorNpc: 'corvin', res: 'Nerve',
     flavour: 'The dark is a map nobody has finished drawing.', how: 'Explore new rooms, draw maps, find secrets and disarm traps.',
     branches: [
-      { name: 'Delver', sub: 'Exploring', tiers: [['Dark Eyes', 'Sure Step'], ['*Torchlight', 'Echo Sense', 'Deep Lungs'], ['*Seek Passage', '?Map Sense|Wall Tap', 'Crawlspace'], ["*Delver's Instinct", '!Lone Delver', 'Night Sight'], ['Deep Roads', 'Sense the Boss']], cap: 'Master of the Deep' },
-      { name: 'Trapper', sub: 'Traps', tiers: [['Wary', 'Quick Fingers'], ['*Disarm', 'Trap Sense', 'Salvage'], ['*Rig Trap', '?Rearm|Explosive Rig', 'Tripwire'], ['*Snare Field', '!Trapmaster', 'Pressure Plate'], ['Clockwork', 'Killing Floor']], cap: 'The Labyrinth' },
-      { name: 'Treasure', sub: 'Loot', tiers: [['Keen Nose', 'Lockpick'], ['*Appraise', 'Hidden Cache', 'Lucky Find'], ['*Loot Sense', '?Gold Nose|Relic Hunter', 'Picky'], ['*Mimic Sense', '!Greed', 'Vault Breaker'], ["Dragon's Hoard", 'Fortune']], cap: "King's Ransom" },
+      { name: 'Delver', sub: 'Exploring', tiers: [['Torchbearer', 'Sure Step'], ['*Torchlight', "Cartographer's Eye", 'Deep Lungs'], ['*Seek Passage', "Delver's Sense", 'Crawlspace'], ["*Delver's Instinct", '!Lone Delver', 'Night Sight'], ['Deep Breath', 'Sense the Boss']], cap: 'Master Delver' },
+      { name: 'Trapper', sub: 'Traps', tiers: [['Wary', 'Quick Fingers'], ['*Disarm', 'Trap Sense', 'Salvage'], ['*Rig Trap', '?Rearm|Explosive Rig', 'Light Feet'], ['*Snare Field', '!Trapmaster', 'Pressure Plate'], ['Clockwork', 'Killing Floor']], cap: 'The Labyrinth' },
+      { name: 'Treasure', sub: 'Loot', tiers: [['Keen Nose', 'Lockpick'], ['*Appraise', 'Hidden Cache', 'Lucky Find'], ['*Loot Sense', '?Gold Nose|Relic Hunter', 'Picky'], ['*Mimic Sense', '!Greed', 'Treasure Nose'], ["Dragon's Hoard", 'Fortune']], cap: "King's Ransom" },
     ],
   },
   {

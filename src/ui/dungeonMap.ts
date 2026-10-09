@@ -20,6 +20,18 @@ export interface MapData {
   notes: { i: number; j: number; t: string }[];
 }
 
+/**
+ * The automap (Dungeoneering's Cartographer's Eye, feat/dungeons): the rooms
+ * you've seen, inked by the game in a faint blue hand under your own lines.
+ * The hand-drawn map stays the default; this is a perk and can be switched off.
+ */
+export interface AutoLayer {
+  hw: number[];
+  vw: number[];
+  fill: number[];
+  icons: Record<string, string>;
+}
+
 export function emptyMap(w: number, h: number): MapData {
   return { w, h, hw: new Array(w * (h + 1)).fill(0), vw: new Array((w + 1) * h).fill(0), fill: new Array(w * h).fill(0), icons: {}, notes: [] };
 }
@@ -97,7 +109,7 @@ function drawIcon(g: CanvasRenderingContext2D, icon: Icon, x: number, y: number,
 }
 
 /** Paint a region of a map onto a canvas. `view` = cells visible; `ox, oy` = top-left cell (fractional ok). */
-function paint(g: CanvasRenderingContext2D, d: MapData, cs: number, ox: number, oy: number, cols: number, rows: number, player?: { x: number; y: number; yaw: number }) {
+function paint(g: CanvasRenderingContext2D, d: MapData, cs: number, ox: number, oy: number, cols: number, rows: number, player?: { x: number; y: number; yaw: number }, auto?: AutoLayer | null) {
   const W = cols * cs, H = rows * cs;
   g.fillStyle = PAPER;
   g.fillRect(0, 0, W, H);
@@ -123,6 +135,30 @@ function paint(g: CanvasRenderingContext2D, d: MapData, cs: number, ox: number, 
     g.lineTo(X(d.w), Y(j));
   }
   g.stroke();
+  // The automap's faint blue wash and lines, under your own ink.
+  if (auto && auto.fill.length === d.w * d.h) {
+    g.fillStyle = 'rgba(70, 100, 140, 0.16)';
+    for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) if (auto.fill[j * d.w + i]) g.fillRect(X(i), Y(j), cs, cs);
+    g.strokeStyle = 'rgba(52, 78, 120, 0.75)';
+    g.lineWidth = Math.max(1, cs * 0.06);
+    g.beginPath();
+    for (let j = 0; j <= d.h; j++) for (let i = 0; i < d.w; i++) if (auto.hw[j * d.w + i]) {
+      g.moveTo(X(i), Y(j));
+      g.lineTo(X(i + 1), Y(j));
+    }
+    for (let j = 0; j < d.h; j++) for (let i = 0; i <= d.w; i++) if (auto.vw[j * (d.w + 1) + i]) {
+      g.moveTo(X(i), Y(j));
+      g.lineTo(X(i), Y(j + 1));
+    }
+    g.stroke();
+    g.globalAlpha = 0.6;
+    for (const [k, icon] of Object.entries(auto.icons)) {
+      if (!(ICONS as readonly string[]).includes(icon)) continue;
+      const [i, j] = k.split(',').map(Number);
+      drawIcon(g, icon as Icon, X(i + 0.5), Y(j + 0.5), cs);
+    }
+    g.globalAlpha = 1;
+  }
   // Floor shading.
   g.fillStyle = 'rgba(120, 88, 48, 0.22)';
   for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) if (d.fill[j * d.w + i]) g.fillRect(X(i) + 1, Y(j) + 1, cs - 2, cs - 2);
@@ -185,6 +221,16 @@ export class DungeonMapUI {
   private dragging = false;
   private dragValue = 1;
   open = false;
+  /** the automap layer for this floor (null: none, or you haven't the perk) */
+  auto: AutoLayer | null = null;
+  /** the automap is on (a setting on the map itself, remembered) */
+  autoOn = (() => {
+    try {
+      return localStorage.getItem('dmap-auto') !== 'off';
+    } catch {
+      return true;
+    }
+  })();
   onToggle?: (open: boolean) => void;
   onChange?: () => void;
 
@@ -216,6 +262,18 @@ export class DungeonMapUI {
       }),
     );
     this.syncTools();
+    // The automap switch (only shown once you have Cartographer's Eye).
+    const autoBtn = document.createElement('button');
+    autoBtn.className = 'auto-ink';
+    autoBtn.addEventListener('click', () => {
+      this.autoOn = !this.autoOn;
+      try {
+        localStorage.setItem('dmap-auto', this.autoOn ? 'on' : 'off');
+      } catch {}
+      this.drawEditor();
+    });
+    this.editor.querySelector('.tools')!.appendChild(autoBtn);
+    this.autoBtn = autoBtn;
     this.canvas.addEventListener('pointerdown', (e) => {
       this.dragging = true;
       this.canvas.setPointerCapture(e.pointerId);
@@ -233,6 +291,15 @@ export class DungeonMapUI {
         this.toggle(false);
       }
     }, true);
+  }
+
+  private autoBtn: HTMLButtonElement | null = null;
+  /** Hand the map this floor's automap (null hides it). */
+  setAuto(layer: AutoLayer | null) {
+    this.auto = layer;
+  }
+  private get autoShown() {
+    return this.autoOn ? this.auto : null;
   }
 
   private syncTools() {
@@ -278,8 +345,12 @@ export class DungeonMapUI {
     const cs = this.cellSize();
     this.canvas.width = (d.w + 1) * cs;
     this.canvas.height = (d.h + 1) * cs;
-    paint(this.canvas.getContext('2d')!, d, cs, -0.5, -0.5, d.w + 1, d.h + 1, this.player);
+    paint(this.canvas.getContext('2d')!, d, cs, -0.5, -0.5, d.w + 1, d.h + 1, this.player, this.autoShown);
     this.editor.querySelector('.floor')!.textContent = this.floorName;
+    if (this.autoBtn) {
+      this.autoBtn.style.display = this.auto ? '' : 'none';
+      this.autoBtn.textContent = this.autoOn ? 'Auto-ink: on' : 'Auto-ink: off';
+    }
   }
 
   private apply(e: PointerEvent, first: boolean) {
@@ -336,7 +407,7 @@ export class DungeonMapUI {
     const cs = 24, cols = 9;
     const ox = this.player.x - cols / 2, oy = this.player.y - cols / 2;
     const g = this.miniCanvas.getContext('2d')!;
-    paint(g, d, cs, ox, oy, cols, cols, this.player);
+    paint(g, d, cs, ox, oy, cols, cols, this.player, this.autoShown);
     this.miniLabel.textContent = this.floorName;
     if (this.open) this.drawEditor();
   }

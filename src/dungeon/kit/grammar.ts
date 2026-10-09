@@ -264,7 +264,9 @@ export function buildFloor(plan: FloorPlan, seed: number, opts: GrammarOpts): Fl
     keyCell = centre(r);
   }
   if (plan.mechanism && B.length) {
-    const r = deepest(B);
+    // A puzzle wants floor space: the deepest room that isn't a passage.
+    const roomy = B.filter((q) => Math.min(q.rect.w, q.rect.h) >= 2);
+    const r = deepest(roomy.length ? roomy : B);
     r.tags.add('mech');
     mechRoom = r.id;
     // The clue is elsewhere on this side of the gate: a big room in wing A or B.
