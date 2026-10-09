@@ -16,7 +16,7 @@ type Category = 'all' | 'weapons' | 'shields' | 'armour' | 'accessories' | 'spel
 type Sort = 'recent' | 'name' | 'rarity' | 'type';
 const CATEGORIES: [Category, string, string, ItemKind[]][] = [
   ['all', 'All items', '✧', []],
-  ['weapons', 'Weapons', '⚔', ['sword']],
+  ['weapons', 'Weapons', '⚔', ['sword', 'bow']],
   ['shields', 'Shields', '◈', ['shield']],
   ['armour', 'Armour', '⬟', ['armor']],
   ['accessories', 'Accessories', '◇', ['accessory']],
@@ -26,7 +26,7 @@ const CATEGORIES: [Category, string, string, ItemKind[]][] = [
   ['quest', 'Quest items', '⌘', ['key']],
 ];
 const RARITY_RANK: Record<string, number> = { epic: 0, rare: 1, fine: 2, common: 3 };
-const KIND_RANK: Record<ItemKind, number> = { sword: 0, shield: 1, armor: 2, accessory: 3, spell: 4, consumable: 5, material: 6, key: 7 };
+const KIND_RANK: Record<ItemKind, number> = { sword: 0, shield: 1, armor: 2, accessory: 3, spell: 4, consumable: 5, material: 6, key: 7, bow: 0 };
 const STAT_NAMES: Partial<Record<keyof ItemStats, string>> = {
   damage: 'Damage', speed: 'Speed', block: 'Block', stability: 'Stability', armor: 'Armour', poise: 'Poise',
   manaCost: 'Mana cost', heal: 'Restores HP', restoreMana: 'Restores MP', restoreStamina: 'Restores stamina', waterBreathing: 'Breathe underwater (s)',
