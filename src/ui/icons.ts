@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ITEMS, buildItemModel, type ItemDef } from '../items/itemDefs';
+import { isWeaponKind } from '../items/weapons/kinds';
 
 // Item icons: 3D items are rendered from their real models once at startup;
 // spells and potions are painted in 2D.
@@ -347,16 +348,17 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
     const holder = new THREE.Group();
     holder.add(model);
     // Swords lie diagonally; shields face the camera; armour is framed as-is.
-    if (def.kind === 'sword') holder.rotation.set(0, 0, -Math.PI / 4);
+    if (def.kind === 'sword' || isWeaponKind(def.kind) || def.kind === 'tool') holder.rotation.set(0, 0, -Math.PI / 4);
+    if (def.kind === 'ammo') holder.rotation.set(0.3, 0, -Math.PI / 4);
     if (def.kind === 'shield') holder.rotation.set(0.15, -0.35, 0);
     if (def.kind === 'armor' || def.kind === 'accessory') holder.rotation.set(0.25, -0.5, 0);
     if (def.kind === 'material' || def.kind === 'consumable' || def.kind === 'key') holder.rotation.set(0.45, -0.5, 0);
     snap(holder, SIZE, SIZE, 1.15, (url) => cache.set(def.id, url));
     // Wide versions for the hand frames: blades horizontal, shields upright.
-    if (def.kind === 'sword' || def.kind === 'shield') {
+    if (def.kind === 'sword' || def.kind === 'shield' || isWeaponKind(def.kind)) {
       const wide = new THREE.Group();
       wide.add(model.clone()); // a copy: the square icon's holder still needs the original
-      if (def.kind === 'sword') wide.rotation.set(0.25, 0, -Math.PI / 2 + 0.12);
+      if (def.kind === 'sword' || isWeaponKind(def.kind)) wide.rotation.set(0.25, 0, -Math.PI / 2 + 0.12);
       else wide.rotation.set(0.1, -0.3, 0);
       snap(wide, 256, 112, 1.08, (url) => wideCache.set(def.id, url));
     }

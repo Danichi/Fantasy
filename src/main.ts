@@ -123,6 +123,8 @@ import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 import { afflictions } from './combat/afflictions';
 import { ShopUI } from './ui/shopUI';
+import { setupArms } from './crafting/arms'; // Arms and Crafting (feat/arms)
+import { withArms } from './items/armsShops';
 
 const STEP = 1 / 60;
 
@@ -353,6 +355,9 @@ async function boot() {
   const inv = new InventoryUI(player, preview);
   const skills = new SkillsUI(player);
   skills.runtime = skillRt;
+  // ---- Arms and Crafting (feat/arms): weapon families, bows, crafting ----
+  const arms = setupArms({ scene: r.scene, player, cam, skillRt, toast: (m) => hud.toast(m) });
+  arms.fromJSON(saveData?.world?.arms);
   const mapUI = new DungeonMapUI();
   let frontier!: FrontierRegion;
   let microDiscoveries!: MicroDiscoveries;
@@ -745,8 +750,8 @@ async function boot() {
       },
     },
   ]);
-  folkServices.set('ragna', () => [{ label: 'Browse Port steel', run: () => shop('ragna', 'Aurelle-folded steel. Heavier purse, lighter grave.', [['knightSword', 110], ['kiteShield', 90], ['armingSword', 55], ['roundShield', 50]]) }]);
-  folkServices.set('quill', () => [{ label: 'Browse fine draughts', run: () => shop('quill', 'Twice the strength of a village draught. Half the taste.', [['healthPotion', 18], ['manaPotion', 22], ['greaterHealthPotion', 55], ['greaterManaPotion', 60]]) }]);
+  folkServices.set('ragna', () => [{ label: 'Browse Port steel', run: () => shop('ragna', 'Aurelle-folded steel. Heavier purse, lighter grave.', withArms('ragna', [['knightSword', 110], ['kiteShield', 90], ['armingSword', 55], ['roundShield', 50]])) }]);
+  folkServices.set('quill', () => [{ label: 'Browse fine draughts', run: () => shop('quill', 'Twice the strength of a village draught. Half the taste.', withArms('quill', [['healthPotion', 18], ['manaPotion', 22], ['greaterHealthPotion', 55], ['greaterManaPotion', 60]])) }]);
   folkServices.set('sabeth', () => [{ label: 'Browse rings and charms', run: () => shop('sabeth', 'Every ring is a promise. Choose yours.', [['ringSage', 200]]) }]);
   folkServices.set('bruni', () => [{ label: "Buy a miner's lantern — 35g", run: () => { if (player.prog.gold >= 35) { player.prog.addGold(-35); giveItem('minersLantern', 1); } dialogue.close(); } }]);
   folkServices.set('bess', (show, back) => [{
@@ -765,10 +770,10 @@ async function boot() {
   // ---- The Royal Capital's services ----------------------------------------------------
   folkServices.set('grandmaster', () => [{ label: 'See the guild board', run: () => { dialogue.close(); town.guild.open('board'); } }]);
   folkServices.set('armourer', () => [{ label: 'Browse royal armour', run: () => shop('armourer', 'Fitted by appointment. Today is your appointment.', [['ironHelm', 70], ['pauldrons', 85], ['breastplate', 170], ['gauntlets', 60], ['greaves', 95], ['sabatons', 60], ['kiteShield', 95], ['towerShield', 150]]) }]);
-  folkServices.set('bladesmith', () => [{ label: 'Browse capital blades', run: () => shop('bladesmith', 'Every edge here was folded under the royal charter.', [['knightSword', 115], ['bastardSword', 150], ['claymore', 280], ['estoc', 260], ['frostbite', 340], ['emberbrand', 340]]) }]);
-  folkServices.set('capAlchemist', () => [{ label: 'Browse court draughts', run: () => shop('capAlchemist', 'Brewed to the Collegium\u2019s own recipes.', [['healthPotion', 16], ['manaPotion', 20], ['greaterHealthPotion', 50], ['greaterManaPotion', 55]]) }]);
+  folkServices.set('bladesmith', () => [{ label: 'Browse capital blades', run: () => shop('bladesmith', 'Every edge here was folded under the royal charter.', withArms('bladesmith', [['knightSword', 115], ['bastardSword', 150], ['claymore', 280], ['estoc', 260], ['frostbite', 340], ['emberbrand', 340]])) }]);
+  folkServices.set('capAlchemist', () => [{ label: 'Browse court draughts', run: () => shop('capAlchemist', 'Brewed to the Collegium\u2019s own recipes.', withArms('capAlchemist', [['healthPotion', 16], ['manaPotion', 20], ['greaterHealthPotion', 50], ['greaterManaPotion', 55]])) }]);
   folkServices.set('capJeweller', () => [{ label: 'Browse court jewellery', run: () => shop('capJeweller', 'Garnets, gold, and a little protective enchantment.', [['garnetAmulet', 260], ['ringVigor', 220], ['ringSage', 200], ['warriorBelt', 180]]) }]);
-  folkServices.set('archmage', () => [{ label: 'Study at the Collegium (spell tomes)', run: () => shop('archmage', 'The first grammar of magic: fire, and its opposite.', [['fireball', 140], ['healingLight', 155], ['manaPotion', 22], ['greaterManaPotion', 60]]) }]);
+  folkServices.set('archmage', () => [{ label: 'Study at the Collegium (spell tomes)', run: () => shop('archmage', 'The first grammar of magic: fire, and its opposite.', withArms('archmage', [['fireball', 140], ['healingLight', 155], ['manaPotion', 22], ['greaterManaPotion', 60]])) }]);
   folkServices.set('cartographer', (show) => [{
     label: 'Buy a map of the Crown lands \u2014 40g',
     run: () => {
@@ -1228,7 +1233,7 @@ async function boot() {
     if (TEST_MODE && !location.search.includes('save')) return;
     const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON() }, realm.mineProgress);
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   // Guild contracts show in the quest log (tracker, journal, map, waypoint).
@@ -1427,6 +1432,7 @@ async function boot() {
     if (realm.mode === 'overworld') sailing.preStep(STEP);
     player.update(STEP, input, cam);
     skillRt.update(STEP);
+    arms.update(STEP, input); // Arms and Crafting (feat/arms)
     if (realm.mode === 'overworld') {
       slimes.update(STEP, player);
       frontier.update(STEP);
@@ -1502,6 +1508,7 @@ async function boot() {
     renderPos.copy(player.char.root.position);
     if (!paused) realm.present(alpha, overlayUp || mapUI.open ? 0 : simDt);
     if (!paused && realm.mode === 'overworld') gravewood.present(alpha, overlayUp || worldMap.open ? 0 : simDt, player, r.camera);
+    arms.frame(dt); // Arms and Crafting (feat/arms): aim camera, reticle
     cam.update(dt, renderPos, player.sprinting);
     r.camera.getWorldDirection(player.aimDir);
     ground.update(r.camera.position);
@@ -1658,6 +1665,7 @@ async function boot() {
       encounters.clear();
       crownRoad.threats.clear();
       sailing.reset();
+      arms.reset(); // Arms and Crafting (feat/arms)
       quests.state = {};
       quests.tracked = null;
       for (const k of Object.keys(worldFlags)) delete worldFlags[k];
@@ -1679,6 +1687,7 @@ async function boot() {
       sleep: (on: boolean) => (asleep = on),
       THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
+      arms, // Arms and Crafting (feat/arms)
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

@@ -12,6 +12,7 @@ import { events } from '../core/events';
 import { ITEMS } from '../items/itemDefs';
 import { AdventurerGuild } from '../guild/adventurerGuild';
 import type { ShopUI, ShopOpts } from '../ui/shopUI';
+import { ARMS_STOCK } from '../items/armsShops';
 
 // The townsfolk: who they are, where they stand, and what they teach or sell.
 
@@ -293,7 +294,7 @@ export class Town {
         this.showShop(s.name, s.title, 'Cloaks and belts made for long expeditions.', [['wayfarerCloak', 95], ['warriorBelt', 80], ['luckyCharm', 140]], { wants: BUYS.tailor, buyRate: { armor: 0.45, accessory: 0.45, default: 0.3 } });
         return true;
       case 'carpenter':
-        this.showShop(s.name, s.title, 'Reliable beginner gear, built to survive rough travel.', [['shortsword', 45], ['armingSword', 60], ['roundShield', 55], ['buckler', 115]], { buyRate: { sword: 0.4, shield: 0.4, default: 0.3 } });
+        this.showShop(s.name, s.title, 'Reliable beginner gear, built to survive rough travel.', [['shortsword', 45], ['armingSword', 60], ['roundShield', 55], ['buckler', 115], ...ARMS_STOCK.carpenter], { buyRate: { sword: 0.4, shield: 0.4, default: 0.3 } });
         return true;
       case 'arcanist':
         this.showShop(s.name, s.title, 'Battle magic for people who have already learned to respect fire.', [['fireball', 150], ['healingLight', 165], ['ringSage', 190], ['manaPotion', 24], ['greaterManaPotion', 65]], { buyRate: { spell: 0.5, accessory: 0.45, default: 0.3 } });
@@ -374,6 +375,7 @@ export class Town {
     const locked: [string, string][] = [];
     const t2: [string, number][] = [['falchion', 210], ['knightSword', 220], ['claymore', 340], ['towerShield', 170], ['pauldrons', 90], ['greaves', 100], ['breastplate', 180]];
     const t3: [string, number][] = [['estoc', 380], ['frostbite', 440], ['emberbrand', 460]];
+    stock.push(...ARMS_STOCK.froest, ...(tier2 ? ARMS_STOCK.froest2 : [])); // Arms and Crafting (feat/arms)
     if (tier2) stock.push(...t2);
     else locked.push(['claymore', 'Clear the crypt on the hill, or help at the forge (Tempered Steel)'], ['falchion', 'The same']);
     if (tier3) stock.push(...t3);
