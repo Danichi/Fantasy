@@ -123,6 +123,10 @@ import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 import { afflictions } from './combat/afflictions';
 import { ShopUI } from './ui/shopUI';
+// ---- Origins (feat/origins) ----
+import { prepareHero } from './origins/hero';
+import { wireOrigins } from './origins/wiring';
+import { CharacterCreator } from './ui/creator';
 
 const STEP = 1 / 60;
 
@@ -151,6 +155,8 @@ async function boot() {
   mark('terrain');
 
   const player = new Player();
+  // ---- Origins (feat/origins): build the saved hero's look from the start ----
+  prepareHero(player, TEST_MODE && !location.search.includes('save') ? null : loadSave());
   const spawn = new THREE.Vector3(0, heightAt(0, 10), 10);
   terrain.warm(spawn);
   await player.init(r.scene, spawn);
@@ -1196,6 +1202,8 @@ async function boot() {
   // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
   quests.fromJSON(saveData?.world?.quests);
+  // ---- Origins (feat/origins): passives, Renown, legendary abilities, flight, NPC reactions ----
+  const origins = wireOrigins({ player, skillRt, fx, scene: r.scene, input, cam, hud, dialogue, shopUI, quests, realm, time, weather, gravewood, foraging });
   events.on('mapRevealed', () => worldMap.markFogDirty());
   events.on('regionEntered', ({ name, subtitle, first }) => {
     regionName = name;
@@ -1271,6 +1279,9 @@ async function boot() {
   }, player.prog.origin, music);
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
+  // ---- Origins (feat/origins): a new game opens the character creator ----
+  const creator = new CharacterCreator(origins);
+  overlays.creator = (begin) => creator.show(begin);
   hud.onSlotDrop = (mode, slot, ref) => {
     const eq = player.equip;
     const uid = typeof ref === 'number' ? ref : 0;
@@ -1427,6 +1438,7 @@ async function boot() {
     if (realm.mode === 'overworld') sailing.preStep(STEP);
     player.update(STEP, input, cam);
     skillRt.update(STEP);
+    origins.update(STEP); // ---- Origins (feat/origins) ----
     if (realm.mode === 'overworld') {
       slimes.update(STEP, player);
       frontier.update(STEP);
@@ -1593,6 +1605,7 @@ async function boot() {
     dialogue.update(dt);
     if (realm.mode === 'overworld') town.update(dt, player.pos);
     physDebug?.update();
+    origins.frame(paused ? 0 : dt); // ---- Origins (feat/origins) ----
     r.followShadow(renderPos);
     if (!CATCH_UP || now - lastDraw > 250) {
       lastDraw = now;
@@ -1679,6 +1692,7 @@ async function boot() {
       sleep: (on: boolean) => (asleep = on),
       THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
+      origins, creator, // ---- Origins (feat/origins) ----
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {
@@ -1690,6 +1704,12 @@ async function boot() {
         paused = true;
         player.debugPose(id, t);
       },
+    };
+    // ---- Origins (feat/origins): tests also reset abilities, flight, forms and the hero's body ----
+    const g = (window as any).__game, resetBase = g.resetForTest;
+    g.resetForTest = async () => {
+      await resetBase();
+      await origins.resetForTest();
     };
   }
   (window as any).__ready = true;
