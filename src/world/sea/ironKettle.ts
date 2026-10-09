@@ -61,7 +61,24 @@ export class IronKettle {
   private paddles: THREE.Object3D[] = [];
   private paddleT = 0;
 
+  /** where you step ashore at the cove if she can't take a berth */
+  cove = new THREE.Vector3(5250, 0, -4822);
+  /** climbing back aboard mid-voyage (after a swim) */
+  readonly interactable = {
+    pos: new THREE.Vector3(0, -999, 0), radius: 6,
+    label: () => 'Climb back aboard the Iron Kettle',
+    enabled: () => this.reboard(),
+    action: () => { if (this.ship) this.sailing.board(this.ship); },
+  };
+
   constructor(private scene: THREE.Scene, private fx: FX, private player: Player, private sailing: Sailing, private hooks: KettleHooks) {}
+
+  private reboard() {
+    const s = this.ship;
+    const ok = !!s && !!this.voyage && this.sailing.current !== s && Math.hypot(this.player.pos.x - s.pos.x, this.player.pos.z - s.pos.z) < s.length * 0.5 + 4;
+    this.interactable.pos.copy(ok ? this.player.pos : new THREE.Vector3(0, -999, 0));
+    return ok;
+  }
 
   /** Sailing's helm controls (Hamm sets the sail while he steers). */
   private get ctl() {
@@ -176,6 +193,8 @@ export class IronKettle {
     const ship = this.ship;
     if (!ship) return;
     const aboard = this.sailing.current === ship;
+    // Docked her yourself at Kettle Cove (or stepped ashore there): the voyage is over.
+    if (this.voyage && !aboard && Math.hypot(ship.pos.x - KETTLE_ROUTE[KETTLE_ROUTE.length - 1][0], ship.pos.z - KETTLE_ROUTE[KETTLE_ROUTE.length - 1][1]) < 320) this.arrive();
     if (!aboard) {
       // Riding at her berth (only when someone is near enough to see her).
       if (Math.hypot(ship.pos.x - this.player.pos.x, ship.pos.z - this.player.pos.z) < 700) ship.update(dt, { ...NO_CONTROL(), anchor: true }, { skill: 0, assisted: true });
@@ -189,24 +208,24 @@ export class IronKettle {
     const last = v.leg >= KETTLE_ROUTE.length - 1;
     if (!last && dist < 120) v.leg++;
     // Hamm keeps the helm while you're away from the wheel.
-    if (!this.sailing.atHelm) {
+    const hamm = !this.sailing.atHelm;
+    if (hamm) {
       this.sailing.lashed = Math.atan2(tx - ship.pos.x, tz - ship.pos.z);
-      this.ctl.sail = last && dist < 160 ? 0 : 1;
+      this.ctl.sail = last && dist < 260 ? 0 : 1;
       this.ctl.anchor = false;
       this.ctl.reef = storm > 0.45;
     }
     // The paddle boiler: in calm water she makes way whatever the wind does.
-    const boiler = storm < 0.35 && !(last && dist < 160) ? (this.sailing.atHelm ? (this.ctl.sail > 0.4 ? 7 : 0) : 12) : 0;
-    if (boiler > 0 && ship.speed < boiler) ship.speed = Math.min(boiler, ship.speed + dt * 2.2);
+    // (Coming in, Hamm eases her down to a crawl alongside the quay.)
+    let boiler = storm < 0.35 ? (hamm ? 12 : this.ctl.sail > 0.4 ? 7 : 0) : 0;
+    if (last && hamm) boiler = dist > 40 ? Math.max(2, Math.min(12, (dist - 30) / 12)) : 0;
+    if (boiler > 0 && ship.speed < boiler) ship.speed = Math.min(boiler, ship.speed * 1.012 + dt * 2.5);
+    if (last && hamm && ship.speed > boiler + 0.5) ship.speed = Math.max(boiler, ship.speed - dt * 2.5);
     this.paddleT += dt * (boiler > 0 ? Math.max(0.6, ship.speed / 3) : 0);
     for (const p of this.paddles) p.rotation.x = this.paddleT;
-    // Coming in: Hamm takes in sail and brings her alongside.
-    if (last && dist < 160) {
-      ship.speed = Math.max(0, ship.speed - dt * 2.4);
-      if (Math.abs(ship.speed) < 2.4 && !this.sailing.atHelm) {
-        v.slowT += dt;
-        if (v.slowT > 2.5) this.arrive();
-      }
+    if (last && hamm && dist < 60 && Math.abs(ship.speed) < 2.6) {
+      v.slowT += dt;
+      if (v.slowT > 1.5) this.arrive();
     }
     // The voyage's events, as she comes to each stretch of water.
     if (!v.storm && v.leg >= 4) {
@@ -241,7 +260,7 @@ export class IronKettle {
     this.voyage = null;
     this.where = 'cove';
     this.sailing.lashed = null;
-    if (this.sailing.current === this.ship) this.hooks.dock('kettleCove');
+    if (this.sailing.current === this.ship && !this.hooks.dock('kettleCove')) this.sailing.leaveShip(this.cove);
     this.hooks.signal('kettle-landed');
     this.hooks.save();
   }

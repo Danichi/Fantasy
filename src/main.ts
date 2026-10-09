@@ -96,6 +96,7 @@ const { updateSea } = seaState;
 import { Sailing, harbourFolk, HARBOUR_SAILORS, seamanshipLevel } from './world/sea/sailing';
 import { SeamanshipPanel } from './ui/seamanshipPanel';
 import { buildIslandPorts } from './world/sea/islandPorts';
+import { Mountains } from './world/mountains/mountains'; // The White and Deep Mountains (feat/mountains)
 import { GroundWindow } from './world/groundWindow';
 import { SkillsUI } from './ui/skills';
 import { DISC } from './paths/data';
@@ -1193,6 +1194,20 @@ async function boot() {
   desert.onDoors = (doors) => addDoors(doors);
   const desertQuests = setupDesertQuests(quests, r.scene, fx, (id, n) => giveItem(id, n), (m) => hud.toast(m));
   realm.overworldInteractables.push(...desertQuests.interactables);
+  // ---- The White and Deep Mountains (feat/mountains) ----
+  const mountains = new Mountains({
+    r, mats: world.mats, fx, player, input, cam, hud, dialogue, quests, sailing, realm, npcs, time, weather, flags: worldFlags, rewards, mapUI, discovery, islands,
+    folkServices, give: giveItem, count: countItem, take: takeItem, save: () => save(),
+    shop: (name, title, intro, stock, wants) => town.showShop(name, title, intro, stock, wants ? { wants } : {}),
+  });
+  realm.overworldInteractables.push(...mountains.interactables);
+  {
+    // Its scenery hides with the rest of the overworld when a realm (dungeon, room, the deep) takes over.
+    const ov = (realm as unknown as { overworld: { hide: (h: boolean) => void } }).overworld;
+    const hide = ov.hide;
+    ov.hide = (h) => { hide(h); mountains.setVisible(!h); };
+  }
+  // ---- (end of the White and Deep Mountains) ----
   // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
   quests.fromJSON(saveData?.world?.quests);
@@ -1424,6 +1439,7 @@ async function boot() {
       else worldMap.toggle();
     }
     slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
+    mountains.preStep(STEP); // The White and Deep Mountains (feat/mountains)
     if (realm.mode === 'overworld') sailing.preStep(STEP);
     player.update(STEP, input, cam);
     skillRt.update(STEP);
@@ -1564,6 +1580,7 @@ async function boot() {
       if (folkTalk.npc) folkTalk.pos.copy(folkTalk.npc.pos);
       else folkTalk.pos.set(0, -999, 0);
     }
+    mountains.frame(dt); // The White and Deep Mountains (feat/mountains)
     const riverNear = Math.max(0, 1 - Math.abs(player.pos.x - riverX(player.pos.z)) / 40) * (Math.abs(player.pos.z) < 420 ? 1 : 0);
     const def = REGIONS[here];
     ambience.update(dt, def?.ambience ?? 'meadow', ts.night, wp, { river: riverNear * 0.7 }, realm.mode !== 'overworld');
@@ -1691,6 +1708,13 @@ async function boot() {
         player.debugPose(id, t);
       },
     };
+  }
+  if (DEBUG || TEST_MODE) {
+    // ---- The White and Deep Mountains (feat/mountains): exposed for tests, and reset with the rest ----
+    const g = (window as any).__game;
+    g.mountains = mountains;
+    const resetRest = g.resetForTest;
+    g.resetForTest = async () => { await mountains.reset(); await resetRest(); };
   }
   (window as any).__ready = true;
 }

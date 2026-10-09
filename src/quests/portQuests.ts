@@ -92,7 +92,7 @@ export const PORT_QUESTS: QuestDef[] = [
       ] },
       { note: 'Be at the harbour on sailing day at 8:00.', hook: 'dwarves:sailing', objectives: [{ type: 'signal', id: 'expedition-sails', text: 'Board the Iron Kettle at the harbour (sailing day, 8:00)', at: [HARBOUR_BERTH.x, HARBOUR_BERTH.z] }] },
     ],
-    done: 'The Iron Kettle slips out of Port Aurelle on the morning tide, bound for the White Mountains. (The mountains open in a later chapter; Bruni will hold your berth.)',
+    done: 'The Iron Kettle slips out of Port Aurelle on the morning tide, bound for the White Mountains, Captain Hamm Copperbeard at the helm and Bruni at the rail.',
     rewards: { gold: 150, xp: 400, items: [['healthPotion', 3]], guildRep: 60 },
   },
   // ---- The fish market -------------------------------------------------------------------------
