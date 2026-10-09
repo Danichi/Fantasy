@@ -1,8 +1,15 @@
 import * as THREE from 'three';
 import { events } from '../core/events';
 import { heightAt } from '../world/terrain';
-/** The origin picked when a new game starts (it grants the V ability). */
-export type Origin = 'human' | 'dragon' | 'demon';
+import type { OriginLook } from '../origins/data';
+import type { LegacySave } from '../origins/legacy';
+/** The origin picked when a new game starts (origins/data.ts: passives, the V ability, the legendary tree). */
+export type Origin = 'human' | 'elf' | 'dwarf' | 'beastfolk' | 'demon' | 'dragonkin';
+/** Saves from before the six peoples called the dragonkin 'dragon'. */
+export function normalizeOrigin(o: unknown): Origin {
+  if (o === 'dragon') return 'dragonkin';
+  return o === 'elf' || o === 'dwarf' || o === 'beastfolk' || o === 'demon' || o === 'dragonkin' ? o : 'human';
+}
 
 // XP and gold, plus the glowing orbs and coins that
 // burst out of defeated enemies and fly to the player.
@@ -33,6 +40,10 @@ export class Progression {
   totalXp = 0;
   gold = 0;
   origin: Origin = 'human';
+  /** the character creator's choices (origins/data.ts); a default look for saves from before it */
+  look: OriginLook | null = null;
+  /** Renown and the great deeds that earned it (origins/legacy.ts) */
+  legacy: LegacySave = { renown: 0, deeds: {} };
 
   addXp(n: number) {
     this.xp += n;

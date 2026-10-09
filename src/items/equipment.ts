@@ -39,6 +39,17 @@ export class Equipment implements LimbFit {
 
   constructor(private char: Character, private rig: RigLayer) {}
 
+  /** Move worn and held gear onto a rebuilt body (origins: a new look). */
+  rebind(char: Character, rig: RigLayer) {
+    for (const objs of this.models.values()) for (const o of objs) o.removeFromParent();
+    this.models.clear();
+    for (const l of this.limbSockets.values()) l.socket.removeFromParent();
+    this.limbSockets.clear();
+    this.char = char;
+    this.rig = rig;
+    this.refreshModels();
+  }
+
   // ---- LimbFit ------------------------------------------------------------
   /** Socket on a bone whose axes are the limb frame described in armorModels. */
   limb(bone: string) {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { HERO } from '../npc/cast';
+import type { Look } from '../npc/charBuilder';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Character } from './character';
 import { RigLayer, blendPose, overlayPose, type ProcPose } from './rigLayer';
@@ -62,7 +63,8 @@ const MANA_REGEN = 0.7;
 const MOUNT_TIME = 0.5;
 
 export class Player {
-  readonly char = new Character();
+  /** the hero's body (replaced whole by rebuildBody when the look changes) */
+  char = new Character();
   rig!: RigLayer;
   anim!: Animator;
   equip!: Equipment;
@@ -103,7 +105,6 @@ export class Player {
   private burn = { dps: 0, left: 0 };
   mounted = false;
   private mountVisual = new THREE.Group();
-  private originCooldown = 0;
 
   act: ActiveAction | null = null;
   private buffer: { a: Buffered; t: number } | null = null;
@@ -150,9 +151,34 @@ export class Player {
   /** per-target bonus for blade hits (brands, forced crits) */
   meleeBonus?: (t: Target) => { mult: number; crit: boolean };
 
+  // ---- origins (feat/origins): hooks only; the logic lives in src/origins ----
+  /** the look the body is built from (the character creator) and its standing height (0: the default) */
+  look: Look = HERO;
+  lookHeight = 0;
+  /** proportions and procedural parts (npc/charParts), applied right after the body loads */
+  shapeBody?: (char: Character) => void;
+  /** flight (origins/flight.ts), every step; sets `flying` while it owns the velocity */
+  flight?: (dt: number, input: Input, cam: ThirdPersonCamera) => void;
+  flying = false;
+  /** the V key (origins/abilities.ts) */
+  originAbility?: () => void;
+  /** swap an action for another (forms' movesets, the beastfolk pounce) */
+  remapAction?: (id: string) => string;
+  /** stagger resistance: (gear poise + flat) x mul; immune ignores staggers */
+  poiseMul = 1;
+  poiseFlat = 0;
+  staggerImmune = false;
+  /** fraction of fire damage and burning shrugged off */
+  fireResist = 0;
+  /** lock-on reach in metres */
+  lockRange = 24;
+  /** unseen (Moonveil): enemies that check it lose track of you */
+  veiled = false;
+
   async init(scene: THREE.Scene, spawn: THREE.Vector3) {
     // The stylised hero (docs/ART-DIRECTION.md §7), playing the Mixamo clips.
-    await this.char.load(undefined, undefined, HERO);
+    await this.char.load(undefined, this.lookHeight ? { height: this.lookHeight } : undefined, this.look);
+    this.shapeBody?.(this.char);
     scene.add(this.char.root);
     this.anim = new Animator(this.char);
     // Real clips hold the sword and shield themselves; the placeholder's
@@ -180,6 +206,30 @@ export class Player {
     this.kcc = physics.createCharacterController(0.02);
     this.pos.copy(spawn);
     this.prevPos.copy(spawn);
+  }
+
+  /** Rebuild the hero's body for a new look (origins: the character creator), keeping gear, place and state. */
+  async rebuildBody() {
+    const old = this.char;
+    const char = new Character();
+    await char.load(undefined, this.lookHeight ? { height: this.lookHeight } : undefined, this.look);
+    this.shapeBody?.(char);
+    char.root.position.copy(old.root.position);
+    char.root.rotation.copy(old.root.rotation);
+    old.root.parent?.add(char.root);
+    old.root.removeFromParent();
+    this.char = char;
+    this.anim = new Animator(char);
+    this.armsFromClips = char.has('attack_light_1') || char.has('block_idle');
+    this.anim.update(0.3, { local: { x: 0, z: 0 }, grounded: true });
+    char.root.updateMatrixWorld(true);
+    this.rig = new RigLayer(char);
+    this.rig.setup();
+    this.equip.rebind(char, this.rig);
+    char.root.add(this.mountVisual);
+    for (const b of ['Head', 'Spine2', 'RightArm', 'LeftArm', 'RightForeArm', 'LeftForeArm', 'RightHand', 'LeftHand', 'RightUpLeg', 'LeftUpLeg', 'RightLeg', 'LeftLeg', 'RightFoot', 'LeftFoot']) this.equip.limb(b);
+    this.lastPose = {};
+    this.poseFrom = null;
   }
 
   private buildMountVisual() {
@@ -317,10 +367,7 @@ export class Player {
       this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0;
       return;
     }
-    if (this.prog.origin === 'dragon' && !this.grounded && input.held('jump')) {
-      // Dragon origin: hold jump in the air to glide down slowly.
-      this.vel.y = Math.max(this.vel.y, -1.25);
-    }
+    this.flight?.(dt, input, cam);
     this.updateAction(dt, input);
     this.updateLock(cam);
     this.move(dt);
@@ -356,6 +403,7 @@ export class Player {
 
   // ---- actions --------------------------------------------------------------
   private startAction(id: string, t0?: number): boolean {
+    id = this.remapAction?.(id) ?? id;
     const raw = ACTIONS[id];
     if (!raw) return false;
     const usingClip = !!raw.clip && this.char.has(raw.clip);
@@ -544,7 +592,7 @@ export class Player {
       if (!t.alive || !t.lockable) continue;
       const to = t.center.clone().sub(cam.camera.position);
       const dist = t.center.distanceTo(this.center);
-      if (dist > 24) continue;
+      if (dist > this.lockRange) continue;
       const ang = to.normalize().angleTo(camF);
       if (ang > 0.9) continue;
       if (!this.canSee(t)) continue; // no locking on through walls
@@ -569,7 +617,7 @@ export class Player {
   }
 
   private updateLock(cam: ThirdPersonCamera) {
-    if (this.lock && (!this.lock.alive || this.lock.center.distanceTo(this.center) > 30)) this.lock = null;
+    if (this.lock && (!this.lock.alive || this.lock.center.distanceTo(this.center) > this.lockRange * 1.25)) this.lock = null;
     if (this.lock) {
       this.lockHidden = this.canSee(this.lock) ? 0 : this.lockHidden + 1 / 60;
       if (this.lockHidden > 1.2) this.lock = null;
@@ -688,7 +736,7 @@ export class Player {
       hv.multiplyScalar(keep).addScaledVector(dir, v * (1 - keep));
     } else if (a) {
       hv.multiplyScalar(Math.exp(-12 * dt));
-    } else {
+    } else if (!this.flying) {
       const want = intent.clone().multiplyScalar(targetSpeed);
       const accel = this.grounded ? (targetSpeed > hv.length() ? 8 : 11) : 2.5;
       hv.x = damp(hv.x, want.x, accel, dt);
@@ -716,7 +764,7 @@ export class Player {
     if (this.swimming && surface !== null) {
       // Buoyancy: ease toward treading water at the surface.
       this.vel.y = (surface - 1.25 - this.diveDepth - this.pos.y) * 5;
-    } else {
+    } else if (!this.flying) {
       this.vel.y -= GRAVITY * dt;
       if (this.grounded && this.vel.y < 0) this.vel.y = 0;
     }
@@ -1138,15 +1186,15 @@ export class Player {
       return 'blocked';
     }
     const armor = this.equip.armorValue;
-    const dmg = att.damage * (100 / (100 + armor * 5));
+    const dmg = att.damage * (100 / (100 + armor * 5)) * (att.burn ? 1 - this.fireResist : 1);
     this.applyDamage(dmg);
     if (att.burn) {
-      const burnScale = this.prog.origin === 'dragon' ? 0.35 : 1;
+      const burnScale = 1 - this.fireResist;
       this.burn = { dps: att.burn * burnScale, left: 3 };
     }
     // Hyper-armour through the middle of heavy swings.
     const heavyArmor = (a?.def.id === 'heavy' || a?.def.id === 'airAttack') && a.def.hit && a.t > a.def.hit.from - 0.2 && a.t < a.def.hit.to;
-    if (!this.dead && !heavyArmor && att.poise > this.equip.poise * 0.8) {
+    if (!this.dead && !heavyArmor && !this.staggerImmune && att.poise > (this.equip.poise + this.poiseFlat) * this.poiseMul * 0.8) {
       this.startAction('stagger');
       this.vel.addScaledVector(toAtt, -3.5);
     }
@@ -1192,11 +1240,9 @@ export class Player {
   }
 
   private updateStats(dt: number) {
-    this.originCooldown = Math.max(0, this.originCooldown - dt);
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
     else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen + this.mods.staminaRegen) * dt);
     this.mana = Math.min(this.maxMana, this.mana + MANA_REGEN * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen + this.mods.manaRegen) * dt);
-    if (this.prog.origin === 'demon' && !this.dead) this.hp = Math.min(this.maxHp, this.hp + 0.8 * dt);
     this.hp = Math.min(this.hp, this.maxHp);
     if (this.hot.left > 0 && !this.dead) {
       this.hot.left -= dt;
@@ -1233,36 +1279,10 @@ export class Player {
   }
 
 
+  /** V: the origin's slotted ability (origins/abilities.ts). */
   private useOriginAbility() {
-    if (this.originCooldown > 0 || this.dead) return;
-    const origin = this.prog.origin;
-    if (origin === 'dragon') {
-      const f = this.forward;
-      const center = this.center;
-      for (const t of targets) {
-        if (!t.alive) continue;
-        const to = t.center.clone().sub(center).setY(0);
-        const d = to.length();
-        if (d > 6.5 || d < 0.01) continue;
-        if (to.normalize().dot(f) < 0.62) continue;
-        if (!this.reachable(t)) continue;
-        const dmg = Math.round(26 + this.prog.level * 2.5);
-        t.takeHit({ damage: dmg, poise: 35, dir: f.clone(), at: t.center.clone(), crit: false, source: 'melee' });
-        events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: false, enemyId: t.id });
-      }
-      this.originCooldown = 4.5;
-      events.emit('originAbility', { origin, ability: 'Dragon Breath' });
-    } else if (origin === 'demon') {
-      this.hot = { rate: Math.max(10, this.maxHp * 0.08), left: 2.5 };
-      this.stamina = Math.min(this.maxStamina, this.stamina + 30);
-      this.originCooldown = 5.5;
-      events.emit('originAbility', { origin, ability: 'Blood Awakening' });
-    } else {
-      this.mana = Math.min(this.maxMana, this.mana + 22);
-      this.stamina = Math.min(this.maxStamina, this.stamina + 22);
-      this.originCooldown = 6;
-      events.emit('originAbility', { origin, ability: 'Heroic Adaptation' });
-    }
+    if (this.dead) return;
+    this.originAbility?.();
   }
 
   /**

@@ -34,6 +34,7 @@ const MINORS: Record<Family, NodeEffect[]> = {
     { text: '+6% effect duration', m: { duration: 0.06 } },
     { text: '+4% area', m: { area: 0.04 } },
   ],
+  legacy: [{ text: '+4% damage', m: { melee: 0.04 } }],
   calling: [
     { text: '+10% yield', craft: true },
     { text: '+8% effect strength', craft: true },

@@ -4,7 +4,7 @@
 //   '*' skill (goes on the bar, ranks I-V)   '!' keystone   '?' choice "A|B"
 //   no prefix: tier 1 and last-in-row are minor, the rest notable.
 
-export type Family = 'combat' | 'magic' | 'calling';
+export type Family = 'combat' | 'magic' | 'calling' | 'legacy';
 
 export interface BranchDef {
   name: string;
@@ -40,6 +40,7 @@ export const FAMILIES: Record<Family, { name: string; note: string; flavour: str
   combat: { name: 'Combat Classes', note: 'One active at a time', flavour: 'Your stance, your moveset, your breath between blows.', look: 'Sigil wheel' },
   magic: { name: 'Magic Classes', note: 'Learn any', flavour: 'Each school is a sky of its own. Learn the stars you need.', look: 'Constellation' },
   calling: { name: 'Callings', note: 'Crafts and trades', flavour: 'Patient work that makes the brave stronger than their steel.', look: 'Living tree' },
+  legacy: { name: 'Legacy', note: 'Earned by deeds', flavour: 'What the world will say of you. No XP can buy it.', look: 'Your origin' },
 };
 
 export const DISCIPLINES: DisciplineDef[] = [
@@ -174,6 +175,12 @@ export const DISCIPLINES: DisciplineDef[] = [
   {
     id: 'beastbinding', fam: 'calling', name: 'Beastbinding', color: '--c-herb', mentor: 'Unknown', secret: true,
     flavour: 'Every slime remembers what it ate.', how: 'Capture monster essences.',
+  },
+
+  // ---- legacy (origins/legacy.ts: levels come from Renown, never from XP) --------
+  {
+    id: 'legendaryHero', fam: 'legacy', name: 'Legendary Hero', color: '--c-gold', mentor: 'No one: great deeds raise it', res: 'Renown',
+    flavour: 'You were summoned as one of six peoples. The world will remember which.', how: 'Slay named bosses and great beasts, finish chapters of the story, make first landfalls.',
   },
 ];
 

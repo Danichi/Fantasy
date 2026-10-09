@@ -140,6 +140,7 @@ export class Paths {
     return Math.round(levelCost(this.level(id)) * (1 - this.discount(id)));
   }
   canInvest(id: string) {
+    if (DISC[id]?.fam === 'legacy') return false; // Renown only (origins/legacy.ts)
     const L = this.level(id);
     return L > 0 && L < MAX_LEVEL && this.prog.xp >= this.nextCost(id);
   }
@@ -156,7 +157,7 @@ export class Paths {
   /** Taught by a mentor: the discipline starts at level 1. */
   canTeach(id: string) {
     const d = DISC[id];
-    if (!d || this.learned(id)) return false;
+    if (!d || this.learned(id) || d.fam === 'legacy') return false;
     return !d.requires || this.level(d.requires[0]) >= d.requires[1];
   }
   teach(id: string) {
@@ -167,6 +168,13 @@ export class Paths {
     this.syncLevel(true);
     events.emit('progressChanged', {});
     return true;
+  }
+  /** Legacy disciplines level from Renown (origins/legacy.ts), never from XP. */
+  setLevelFromRenown(id: string, L: number, announce = false) {
+    if (this.level(id) === L) return;
+    this.lv[id] = L;
+    if (announce) events.emit('disciplineLevel', { id, level: L });
+    this.syncLevel(announce);
   }
   /** Only combat classes can be active, and only one at a time. */
   setActive(id: string) {
@@ -224,9 +232,11 @@ export class Paths {
   }
 
   // ---- tree points -------------------------------------------------------------
+  /** extra tree points from outside the tree (origins: Heroic Adaptation) */
+  bonusPoints?: (id: string) => number;
   earned(id: string) {
     const L = this.level(id);
-    return L + Math.floor(L / 5);
+    return L + Math.floor(L / 5) + (L > 0 ? this.bonusPoints?.(id) ?? 0 : 0);
   }
   spent(id: string) {
     const t = treeOf(DISC[id]);

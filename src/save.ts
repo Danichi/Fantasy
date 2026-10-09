@@ -6,7 +6,9 @@ import type { DungeonProgress } from './dungeon/instance';
 import type { MineProgress } from './dungeon/mine';
 import type { GuildSaveData } from './guild/adventurerGuild';
 import type { DiscoverySave } from './world/discovery';
-import { xpToNext } from './progression/progression';
+import { xpToNext, normalizeOrigin } from './progression/progression';
+import { cleanLook, type OriginLook } from './origins/data';
+import { cleanLegacy, type LegacySave } from './origins/legacy';
 import type { PathsSave } from './paths/paths';
 
 // Browser save (localStorage). Hand-drawn maps have to survive a reload, so
@@ -64,6 +66,10 @@ export interface SaveData {
   mine?: MineProgress;
   guild: GuildSaveData;
   world: WorldSave;
+  /** the character creator's look (missing before origins: a default look is made) */
+  look?: Partial<OriginLook>;
+  /** Renown and deeds for the Legendary Hero */
+  legacy?: LegacySave;
 }
 
 export function hasSave() {
@@ -143,6 +149,8 @@ export function buildSave(player: Player, seed: number, maps: Record<string, Map
     mine,
     guild,
     world,
+    look: player.prog.look ?? undefined,
+    legacy: player.prog.legacy,
   };
   return data;
 }
@@ -173,7 +181,9 @@ export function applySave(player: Player, d: SaveData) {
     player.paths.reset();
   }
   const origin = d.prog.origin ?? d.prog.combat?.origin;
-  p.origin = origin === 'dragon' || origin === 'demon' ? origin : 'human';
+  p.origin = normalizeOrigin(origin);
+  p.look = cleanLook(d.look, p.origin);
+  p.legacy = cleanLegacy(d.legacy);
   eq.items = [];
   const uids: number[] = [];
   for (const it of d.items) {
