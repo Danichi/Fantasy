@@ -123,6 +123,7 @@ import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 import { afflictions } from './combat/afflictions';
 import { ShopUI } from './ui/shopUI';
+import { Elves } from './world/elves/elves'; // The Verdant Elves (feat/elves)
 
 const STEP = 1 / 60;
 
@@ -206,6 +207,10 @@ async function boot() {
   mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
   stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING];
+  // ---- The Verdant Elves (feat/elves) ----
+  // The great forest north of Cresha: Thornwick, Silverbough, the giants, the Sanctum, Moonlight Glade.
+  const elves = new Elves(r.scene, r.renderer, world.mats, fx);
+  stylizedNature.clearings.push(...elves.clearings);
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -379,8 +384,9 @@ async function boot() {
       gravewood.setVisible(!h);
       microDiscoveries?.setVisible(!h);
       town.setVisible(!h);
+      elves.setVisible(!h); // feat/elves
     },
-    clearEnemies: () => { slimes.clear(); frontier?.dispose(); encounters?.clear(); },
+    clearEnemies: () => { slimes.clear(); frontier?.dispose(); encounters?.clear(); elves.forest.threats.clear(); },
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
   }, rewards, world.crypt.door, world.mineDoor);
   const dialogue = new DialogueUI();
@@ -1193,6 +1199,16 @@ async function boot() {
   desert.onDoors = (doors) => addDoors(doors);
   const desertQuests = setupDesertQuests(quests, r.scene, fx, (id, n) => giveItem(id, n), (m) => hud.toast(m));
   realm.overworldInteractables.push(...desertQuests.interactables);
+  // ---- The Verdant Elves (feat/elves) ----
+  elves.wire({
+    quests, npcs, player, folkServices, interactables: realm.overworldInteractables, flags: worldFlags,
+    toast: (m) => hud.toast(m), card: (t, sub, first) => hud.regionCard(t, sub, first), bossBar: (t, n) => hud.bossBar(t, n), fade: (on) => hud.fade(on),
+    give: giveItem, count: countItem, take: takeItem, hour: () => time.hour, hours: gameHours,
+    sleep: () => { time.skipTo(7); player.hp = player.maxHp; player.mana = player.maxMana; player.stamina = player.maxStamina; save(); },
+    save: () => save(), talk: (who, title, text, opts) => dialogue.show(who, title, text, opts), close: () => dialogue.close(),
+    shop: (who, title, intro, stock, extra) => town.showShop(who, title, intro, stock, extra), openRoad: (id) => roads.open(id), addDoors: (d) => addDoors(d),
+    dismount: () => { if (player.mounted) horses.dismount(); },
+  });
   // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
   quests.fromJSON(saveData?.world?.quests);
@@ -1437,6 +1453,7 @@ async function boot() {
       desert?.update(STEP, player);
     }
     realm.update(STEP);
+    elves.step(STEP, realm.mode === 'overworld'); // feat/elves
     afflictions.update(STEP);
     rewards.update(STEP, player.center);
     // Interaction: nearest enabled thing in reach.
@@ -1541,6 +1558,7 @@ async function boot() {
       caravans.update(dt, player.pos);
       port.update(dt, ts.night);
       capital.update(dt, player.pos, ts.night);
+      elves.frame(dt, r.camera.position, ts.night); // feat/elves
       boats.update(dt);
       if (worldRunning) riverLife.update(dt, player.pos, player.sprinting, ts.night);
       fishing.update(dt);
@@ -1657,6 +1675,7 @@ async function boot() {
       slimes.clear();
       encounters.clear();
       crownRoad.threats.clear();
+      elves.reset(); // feat/elves
       sailing.reset();
       quests.state = {};
       quests.tracked = null;
@@ -1679,6 +1698,7 @@ async function boot() {
       sleep: (on: boolean) => (asleep = on),
       THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
+      elves, // feat/elves
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

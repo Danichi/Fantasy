@@ -114,7 +114,7 @@ export class ElvenForest {
     this.mats = elfMats();
     this.mega = new MegaForest(scene, renderer, m.planks, this.mats.rope);
     this.threats = new ForestThreats(scene, fx, {
-      toast: (s) => hooks.toast(s), bossBar: (t, n) => hooks.bossBar(t, n), flags: hooks.flags, hour: () => hooks.hour(),
+      toast: (s) => hooks.toast(s), bossBar: (t, n) => hooks.bossBar(t, n), get flags() { return hooks.flags; }, hour: () => hooks.hour(),
       wants: (id) => hooks.wants(id), isActive: (q) => hooks.isActive(q), addGold: (n) => hooks.addGold(n), save: () => hooks.save(),
     });
     scene.add(this.ribbons);
