@@ -359,6 +359,17 @@ export class OrcWarlord implements Target {
       this.onRoar?.(this);
     }
   }
+  /** Speed the dungeon boss template raises in later phases (dungeon/kit/boss.ts). */
+  phaseSpeed = 1;
+  /** A phase change (dungeon/kit/boss.ts): he breaks off whatever he's doing and roars. */
+  phaseRoar() {
+    if (!this.alive || this.state === 'dormant' || this.state === 'emerging' || this.state === 'dying') return;
+    this.move = null;
+    this.arrowNocked.visible = false;
+    this.sheathe(false);
+    this.setState('roar');
+    this.onRoar?.(this);
+  }
   get enraged() {
     return this.hp < this.maxHp * 0.5;
   }
@@ -518,7 +529,7 @@ export class OrcWarlord implements Target {
     const toP = player.pos.clone().sub(this.position).setY(0);
     const dist = toP.length();
     const want = Math.atan2(toP.x, toP.z);
-    const speedMul = this.enraged ? 1.15 : 1;
+    const speedMul = (this.enraged ? 1.15 : 1) * this.phaseSpeed;
     let moveSpeed = 0;
     let turn = true;
 

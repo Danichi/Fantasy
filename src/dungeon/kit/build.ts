@@ -51,6 +51,8 @@ export interface KitDungeonDef {
   mobs: (floor: number) => MobKind[];
   loot: LootTable;
   boss?: { floor: number; def: BossDef };
+  /** the named gear waiting in the boss's reward room (once) */
+  reward?: string;
   /** what the way out says on each floor */
   exitLabel: (floor: number) => string;
   arrive: (floor: number) => string;
@@ -146,7 +148,7 @@ export class KitInstance {
   private roomGroups = new Map<number, THREE.Group>();
   private wet = new Set<number>();
   private pits = new Set<number>();
-  private bolts: Bolts;
+  readonly bolts: Bolts;
   private dormant: { room: number; kind: MobKind; at: THREE.Vector3 }[] = [];
   private chests: { id: string; lid: THREE.Group; root: THREE.Group; open: boolean; t: number; pos: THREE.Vector3; tier: number; item?: string; hidden: boolean; glint: THREE.Sprite }[] = [];
   private keyObj: { mesh: THREE.Object3D; taken: boolean; pos: THREE.Vector3 } | null = null;
@@ -182,6 +184,11 @@ export class KitInstance {
     this.bolts = new Bolts(scene);
     scene.add(this.group);
     for (const t of this.fg.traps) if (t.kind === 'collapse') this.pits.add(t.cell[1] * this.fg.w + t.cell[0]);
+    const rewardRoom = this.fg.rooms.find((r) => r.role === 'reward');
+    if (def.reward && rewardRoom) {
+      const r = rewardRoom.rect;
+      this.fg.chests.push({ id: `reward-${floor}`, room: rewardRoom.id, cell: [r.x + Math.floor(r.w / 2), r.y + Math.floor(r.h / 2)], tier: 3, item: def.reward });
+    }
     this.ctx = this.makeCtx();
 
     this.buildShell();
@@ -197,6 +204,7 @@ export class KitInstance {
     this.secrets = new SecretSet(this.ctx);
     this.puzzles = new PuzzleSet(this.ctx);
     this.buildBreadcrumbs();
+    this.buildShrines();
     this.spawnWanderers(rnd);
     if (def.boss && def.boss.floor === floor) {
       const arena = this.fg.rooms.find((r) => r.role === 'boss')!;
@@ -883,6 +891,21 @@ export class KitInstance {
         this.hooks.save();
       },
     });
+  }
+
+  /** The antechamber's shrine: rest (heal, save) and wake here if you fall. */
+  private buildShrines() {
+    for (const r of this.fg.rooms.filter((q) => q.role === 'ante')) {
+      this.interactables.push({
+        pos: this.centreOf(r), radius: 2.6,
+        label: () => (this.def.theme === 'cave' ? "Rest by the smugglers' fire" : 'Rest at the Sunwheel shrine'),
+        enabled: () => true,
+        action: () => {
+          this.progress.shrine = { floor: this.floor, room: r.id };
+          this.hooks.rest();
+        },
+      });
+    }
   }
 
   // ---- lights -----------------------------------------------------------------------------------
