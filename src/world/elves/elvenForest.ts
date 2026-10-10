@@ -707,6 +707,8 @@ export class ElvenForest {
       for (let s = L.from; s <= len; s += 3) {
         const p = pointAlong(spec, s);
         const sx = -p.dir.y, sz = p.dir.x;
+        // The grass keeps off the road (the road texture doesn't reach this far north).
+        if (Math.round(s) % 4 < 3) GRASS_MASKS.push({ x: p.x, z: p.z, r: L.half + 0.4, amount: 0.92 });
         for (const k of [-1, -0.6, 0, 0.6, 1]) {
           const x = p.x + sx * k * L.half, z = p.z + sz * k * L.half;
           pos.push(x, heightAt(x, z) + 0.08, z);
