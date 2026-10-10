@@ -181,7 +181,6 @@ export class ArmsRuntime {
     if ((this.cracked.get(t.id) ?? 0) > 0) mult *= 1.2;
     if (f?.backstab && this.behind(t)) {
       mult *= f.backstab;
-      crit = true;
       this.stats.backstabs++;
     }
     const o = this.takeOpening();
