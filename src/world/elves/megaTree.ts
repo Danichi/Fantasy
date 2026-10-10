@@ -60,8 +60,9 @@ export interface TreeParts { trunk: THREE.BufferGeometry; crown: THREE.BufferGeo
  * One giant of height H, seeded. `detail` 0 is the near model, 1 the middle
  * distance. Opts tune the World Tree and Silverbough's home trees.
  */
-export function buildGiant(seed: number, H: number, detail: 0 | 1, opts: { blobs?: number; crownScale?: number; roots?: number; lean?: number } = {}): TreeParts {
+export function buildGiant(seed: number, H: number, detail: 0 | 1, opts: { blobs?: number; crownScale?: number; roots?: number; lean?: number; girth?: number; rootReach?: number; rootHeight?: number } = {}): TreeParts {
   const rnd = mulberry32(seed);
+  const gr = opts.girth ?? 1, rr = opts.rootReach ?? 1;
   const seg = detail === 0 ? 18 : 8, rings = detail === 0 ? 18 : 7;
   const bark: THREE.BufferGeometry[] = [];
   const lean = (opts.lean ?? 0.03) * H, leanA = rnd() * Math.PI * 2;
@@ -75,7 +76,7 @@ export function buildGiant(seed: number, H: number, detail: 0 | 1, opts: { blobs
       const u = p.getY(i) + 0.5;
       const y = -2 + u * (0.9 * H + 2);
       const a = Math.atan2(p.getZ(i), p.getX(i));
-      const r = trunkRadius(y, H) * (1 + 0.09 * Math.sin(a * flutes + ph) * (1 - u * 0.6));
+      const r = gr * trunkRadius(y, H) * (1 + 0.09 * Math.sin(a * flutes + ph) * (1 - u * 0.6));
       const c = axis(y);
       p.setXYZ(i, c.x + Math.cos(a) * r, y, c.z + Math.sin(a) * r);
     }
@@ -86,13 +87,13 @@ export function buildGiant(seed: number, H: number, detail: 0 | 1, opts: { blobs
   const nRoots = opts.roots ?? 7;
   for (let k = 0; k < nRoots; k++) {
     const a = (k / nRoots) * Math.PI * 2 + rnd() * 0.4;
-    const y0 = H * (0.06 + rnd() * 0.07);
-    const r0 = trunkRadius(y0, H) * 0.8;
+    const y0 = H * (0.06 + rnd() * 0.07) * (opts.rootHeight ?? 1);
+    const r0 = gr * trunkRadius(y0, H) * 0.8;
     const start = new THREE.Vector3(Math.cos(a) * r0, y0, Math.sin(a) * r0);
-    const reach = trunkRadius(0, H) + H * (0.08 + rnd() * 0.07);
+    const reach = gr * trunkRadius(0, H) + H * (0.08 + rnd() * 0.07) * rr;
     const mid = new THREE.Vector3(Math.cos(a) * reach * 0.62, y0 * 0.32, Math.sin(a) * reach * 0.62);
     const end = new THREE.Vector3(Math.cos(a) * reach, -1.2, Math.sin(a) * reach);
-    const w = R0 * H * (0.42 + rnd() * 0.2);
+    const w = R0 * H * gr * (0.42 + rnd() * 0.2);
     bark.push(limb(start, mid, w, w * 0.7, detail === 0 ? 7 : 5), limb(mid, end, w * 0.7, w * 0.25, detail === 0 ? 7 : 5));
   }
   // Limbs and the crown's cloud-like masses.
@@ -131,7 +132,7 @@ export function buildGiant(seed: number, H: number, detail: 0 | 1, opts: { blobs
     const len = H * (0.18 + rnd() * 0.1) * cs;
     const up = 0.55 + rnd() * 0.5;
     const end = c0.clone().add(new THREE.Vector3(Math.cos(a) * len, len * up, Math.sin(a) * len));
-    bark.push(limb(c0, end, R0 * H * 0.42, R0 * H * 0.12, detail === 0 ? 8 : 5));
+    bark.push(limb(c0, end, R0 * H * gr * 0.42, R0 * H * gr * 0.12, detail === 0 ? 8 : 5));
     blob(end.clone().add(new THREE.Vector3(0, H * 0.03, 0)), H * (0.12 + rnd() * 0.05) * cs);
     if (rnd() < 0.7) blob(end.clone().lerp(c0, 0.45).add(new THREE.Vector3(0, H * 0.06, 0)), H * (0.09 + rnd() * 0.04) * cs);
   }
@@ -270,91 +271,11 @@ export class MegaForest {
   private impostorSize: [number, number] = [1, 1];
 
   private buildWalk(plank: THREE.Material, rope: THREE.Material) {
-    const parts: THREE.BufferGeometry[] = [], ropes: THREE.BufferGeometry[] = [];
-    const Y = this.deckY;
-    const put = (g: THREE.BufferGeometry, x: number, y: number, z: number, ry = 0, list = parts) => {
-      g.rotateY(ry);
-      g.translate(x, y, z);
-      list.push(clean(g));
-    };
-    const box = (x: number, y: number, z: number, hx: number, hy: number, hz: number, ry: number) =>
-      physics.addBox(new THREE.Vector3(x, y, z), new THREE.Vector3(hx, hy, hz), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)));
-    const outer: number[] = [];
-    // Platforms: a ring of planks around each walk tree, railed with rope.
-    for (const [x, z, H] of WALK_TREES) {
-      const gy = heightAt(x, z) - 0.6;
-      const inner = trunkRadius(Y - gy, H);
-      const R = inner + 4.2;
-      outer.push(R);
-      const ring = new THREE.CylinderGeometry(R, R, 0.35, 28, 1, false);
-      put(ring, x, Y - 0.18, z);
-      // Brackets under the deck, and a rope rail on posts.
-      for (let k = 0; k < 10; k++) {
-        const a = (k / 10) * Math.PI * 2;
-        const bx = x + Math.cos(a) * (inner + R) / 2, bz = z + Math.sin(a) * (inner + R) / 2;
-        const strut = new THREE.CylinderGeometry(0.12, 0.12, (R - inner) * 1.3, 5);
-        strut.rotateZ(Math.PI / 2 - 0.6);
-        put(strut, bx, Y - 1.5, bz, -a);
-        put(new THREE.CylinderGeometry(0.07, 0.07, 1.1, 5), x + Math.cos(a) * (R - 0.2), Y + 0.55, z + Math.sin(a) * (R - 0.2), 0);
-      }
-      const rail = new THREE.TorusGeometry(R - 0.2, 0.04, 4, 40);
-      rail.rotateX(Math.PI / 2);
-      put(rail, x, Y + 1.05, z, 0, ropes);
-      physics.addCylinder(new THREE.Vector3(x, Y - 0.2, z), 0.2, R);
-    }
-    // Rope bridges between the platforms (decks, rails and their colliders).
-    for (const [a, b] of WALK_BRIDGES) {
-      const A = WALK_TREES[a], B = WALK_TREES[b];
-      const dx = B[0] - A[0], dz = B[1] - A[1], d = Math.hypot(dx, dz);
-      const ux = dx / d, uz = dz / d;
-      const s0 = outer[a] - 0.6, s1 = d - outer[b] + 0.6;
-      const len = s1 - s0, mx = A[0] + ux * (s0 + len / 2), mz = A[1] + uz * (s0 + len / 2);
-      const yaw = Math.atan2(ux, uz);
-      const deck = new THREE.BoxGeometry(2.2, 0.16, len);
-      put(deck, mx, Y - 0.08, mz, yaw);
-      for (let k = 0; k < Math.floor(len / 0.7); k++) {
-        const t = s0 + 0.35 + k * 0.7;
-        put(new THREE.BoxGeometry(2.5, 0.08, 0.32), A[0] + ux * t, Y + 0.02, A[1] + uz * t, yaw);
-      }
-      for (const side of [-1, 1]) {
-        const ox = uz * side * 1.15, oz = -ux * side * 1.15;
-        const r = new THREE.CylinderGeometry(0.035, 0.035, len, 4);
-        r.rotateX(Math.PI / 2);
-        put(r, mx + ox, Y + 1.0, mz + oz, yaw, ropes);
-        box(mx + ox * 1.05, Y + 0.6, mz + oz * 1.05, 0.08, 0.6, len / 2, yaw);
-        for (let k = 0; k <= Math.floor(len / 2.5); k++) {
-          const t = s0 + k * 2.5;
-          put(new THREE.CylinderGeometry(0.02, 0.02, 1.0, 3), A[0] + ux * t + ox, Y + 0.5, A[1] + uz * t + oz, 0, ropes);
-        }
-      }
-      box(mx, Y - 0.1, mz, 1.15, 0.12, len / 2, yaw);
-      this.bridgeMids.push(new THREE.Vector3(mx, Y, mz));
-    }
-    // The spiral stair up the first walk tree: plank steps on brackets, 0.32 m a step.
-    const [sx, sz, sH] = WALK_TREES[0];
-    const gy = heightAt(sx, sz) - 0.6;
-    let angle = Math.atan2(SITES.worldTree[1] - sz, SITES.worldTree[0] - sx); // starts facing the Sanctum
-    const steps = Math.ceil((Y - gy - 0.2) / 0.32);
-    let start = new THREE.Vector3();
-    for (let k = 0; k < steps; k++) {
-      const y = gy + 0.32 * (k + 1);
-      const rIn = trunkRadius(y - gy, sH) + 0.3;
-      const rMid = Math.max(rIn + 0.9, k < 8 ? trunkRadius(0, sH) * 0.6 + 2.2 : 0);
-      const x = sx + Math.cos(angle) * rMid, z = sz + Math.sin(angle) * rMid;
-      if (k === 0) start = new THREE.Vector3(x + Math.cos(angle) * 2.5, heightAt(x + Math.cos(angle) * 2.5, z + Math.sin(angle) * 2.5), z + Math.sin(angle) * 2.5);
-      const yaw = -angle;
-      put(new THREE.BoxGeometry(2.0, 0.14, 0.95), x, y - 0.07, z, yaw);
-      put(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 3), x + Math.cos(angle) * 1.0, y + 0.5, z + Math.sin(angle) * 1.0, 0, ropes);
-      box(x, y - 0.12, z, 1.0, 0.12, 0.5, yaw);
-      // An outer rail so you don't step off the edge.
-      box(x + Math.cos(angle) * 1.1, y + 0.55, z + Math.sin(angle) * 1.1, 0.06, 0.55, 0.5, yaw);
-      angle += 0.9 / rMid;
-    }
-    const merged = new THREE.Mesh(mergeGeometries(parts, false)!, plank);
-    merged.castShadow = merged.receiveShadow = true;
-    const r = new THREE.Mesh(mergeGeometries(ropes, false)!, rope);
-    this.walk.add(merged, r);
-    return start;
+    const w = buildWalkway(this.walk, {
+      trees: WALK_TREES.map(([x, z, H]) => ({ x, z, H })), deckY: this.deckY, bridges: WALK_BRIDGES, stair: 0, startToward: SITES.worldTree, plank, rope,
+    });
+    this.bridgeMids.push(...w.bridgeMids);
+    return w.start;
   }
 
   /** Assign level of detail by distance to the camera (a few times a second). */
@@ -400,4 +321,101 @@ export class MegaForest {
     this.group.visible = v;
     this.walk.visible = v;
   }
+}
+
+export interface WalkTree { x: number; z: number; H: number; girth?: number }
+/**
+ * Platforms round tree trunks at one deck height, rope bridges between them
+ * and a spiral stair up the first: meshes into `group`, colliders into the
+ * physics world. The Sentinel Walk and the Sanctum's canopy both use it.
+ */
+export function buildWalkway(group: THREE.Group, o: { trees: WalkTree[]; deckY: number; bridges: [number, number][]; stair: number; startToward: [number, number]; plank: THREE.Material; rope: THREE.Material }) {
+  const bridgeMids: THREE.Vector3[] = [];
+  const TR = (y: number, t: WalkTree) => (t.girth ?? 1) * trunkRadius(y, t.H);
+  const parts: THREE.BufferGeometry[] = [], ropes: THREE.BufferGeometry[] = [];
+  const Y = o.deckY;
+  const put = (g: THREE.BufferGeometry, x: number, y: number, z: number, ry = 0, list = parts) => {
+    g.rotateY(ry);
+    g.translate(x, y, z);
+    list.push(clean(g));
+  };
+  const box = (x: number, y: number, z: number, hx: number, hy: number, hz: number, ry: number) =>
+    physics.addBox(new THREE.Vector3(x, y, z), new THREE.Vector3(hx, hy, hz), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)));
+  const outer: number[] = [];
+  // Platforms: a ring of planks around each walk tree, railed with rope.
+  for (const t of o.trees) {
+    const { x, z } = t;
+    const gy = heightAt(x, z) - 0.6;
+    const inner = TR(Y - gy, t);
+    const R = inner + 4.2;
+    outer.push(R);
+    const ring = new THREE.CylinderGeometry(R, R, 0.35, 28, 1, false);
+    put(ring, x, Y - 0.18, z);
+    // Brackets under the deck, and a rope rail on posts.
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2;
+      const bx = x + Math.cos(a) * (inner + R) / 2, bz = z + Math.sin(a) * (inner + R) / 2;
+      const strut = new THREE.CylinderGeometry(0.12, 0.12, (R - inner) * 1.3, 5);
+      strut.rotateZ(Math.PI / 2 - 0.6);
+      put(strut, bx, Y - 1.5, bz, -a);
+      put(new THREE.CylinderGeometry(0.07, 0.07, 1.1, 5), x + Math.cos(a) * (R - 0.2), Y + 0.55, z + Math.sin(a) * (R - 0.2), 0);
+    }
+    const rail = new THREE.TorusGeometry(R - 0.2, 0.04, 4, 40);
+    rail.rotateX(Math.PI / 2);
+    put(rail, x, Y + 1.05, z, 0, ropes);
+    physics.addCylinder(new THREE.Vector3(x, Y - 0.2, z), 0.2, R);
+  }
+  // Rope bridges between the platforms (decks, rails and their colliders).
+  for (const [a, b] of o.bridges) {
+    const A = [o.trees[a].x, o.trees[a].z], B = [o.trees[b].x, o.trees[b].z];
+    const dx = B[0] - A[0], dz = B[1] - A[1], d = Math.hypot(dx, dz);
+    const ux = dx / d, uz = dz / d;
+    const s0 = outer[a] - 0.6, s1 = d - outer[b] + 0.6;
+    const len = s1 - s0, mx = A[0] + ux * (s0 + len / 2), mz = A[1] + uz * (s0 + len / 2);
+    const yaw = Math.atan2(ux, uz);
+    const deck = new THREE.BoxGeometry(2.2, 0.16, len);
+    put(deck, mx, Y - 0.08, mz, yaw);
+    for (let k = 0; k < Math.floor(len / 0.7); k++) {
+      const t = s0 + 0.35 + k * 0.7;
+      put(new THREE.BoxGeometry(2.5, 0.08, 0.32), A[0] + ux * t, Y + 0.02, A[1] + uz * t, yaw);
+    }
+    for (const side of [-1, 1]) {
+      const ox = uz * side * 1.15, oz = -ux * side * 1.15;
+      const r = new THREE.CylinderGeometry(0.035, 0.035, len, 4);
+      r.rotateX(Math.PI / 2);
+      put(r, mx + ox, Y + 1.0, mz + oz, yaw, ropes);
+      box(mx + ox * 1.05, Y + 0.6, mz + oz * 1.05, 0.08, 0.6, len / 2, yaw);
+      for (let k = 0; k <= Math.floor(len / 2.5); k++) {
+        const t = s0 + k * 2.5;
+        put(new THREE.CylinderGeometry(0.02, 0.02, 1.0, 3), A[0] + ux * t + ox, Y + 0.5, A[1] + uz * t + oz, 0, ropes);
+      }
+    }
+    box(mx, Y - 0.1, mz, 1.15, 0.12, len / 2, yaw);
+    bridgeMids.push(new THREE.Vector3(mx, Y, mz));
+  }
+  // The spiral stair up the first walk tree: plank steps on brackets, 0.32 m a step.
+  const st = o.trees[o.stair], sx = st.x, sz = st.z;
+  const gy = heightAt(sx, sz) - 0.6;
+  let angle = Math.atan2(o.startToward[1] - sz, o.startToward[0] - sx); // starts facing where you come from
+  const steps = Math.ceil((Y - gy - 0.2) / 0.32);
+  let start = new THREE.Vector3();
+  for (let k = 0; k < steps; k++) {
+    const y = gy + 0.32 * (k + 1);
+    const rIn = TR(y - gy, st) + 0.3;
+    const rMid = Math.max(rIn + 0.9, k < 8 ? TR(0, st) * 0.6 + 2.2 : 0);
+    const x = sx + Math.cos(angle) * rMid, z = sz + Math.sin(angle) * rMid;
+    if (k === 0) start = new THREE.Vector3(x + Math.cos(angle) * 2.5, heightAt(x + Math.cos(angle) * 2.5, z + Math.sin(angle) * 2.5), z + Math.sin(angle) * 2.5);
+    const yaw = -angle;
+    put(new THREE.BoxGeometry(2.0, 0.14, 0.95), x, y - 0.07, z, yaw);
+    put(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 3), x + Math.cos(angle) * 1.0, y + 0.5, z + Math.sin(angle) * 1.0, 0, ropes);
+    box(x, y - 0.12, z, 1.0, 0.12, 0.5, yaw);
+    // An outer rail so you don't step off the edge.
+    box(x + Math.cos(angle) * 1.1, y + 0.55, z + Math.sin(angle) * 1.1, 0.06, 0.55, 0.5, yaw);
+    angle += 0.9 / rMid;
+  }
+  const merged = new THREE.Mesh(mergeGeometries(parts, false)!, o.plank);
+  merged.castShadow = merged.receiveShadow = true;
+  const r = new THREE.Mesh(mergeGeometries(ropes, false)!, o.rope);
+  group.add(merged, r);
+  return { start, bridgeMids };
 }
