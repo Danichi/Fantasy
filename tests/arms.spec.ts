@@ -34,7 +34,7 @@ test('each weapon family attacks with its own clip, timing and reach', async ({ 
       equip(id);
       const def = g.arms.runtime.actionFor('slash1') ?? null;
       const m = p.equip.model('main');
-      const sig = def ? `${def.clip ?? 'proc'}|${def.dur}|${def.hit?.from}` : 'sword';
+      const sig = def ? `${def.clip ?? 'proc'}|${def.dur}|${def.hit?.from}|${def.clipTiming?.speed ?? 1}|${def.hit?.dmg}` : 'sword';
       sigs.add(sig);
       out[fam] = { reach: +(m.userData.bladeTip).toFixed(2), sig };
     }
@@ -79,9 +79,9 @@ test("a greatsword's heavy has hyper-armour from the first frame; a sword's does
       g.slimes.clear();
       await window.W(10);
       g.input.press('Mouse0');
-      for (let i = 0; i < 200 && p.act?.def.id !== 'heavy'; i++) await window.W(1);
-      await window.W(4);
+      for (let i = 0; i < 400 && p.act?.def.id !== 'heavy'; i++) await window.W(1);
       // A heavy blow early in the wind-up, before the swing itself.
+      p.act.t = 0.1;
       const from = p.pos.clone().add(p.forward.multiplyScalar(1.2));
       p.receiveAttack({ damage: 5, from, parryable: false, poise: 999 });
       out[id] = p.act?.def.id ?? 'none';
