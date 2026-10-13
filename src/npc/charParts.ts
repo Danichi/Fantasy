@@ -184,9 +184,10 @@ export function addOriginParts(root: THREE.Object3D, model: THREE.Object3D, bone
     objects.push(hs);
     if (look.ears === 'elf') {
       for (const s of [-1, 1]) {
-        const e = mesh(earGeo(0.13, 0.045, 0.012, 0.42), skin);
-        e.position.set(s * 0.078, 0.065, -0.012);
-        e.rotation.set(-0.75, s * 1.2, s * -0.55, 'YXZ');
+        // Long leaves swept up and back, tips well clear of the hair.
+        const e = mesh(earGeo(0.16, 0.05, 0.012, 0.4), skin);
+        e.position.set(s * 0.074, 0.07, 0.005);
+        e.quaternion.copy(basisQuat(new THREE.Vector3(s * 0.62, 0.55, -0.56), new THREE.Vector3(s, 0.1, 0.35)));
         hs.add(e);
       }
     } else if (look.ears === 'wolf' || look.ears === 'cat') {
@@ -224,14 +225,18 @@ export function addOriginParts(root: THREE.Object3D, model: THREE.Object3D, bone
     }
     if (look.markings && L.markings === 'scales') {
       // Scale patches on the cheekbones and temples.
-      const scaleMat = keep(mat(new THREE.Color(look.skin).lerp(new THREE.Color(0x2a6a5a), 0.45), { roughness: 0.45, metalness: 0.15 }));
-      const g = keep(new THREE.SphereGeometry(0.011, 6, 4).scale(1, 0.75, 0.32));
+      const scaleMat = keep(mat(BASE_SKIN.clone().multiply(new THREE.Color(look.skin)).multiplyScalar(0.62).lerp(new THREE.Color(0x2a5a50), 0.3), { roughness: 0.4, metalness: 0.1 }));
+      const g = keep(new THREE.CylinderGeometry(0.008, 0.008, 0.003, 6).rotateX(Math.PI / 2));
       const spots: [number, number, number][] = [];
-      for (const s of [-1, 1]) for (let i = 0; i < 9; i++) spots.push([s * (0.072 + (i % 3) * 0.004), 0.06 + Math.floor(i / 3) * 0.018 + (i % 3) * 0.006, 0.035 - (i % 3) * 0.017]);
+      // Two rows of small plates along each cheekbone, up to the temple.
+      for (const s of [-1, 1]) for (let i = 0; i < 10; i++) {
+        const u = (i % 5) / 4, row = Math.floor(i / 5);
+        spots.push([s * (0.066 - u * 0.004 + row * 0.003), 0.055 + u * 0.05 + row * 0.012, 0.075 - u * 0.03 - row * 0.012]);
+      }
       const inst = new THREE.InstancedMesh(g, scaleMat, spots.length);
       const m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
       spots.forEach(([x, y, z], i) => {
-        q.setFromEuler(new THREE.Euler(0, Math.sign(x) * 1.45, 0));
+        q.setFromEuler(new THREE.Euler(0, Math.sign(x) * 1.2, 0));
         m4.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(1, 1, 1));
         inst.setMatrixAt(i, m4);
       });
@@ -253,7 +258,7 @@ export function addOriginParts(root: THREE.Object3D, model: THREE.Object3D, bone
     const ps = frameSocket(pelvis, root, 'tail');
     objects.push(ps);
     tailRoot = new THREE.Group();
-    tailRoot.position.set(0, -0.04, -0.14);
+    tailRoot.position.set(0, 0.0, -0.13);
     ps.add(tailRoot);
     tailMid = new THREE.Group();
     const o = look.origin;
@@ -263,8 +268,9 @@ export function addOriginParts(root: THREE.Object3D, model: THREE.Object3D, bone
     const m = o === 'beastfolk' ? hair : o === 'dragonkin' ? darkSkin : skin;
     const half = len / 2;
     // First half droops back and down, the second curls a little up.
-    tailRoot.add(mesh(taperTube([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -0.1, -half * 0.55), new THREE.Vector3(0, -0.16, -half)], r, r * 0.8, 9), m));
-    tailMid.position.set(0, -0.16, -half);
+    const c1 = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -0.06, -half * 0.55), new THREE.Vector3(0, -0.13, -half)];
+    tailRoot.add(mesh(taperTube(c1, r, r * 0.8, 9), m));
+    tailMid.position.copy(c1[2]);
     tailRoot.add(tailMid);
     const bushy = o === 'beastfolk' && !cat;
     tailMid.add(mesh(taperTube([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -0.04, -half * 0.55), new THREE.Vector3(0, 0.03, -half)], r * (bushy ? 1.25 : 0.8), bushy ? r * 0.25 : r * 0.25, 9, bushy ? 0.5 : 1), m));
@@ -276,9 +282,12 @@ export function addOriginParts(root: THREE.Object3D, model: THREE.Object3D, bone
     }
     if (o === 'dragonkin') {
       // A ridge of plates along the top.
+      const curve = new THREE.CatmullRomCurve3(c1);
       for (let i = 0; i < 5; i++) {
-        const plate = mesh(new THREE.ConeGeometry(0.025 - i * 0.003, 0.05, 4).scale(0.35, 1, 1), horn);
-        plate.position.set(0, 0.06 - i * 0.04, -0.06 - i * 0.12);
+        const u = 0.12 + i * 0.2, at = curve.getPointAt(u), tan = curve.getTangentAt(u);
+        const plate = mesh(new THREE.ConeGeometry(0.03 - i * 0.004, 0.06, 4).scale(0.3, 1, 1), horn);
+        plate.position.copy(at).add(new THREE.Vector3(0, r * (1 - u * 0.2) * 0.85, 0));
+        plate.rotation.x = Math.atan2(-tan.z, 1) * 0.5 - 0.3;
         tailRoot.add(plate);
       }
     }
@@ -290,7 +299,7 @@ export function addOriginParts(root: THREE.Object3D, model: THREE.Object3D, bone
   if (L.wings && chest) {
     const cs = frameSocket(chest, root, 'wings');
     objects.push(cs);
-    const memMat = keep(mat(new THREE.Color(look.skin).multiplyScalar(0.55).lerp(new THREE.Color(0x5a2a2a), 0.35), { side: THREE.DoubleSide, roughness: 0.9 }));
+    const memMat = keep(mat(BASE_SKIN.clone().multiply(new THREE.Color(look.skin)).multiplyScalar(0.42).lerp(new THREE.Color(0x4a2630), 0.35), { side: THREE.DoubleSide, roughness: 0.9 }));
     const sparGeo = keep(new THREE.CylinderGeometry(0.014, 0.02, 1, 6).translate(0, 0.5, 0));
     for (const side of [-1, 1]) {
       const wr = new THREE.Group();
