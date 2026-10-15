@@ -92,7 +92,7 @@ export function buildWhiteMountains(scene: THREE.Scene, m: WorldMats): WhiteBuil
         if (n > 0) idx.push(n * 2 - 2, n * 2 - 1, n * 2, n * 2 - 1, n * 2 + 1, n * 2);
         n++;
       }
-      clearings.push([(ax + bx) / 2, (az + bz) / 2, len / 2 + 6]);
+      for (let k = 0; k < len; k += 20) clearings.push([ax + ((bx - ax) * k) / len, az + ((bz - az) * k) / len, 11]);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));

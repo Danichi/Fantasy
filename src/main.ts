@@ -1201,6 +1201,7 @@ async function boot() {
     shop: (name, title, intro, stock, wants) => town.showShop(name, title, intro, stock, wants ? { wants } : {}),
   });
   realm.overworldInteractables.push(...mountains.interactables);
+  stylizedNature.clearings.push(...mountains.white.clearings);
   {
     // Its scenery hides with the rest of the overworld when a realm (dungeon, room, the deep) takes over.
     const ov = (realm as unknown as { overworld: { hide: (h: boolean) => void } }).overworld;

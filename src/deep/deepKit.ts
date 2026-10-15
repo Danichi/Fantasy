@@ -6,6 +6,7 @@ import { worldUV } from '../world/buildings';
 import { emptyMap, type MapData } from '../ui/dungeonMap';
 import type { Interactable } from '../dungeon/instance';
 import type { Player } from '../player/player';
+import { pbr } from '../world/props';
 
 // The building kit for the places under the mountains (docs/design/mountains.md
 // §6, §11): near-black stone, glowing blue crystal and orange forge-light.
@@ -17,11 +18,12 @@ import type { Player } from '../player/player';
 let mats: ReturnType<typeof makeMats> | null = null;
 function makeMats() {
   const std = (color: number, roughness = 0.85, metalness = 0, emissive = 0, ei = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness, emissive, emissiveIntensity: ei });
+  const L = new THREE.TextureLoader();
   return {
-    stone: std(0x3a3a40, 0.92),
-    stoneDark: std(0x24242a, 0.95),
-    dwarfStone: std(0x6a6a72, 0.8),
-    floor: std(0x4a4a50, 0.9),
+    stone: pbr(L, 'rock_face_03', { color: 0x6a6870 }, 4, 0.7),
+    stoneDark: pbr(L, 'rock_face_03', { color: 0x3a3a42 }, 4, 0.8),
+    dwarfStone: pbr(L, 'rock_face_03', { color: 0x9a98a2 }, 4, 0.85),
+    floor: pbr(L, 'rock_face_03', { color: 0x5a5a62 }, 4, 0.8),
     timber: std(0x4a3626, 0.9),
     iron: std(0x2e2e34, 0.5, 0.75),
     brass: std(0x9b7130, 0.35, 0.8),

@@ -36,7 +36,7 @@ export class CollapsedShaft implements DeepSpace {
   readonly ready: Promise<void>;
   readonly interactables: Interactable[] = [];
   readonly map;
-  readonly light = { hemi: 0.3, sky: 0x7186a5, ground: 0x18130f, fog: 0x06080c, far: 150, haze: 0.018 };
+  readonly light = { hemi: 0.55, sky: 0x8a9ab8, ground: 0x2a2018, fog: 0x06080c, far: 150, haze: 0.014 };
   spawnPoint: THREE.Vector3;
   spawnYaw = Math.PI;
   respawnPoint: THREE.Vector3;
@@ -81,8 +81,8 @@ export class CollapsedShaft implements DeepSpace {
     // The old chamber the miners broke into: crystal in the walls.
     b.room(-14, -102, 14, -72, 12, 0, [['s', 0, 4]]);
     for (const [x, z] of [[-11, -76], [11, -78], [-10, -98], [12, -88], [-12, -88], [0, -100]] as const) b.crystals(x, 0, z, 5, 1.4);
-    b.light(-8, 5, -84, 0x6ab8ff, 7, 26);
-    b.light(8, 5, -92, 0x6ab8ff, 7, 26);
+    b.light(-8, 5, -84, 0x6ab8ff, 12, 30);
+    b.light(8, 5, -92, 0x6ab8ff, 12, 30);
     for (const [x, z] of [[-6, -80], [6, -80], [-6, -94], [6, -94]] as const) b.block(x, 0, z, 1.8, 12, 1.8, m.stoneDark);
     b.rubble(9, 0, -97, 12, 3);
     b.finish();
