@@ -1000,7 +1000,7 @@ export class KitInstance {
     for (const r of this.fg.rooms) {
       if (r.role === 'entry' || r.role === 'ante' || r.role === 'reward' || r.role === 'boss' || r.role === 'stairs' || r.role === 'passage') continue;
       const area = r.rect.w * r.rect.h;
-      const n = r.role === 'hub' ? 2 : area >= 6 ? 1 + (rnd() < 0.5 ? 1 : 0) : rnd() < 0.5 ? 1 : 0;
+      const n = r.role === 'hub' ? 1 : area >= 6 ? 1 + (rnd() < 0.2 ? 1 : 0) : rnd() < 0.35 ? 1 : 0;
       for (let k = 0; k < n; k++) {
         const cells: Cell[] = [];
         for (let j = r.rect.y; j < r.rect.y + r.rect.h; j++) for (let i = r.rect.x; i < r.rect.x + r.rect.w; i++) {

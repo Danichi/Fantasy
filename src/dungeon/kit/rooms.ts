@@ -553,6 +553,6 @@ export const DRESS: Record<string, (c: DressCtx, r: KRoom) => void> = {
   caveGate: (c, r) => { rockRim(c, r, 0.5); sconces(c, r, 2, 'lantern'); },
   entry, caveMouth: entry, seaStair: (c, r) => { entry(c, r); c.water(r, 0.15); },
   stairs: (c, r) => sconces(c, r, 2, c.theme.id === 'cave' ? 'lantern' : c.theme.id === 'drowned' ? 'cold' : 'sconce'),
-  chapelArena: arena, landing: arena, basinArena: arena,
+  chapelArena: arena, landing: arena, basinArena: (c, r) => sconces(c, r, 2, 'cold'),
   tomb, strongroom: (c, r) => { den(c, r); }, kingsStair: plain, ropeway: plain,
 };
