@@ -88,6 +88,26 @@ export const DISCIPLINES: DisciplineDef[] = [
       { name: 'Road', sub: 'The failed watch', tiers: [['Road Dust', 'Night Watch'], ['*Sentinel', 'Unseen', 'Tireless'], ['*Ambush', '?Lantern|Darkness', 'Patrol'], ['!Lone Guard', '*Hold the Road', 'Old Oath'], ['Watchman', 'Grave Vigil']], cap: 'None Shall Pass' },
     ],
   },
+  // The Verdant Elves (feat/elves): the elves' bow-and-wood class and the Hermit's secret druid line.
+  // Skills and passives: paths/elvenPaths.ts.
+  {
+    id: 'ranger', fam: 'combat', name: 'Ranger', color: '--c-herb', mentor: 'Faelan the Bowyer, the Elven Sanctum', mentorNpc: 'faelan', res: 'Focus',
+    flavour: 'Patience, a long draw, and the forest at your back.', how: 'Hit from range and keep moving while Ranger is active.',
+    branches: [
+      { name: 'Marksman', sub: 'Aimed shots', tiers: [['Steady Aim', 'Keen Eye'], ['*Piercing Shot', 'Long Draw', 'Fletcher'], ["*Hunter's Mark", '?Called Shot|Quick Nock', 'Windage'], ['*Volley', '!Deadeye', 'Patience'], ['Heartseeker', 'Arrowstorm']], cap: 'Starfall Arrow' },
+      { name: 'Skirmisher', sub: 'Movement and traps', tiers: [['Light Tread', 'Forest Stride'], ['*Disengage', 'Fleet', 'Bramble Step'], ['*Snare', '?Barbed Snare|Root Snare', "Hunter's Wind"], ['*Shadow Roll', '!Wild Heart', 'Second Breath'], ['Untouchable', 'Pathfinder']], cap: 'The Hunt' },
+      { name: 'Warden of the Wood', sub: 'Spirits and thorns', tiers: [['Bark Skin', 'Green Blood'], ['*Spirit Hawk', 'Kinship', 'Thicket'], ['*Thornburst', '?Hawk Eye|Hawk Talon', 'Moss Mend'], ['*Call of the Wild', '!Sylvan Bond', 'Deep Roots'], ['Old Friend', 'Forest Memory']], cap: 'Heart of the Greenwood' },
+    ],
+  },
+  {
+    id: 'wildwarden', fam: 'combat', name: 'Wildwarden', color: '--c-herb', mentor: 'The Hermit of the Hollow', mentorNpc: 'hermit', res: 'Wild', secret: true,
+    flavour: 'Wolf, bear and owl: the forest lends its shapes to those who keep it.', how: 'Fight in the wild shapes while Wildwarden is active.',
+    branches: [
+      { name: 'Wolf', sub: 'Speed and the pack', tiers: [['Keen Nose', 'Pack Sense'], ['*Wolf Form', 'Lope', 'Fangs'], ['*Pounce', '?Rend|Hamstring Bite', 'Howl Lore'], ['*Pack Howl', '!Alpha', 'Blood Scent'], ['Moonrunner', 'Hunger']], cap: 'Leader of the Pack' },
+      { name: 'Bear', sub: 'Strength and hide', tiers: [['Thick Hide', 'Hibernator'], ['*Bear Form', 'Heavy Paw', 'Fat Stores'], ['*Maul', '?Bear Hug|Earthpaw', 'Den Mother'], ['*Roar', '!Ursine Fury', 'Scar Hide'], ['Old Bear', 'Unbowed']], cap: 'The Great Bear' },
+      { name: 'Owl', sub: 'Sight and growing things', tiers: [['Night Eyes', 'Silent Wings'], ['*Owl Form', 'Feather Fall', 'Watcher'], ['*Moonbeam', '?Starlight|Hush', 'Wise Heart'], ['*Wild Growth', '!Sky Warden', 'Rootbind'], ['Old Owl', 'Green Dream']], cap: 'Spirit of the Wood' },
+    ],
+  },
 
   // ---- magic classes ------------------------------------------------------------
   {
