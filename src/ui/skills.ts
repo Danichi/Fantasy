@@ -8,6 +8,7 @@ import {
 } from '../paths/paths';
 import { ICONS, TreeView, drawSealed } from './skillTree';
 import { SkillRuntime } from '../paths/skills';
+import { legacyCardInfo, renderLegacy } from '../origins/legacyUI';
 
 // The Skills screen (K). Tabs: Disciplines (the atlas of classes and
 // callings; click one to open its tree), Attributes, Mastery.
@@ -177,13 +178,14 @@ export class SkillsUI {
         const info = locked
           ? `Learn from ${esc(d.mentor)}`
           : `<span class="sk-mchip">${MASTERY_NAMES[mr]}${mr > 0 ? ` · -${Math.round(P.discount(d.id) * 100)}% cost` : ''}</span>${pts > 0 ? ` · <span class="sk-pts">${pts} tree pt${pts > 1 ? 's' : ''}</span>` : ''}`;
-        const btn = locked ? '' : L >= MAX_LEVEL ? '<span class="sk-mchip">MAX</span>' :
+        const legacy = d.fam === 'legacy' ? legacyCardInfo(this.player) : null; // origins: Renown, not XP
+        const btn = legacy ? legacy.btn : locked ? '' : L >= MAX_LEVEL ? '<span class="sk-mchip">MAX</span>' :
           `<button class="sk-invest" type="button" data-invest="${d.id}" ${P.canInvest(d.id) ? '' : 'disabled'}>${nc < base ? `<s>${fmt(base)}</s>` : ''}+1 · ${fmt(nc)} XP</button>`;
-        return `<div class="sk-disc${locked ? ' is-locked' : ''}${isInactive ? ' is-inactive' : ''}" role="button" tabindex="0" data-open="${d.id}" style="--c:var(${d.color})">
+        return `<div class="sk-disc${locked && !legacy ? ' is-locked' : ''}${isInactive ? ' is-inactive' : ''}" role="button" tabindex="0" data-open="${d.id}" style="--c:var(${d.color})">
           <div class="sk-medal">${this.medal(d)}</div>
           <div class="nm"><b>${esc(d.name)}</b>${badges}</div>
           <div class="lv">${locked ? '-' : L}<small>${locked ? '' : 'LEVEL'}</small></div>
-          <div class="sub"><span>${info}</span>${btn}</div>
+          <div class="sub"><span>${legacy ? esc(legacy.info) : info}</span>${btn}</div>
         </div>`;
       }).join('');
       return `<div class="sk-family"><div class="sk-fam-head"><h3>${f.name}</h3><span>${f.note}</span></div><p class="sk-fam-note">${f.flavour}</p>${items}</div>`;
@@ -280,6 +282,10 @@ export class SkillsUI {
     this.crumbEl.innerHTML = `<button type="button" data-back>SKILLS</button> / ${f.name.toUpperCase()}`;
     this.crumbEl.querySelector('[data-back]')!.addEventListener('click', () => this.closeTree());
     this.titleEl.textContent = d.name;
+    if (d.fam === 'legacy') { // origins: the Legendary Hero page (origins/legacyUI.ts)
+      this.body.innerHTML = '<div class="sk-view sk-legacy"></div>';
+      return this.renderPanel();
+    }
     this.body.innerHTML = `<div class="sk-view sk-tree" style="--c:var(${d.color})">
       <div class="sk-stage"><canvas aria-label="${esc(d.name)} skill tree"></canvas><span class="look">${f.look}</span><span class="hint">${t ? 'HOVER TO READ · CLICK TO SELECT · ESC TO GO BACK' : 'ESC TO GO BACK'}</span></div>
       <div class="sk-panel"></div></div>`;
@@ -296,6 +302,7 @@ export class SkillsUI {
   }
 
   private renderPanel() {
+    if (this.openId && DISC[this.openId]?.fam === 'legacy') return renderLegacy(this.body, this.player, (m) => this.toast(m));
     const panel = this.body.querySelector<HTMLElement>('.sk-panel');
     if (!panel || !this.openId) return;
     const P = this.paths, d = DISC[this.openId], t = treeOf(d), L = P.level(d.id), locked = L === 0;

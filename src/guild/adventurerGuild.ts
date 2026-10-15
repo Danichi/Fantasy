@@ -288,6 +288,7 @@ export class AdventurerGuild {
     this.rank = rankForRep(this._rep);
     if (rankIndex(this.rank) > rankIndex(oldRank)) {
       this.progression.addGold(75 * rankIndex(this.rank));
+      events.emit('deed', { id: 'guild:' + this.rank, renown: 1, label: `Promoted to guild rank ${this.rank}` });
       this.dialogue.show('Guild Registrar', 'Adventurer\'s Guild', 'Your deeds have been recorded. You have been promoted to ' + this.rank + ' rank.', [
         { label: 'Accept promotion.', run: () => this.dialogue.close() },
       ]);

@@ -1,0 +1,27 @@
+/* The Legendary Hero page in the Skills screen (origins/legacyUI.ts). Scoped under .sk like skills.css. */
+.sk .sk-legacy { --c: var(--sk-gold); overflow: auto; height: 100%; }
+.sk .lg-cols { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 24px; align-items: start; }
+.sk .lg-left { display: grid; gap: 12px; }
+.sk .lg-who h3 { margin: 0; font: 600 22px/1.1 var(--sk-serif, 'Cinzel', serif); color: var(--sk-gold-hi); letter-spacing: 0.06em; }
+.sk .lg-who span { font-size: 12px; color: var(--sk-muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.sk .lg-who p { margin: 6px 0 0; color: var(--sk-bone); font-size: 13px; line-height: 1.4; }
+.sk .lg-sub { font: 600 10px/1 var(--sk-mono, monospace); letter-spacing: 0.18em; color: var(--sk-gold); border-bottom: 1px solid var(--sk-line); padding-bottom: 6px; }
+.sk .lg-pass, .sk .lg-deeds { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 12px; color: var(--sk-bone); line-height: 1.4; }
+.sk .lg-pass b { color: var(--sk-gold-hi); font-weight: 600; }
+.sk .lg-deeds li { display: flex; gap: 8px; }
+.sk .lg-deeds span { color: var(--sk-gold); font-family: var(--sk-mono, monospace); min-width: 22px; }
+.sk .lg-tree { display: grid; gap: 10px; position: relative; }
+.sk .lg-tier { display: grid; grid-template-columns: 44px 1fr; gap: 12px; padding: 12px 14px; border: 1px solid var(--sk-line); background: rgba(0, 0, 0, 0.3); border-radius: 3px; opacity: 0.62; }
+.sk .lg-tier.open { opacity: 1; border-color: color-mix(in srgb, var(--sk-gold) 55%, var(--sk-line)); background: linear-gradient(90deg, color-mix(in srgb, var(--sk-gold) 10%, transparent), rgba(0, 0, 0, 0.3)); }
+.sk .lg-num { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--sk-line-2); color: var(--sk-muted); font: 600 15px/1 var(--sk-serif, 'Cinzel', serif); }
+.sk .lg-tier.open .lg-num { border-color: var(--sk-gold); color: var(--sk-gold-hi); box-shadow: 0 0 12px color-mix(in srgb, var(--sk-gold) 40%, transparent); }
+.sk .lg-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.sk .lg-head b { color: var(--sk-bone); font-size: 15px; font-weight: 600; }
+.sk .lg-kind { font: 500 10px/1 var(--sk-mono, monospace); color: var(--sk-muted); letter-spacing: 0.1em; text-transform: uppercase; }
+.sk .lg-lock { margin-left: auto; font: 500 10px/1 var(--sk-mono, monospace); color: var(--sk-blood); letter-spacing: 0.06em; }
+.sk .lg-body p { margin: 5px 0 4px; font-size: 13px; line-height: 1.45; color: var(--sk-bone); }
+.sk .lg-body small { color: var(--sk-muted); font-size: 11px; }
+.sk .lg-act { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.sk .lg-act span { font-size: 11px; color: var(--sk-muted); margin: 0 2px 0 8px; }
+.sk .lg-act .sk-btn.on, .sk .lg-act .sk-slot.on { border-color: var(--sk-gold); color: var(--sk-gold-hi) !important; }
+@media (max-width: 900px) { .sk .lg-cols { grid-template-columns: 1fr; } }

@@ -23,7 +23,7 @@ export interface PartsHandle {
 }
 
 /** Painted skin under the kit's skin texture (approximately), for parts that must match it. */
-const BASE_SKIN = new THREE.Color(0xf1c4a6);
+const BASE_SKIN = new THREE.Color(0xd99870);
 
 const mat = (color: THREE.ColorRepresentation, o: Partial<THREE.MeshStandardMaterialParameters> = {}) => {
   const m = new THREE.MeshStandardMaterial({ color, roughness: 0.82, metalness: 0, ...o });
