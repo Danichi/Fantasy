@@ -188,3 +188,131 @@ test('the new families are for sale at Fröst\'s forge and Ragna\'s stall', asyn
   });
   for (const id of ['ironSpear', 'ironGreatsword', 'handAxe', 'flangedMace', 'ironDagger', 'huntingBow', 'arrowIron', 'longsword']) expect(res.stock).toContain(id);
 });
+
+// ---- A2: bows, crossbows and staffs ------------------------------------------------------------
+
+test('a drawn arrow hits a target 40 m away', async ({ game }) => {
+  const { page } = game;
+  const res = await page.evaluate(async (H) => {
+    const { g, p, equip, target } = eval(H);
+    await g.arms.clips;
+    equip('huntingBow');
+    p.equip.add('arrowIron', 10);
+    const s = target(40);
+    g.cam.yaw = Math.PI;
+    g.input.press('Mouse2');
+    await window.W(30);
+    // Point the camera's centre ray at the target.
+    for (let k = 0; k < 4; k++) {
+      const c = g.cam.camera.position, t = s.center;
+      g.cam.pitch = Math.atan2(c.y - t.y, Math.hypot(c.x - t.x, c.z - t.z));
+      g.cam.yaw = Math.atan2(t.x - c.x, t.z - c.z);
+      await window.W(10);
+    }
+    for (let i = 0; i < 200 && g.arms.ranged.draw < 1; i++) await window.W(1);
+    const hp0 = s.hp, fired0 = g.arms.ranged.fired, n0 = g.arms.ranged.ammoCount();
+    g.input.press('Mouse0');
+    await window.W(2);
+    g.input.release('Mouse0');
+    for (let i = 0; i < 240 && s.hp === hp0; i++) await window.W(1);
+    g.input.release('Mouse2');
+    return { dmg: hp0 - s.hp, fired: g.arms.ranged.fired - fired0, used: n0 - g.arms.ranged.ammoCount(), dist: p.pos.distanceTo(s.position) };
+  }, HELPERS);
+  expect(res.dist).toBeGreaterThan(39);
+  expect(res.fired).toBe(1);
+  expect(res.used).toBe(1);
+  expect(res.dmg).toBeGreaterThan(10);
+  expect(game.errors).toEqual([]);
+});
+
+test('arrows run out, and arrows that hit the ground can be picked up again', async ({ game }) => {
+  const { page } = game;
+  const res = await page.evaluate(async (H) => {
+    const { g, p, equip } = eval(H);
+    await g.arms.clips;
+    g.slimes.clear();
+    for (const it of [...p.equip.items]) if (it.def.kind === 'ammo') p.equip.items.splice(p.equip.items.indexOf(it), 1);
+    equip('huntingBow');
+    p.equip.add('arrowIron', 2);
+    g.cam.yaw = Math.PI;
+    g.cam.pitch = 0.75; // aim at the ground a few metres ahead
+    g.input.press('Mouse2');
+    const shots: boolean[] = [];
+    for (let k = 0; k < 3; k++) {
+      for (let i = 0; i < 200 && g.arms.ranged.draw < 0.6 && g.arms.ranged.ammoCount() > 0; i++) await window.W(1);
+      const f0 = g.arms.ranged.fired;
+      g.input.press('Mouse0');
+      await window.W(2);
+      g.input.release('Mouse0');
+      await window.W(30);
+      shots.push(g.arms.ranged.fired > f0);
+    }
+    g.input.release('Mouse2');
+    await window.W(60);
+    const left = g.arms.ranged.ammoCount(), stuck = g.arms.ranged.stuckCount;
+    // Walk over them.
+    const at = g.arms.ranged.stuckAt(0).clone();
+    p.teleport(new g.THREE.Vector3(at.x, Math.max(p.pos.y, at.y - 0.2), at.z));
+    await window.W(20);
+    const at2 = g.arms.ranged.stuckAt(0);
+    if (at2) p.teleport(new g.THREE.Vector3(at2.x, Math.max(p.pos.y, at2.y - 0.2), at2.z));
+    await window.W(20);
+    return { shots, left, stuck, after: g.arms.ranged.ammoCount(), stuckAfter: g.arms.ranged.stuckCount };
+  }, HELPERS);
+  expect(res.shots).toEqual([true, true, false]);
+  expect(res.left).toBe(0);
+  expect(res.stuck).toBe(2);
+  expect(res.after).toBe(2);
+  expect(res.stuckAfter).toBe(0);
+});
+
+test('a staff speeds spells, and Gale momentum speeds them further', async ({ game }) => {
+  const { page } = game;
+  const res = await page.evaluate(async (H) => {
+    const { g, p, equip } = eval(H);
+    p.equip.equip(p.equip.add('healingLight').uid);
+    const rt = g.skillRt;
+    const castSpeed = async (weapon: string, flow: number) => {
+      equip(weapon);
+      p.mana = p.maxMana;
+      rt.flow = flow;
+      await window.W(3);
+      g.input.press('KeyR');
+      for (let i = 0; i < 60 && !p.act; i++) await window.W(1);
+      g.input.release('KeyR');
+      const sp = p.act?.speed ?? 0;
+      for (let i = 0; i < 300 && p.act; i++) await window.W(1);
+      return sp;
+    };
+    return { sword: await castSpeed('longsword', 0), staff: await castSpeed('ashStaff', 0), staffFlow: await castSpeed('ashStaff', 5) };
+  }, HELPERS);
+  expect(res.sword).toBeGreaterThan(0);
+  expect(res.staff / res.sword).toBeCloseTo(1.12, 2);
+  expect(res.staffFlow / res.staff).toBeCloseTo(1.4, 2);
+});
+
+test('a crossbow fires a bolt, then must be reloaded', async ({ game }) => {
+  const { page } = game;
+  const res = await page.evaluate(async (H) => {
+    const { g, p, equip, target, click } = eval(H);
+    await g.arms.clips;
+    equip('lightCrossbow');
+    p.equip.add('boltIron', 5);
+    const s = target(8);
+    p.lock = s;
+    await window.W(10);
+    const hp0 = s.hp;
+    await click();
+    for (let i = 0; i < 120 && s.hp === hp0; i++) await window.W(1);
+    const hit = hp0 - s.hp, loadedAfterShot = g.arms.ranged.loaded;
+    for (let i = 0; i < 60 && p.act; i++) await window.W(1);
+    await click(); // cranks the string back
+    const reloading = p.act?.def.id;
+    for (let i = 0; i < 300 && !g.arms.ranged.loaded; i++) await window.W(1);
+    return { hit, loadedAfterShot, reloading, loaded: g.arms.ranged.loaded };
+  }, HELPERS);
+  expect(res.hit).toBeGreaterThan(20);
+  expect(res.loadedAfterShot).toBe(false);
+  expect(res.reloading).toBe('reload');
+  expect(res.loaded).toBe(true);
+});
