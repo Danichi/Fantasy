@@ -8,6 +8,7 @@ import type { Realm } from '../realm';
 import { hollowRidgeDef } from './hollowRidge';
 import { drownedShrineDef } from './drownedShrine';
 import type { KitDungeonDef } from '../kit/build';
+import { kitTestDef } from './kitTest';
 
 // ---------------------------------------------------------------------------
 // Where this update's new dungeons open onto the world (Dungeons Reborn):
@@ -86,6 +87,8 @@ function buildShrinePortico(scene: THREE.Scene, m: WorldMats) {
 export interface DungeonEntrances {
   hollowRidge: KitDungeonDef;
   drownedShrine: KitDungeonDef;
+  /** the kit's test dungeon (console and tests only) */
+  kitTest: KitDungeonDef;
   /** where each door is in the world (tests, the world map) */
   doors: Record<string, THREE.Vector3>;
 }
@@ -102,5 +105,5 @@ export function setupDungeonEntrances(scene: THREE.Scene, m: WorldMats, realm: R
   realm.registerKit(hollowRidge, cave, caveOut, 0, 'Enter Hollow Ridge Caves');
   const sh = buildShrinePortico(scene, m);
   realm.registerKit(drownedShrine, sh.door, sh.out, sh.yaw, 'Go down into the Drowned Shrine');
-  return { hollowRidge, drownedShrine, doors: { hollowRidge: cave, drownedShrine: sh.door, crypt: realm.cryptDoor.clone() } };
+  return { hollowRidge, drownedShrine, kitTest: kitTestDef(), doors: { hollowRidge: cave, drownedShrine: sh.door, crypt: realm.cryptDoor.clone() } };
 }
