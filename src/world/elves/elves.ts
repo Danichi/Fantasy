@@ -4,6 +4,10 @@ import { events } from '../../core/events';
 import { ITEMS } from '../../items/itemDefs';
 import { ElvenForest, type ElfHooks, type Gather } from './elvenForest';
 import { LostWoods } from './lostWoods';
+import { Sanctum } from './sanctum';
+import { mentorOptions } from '../../paths/mentors';
+import '../../paths/elvenPaths'; // the Ranger's and the Wildwarden's skills join the shared tables
+import type { NpcSpec } from '../../npc/npc';
 import { SITES, type P2 } from './elvenForestData';
 import { ELF_QUESTS } from '../../quests/elfQuests';
 import type { WorldMats } from '../buildings';
@@ -55,6 +59,7 @@ export interface ElvesContext {
 export class Elves {
   readonly forest: ElvenForest;
   readonly lost: LostWoods;
+  readonly sanctum: Sanctum;
   readonly hooks: ElfHooks;
   private ctx: ElvesContext | null = null;
   private pendingDoors: Door[] = [];
@@ -89,6 +94,8 @@ export class Elves {
       addDoors: (d) => (self.ctx ? self.ctx.addDoors(d) : self.pendingDoors.push(...d)),
     };
     this.forest = new ElvenForest(scene, renderer, mats, fx, this.hooks);
+    this.sanctum = new Sanctum(scene, renderer, mats.planks, new THREE.MeshStandardMaterial({ color: 0xb8a070, roughness: 0.9 }));
+    this.forest.clearings.push(...this.sanctum.clearings);
     const hooks = this.hooks;
     this.lost = new LostWoods(scene, {
       get flags() {
@@ -124,7 +131,7 @@ export class Elves {
     this.ctx = ctx;
     if (this.pendingDoors.length) ctx.addDoors(this.pendingDoors.splice(0));
     const { quests, npcs } = ctx;
-    for (const s of this.forest.settlements) {
+    for (const s of [...this.forest.settlements, this.sanctum.settlement]) {
       npcs.addSettlement(s.settlement);
       for (const rec of s.records) npcs.add(rec);
     }
@@ -259,7 +266,59 @@ export class Elves {
         show('Starlight is the oldest light there is. It was old before your sun. Bind a little of it, and keep it.', [{ label: 'Back.', run: back }]);
       },
     }]);
+    // ---- the Sanctum's teachers and crafts ----
+    fs.set('faelan', (show, back) => [
+      ...mentorOptions(c.player.paths, { id: 'faelan' } as NpcSpec, (t) => show(t, [{ label: 'Back.', run: back }]), (m) => c.toast(m)),
+      { label: 'Browse the bowyer\u2019s racks', run: () => c.shop('Faelan the Bowyer', 'Bowyer of the Sanctum', 'Bows of ironbark and heartwood. Strung with moonweave; they will outlive you.', [['elvenShortbow', 150], ['heartwoodLongbow', 980]], { wants: [['heartwood', 110], ['ironbark', 40], ['moonweave', 120]] }) },
+    ]);
+    fs.set('orielCarver', (show, back) => this.benchOptions(show, back));
+    fs.set('hermit', (show, back) => {
+      const P = c.player.paths;
+      if (P.learned('wildwarden')) return P.active === 'wildwarden' ? [] : [{ label: 'Let me fight in the wild shapes.', run: () => { P.setActive('wildwarden'); c.toast('Wildwarden is now your active combat class'); show('Then put down the man. Pick up the wolf.', [{ label: 'Back.', run: back }]); } }];
+      return [{
+        label: 'Teach me what you know.',
+        run: () => {
+          if (!quests.isDone('the-blight')) return show('You smell of steel and roads. Kill the thing that is rotting the oldest grove, and come back smelling of the forest.', [{ label: 'Back.', run: back }]);
+          P.teach('wildwarden');
+          c.toast('Learned the secret Wildwarden \u00b7 open Skills (K) to invest XP');
+          show('You felled the Elder and the grove forgave you. So will the shapes. Wolf for the hunt, bear for the fight, owl for the long night. Do not stay in any of them too long. I did.', [{ label: 'I will remember.', run: back }]);
+        },
+      }];
+    });
+    fs.set('lirael', (show, back) => (this.hooks.origin() === 'elf' && quests.status('a-name-among-the-leaves') === 'available' ? [{
+      label: '\u2757 A Name Among the Leaves',
+      run: () => show('You have the look of Silverbough about you, child, and no memory of it. The Archive of Songs keeps every name. Ask Ellisande.', [
+        { label: 'I will.', run: () => { quests.accept('a-name-among-the-leaves'); back(); } },
+        { label: 'Not now.', run: back },
+      ]),
+    }] : []));
     fs.set('tobin', (show, back) => (flags['elves:tobinHome'] ? [] : [{ label: 'Are you hurt?', run: () => show('Only my pride. And my feet.', [{ label: 'Back.', run: back }]) }]));
+  }
+
+  /** The heartwood carvers' bench and the weavers' loom. TODO(merge): register with crafting (feat/arms registerStation) and move these recipes there. */
+  readonly recipes: { out: string; n: number; needs: [string, number][]; where: 'bench' | 'loom' }[] = [
+    { out: 'heartwoodLongbow', n: 1, needs: [['heartwood', 3], ['moonweave', 1], ['ironbark', 1]], where: 'bench' },
+    { out: 'heartwoodBuckler', n: 1, needs: [['heartwood', 2], ['ironbark', 2]], where: 'bench' },
+    { out: 'heartwoodTalisman', n: 1, needs: [['heartwood', 1], ['spiritAmber', 1]], where: 'bench' },
+    { out: 'moonweave', n: 1, needs: [['moonblossom', 4]], where: 'loom' },
+    { out: 'moonblossomTonic', n: 2, needs: [['moonblossom', 2]], where: 'loom' },
+  ];
+  /** Make something at the carvers' bench or the weavers' loom; false if you lack the materials. */
+  craft(out: string, where: 'bench' | 'loom' = 'bench') {
+    const c = this.ctx!;
+    const r = this.recipes.find((x) => x.out === out && x.where === where);
+    if (!r || !r.needs.every(([id, n]) => c.count(id) >= n)) return false;
+    for (const [id, n] of r.needs) c.take(id, n);
+    c.give(r.out, r.n);
+    c.save();
+    return true;
+  }
+  private benchOptions(show: Show, back: () => void, where: 'bench' | 'loom' = 'bench') {
+    const c = this.ctx!;
+    return this.recipes.filter((r) => r.where === where).map((r) => ({
+      label: `${where === 'bench' ? 'Carve' : 'Weave'} ${Elves.itemName(r.out)}${r.n > 1 ? ' \u00d7' + r.n : ''} (${r.needs.map(([id, n]) => `${n} ${Elves.itemName(id)}`).join(', ')})`,
+      run: () => show(this.craft(r.out, where) ? `It is done: ${Elves.itemName(r.out)}. The wood was willing.` : `You need ${r.needs.map(([id, n]) => `${n} ${Elves.itemName(id)} (you have ${c.count(id)})`).join(', ')}.`, [{ label: 'Back.', run: back }]),
+    }));
   }
 
   /** The loggers' quarrel ends one of two ways: the Hollow Grove stands (elves) or falls (loggers). */
@@ -295,7 +354,44 @@ export class Elves {
         c.toast('Among a nest of bright things (a spoon, a button, a ring of brass) lies the silver bell.');
       },
     });
-    void flags;
+    // The Sanctum: the moon-pool, the carvers' bench, the weavers' loom.
+    const S = this.sanctum.spots;
+    c.interactables.push(
+      {
+        pos: S.pool, radius: 7.5,
+        label: () => 'Look into the moon-pool',
+        enabled: () => true,
+        action: () => {
+          if (quests.wants('moonpool-seen')) {
+            quests.signal('moonpool-seen');
+            return c.talk('The Moon-Pool', 'Under the World Tree', 'The water is black and full of stars, though it is not night. The stars turn, slowly, into a wheel of twelve spokes, and in the spokes, very small, a figure that is you, falling from somewhere else into Cresha. The wheel keeps turning after you look away.', [{ label: 'Step back.', run: () => c.close() }]);
+          }
+          c.talk('The Moon-Pool', 'Under the World Tree', flags['elves:token'] ? 'The stars in the water have moved since you last looked. A little further round.' : 'Your own face, and stars behind it.', [{ label: 'Step back.', run: () => c.close() }]);
+        },
+      },
+      {
+        // TODO(merge): register with crafting: registerStation({ id: 'heartwoodBench', kind: 'carvers', name: 'The Heartwood Carvers\u2019 Bench', pos })
+        pos: S.bench, radius: 3,
+        label: () => 'Use the heartwood carvers\u2019 bench',
+        enabled: () => true,
+        action: () => {
+          const show: Show = (t, o) => c.talk('The Carvers\u2019 Bench', 'Elven Sanctum', t, o);
+          const back = () => show('Heartwood, ironbark, moonweave and amber. What will you make?', [...this.benchOptions(show, back), { label: 'Step away.', run: () => c.close() }]);
+          back();
+        },
+      },
+      {
+        // TODO(merge): register with crafting: registerStation({ id: 'moonLoom', kind: 'loom', name: 'The Weavers\u2019 Loom', pos })
+        pos: S.loom, radius: 3,
+        label: () => 'Use the weavers\u2019 loom',
+        enabled: () => true,
+        action: () => {
+          const show: Show = (t, o) => c.talk('The Weavers\u2019 Loom', 'Elven Sanctum', t, o);
+          const back = () => show('Moonblossom fibre, spun fine. What will you weave?', [...this.benchOptions(show, back, 'loom'), { label: 'Step away.', run: () => c.close() }]);
+          back();
+        },
+      },
+    );
   }
 
   /** Moonblossoms are open (night). */
@@ -371,11 +467,13 @@ export class Elves {
     const c = this.ctx;
     if (!c) return;
     this.forest.frame(dt, camera, c.player.pos, night);
+    this.sanctum.update(dt, camera, night);
   }
 
   setVisible(v: boolean) {
     this.forest.setVisible(v);
     this.lost.setVisible(v);
+    this.sanctum.setVisible(v);
   }
 
   /** Back to a fresh world (tests). */
