@@ -7,6 +7,7 @@ import { heightAt } from '../world/terrain';
 import type { CombatMods } from '../combat/mods';
 import { ORIGINS, type TreeTier } from './data';
 import type { Origins } from './origins';
+import { fearful, stealth } from './stealth';
 
 // Every origin ability (docs/design/origins.md §3, §6): the innate V ability
 // each people starts with, and tiers 1 to 5 of the legendary trees. Actives
@@ -14,13 +15,6 @@ import type { Origins } from './origins';
 // passives are simply on once their tier is open. Flight is in flight.ts and
 // the transformations (Demon Form, Primal Rage, stone skin) in forms.ts.
 
-/** Enemies that have lost track of you (Moonveil) or fled (Savage Howl): the AIs check this. */
-const fearful = new Map<Target, number>();
-let veiled = false;
-/** Should this enemy ignore the player right now? (enemy AIs: one line each) */
-export function ignoresPlayer(t: unknown) {
-  return veiled || (fearful.get(t as Target) ?? 0) > 0;
-}
 
 interface Mote { mesh: THREE.Mesh; vel: THREE.Vector3; target: Target | null; life: number; dmg: number }
 interface Wolf { g: THREE.Group; legs: THREE.Object3D[]; pos: THREE.Vector3; yaw: number; bite: number; phase: number }
@@ -470,8 +464,8 @@ export class OriginAbilities {
     for (const [t, v] of this.marked) (v - dt <= 0 || !t.alive ? this.marked.delete(t) : this.marked.set(t, v - dt));
     for (const [t, v] of fearful) (v - dt <= 0 || !t.alive ? fearful.delete(t) : fearful.set(t, v - dt));
     this.resolveCd = Math.max(0, this.resolveCd - dt);
-    veiled = this.buff('veil');
-    p.veiled = veiled;
+    stealth.veiled = this.buff('veil');
+    p.veiled = stealth.veiled;
 
     // Buffs into the combat modifiers.
     if (this.buff('stubborn') || this.buff('unbroken')) p.staggerImmune = true;
@@ -634,7 +628,7 @@ export class OriginAbilities {
     this.buffs.clear();
     this.marked.clear();
     fearful.clear();
-    veiled = false;
+    stealth.veiled = false;
     this.p.veiled = false;
     this.resolveCd = 0;
     this.breathing = false;

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ignoresPlayer } from '../origins/stealth';
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -302,7 +303,7 @@ export class Beast implements Target {
         this.cooldown = v.attackCooldown;
         this.setState('chase');
       }
-    } else if (!player.dead && distance < v.aggro) {
+    } else if (!player.dead && !ignoresPlayer(this) && distance < v.aggro) {
       this.wander = null;
       this.yaw = dampAngle(this.yaw, Math.atan2(toPlayer.x, toPlayer.z), 8, dt);
       if (distance < v.attackRange && this.cooldown <= 0) this.setState('attack');

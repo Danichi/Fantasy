@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ignoresPlayer } from '../origins/stealth';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
 import { clamp, dampAngle, segmentPointDistance } from '../core/math';
@@ -165,7 +166,7 @@ export class OrcMob implements Target {
 
     const to = player.pos.clone().sub(this.position);
     const dist = Math.hypot(to.x, to.z);
-    const aware = !player.dead && dist < 15;
+    const aware = !player.dead && !ignoresPlayer(this) && dist < 15;
     const wantYaw = Math.atan2(to.x, to.z);
     const fwd = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
 

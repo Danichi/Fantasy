@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ignoresPlayer } from '../origins/stealth';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
 import { dampAngle, segmentPointDistance } from '../core/math';
@@ -220,7 +221,7 @@ export class Bandit implements Target {
     }
     const to = player.pos.clone().sub(this.position);
     const dist = Math.hypot(to.x, to.z);
-    const aware = !player.dead && (dist < (this.alerted ? 34 : 18));
+    const aware = !player.dead && !ignoresPlayer(this) && (dist < (this.alerted ? 34 : 18));
     if (aware) this.alerted = true;
     const wantYaw = Math.atan2(to.x, to.z);
     const ranged = this.role !== 'sword';
