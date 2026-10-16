@@ -490,7 +490,7 @@ export class PuzzleSet {
   /** Wake the mechanism's guardians: kill them all and the seal breaks anyway. */
   challenge() {
     if (this.solved || this.challengers || !this.room) return;
-    const kinds: MobKind[] = this.c.inst.def.theme === 'cave' ? ['bandit', 'crossbow', 'bandit'] : this.c.inst.def.theme === 'drowned' ? ['armour', 'zombie', 'armour'] : ['armour', 'orc', 'armour'];
+    const kinds: MobKind[] = this.c.inst.def.theme === 'cave' ? ['bandit', 'crossbow', 'bandit'] : this.c.inst.def.theme === 'drowned' ? ['armour', 'blue', 'armour'] : ['armour', 'orc', 'armour'];
     const ctr = this.c.centre(this.room);
     this.challengers = kinds.map((k, i) => this.c.spawnNow(k, ctr.clone().add(V((i - 1) * 1.8, 0, 1.0)), this.room!.id));
     this.c.toast('The mechanism shrieks. Its guardians come for you.');

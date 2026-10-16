@@ -312,7 +312,7 @@ test('D5: Hollow Ridge Caves and the Drowned Shrine can be finished; the shrine 
       const arena = inst.fg.rooms.find((r) => r.role === 'boss');
       g.player.teleport(inst.centreOf(arena).add(new T.Vector3(0, 0.3, 6)));
       for (let i = 0; i < 40 && !inst.boss.started; i++) await sleep(50);
-      kill(o, o.maxHp * 0.45);
+      kill(o, o.maxHp * 0.55);
       for (let i = 0; i < 40 && inst.boss.phase < 1; i++) await sleep(50);
       await mid?.();
       kill(o);
