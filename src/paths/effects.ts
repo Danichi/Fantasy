@@ -1,5 +1,6 @@
 import type { CombatMods } from '../combat/mods';
 import type { Family } from './data';
+import { DUNGEONEERING_PASSIVES } from '../dungeon/kit/delving';
 
 // What every passive node does. `m` adds to the player's combat modifiers
 // (multipliers are written as fractions: 0.05 = +5%; flat maxima as numbers).
@@ -92,6 +93,8 @@ export function genericEffect(fam: Family, key: string, type: string): NodeEffec
 // ---- written passives --------------------------------------------------------------
 // Keyed "discipline:Node Name"; choice nodes use "discipline:Option".
 export const PASSIVES: Record<string, NodeEffect> = {
+  // Dungeoneering (Dungeons Reborn, feat/dungeons): written in dungeon/kit/delving.ts
+  ...DUNGEONEERING_PASSIVES,
   // Gale Style: Tailwind
   'gale:Swift Feet': { text: '+5% movement speed', m: { moveSpeed: 0.05 } },
   'gale:Light Grip': { text: '+4% attack speed', m: { attackSpeed: 0.04 } },

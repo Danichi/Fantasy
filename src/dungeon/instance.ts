@@ -35,6 +35,8 @@ export interface DungeonProgress {
   gateOpen: boolean;
   bossDead: boolean;
   chests: string[]; // "floor:i,j" of opened chests
+  /** Dungeons Reborn (feat/dungeons): each kit dungeon's progress, by id */
+  kit?: Record<string, import('./kit/types').KitProgress>;
 }
 
 export interface DungeonHooks {
