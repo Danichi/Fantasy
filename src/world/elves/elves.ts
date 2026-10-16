@@ -5,6 +5,9 @@ import { ITEMS } from '../../items/itemDefs';
 import { ElvenForest, type ElfHooks, type Gather } from './elvenForest';
 import { LostWoods } from './lostWoods';
 import { Sanctum } from './sanctum';
+import { StarfallGate } from '../../dungeon/dungeons/starfall';
+import type { Realm } from '../../dungeon/realm';
+import type { DungeonMapUI } from '../../ui/dungeonMap';
 import { mentorOptions } from '../../paths/mentors';
 import '../../paths/elvenPaths'; // the Ranger's and the Wildwarden's skills join the shared tables
 import type { NpcSpec } from '../../npc/npc';
@@ -54,20 +57,26 @@ export interface ElvesContext {
   openRoad(id: string): void;
   addDoors(doors: Door[]): void;
   dismount(): void;
+  realm: Realm;
+  mapUI: DungeonMapUI;
 }
 
 export class Elves {
   readonly forest: ElvenForest;
   readonly lost: LostWoods;
   readonly sanctum: Sanctum;
+  /** the Temple of Starfall (set once wired) */
+  temple: StarfallGate | null = null;
   readonly hooks: ElfHooks;
   private ctx: ElvesContext | null = null;
   private pendingDoors: Door[] = [];
   /** flags before the game's own (saved) ones are wired in */
+  private fx: FX;
   private bootFlags: Record<string, boolean | number | string> = {};
   private leadFox: import('../../enemies/forest/forestCreature').ForestCreature | null = null;
 
-  constructor(scene: THREE.Scene, renderer: THREE.WebGLRenderer, mats: WorldMats, fx: FX) {
+  constructor(private scene: THREE.Scene, renderer: THREE.WebGLRenderer, mats: WorldMats, fx: FX) {
+    this.fx = fx;
     const self = this;
     // Late-bound: until wire() these only record (doors) or do nothing.
     this.hooks = {
@@ -139,6 +148,7 @@ export class Elves {
     this.wireQuests();
     this.wireServices();
     this.wireInteractables();
+    this.wireTemple();
     events.on('placeDiscovered', ({ id }) => {
       if (id === 'silverbough') ctx.flags['elves:seenSilverbough'] = true;
       if ((id === 'elvenSanctum' || id === 'moonlightGlade') && !ctx.flags['deed:place:' + id]) {
@@ -394,6 +404,32 @@ export class Elves {
     );
   }
 
+  /** The Temple of Starfall: its door in the oldest grove, its progress in the world flags, its respawn point. */
+  private wireTemple() {
+    const c = this.ctx!;
+    const f = (k: string) => ({ get: () => !!c.flags['elves:temple:' + k], set: (v: boolean) => (c.flags['elves:temple:' + k] = v), enumerable: true });
+    const progress = Object.defineProperties({} as { doorOpen: boolean; guardianDead: boolean; chartTaken: boolean }, { doorOpen: f('door'), guardianDead: f('guardian'), chartTaken: f('chart') });
+    const door = this.forest.spots.templeDoor;
+    const gate = new StarfallGate(progress, c.realm, this.scene, this.fx, c.player, c.mapUI, {
+      toast: (m) => c.toast(m), give: (id, n) => c.give(id, n), bossBar: (t, n) => c.bossBar(t, n), signal: (id) => void c.quests.signal(id), save: () => c.save(), fade: (on) => c.fade(on),
+    }, () => door.clone().add(new THREE.Vector3(0, 0, 4)));
+    this.temple = gate;
+    c.interactables.push({
+      pos: door, radius: 3.2,
+      label: () => 'Enter the Temple of Starfall',
+      enabled: () => !gate.inside,
+      action: () => {
+        if (!c.flags['elves:elderDead']) return c.talk('The Temple of Starfall', 'The oldest grove', 'Black roots, wet with rot, have grown across the door and set like iron. While the Blighted Elder lives, the Temple stays shut.', [{ label: 'Step back.', run: () => c.close() }]);
+        c.dismount();
+        void gate.enter();
+      },
+    });
+    // Dying in the Temple wakes you at its door inside, not in Elder Glen.
+    const realm = c.realm;
+    const base = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(realm), 'respawnPoint')!.get!;
+    Object.defineProperty(realm, 'respawnPoint', { get: () => gate.respawn ?? base.call(realm), configurable: true });
+  }
+
   /** Moonblossoms are open (night). */
   private open() {
     const h = this.hooks.hour();
@@ -441,6 +477,7 @@ export class Elves {
   /** Simulation step (every mode: the forest's threats only run in the overworld). */
   step(dt: number, overworld: boolean) {
     const c = this.ctx;
+    if (this.temple?.inside) this.temple.step(dt);
     if (!c || !overworld) return;
     this.forest.step(dt, c.player);
     this.lost.update(dt, c.player);
@@ -478,6 +515,7 @@ export class Elves {
 
   /** Back to a fresh world (tests). */
   reset() {
+    this.temple?.dispose();
     this.forest.reset();
     this.lost.reset();
     this.leadFox = null;

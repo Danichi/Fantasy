@@ -1208,6 +1208,7 @@ async function boot() {
     save: () => save(), talk: (who, title, text, opts) => dialogue.show(who, title, text, opts), close: () => dialogue.close(),
     shop: (who, title, intro, stock, extra) => town.showShop(who, title, intro, stock, extra), openRoad: (id) => roads.open(id), addDoors: (d) => addDoors(d),
     dismount: () => { if (player.mounted) horses.dismount(); },
+    realm, mapUI,
   });
   // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
