@@ -40,7 +40,7 @@ function buildShrinePortico(scene: THREE.Scene, m: WorldMats) {
   const y = heightAt(sp.x, sp.z);
   const g = new THREE.Group();
   const stone = (m.bridgeStone ?? m.stone) as THREE.Material;
-  const sea = new THREE.MeshStandardMaterial({ color: 0x7fa8a0, roughness: 0.85 });
+  const sea = new THREE.MeshStandardMaterial({ color: 0xa4b4ac, roughness: 0.9 });
   const dark = new THREE.MeshBasicMaterial({ color: 0x020606 });
   const glow = new THREE.MeshStandardMaterial({ color: 0x2a6a70, emissive: 0x40e0d8, emissiveIntensity: 1.4 });
   const add = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, yy: number, z: number, ry = 0, rz = 0) => {
@@ -64,8 +64,9 @@ function buildShrinePortico(scene: THREE.Scene, m: WorldMats) {
     void ray;
   }
   // Steps down (they end in the dark; the door is the way in).
-  for (let k = 0; k < 5; k++) add(new THREE.BoxGeometry(2.8, 0.2, 0.7), sea, 0, 0.35 - k * 0.25, -0.6 + k * 0.7);
-  add(new THREE.PlaneGeometry(2.8, 3.2), dark, 0, -0.9, 1.4, 0).rotation.x = -Math.PI / 2 + 0.55;
+  // The stair mouth: a black well in the plinth with its top steps showing.
+  add(new THREE.PlaneGeometry(2.6, 3.4), dark, 0, 0.415, 0.9).rotation.x = -Math.PI / 2;
+  for (let k = 0; k < 2; k++) add(new THREE.BoxGeometry(2.6, 0.12, 0.5), stone, 0, 0.38 - k * 0.22, -0.55 + k * 0.5);
   for (const sx of [-1.6, 1.6]) add(new THREE.BoxGeometry(0.3, 0.8, 3.6), stone, sx, 0.4, 0.8);
   g.position.set(sp.x, y, sp.z);
   g.rotation.y = sp.face + Math.PI;

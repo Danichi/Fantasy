@@ -96,7 +96,7 @@ export function theme(id: ThemeId): Theme {
       id, wallH: 5.2, warm: 0xffb066, cold: 0x6ad0c8,
       lantern: { color: 0xffe2b0, intensity: 5.6, distance: 13 },
       fog: [0x07070a, 10, 40],
-      hemi: { sky: 0x8090a8, ground: 0x241a12, intensity: 0.3 },
+      hemi: { sky: 0x8090a8, ground: 0x241a12, intensity: 0.42 },
       m: {
         ...common,
         wall: rep(rock, 1.4),
