@@ -14,6 +14,8 @@ import { SITES, GATE_AT, GATE_S, OLDEST_WAY, megaTrees, forestLayer, LAYER_NAMES
 import { MegaForest, buildGiant, barkMaterial, leafMaterial, trunkRadius } from './megaTree';
 import { thornwickFolk, markerFolk, silverboughFolk, gladeFolk, hermitFolk, hunterFolk, type FolkSettlement } from './elfFolk';
 import { ForestThreats } from '../../enemies/forest/forestThreats';
+import { ElvenAtmosphere } from './elvenAtmosphere';
+import { SUN_DIR } from '../../render/renderer';
 import type { FX } from '../../fx/particles';
 import type { Player } from '../../player/player';
 import type { Interactable } from '../../dungeon/instance';
@@ -94,6 +96,7 @@ export class ElvenForest {
   readonly gathers: Gather[] = [];
   readonly mega: MegaForest;
   readonly threats: ForestThreats;
+  readonly atmosphere: ElvenAtmosphere;
   /** where things stand (quests, tests, folk) */
   readonly spots: Record<string, THREE.Vector3> = {};
   /** the forest layer the player is in (cards on entry) */
@@ -118,6 +121,7 @@ export class ElvenForest {
       wants: (id) => hooks.wants(id), isActive: (q) => hooks.isActive(q), addGold: (n) => hooks.addGold(n), save: () => hooks.save(),
     });
     scene.add(this.ribbons);
+    this.atmosphere = new ElvenAtmosphere(scene);
     this.layoutThornwick();
     this.layoutMarker();
     this.layoutOuterCamps();
@@ -754,6 +758,7 @@ export class ElvenForest {
     }
     this.ribbons.visible = this.visible && Math.hypot(camera.x + 2200, camera.z + 2700) < 2600;
     this.mega.update(dt, camera);
+    this.atmosphere.update(dt, camera, night, SUN_DIR);
     const near = (q: THREE.Vector3, r: number) => Math.hypot(player.x - q.x, player.z - q.z) < r;
     for (const f of this.fires) {
       if (!near(f.pos, 200)) continue;
@@ -791,6 +796,7 @@ export class ElvenForest {
     for (const a of this.areas) a.group.visible = v && a.built;
     this.ribbons.visible = v;
     this.mega.setVisible(v);
+    this.atmosphere.setVisible(v);
   }
 
   /** Back to a fresh world (tests). */
