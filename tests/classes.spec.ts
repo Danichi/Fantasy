@@ -70,6 +70,7 @@ test('Pyromancer Heat builds, overheats, burns you and vents', async ({ game }) 
     const vent = learn('pyromancer', 'Vent');
     pl.mana = pl.maxMana = 999;
     // Kindle needs no lock-on and builds Heat.
+    for (let i = 0; i < 600 && !pl.canAct; i++) await W(1);
     const why = rt.use(kindle);
     await W(80);
     const afterKindle = rt.heat;
@@ -94,9 +95,11 @@ test('Pyromancer Heat builds, overheats, burns you and vents', async ({ game }) 
     const unlocked = rt.blocked(kindle);
     // Vent: spends every point of Heat on a ring of fire.
     const s = g.slimes.spawn('blue', pl.pos.x + Math.sin(pl.yaw) * 2, pl.pos.z + Math.cos(pl.yaw) * 2);
+    s.cooldown = 1e9;
     await W(20);
     rt.heat = 70;
     const shp = s.hp;
+    for (let i = 0; i < 600 && !pl.canAct; i++) await W(1);
     const vwhy = rt.use(vent);
     await W(90);
     return { why, afterKindle, cooled, cold, hot, burnt, over, unlocked, vwhy, ventHeat: rt.heat, ventDmg: shp - Math.max(0, s.hp) };
@@ -122,6 +125,7 @@ test('Lightbinder Verdict, Sentence, Radiance and Halo Ward', async ({ game }) =
   const res = await page.evaluate(async (learnSrc) => {
     const learn = eval(learnSrc);
     const g = (window as any).__game, rt = g.skillRt, pl = g.player, W = (window as any).waitSteps;
+    const ready = async () => { for (let i = 0; i < 600 && !pl.canAct; i++) await W(1); };
     const brand = learn('lightbinder', 'Brand');
     const sentence = learn('lightbinder', 'Sentence');
     const halo = learn('lightbinder', 'Halo Ward');
@@ -129,8 +133,10 @@ test('Lightbinder Verdict, Sentence, Radiance and Halo Ward', async ({ game }) =
     pl.mana = pl.maxMana = 999;
     const s = g.slimes.spawn('blue', pl.pos.x + Math.sin(pl.yaw) * 4, pl.pos.z + Math.cos(pl.yaw) * 4);
     s.hp = 2000;
+    s.cooldown = 1e9; // a punching bag: it never attacks back
     await W(20);
     pl.lock = s;
+    await ready();
     const bwhy = rt.use(brand);
     await W(80);
     const branded = rt.branded(s);
@@ -142,24 +148,27 @@ test('Lightbinder Verdict, Sentence, Radiance and Halo Ward', async ({ game }) =
     // Sentence cashes the stacks in.
     const hp0 = s.hp;
     rt.radiance = 0; // no empowering, for a clean number
+    await ready();
     const swhy = rt.use(sentence);
     await W(80);
     const sentenced = { dmg: hp0 - s.hp, left: rt.statusOf(s)?.verdict ?? 0 };
     // Halo Ward stops arrows from any side.
-    rt.use(halo);
+    s.takeHit({ damage: 99999, poise: 0, dir: new g.THREE.Vector3(0, 0, 1), at: s.center.clone(), crit: false, source: 'melee' });
+    await W(30);
+    await ready();
+    const hwhy = rt.use(halo);
     await W(120);
     const hpA = pl.hp;
     const arrow = () => pl.receiveAttack({ damage: 20, from: pl.pos.clone().add(new g.THREE.Vector3(0, 1, -6)), parryable: true, poise: 30, projectile: true });
     const r1 = arrow(), r2 = arrow(), r3 = arrow();
     const haloHp = hpA - pl.hp;
     // Mote of Light heals you while you stand near it.
-    s.takeHit({ damage: 99999, poise: 0, dir: new g.THREE.Vector3(0, 0, 1), at: s.center.clone(), crit: false, source: 'melee' });
-    await W(10);
     pl.hp = pl.maxHp - 30;
+    await ready();
     rt.use(mote);
     await W(240);
     const healed = pl.hp - (pl.maxHp - 30);
-    return { bwhy, branded, verdict, radGain, swhy, sentenced, r: [r1, r2, r3], haloHp, healed, mote: !!rt.mote };
+    return { bwhy, hwhy, halo: rt.halo, branded, verdict, radGain, swhy, sentenced, r: [r1, r2, r3], haloHp, healed, mote: !!rt.mote };
   }, LEARN);
   expect(res.bwhy).toBeNull();
   expect(res.branded).toBe(true);
@@ -168,6 +177,7 @@ test('Lightbinder Verdict, Sentence, Radiance and Halo Ward', async ({ game }) =
   expect(res.swhy).toBeNull();
   expect(res.sentenced.dmg).toBeGreaterThan(50); // 15 + 12 x 4, before spell power
   expect(res.sentenced.left).toBe(0);
+  expect(res.hwhy).toBeNull();
   expect(res.r.slice(0, 2)).toEqual(['blocked', 'blocked']);
   expect(res.r[2]).not.toBe('blocked');
   expect(res.mote).toBe(true);

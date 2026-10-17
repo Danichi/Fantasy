@@ -304,7 +304,7 @@ export class SkillsUI {
     const nc = P.nextCost(d.id), base = levelCost(L);
     let h = `<div class="sk-phead"><div class="sk-medal">${this.medal(d)}</div><div><h3>${esc(d.name)}</h3><div class="fl">${esc(d.flavour)}</div></div></div>`;
     if (locked) {
-      h += `<div class="sk-note">Not learned yet. Find <b>${esc(d.mentor)}</b> to learn it. You can look at the tree, but nothing can be bought until then.</div>`;
+      h += `<div class="sk-note">Not learned yet. Find <b>${esc(d.mentor)}</b> to learn it${d.trial ? ' (they will set you a short trial first)' : ''}. You can look at the tree, but nothing can be bought until then.</div>`;
     } else {
       h += `<div class="sk-kv">
         <span>Level</span><span class="hi">${L} / ${MAX_LEVEL}</span>
@@ -352,7 +352,7 @@ export class SkillsUI {
     const found = `Tiers open at level 1, 5, 10, 15 and 20. ${gates ? `Each branch ends in a gateway at 25 (and ${GATE_NODES} nodes in that branch); you may open only one.` : 'Capstones at 25; you may own only one.'}`;
     if (n.type === 'center') {
       const core = SkillRuntime.skill(d.id, n.name);
-      if (core) return `Core spell, known from the first lesson: ${core.text(1, this.runtime!)}. ${d.res ? `${d.name} uses ${d.res}. ` : ''}${found}`;
+      if (core) return `Core spell, known from the first lesson: ${core.text(1, this.runtime!).replace(/\.$/, '')}. ${d.res ? `${d.name} uses ${d.res}. ` : ''}${found}`;
       return `Foundation of ${d.name}.${d.res ? ` Grants the ${d.res} resource.` : ''} ${found}`;
     }
     const gate = this.paths.gate(d.id, n);
@@ -363,7 +363,7 @@ export class SkillsUI {
     }
     const skill = SkillRuntime.skill(d.id, n.name);
     const rank = this.paths.node(d.id, n.id)?.r ?? 1;
-    if (skill) return skill.text(rank, this.runtime!) + '.';
+    if (skill) return skill.text(rank, this.runtime!).replace(/\.$/, '') + '.';
     if (n.type === 'active') return `${NODE_TEXT[n.name] ?? 'A technique for your bar.'} (Not in the game yet.)`;
     if (n.type === 'choice') {
       const v = this.paths.node(d.id, n.id);
