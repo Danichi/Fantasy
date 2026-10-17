@@ -69,6 +69,19 @@ const DEFS: Record<string, Def> = {
     dur: 3.5, stamina: 0, clip: 'skill_combo', iframes: [0, 3.3], events: ev('cuts', 0.45, 0.7, 0.95, 1.26, 1.6, 1.95, 2.3, 2.6),
     cancel: 3.2, track: 3.2, clipTiming: { speed: 1.5 },
   },
+  // ---- Cross Style -------------------------------------------------------------------
+  /** both blades at once: an X cut */
+  sk_crossCut: {
+    flair: [F('lean', 0.15, 0.7, 0.32), F('crouch', 0.2, 0.7, 0.14), F('bank', 0.25, 0.6, 0.12)],
+    dur: 1.0, stamina: 0, clip: 'attack_light_2', weaponSpeed: true, boost: { dist: 0.9, from: 0.15, to: 0.45 },
+    events: ev('x', 0.42), cancel: 0.62, track: 0.4, clipTiming: { speed: 1.05 },
+  },
+  /** an eight-cut flurry */
+  sk_bladeDance: {
+    flair: [F('spin', 0.3, 2.4, 1.5), F('lean', 0.3, 2.6, 0.22), F('bank', 0.5, 1.5, 0.12), F('bank', 1.4, 2.4, -0.12)],
+    dur: 3.5, stamina: 0, clip: 'skill_combo', events: ev('dance', 0.4, 0.7, 1.0, 1.3, 1.6, 1.9, 2.2, 2.5),
+    cancel: 2.9, track: 2.6, clipTiming: { speed: 1.35 },
+  },
   // ---- Boundary Style --------------------------------------------------------------
   sk_guardUp: { dur: 0.62, stamina: 0, clip: 'parry_shield', events: ev('guard', 0.12), cancel: 0.36, track: 0.1 },
   sk_deflect: { dur: 0.62, stamina: 0, clip: 'parry_shield', parry: [0.02, 0.5], events: ev('deflect', 0.02), cancel: 0.45, track: 0.1 },

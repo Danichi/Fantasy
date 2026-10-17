@@ -8,6 +8,7 @@ import {
 } from '../paths/paths';
 import { ICONS, TreeView, drawSealed } from './skillTree';
 import { SkillRuntime } from '../paths/skills';
+import { PASSIVES } from '../paths/effects';
 import { legacyCardInfo, renderLegacy } from '../origins/legacyUI';
 
 // The Skills screen (K). Tabs: Disciplines (the atlas of classes and
@@ -359,7 +360,9 @@ export class SkillsUI {
     const found = `Tiers open at level 1, 5, 10, 15 and 20. ${gates ? `Each branch ends in a gateway at 25 (and ${GATE_NODES} nodes in that branch); you may open only one.` : 'Capstones at 25; you may own only one.'}`;
     if (n.type === 'center') {
       const core = SkillRuntime.skill(d.id, n.name);
-      if (core) return `Core spell, known from the first lesson: ${core.text(1, this.runtime!).replace(/\.$/, '')}. ${d.res ? `${d.name} uses ${d.res}. ` : ''}${found}`;
+      if (core) return `Core ${d.fam === 'magic' ? 'spell' : 'technique'}, known from the first lesson: ${core.text(1, this.runtime!).replace(/\.$/, '')}. ${d.res ? `${d.name} uses ${d.res}. ` : ''}${found}`;
+      const passive = PASSIVES[`${d.id}:${n.name}`];
+      if (passive && d.core) return `${d.core}, known from the first lesson: ${passive.text}. ${found}`;
       return `Foundation of ${d.name}.${d.res ? ` Grants the ${d.res} resource.` : ''} ${found}`;
     }
     const gate = this.paths.gate(d.id, n);

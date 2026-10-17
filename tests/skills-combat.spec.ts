@@ -40,7 +40,7 @@ test('passives change combat stats, and only while their class is active', async
     learn('gale', 'Swift Feet');
     learn('pyromancer', 'Kindling');
     P.teach('boundary');
-    learn('boundary', 'Hold the Line');
+    learn('boundary', 'Tough');
     await (window as any).waitSteps(2);
     const galeActive = { move: g.player.mods.moveSpeed, dmgTaken: g.player.mods.dmgTaken, fire: rt.x('fireDmg') };
     P.setActive('boundary');
@@ -53,7 +53,7 @@ test('passives change combat stats, and only while their class is active', async
   expect(res.galeActive.dmgTaken).toBeCloseTo(1, 5); // Boundary inactive: no effect
   expect(res.galeActive.fire).toBeCloseTo(0.05, 5); // magic passives always apply
   expect(res.boundaryActive.move).toBeCloseTo(1, 5);
-  expect(res.boundaryActive.dmgTaken).toBeCloseTo(0.92, 5); // Hold the Line
+  expect(res.boundaryActive.dmgTaken).toBeCloseTo(0.96, 5); // Tough
   expect(res.boundaryActive.fire).toBeCloseTo(0.05, 5);
   expect(errors).toEqual([]);
 });
@@ -83,6 +83,7 @@ test('skills on the moves bar cost resources, animate and hurt enemies', async (
     await W(5);
     pl.lock = s;
     await ready();
+    rt.flow = 3; // Gale Step costs 1 Flow
     const st0 = pl.stamina, hp0 = s.hp;
     const why0 = rt.blocked(step);
     // Read the action and stamina the moment the skill fires (waits can overshoot).
@@ -116,8 +117,8 @@ test('skills on the moves bar cost resources, animate and hurt enemies', async (
     await W(150);
     off2();
     const fire1 = { mana: manaSpent, dmg: hp1 - Math.max(0, s.hp), why2 };
-    // Not enough Flow: Severing Arc refuses and says why.
-    const arc = learn('gale', 'Severing Arc');
+    // Not enough Flow: Flash Cut refuses and says why.
+    const arc = learn('gale', 'Flash Cut');
     rt.flow = 0;
     const refused = rt.use(arc);
     return { step1, fire1, refused, flowAfterHits: rt.flow };
@@ -130,7 +131,7 @@ test('skills on the moves bar cost resources, animate and hurt enemies', async (
   expect(res.step1.cd).toBe(true);
   expect(res.fire1.mana, JSON.stringify(res.fire1)).toBeGreaterThanOrEqual(15);
   expect(res.fire1.dmg).toBeGreaterThan(0);
-  expect(res.refused).toBe('Needs 1 Flow');
+  expect(res.refused).toBe('Needs 2 Flow');
   expect(errors).toEqual([]);
 });
 

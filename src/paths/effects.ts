@@ -2,6 +2,7 @@ import type { CombatMods } from '../combat/mods';
 import type { Family } from './data';
 import { DUNGEONEERING_PASSIVES } from '../dungeon/kit/delving';
 import { FIRE_PASSIVES } from './classes/fire.passives';
+import { GALE_PASSIVES, BOUNDARY_PASSIVES, CROSS_PASSIVES } from './classes/sword.passives';
 import { LIGHT_PASSIVES } from './classes/light.passives';
 
 // What every passive node does. `m` adds to the player's combat modifiers
@@ -98,84 +99,9 @@ export function genericEffect(fam: Family, key: string, type: string): NodeEffec
 export const PASSIVES: Record<string, NodeEffect> = {
   // Dungeoneering (Dungeons Reborn, feat/dungeons): written in dungeon/kit/delving.ts
   ...DUNGEONEERING_PASSIVES,
-  // Gale Style: Tailwind
-  'gale:Swift Feet': { text: '+5% movement speed', m: { moveSpeed: 0.05 } },
-  'gale:Light Grip': { text: '+4% attack speed', m: { attackSpeed: 0.04 } },
-  'gale:Tailwind': { text: 'Dodging within 1.5 seconds of landing a hit costs no stamina', x: { tailwind: 1 } },
-  'gale:Slipstream': { text: '+10% movement speed while you have 3 or more Flow', x: { slipstream: 1 } },
-  'gale:Squall': { text: 'The third hit of your combo strikes twice, the second time as a blade of wind', x: { squall: 1 } },
-  'gale:Updraft': { text: 'The third hit of your combo hits 150% harder against poise and launches small foes', x: { updraft: 1 } },
-  'gale:Flow Well': { text: '+1 maximum Flow', x: { flowMax: 1 } },
-  'gale:Storm Unbound': { text: '+20% attack speed and Flow never fades, but you cannot block', m: { attackSpeed: 0.2 }, x: { flowKeep: 1, noBlock: 1 } },
-  'gale:Wind Shear': { text: 'Gale Style techniques deal 15% more damage', x: { techDmg: 0.15 } },
-  'gale:Hurricane Heart': { text: 'Kills restore 1 Flow and 15 stamina', x: { hurricane: 1 } },
-  'gale:Lingering Vortex': { text: 'Crescent Wind leaves a vortex that keeps cutting for 2 seconds', x: { vortex: 1 } },
-  'gale:Eye of the Storm': { text: 'At full Flow, every third hit also releases a blade of wind', x: { eyeStorm: 1 } },
-  // Gale Style: Cutting Wind
-  'gale:Keen Edge': { text: '+3% crit chance', m: { crit: 0.03 } },
-  'gale:Whetted': { text: '+5% class damage', m: { melee: 0.05 } },
-  'gale:Pressure': { text: '+12% poise damage', m: { poise: 0.12 } },
-  'gale:Far Reach': { text: 'Severing Arc flies 50% farther', x: { arcRange: 0.5 } },
-  'gale:Quickdraw': { text: 'Moonlit Draw is drawn 40% faster', x: { quickdraw: 1 } },
-  'gale:Heavy Draw': { text: 'Moonlit Draw deals 40% more damage', x: { heavyDraw: 1 } },
-  'gale:Bleeding Wind': { text: 'Severing Arc makes enemies bleed for 4 seconds', x: { arcBleed: 1 } },
-  'gale:One Breath': { text: 'Moonlit Draw always crits, but your basic combo deals 30% less damage', m: { lightAttack: -0.3 }, x: { oneBreath: 1 } },
-  'gale:Twin Arcs': { text: 'Severing Arc throws two blades', x: { twinArcs: 1 } },
-  'gale:Blood on the Snow': { text: 'Critical hits make enemies bleed', x: { critBleed: 1 } },
-  'gale:Horizon Cut': { text: 'Severing Arc passes through every enemy in its path', x: { arcPierce: 1 } },
-  // Gale Style: Stillwind
-  'gale:Read the Blade': { text: '+10% parry window', m: { parryWindow: 0.1 } },
-  'gale:Calm Breath': { text: '+10% stamina regen', m: { staminaRegen: 0.1 } },
-  'gale:Deflect': { text: 'Successful parries restore 15 stamina', x: { parryStamina: 15 } },
-  'gale:Wide Guard': { text: '+15% parry window', m: { parryWindow: 0.15 } },
-  'gale:Disarm': { text: 'Parries break the attacker\'s poise and leave them open to a critical hit', x: { disarm: 1 } },
-  'gale:Guard Crush': { text: 'After a parry your next hit within 3 seconds is a critical', x: { guardCrush: 1 } },
-  'gale:Composure': { text: '+20% damage for 4 seconds after a parry', x: { composure: 1 } },
-  'gale:Mirror Guard': { text: 'Your parry window is doubled, but getting hit costs 2 Flow', m: { parryWindow: 1 }, x: { mirrorGuard: 1 } },
-  'gale:Rebuke': { text: 'Parries cut the attacker for half your weapon damage', x: { rebuke: 1 } },
-  "gale:Duelist's Pride": { text: 'Each parry gives +3% damage for 20 seconds, stacking up to 10 times', x: { pride: 1 } },
-  'gale:Quiet Mind': { text: 'Flow no longer fades when you stop hitting', x: { flowKeep: 1 } },
-  'gale:Perfect Calm': { text: 'A parry heals 10% of your health and makes your next 3 hits critical', x: { perfectCalm: 1 } },
-
-  // Boundary Style: Aegis
-  'boundary:Steady Arm': { text: 'Blocking costs 10% less stamina', m: { blockCost: -0.1 } },
-  'boundary:Braced': { text: 'Take 4% less damage', m: { dmgTaken: -0.04 } },
-  'boundary:Iron Stance': { text: 'Blocking costs 25% less stamina', m: { blockCost: -0.25 } },
-  'boundary:Absorb': { text: 'Gain 50% more Resolve', x: { resGain: 0.5 } },
-  'boundary:Unyielding': { text: 'Take 15% less damage while you have 50 or more Resolve', x: { unyielding: 1 } },
-  'boundary:Spiked Rim': { text: 'Enemies whose blows you block take 30% of your weapon damage', x: { spikedRim: 1 } },
-  'boundary:Hold the Line': { text: 'Take 8% less damage', m: { dmgTaken: -0.08 } },
-  'boundary:Unbreakable': { text: 'Blocking costs half the stamina, but dodging costs 50% more', m: { blockCost: -0.5, dodgeCost: 0.5 } },
-  'boundary:Bastion': { text: '+20 max health', m: { hp: 20 } },
-  'boundary:Immovable': { text: 'Take 10% less damage', m: { dmgTaken: -0.1 } },
-  'boundary:Aftershock': { text: 'Earthshaker reaches 40% farther', x: { quakeArea: 0.4 } },
-  'boundary:Living Fortress': { text: 'Every blocked blow builds the Fortress; at 5, your next Shield Bash shakes the earth', x: { fortress: 1 } },
-  // Boundary Style: Vanguard
-  'boundary:Heavy Rim': { text: 'Shield Bash deals 20% more damage', x: { bashDmg: 0.2 } },
-  'boundary:Shoulder In': { text: '+5% poise damage', m: { poise: 0.05 } },
-  'boundary:Staggering Blow': { text: 'Shield Bash hits 50% harder against poise', x: { bashPoise: 0.5 } },
-  'boundary:Bruiser': { text: '+5% class damage', m: { melee: 0.05 } },
-  'boundary:Trample': { text: 'Bull Rush deals 50% more damage', x: { rushDmg: 0.5 } },
-  'boundary:Pin': { text: 'Enemies hit by Bull Rush are left open to a critical hit', x: { rushStun: 1 } },
-  'boundary:Iron Hide': { text: 'Take 6% less damage', m: { dmgTaken: -0.06 } },
-  'boundary:Juggernaut': { text: '+25% class damage and poise damage, but 15% slower movement', m: { melee: 0.25, poise: 0.25, moveSpeed: -0.15 } },
-  'boundary:Plow Through': { text: '+10% class damage', m: { melee: 0.1 } },
-  'boundary:Avalanche': { text: 'Earthshaker deals 40% more damage', x: { quakeDmg: 0.4 } },
-  'boundary:Battering Ram': { text: 'Bull Rush resets Shield Bash', x: { ram: 1 } },
-  'boundary:Unstoppable Charge': { text: 'You cannot be hurt during Bull Rush, and it can be used twice before its cooldown', x: { unstoppable: 1 } },
-  // Boundary Style: Warden
-  'boundary:Watchful': { text: '+10 max health', m: { hp: 10 } },
-  'boundary:Stout Heart': { text: '+10% healing received', m: { heal: 0.1 } },
-  'boundary:Rallying Presence': { text: 'Rallying Cry heals 50% more', x: { rallyHeal: 0.5 } },
-  'boundary:Tough': { text: '+15 max health', m: { hp: 15 } },
-  'boundary:Martyr': { text: 'Oath Ward absorbs 50% more', x: { wardAbsorb: 0.5 } },
-  'boundary:Guardian': { text: 'When Oath Ward breaks it heals you for 20', x: { wardHeal: 20 } },
-  'boundary:Last to Fall': { text: 'Once every 3 minutes, a killing blow leaves you at 1 health', x: { lastToFall: 180 } },
-  'boundary:Oathbound': { text: '+30 max health and take 10% less damage, but deal 15% less damage', m: { hp: 30, dmgTaken: -0.1, melee: -0.15 } },
-  'boundary:Retaliate': { text: 'Getting hit gives +10% damage for 3 seconds', x: { retaliate: 1 } },
-  'boundary:Undying Vow': { text: 'Last to Fall recovers in 60 seconds', x: { lastToFallFast: 1 } },
-  'boundary:Beacon': { text: 'Rallying Cry also restores 30 mana', x: { beacon: 1 } },
-
+  ...GALE_PASSIVES,
+  ...BOUNDARY_PASSIVES,
+  ...CROSS_PASSIVES,
   ...FIRE_PASSIVES,
   // Windcaller: Gust
   'windcaller:Breeze': { text: '+5% wind damage', x: { windDmg: 0.05 } },

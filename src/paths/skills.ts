@@ -13,12 +13,17 @@ import { treeOf, type TreeNode } from './paths';
 import { PASSIVES, genericEffect, type NodeEffect, type NumMod } from './effects';
 import { SkillFx, PALETTE } from './skillFx';
 import { FIRE_SKILLS } from './classes/fire';
+import { CombatClasses } from './classes/combat';
+import { GALE_SKILLS } from './classes/gale';
+import { BOUNDARY_SKILLS } from './classes/boundary';
+import { CROSS_SKILLS } from './classes/cross';
 import { LIGHT_SKILLS } from './classes/light';
 
 // The skill runtime: turns learned tree nodes into combat. It
 //  - sums passive node effects into the player's combat modifiers each step,
 //  - runs active skills from the moves bar (costs, cooldowns, actions, effects),
-//  - tracks class resources (Flow for Gale Style, Resolve for Boundary Style),
+//  - tracks class resources (Flow, Tempo and Focus for the sword styles: see
+//    classes/combat.ts; Heat and Radiance for the magic classes),
 //  - ticks burns, bleeds and brands on enemies, buffs, shields and zones.
 // Combat-class nodes only work while that class is active.
 
@@ -38,6 +43,12 @@ export interface SkillDef {
   stamina?: number;
   mana?: number;
   flow?: number;
+  /** Cross Style: Tempo spent */
+  tempo?: number;
+  /** Boundary Style: Focus spent */
+  focus?: number;
+  /** needs a sword in each hand */
+  needDual?: boolean;
   needShield?: boolean;
   /** needs an enemy in range (lock-on or aim assist) */
   needTarget?: number;
@@ -61,7 +72,6 @@ export interface SkillDef {
 
 /** Rank scaling: each rank past I adds 8%. */
 export const R = (r: number) => 1 + 0.08 * (r - 1);
-const pct = (v: number) => `${Math.round(v)}`;
 
 export type Status = {
   t: Target;
@@ -89,9 +99,8 @@ interface Buff { left: number; v?: number }
 export class SkillRuntime {
   readonly vfx: SkillFx;
   flow = 0;
-  resolve = 0;
-  private flowIdle = 0;
-  private resolveIdle = 0;
+  /** the sword styles' resources and the Boundary ring */
+  readonly cc: CombatClasses;
   private cds = new Map<string, number>();
   private uses = new Map<string, number>();
   buffs = new Map<string, Buff>();
@@ -100,9 +109,7 @@ export class SkillRuntime {
   private timers: { t: number; fn: () => void }[] = [];
   private passive: { m: Partial<Record<NumMod, number>>; x: Record<string, number> } = { m: {}, x: {} };
   private lastHitT = 99;
-  private hits3 = 0;
   private critNext = 0;
-  private fortress = 0;
   private cheat = { last: -1e9, phoenix: -1e9, res: -1e9, crest: -1e9 };
   private secondWindAt = -1e9;
   private time = 0;
@@ -130,6 +137,8 @@ export class SkillRuntime {
 
   constructor(scene: THREE.Scene, private player: Player, fx: FX, private spells: Spells) {
     this.vfx = new SkillFx(scene, fx);
+    this.cc = new CombatClasses(this, scene);
+    player.onDodged = (att) => this.cc.onDodged(att);
     player.onSkillEvent = (n) => this.onEvent(n);
     player.defend = (att, facing) => this.defend(att, facing);
     player.onOverheal = (n) => this.onOverheal(n);
@@ -139,7 +148,6 @@ export class SkillRuntime {
     events.on('pathsChanged', () => this.recompute());
     events.on('meleeHit', (e) => this.onMeleeHit(e.target, e.amount, e.crit, e.action));
     events.on('parrySuccess', ({ at }) => this.onParry(at));
-    events.on('blockImpact', () => this.onBlock());
     events.on('playerDamaged', () => this.onHurt());
     events.on('enemyDied', ({ at, enemyId }) => this.onKill(at, enemyId));
     events.on('spellImpact', ({ at, spell }) => spell === 'fireball' && this.onFireballImpact(at));
@@ -149,7 +157,8 @@ export class SkillRuntime {
 
   /** Back to a calm state (respawn, test reset): no Heat, Radiance, buffs, cooldowns or marks. */
   reset() {
-    this.heat = this.radiance = this.flow = this.resolve = 0;
+    this.heat = this.radiance = 0;
+    this.cc.reset();
     this.halo = 0;
     this.chain = [];
     this.buffs.clear();
@@ -179,7 +188,7 @@ export class SkillRuntime {
     this.buffs.set(k, { left: sec * this.player.mods.duration, v });
   }
   get flowMax() {
-    return 5 + this.x('flowMax');
+    return this.cc.flowMax;
   }
 
   /** Effect of a node, whether written or generic. */
@@ -254,7 +263,8 @@ export class SkillRuntime {
       this.critNext--;
       crit = true;
     }
-    return { mult: this.targetMult(t), crit };
+    const c = this.cc.meleeBonus(t);
+    return { mult: this.targetMult(t) * c.mult, crit: crit || c.crit };
   }
 
   hit(t: Target, amount: number, o: HitOpts = {}) {
@@ -436,6 +446,9 @@ export class SkillRuntime {
     if (def.stamina && p.stamina < def.stamina * p.mods.staminaCost * 0.5) return 'Not enough stamina';
     if (def.mana && p.mana < this.manaCost(def)) return 'Not enough mana';
     if (def.flow && this.flow < def.flow) return `Needs ${def.flow} Flow`;
+    if (def.tempo && this.cc.tempo < def.tempo) return `Needs ${def.tempo} Tempo`;
+    if (def.focus && this.cc.focus < def.focus) return `Needs ${def.focus} Focus`;
+    if (def.needDual && !p.equip.dualWield) return `${s.n.name} needs a sword in each hand`;
     if (def.needTarget && !this.aim(def.needTarget).target) return 'No target in range';
     // Attack spells go where you lock on (middle mouse or Q), like Fireball.
     if ((def.action === 'sk_cast' || def.action === 'sk_castBig') && !def.freeAim) {
@@ -469,14 +482,15 @@ export class SkillRuntime {
       this.vfx.burst(this.player.center, 'light', 0.6, 3);
     }
     if (def.action) {
-      const tech = s.d.id === 'gale' ? 1 + this.x('techDmg') : 1;
-      if (!p.startSkill(def.action, R(rank) * tech, def.action !== 'sk_dash')) return 'busy';
+      if (!p.startSkill(def.action, R(rank), def.action !== 'sk_dash')) return 'busy';
       this.pending = pend;
     } else if (def.now && def.now(this, pend) === false) return 'Nothing happens';
     // Pay.
     if (def.stamina) p.spendStamina(def.stamina * p.mods.staminaCost);
     p.mana -= this.manaCost(def);
     if (def.flow) this.flow -= def.flow;
+    if (def.tempo) this.cc.tempo -= def.tempo;
+    if (def.focus) this.cc.focus -= def.focus;
     if (def.heat) this.addHeat(def.heat);
     const extra = def.charges && this.has(def.charges) ? 2 : 1;
     const used = (this.uses.get(s.key) ?? 0) + 1;
@@ -565,6 +579,8 @@ export class SkillRuntime {
       if (this.halo <= 0) this.buffs.delete('halo');
       return 'blocked';
     }
+    const ring = this.cc.defend(att);
+    if (ring) return ring;
     if (this.buff('counter') && facing > -0.2 && parryable) {
       this.buffs.delete('counter');
       onParried?.();
@@ -572,13 +588,6 @@ export class SkillRuntime {
       this.vfx.ring(p.pos, 'steel', 4);
       this.vfx.slash(p.center, p.yaw, 1.3, 'gale');
       return 'parried';
-    }
-    if (this.buff('reflect') && facing > 0.2) {
-      const t = this.nearestEnemy(from, 3.5);
-      if (t) {
-        this.hit(t, damage * 0.5, { poise: 40, source: 'melee' });
-        this.vfx.burst(t.center, 'steel', 0.6, 4);
-      }
     }
     return null;
   }
@@ -600,6 +609,8 @@ export class SkillRuntime {
 
   private absorbDamage(d: number) {
     if (this.buff('invuln')) return 0;
+    d = this.cc.absorb(d);
+    if (d <= 0) return 0;
     // Second Dawn: a hit worth over a quarter of your health is halved.
     if (this.buff('secondDawn') && d > this.player.maxHp * 0.25) {
       d *= 0.5;
@@ -656,13 +667,8 @@ export class SkillRuntime {
   private onMeleeHit(t: Target, amount: number, crit: boolean, action: string) {
     const P = this.paths;
     this.lastHitT = 0;
-    if (P.active === 'gale') {
-      this.flow = Math.min(this.flowMax, this.flow + 1 * (1 + this.x('resGain')));
-      this.flowIdle = 0;
-      if (this.has('eyeStorm') && this.flow >= this.flowMax && ++this.hits3 % 3 === 0) this.windBlade(this.hand(), this.player.forward, this.weapon() * 0.8, 1, false);
-      if (action === 'slash3' && this.has('squall')) this.windBlade(this.hand(), this.player.forward, this.weapon() * 0.6, 0.8, false);
-      if (action === 'slash3' && this.has('updraft')) this.hit(t, 1, { poise: 150, source: 'melee' });
-    }
+    void P;
+    this.cc.onMeleeHit(t, action);
     if (crit && this.has('critBleed')) this.bleed(t, this.weapon() * 0.12);
     this.addVerdict(t);
     // Firebrand: each blade hit spends 5 Heat as extra fire.
@@ -682,63 +688,14 @@ export class SkillRuntime {
     // Whoever you parried reels: stars circle their head while they're open to a riposte.
     const foe = this.nearestEnemy(at, 4);
     if (foe) this.dazed.push({ t: foe, left: 2.1 });
-    if (P.active === 'boundary') this.gainResolve(15);
-    if (this.buff('lparryWindow')) {
-      const hit = new Set<number>();
-      let from = p.center;
-      for (let i = 0; i < 3; i++) {
-        const t = this.nearestEnemy(from, 8, hit);
-        if (!t) break;
-        hit.add(t.id);
-        this.vfx.lightning(from, t.center, 'gale');
-        this.hit(t, this.weapon() * 0.8 * (this.buffs.get('lparryWindow')?.v ?? 1), { poise: 60 });
-        from = t.center;
-      }
-    }
-    if (this.buff('deflectWindow')) {
-      this.gainResolve(25);
-      p.stamina = Math.min(p.maxStamina, p.stamina + 20);
-      this.area(p.pos, 2.6, this.weapon() * 0.3, { poise: 80, source: 'melee' });
-      this.vfx.ring(p.pos, 'steel', 6);
-    }
-    if (P.active !== 'gale') return;
-    const t = this.nearestEnemy(at, 4);
-    if (this.x('parryStamina')) p.stamina = Math.min(p.maxStamina, p.stamina + this.x('parryStamina'));
-    if (this.has('composure')) this.addBuff('composure', 4);
-    if (this.has('pride')) {
-      const b = this.buffs.get('pride');
-      this.buffs.set('pride', { left: 20, v: Math.min(10, (b && b.left > 0 ? b.v ?? 0 : 0) + 1) });
-    }
-    if (this.has('guardCrush')) this.critNext = Math.max(this.critNext, 1);
-    if (this.has('perfectCalm')) {
-      p.heal(p.maxHp * 0.1);
-      this.critNext = Math.max(this.critNext, 3);
-      this.vfx.ring(p.pos, 'gale', 7);
-    }
-    if (t && this.has('disarm')) this.hit(t, 1, { poise: 200, stun: true, source: 'melee' });
-    if (t && this.has('rebuke')) this.hit(t, this.weapon() * 0.5, { poise: 30, source: 'melee' });
-  }
-
-  private gainResolve(n: number) {
-    this.resolve = Math.min(100, this.resolve + n * (1 + this.x('resGain')));
-    this.resolveIdle = 0;
-  }
-
-  private onBlock() {
-    if (this.paths.active !== 'boundary') return;
-    this.gainResolve(8);
-    if (this.has('fortress')) this.fortress = Math.min(5, this.fortress + 1);
-    if (this.has('spikedRim')) {
-      const t = this.nearestEnemy(this.player.center.addScaledVector(this.player.forward, 1.5), 3);
-      if (t) this.hit(t, this.weapon() * 0.3, { poise: 10, source: 'melee' });
-    }
+    void p;
+    void P;
+    this.cc.onParry();
   }
 
   private onHurt() {
     const p = this.player;
-    if (this.paths.active === 'boundary') this.gainResolve(5);
-    if (this.paths.active === 'gale' && this.has('mirrorGuard')) this.flow = Math.max(0, this.flow - 2);
-    if (this.has('retaliate')) this.addBuff('retaliate', 3);
+    this.cc.onHurt();
     if (this.has('secondWind') && p.hp < p.maxHp * 0.3 && this.time - this.secondWindAt > 60) {
       this.secondWindAt = this.time;
       p.healOverTime(60, 8);
@@ -750,10 +707,7 @@ export class SkillRuntime {
     const s = this.status.get(id);
     this.status.delete(id);
     const burning = (s?.burn?.left ?? 0) > 0;
-    if (this.paths.active === 'gale' && this.has('hurricane') && this.lastHitT < 0.5) {
-      this.flow = Math.min(this.flowMax, this.flow + 1);
-      this.player.stamina = Math.min(this.player.maxStamina, this.player.stamina + 15);
-    }
+    this.cc.onKill();
     if (burning && this.has('inferno')) {
       this.vfx.burst(at, 'fire', 1.5, 6);
       this.vfx.ring(at, 'fire', 7);
@@ -826,18 +780,7 @@ export class SkillRuntime {
     if (this.pending && !p.act) this.pending = null;
 
     // Resources.
-    if (P.active !== 'gale') this.flow = 0;
-    else {
-      this.flowIdle += dt;
-      if (this.flowIdle > 4 && !this.has('flowKeep') && !this.has('noBlock')) {
-        this.flow = Math.max(0, this.flow - dt / 1.5);
-      }
-    }
-    if (P.active !== 'boundary') this.resolve = 0;
-    else {
-      this.resolveIdle += dt;
-      if (this.resolveIdle > 6) this.resolve = Math.max(0, this.resolve - dt * 3);
-    }
+    this.cc.update(dt);
     // Heat cools after 2 seconds without fire (never, with Pure Flame). Above 80 it burns you.
     if (!P.learned('pyromancer')) this.heat = 0;
     else {
@@ -1027,10 +970,7 @@ export class SkillRuntime {
     const m: CombatMods = baseMods();
     for (const [k, v] of Object.entries(this.passive.m)) (m as unknown as Record<string, number>)[k] += v;
     const p = this.player;
-    if (this.has('noBlock')) m.canBlock = false;
-    if (this.has('slipstream') && this.flow >= 3) m.moveSpeed += 0.1;
-    if (this.has('tailwind') && this.lastHitT < 1.5) m.dodgeCost -= 1;
-    if (this.has('unyielding') && this.resolve >= 50) m.dmgTaken -= 0.15;
+    this.cc.applyMods(m);
     if (this.has('emberShield') && this.buff('firebrand')) m.dmgTaken -= 0.15;
     if (this.has('deflectAir') && this.buff('windwall')) m.dmgTaken -= 0.2;
     if (this.buff('faithZone')) m.dmgTaken -= 0.2;
@@ -1068,24 +1008,13 @@ export class SkillRuntime {
   /** HUD: the class resources in play right now (the active combat class's, plus Heat and Radiance once learned). */
   resources(): { name: string; value: number; max: number; kind: 'pips' | 'bar'; color: string; hot?: boolean }[] {
     const a = this.paths.active, out: ReturnType<SkillRuntime['resources']> = [];
-    if (a === 'gale') out.push({ name: 'FLOW', value: this.flow, max: this.flowMax, kind: 'pips', color: '#6fd6c6' });
-    if (a === 'boundary') out.push({ name: 'RESOLVE', value: this.resolve, max: 100, kind: 'bar', color: '#c9a55a' });
+    void a;
+    this.cc.resources(out);
     if (this.paths.learned('pyromancer')) out.push({ name: this.buff('overheat') ? 'OVERHEAT' : 'HEAT', value: this.heat, max: 100, kind: 'bar', color: this.heat > 80 || this.buff('overheat') ? '#ff3b1f' : '#ff8a3a', hot: this.heat > 80 });
     if (this.paths.learned('lightbinder')) out.push({ name: 'RADIANCE', value: this.radiance, max: 100, kind: 'bar', color: '#ffd86a' });
     return out;
   }
 
-  /** Spend Resolve if there's enough; returns whether it was spent. */
-  spendResolve(n: number) {
-    if (this.resolve < n) return false;
-    this.resolve -= n;
-    return true;
-  }
-  takeFortress() {
-    const full = this.fortress >= 5;
-    if (full) this.fortress = 0;
-    return full;
-  }
   clearCooldown(key: string) {
     this.cds.delete(key);
   }
@@ -1097,216 +1026,6 @@ export class SkillRuntime {
 const cone = (rt: SkillRuntime, cos: number) => ({ dir: rt['player'].forward, cos });
 
 export const SKILLS: Record<string, SkillDef> = {
-  // ---- Gale Style ------------------------------------------------------------------------
-  'gale:Gale Step': {
-    action: 'sk_galeStep', cd: 4, stamina: 16,
-    text: (r) => `Dash forward on the wind and cut through whatever stands in the way for ${pct(150 * R(r))}% weapon damage. You can't be hurt during the dash. Builds Flow.`,
-    on: (rt, _p, ev) => ev === 'galeStep' && (rt.vfx.ring(rt['player'].pos, 'gale', 4), rt.vfx.burst(rt['player'].center, 'gale', 0.5, 4)),
-  },
-  'gale:Crescent Wind': {
-    action: 'sk_crescent', cd: 6, stamina: 22,
-    text: (r, rt) => `Spin twice, each turn cutting everything within 3 m for ${pct(100 * R(r))}% weapon damage and knocking small foes back.${rt?.has('vortex') ? ' Leaves a vortex for 2 seconds.' : ''}`,
-    on: (rt, p) => {
-      const pl = rt['player'];
-      rt.area(pl.pos, 3, rt.weapon() * R(p.rank) * (rt.paths.active === 'gale' ? 1 + rt.x('techDmg') : 1), { poise: 45, source: 'melee' });
-      rt.vfx.spinSlash(pl.pos, 2.6, 'gale');
-      rt.vfx.ring(pl.pos, 'gale', 7);
-      if (p.n === 1 && rt.has('vortex')) {
-        rt.vfx.zone({ pos: pl.pos.clone(), radius: 2.2, life: 2, style: 'gale', every: 0.35, motes: 60, onTick: (z) => rt.area(z.pos, z.radius, rt.weapon() * 0.25, { poise: 10, source: 'melee' }) });
-      }
-    },
-  },
-  'gale:Cyclone': {
-    action: 'sk_cyclone', cd: 10, stamina: 12, flow: 2,
-    text: (r) => `Become a moving whirlwind for about 2 seconds, cutting everything within 2.4 m eight times for ${pct(45 * R(r))}% weapon damage each. Costs 2 Flow.`,
-    on: (rt, p) => {
-      const pl = rt['player'];
-      rt.area(pl.pos, 2.4, rt.weapon() * 0.45 * R(p.rank) * (1 + rt.x('techDmg')), { poise: 20, source: 'melee' });
-      rt.vfx.slash(pl.pos.clone().setY(pl.pos.y + 1), pl.yaw + p.n * 2.1, 2.2, 'gale', 1);
-    },
-  },
-  'gale:Severing Arc': {
-    action: 'sk_severingArc', cd: 1.5, stamina: 8, flow: 1,
-    text: (r, rt) => `Swing a blade of wind that flies ${Math.round(12 * (1 + (rt?.x('arcRange') ?? 0)))} m for ${pct(130 * R(r))}% weapon damage.${rt?.has('twinArcs') ? ' Throws two.' : ''}${rt?.has('arcPierce') ? ' Passes through enemies.' : ''} Costs 1 Flow.`,
-    on: (rt, p) => {
-      const pl = rt['player'];
-      const dir = rt.aimDir(p, pl.center);
-      const dmg = rt.weapon() * 1.3 * R(p.rank) * (1 + rt.x('techDmg'));
-      const range = 12 * (1 + rt.x('arcRange'));
-      const n = rt.has('twinArcs') ? 2 : 1;
-      for (let i = 0; i < n; i++) {
-        const d = dir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), n > 1 ? (i - 0.5) * 0.25 : 0);
-        rt.windBlade(pl.center, d, dmg, 1, rt.has('arcPierce'), range, rt.has('arcBleed'));
-      }
-    },
-  },
-  'gale:Moonlit Draw': {
-    action: 'sk_moonlit', cd: 8, stamina: 20,
-    text: (r, rt) => `Draw slowly, then release one enormous cut in front of you for ${pct(260 * R(r) * (rt?.has('heavyDraw') ? 1.4 : 1))}% weapon damage. It always staggers.${rt?.has('oneBreath') ? ' Always a critical hit.' : ''}`,
-    on: (rt, p, ev) => {
-      const pl = rt['player'];
-      if (ev === 'moonlitCharge') {
-        if (rt.has('quickdraw') && pl.act) pl.act.speed *= 1.4;
-        rt.vfx.groundCircle(pl.pos, 'frost', 2.6, 1.6);
-        return;
-      }
-      const dmg = rt.weapon() * 2.6 * R(p.rank) * (rt.has('heavyDraw') ? 1.4 : 1) * (1 + rt.x('techDmg'));
-      rt.area(pl.pos, 3.8, dmg, { poise: 170, cone: cone(rt, 0.35), crit: rt.has('oneBreath'), source: 'melee' });
-      rt.vfx.slash(pl.center.addScaledVector(pl.forward, 0.6), pl.yaw, 3.2, 'frost', 0.6, 0.3);
-      rt.vfx.slash(pl.center.addScaledVector(pl.forward, 0.6), pl.yaw, 2.6, 'gale', 0.5, -0.2);
-      rt.vfx.burst(pl.center.addScaledVector(pl.forward, 2), 'frost', 1, 6);
-      pl.onShake?.(0.45);
-      pl.onHitStop?.(0.12);
-    },
-  },
-  'gale:Razor Gale': {
-    action: 'sk_razorGale', cd: 10, stamina: 26, flow: 1,
-    text: (r) => `A three-strike storm of cuts, each hitting everything in front of you for ${pct(90 * R(r))}% weapon damage; the last one throws a blade of wind. Costs 1 Flow.`,
-    on: (rt, p) => {
-      const pl = rt['player'];
-      const dmg = rt.weapon() * 0.9 * R(p.rank) * (1 + rt.x('techDmg'));
-      rt.area(pl.pos, 3.2, dmg, { poise: 40, cone: cone(rt, 0.2), source: 'melee' });
-      rt.vfx.slash(pl.center.addScaledVector(pl.forward, 0.5), pl.yaw + (p.n - 1) * 0.5, 2.4, 'gale', 0.7, (p.n - 1) * 0.4);
-      if (p.n === 2) rt.windBlade(pl.center, pl.forward, dmg, 1.2, true);
-    },
-  },
-  'gale:Counterstance': {
-    action: 'sk_counter', cd: 7, stamina: 8,
-    text: (r) => `Settle into a stance for ${(2.5 * R(r)).toFixed(1)} seconds: the next blow that reaches you from the front is parried automatically, shield or not.`,
-    on: (rt, p) => {
-      rt.addBuff('counter', 2.5 * R(p.rank));
-      rt.vfx.groundCircle(rt['player'].pos, 'steel', 2.4, 2.5 * R(p.rank));
-    },
-  },
-  'gale:Riposte': {
-    action: 'sk_riposte', cd: 3, stamina: 12,
-    text: (r) => `A lunging thrust for ${pct(170 * R(r))}% weapon damage. Against a staggered or parried enemy it is a critical hit and returns 2 Flow.`,
-    on: (rt) => {
-      const pl = rt['player'];
-      const t = pl.aimTarget(4);
-      if (t?.stunned) rt.flow = Math.min(rt.flowMax, rt.flow + 2);
-      rt.vfx.slash(pl.center.addScaledVector(pl.forward, 0.8), pl.yaw, 1.6, 'gale', 0.3);
-    },
-  },
-  'gale:Lightning Parry': {
-    action: 'sk_lparry', cd: 6, stamina: 8,
-    text: (r) => `A parry charged with storm. If it catches a blow, lightning leaps to up to three enemies for ${pct(80 * R(r))}% weapon damage each.`,
-    on: (rt, p) => {
-      rt.addBuff('lparryWindow', 0.7, R(p.rank));
-      rt.vfx.burst(rt.hand(), 'gale', 0.4, 2);
-    },
-  },
-  'gale:Thousand Cuts': {
-    action: 'sk_thousandCuts', cd: 45, stamina: 30, flow: 5, needTarget: 6,
-    text: (r) => `Spend all 5 Flow to vanish into eight lightning-fast cuts on your target, each for ${pct(70 * R(r))}% weapon damage. You can't be hurt while cutting.`,
-    on: (rt, p) => {
-      const pl = rt['player'];
-      const t = p.target?.alive ? p.target : pl.aimTarget(6);
-      if (!t) return;
-      rt.hit(t, rt.weapon() * 0.7 * R(p.rank), { poise: 30, source: 'melee', crit: p.n === 7 });
-      rt.vfx.slash(t.center, Math.random() * 6.28, 1.4 + t.radius, p.n % 2 ? 'gale' : 'frost', 0.4, (Math.random() - 0.5) * 1.5);
-      pl.onHitStop?.(0.05);
-    },
-  },
-
-  // ---- Boundary Style ------------------------------------------------------------------------
-  'boundary:Shield Wall': {
-    action: 'sk_guardUp', cd: 14, stamina: 10, needShield: true,
-    text: (r) => `For ${(4 * R(r)).toFixed(1)} seconds blocking costs no stamina and nothing gets through your shield.`,
-    on: (rt, p) => {
-      rt.addBuff('shieldWall', 4 * R(p.rank));
-      rt.vfx.ring(rt['player'].pos, 'steel', 5);
-      rt.vfx.groundCircle(rt['player'].pos, 'steel', 2.6, 4 * R(p.rank));
-    },
-  },
-  'boundary:Deflect': {
-    action: 'sk_deflect', cd: 5, stamina: 6,
-    text: () => 'A long, forgiving parry. If it catches a blow you gain 25 Resolve and 20 stamina, and the shockwave shoves everyone around you back.',
-    on: (rt) => rt.addBuff('deflectWindow', 0.7),
-  },
-  'boundary:Reflecting Wall': {
-    action: 'sk_guardUp', cd: 16, stamina: 12, needShield: true,
-    text: (r) => `For ${(5 * R(r)).toFixed(1)} seconds take 60% less damage, and half of every blow from the front is thrown back at the attacker.`,
-    on: (rt, p) => {
-      rt.addBuff('reflect', 5 * R(p.rank));
-      rt.vfx.bubble(() => rt['player'].pos, 'steel', 1.2, () => rt.buff('reflect'));
-    },
-  },
-  'boundary:Shield Bash': {
-    action: 'sk_bash', cd: 4, stamina: 14,
-    text: (r) => `Drive your shield (or shoulder) into everything in front of you for ${pct(90 * R(r))}% weapon damage and a heavy stagger. Spends 30 Resolve, if you have it, to hit twice as hard.`,
-    on: (rt, p) => {
-      const pl = rt['player'];
-      const boost = rt.spendResolve(30) ? 2 : 1;
-      const dmg = rt.weapon() * 0.9 * R(p.rank) * (1 + rt.x('bashDmg')) * boost;
-      rt.area(pl.pos.clone().addScaledVector(pl.forward, 0.6), 2.2, dmg, { poise: 180 * (1 + rt.x('bashPoise')), cone: cone(rt, 0.3), source: 'melee' });
-      rt.vfx.burst(pl.center.addScaledVector(pl.forward, 1), 'steel', boost, 4);
-      rt.vfx.ring(pl.pos.clone().addScaledVector(pl.forward, 1), 'steel', 3);
-      pl.onShake?.(0.3);
-      if (rt.takeFortress()) quake(rt, p.rank, 1.2);
-    },
-  },
-  'boundary:Bull Rush': {
-    action: 'sk_bullRush', cd: 8, stamina: 20, charges: 'unstoppable',
-    text: (r) => `Charge about 7 m, trampling everything in your path for ${pct(110 * R(r))}% weapon damage and knocking it aside.`,
-    on: (rt, p) => {
-      const pl = rt['player'];
-      if (p.n === 0) {
-        (p as Pending & { hit?: Set<number> }).hit = new Set();
-        if (rt.has('unstoppable')) rt.addBuff('invuln', 1.2);
-        if (rt.has('ram')) rt.clearCooldown('boundary:Shield Bash');
-      }
-      const skip = (p as Pending & { hit?: Set<number> }).hit!;
-      rt.area(pl.pos.clone().addScaledVector(pl.forward, 0.5), 1.5, rt.weapon() * 1.1 * R(p.rank) * (1 + rt.x('rushDmg')), { poise: 150, stun: rt.has('rushStun'), skip, source: 'melee' });
-    },
-  },
-  'boundary:Earthshaker': {
-    action: 'sk_quake', cd: 10, stamina: 24,
-    text: (r, rt) => `Slam the ground: everything within ${(4 * (1 + (rt?.x('quakeArea') ?? 0))).toFixed(1)} m takes ${pct(150 * R(r) * (1 + (rt?.x('quakeDmg') ?? 0)))}% weapon damage and is thrown off its feet.`,
-    on: (rt, p) => quake(rt, p.rank, 1),
-  },
-  'boundary:Challenge': {
-    action: 'sk_warcry', cd: 18, stamina: 10,
-    text: (r) => `Roar a challenge. Every enemy within 10 m flinches, you gain 12 Resolve for each, and you take 25% less damage for ${(6 * R(r)).toFixed(0)} seconds.`,
-    on: (rt, p) => {
-      const pl = rt['player'];
-      const foes = rt.vfx.near(pl.pos, 10);
-      for (const t of foes) rt.hit(t, 1, { poise: 30 });
-      rt.resolve = Math.min(100, rt.resolve + 12 * foes.length);
-      rt.addBuff('challenge', 6 * R(p.rank));
-      rt.vfx.ring(pl.pos, 'blood', 16);
-      rt.vfx.burst(pl.center, 'blood', 0.8, 5);
-      pl.onShake?.(0.25);
-    },
-  },
-  'boundary:Oath Ward': {
-    action: 'sk_vow', cd: 20, stamina: 15,
-    text: (r, rt) => `Swear an oath: a ward absorbs the next ${Math.round((40 + 20 * r) * (1 + (rt?.x('wardAbsorb') ?? 0)))} damage for 10 seconds.`,
-    on: (rt, p) => rt.shield((40 + 20 * p.rank) * (1 + rt.x('wardAbsorb')), 10, 'ward', 'steel'),
-  },
-  'boundary:Rallying Cry': {
-    action: 'sk_vow', cd: 25, stamina: 10,
-    text: (r, rt) => `Heal ${pct((15 + 5 * r) * (1 + (rt?.x('rallyHeal') ?? 0)))}% of your health, recover 40 stamina and put out any burns.${rt?.has('beacon') ? ' Also restores 30 mana.' : ''}`,
-    on: (rt, p) => {
-      const pl = rt['player'];
-      pl.heal(pl.maxHp * ((15 + 5 * p.rank) / 100) * (1 + rt.x('rallyHeal')));
-      pl.stamina = Math.min(pl.maxStamina, pl.stamina + 40);
-      if (rt.has('beacon')) pl.mana = Math.min(pl.maxMana, pl.mana + 30);
-      pl.cleanse();
-      rt.vfx.ring(pl.pos, 'light', 8);
-      rt.vfx.burst(pl.center, 'light', 0.8, 4);
-    },
-  },
-  'boundary:The Oath Kept': {
-    action: 'sk_vow', cd: 60, stamina: 20,
-    text: (r) => `For ${(10 * R(r)).toFixed(0)} seconds take half damage from everything.`,
-    on: (rt, p) => {
-      rt.addBuff('oathKept', 10 * R(p.rank));
-      rt.vfx.bubble(() => rt['player'].pos, 'light', 1.3, () => rt.buff('oathKept'));
-      rt.vfx.pillar(rt['player'].pos, 'light', 1.2, 6);
-    },
-  },
-
   // ---- Windcaller ---------------------------------------------------------------------------------
   'windcaller:Gust': {
     action: 'sk_cast', cd: 3, mana: 14,
@@ -1461,19 +1180,9 @@ export const SKILLS: Record<string, SkillDef> = {
       pl.onShake?.(0.5);
     },
   },
+  ...GALE_SKILLS,
+  ...BOUNDARY_SKILLS,
+  ...CROSS_SKILLS,
   ...FIRE_SKILLS,
   ...LIGHT_SKILLS,
 };
-
-function quake(rt: SkillRuntime, rank: number, mult: number) {
-  const pl = rt['player'];
-  const at = pl.pos.clone().addScaledVector(pl.forward, 1.2);
-  const r = 4 * (1 + rt.x('quakeArea'));
-  rt.area(at, r, rt.weapon() * 1.5 * R(rank) * (1 + rt.x('quakeDmg')) * mult, { poise: 130, source: 'melee' });
-  rt.vfx.ring(at, 'steel', r * 2.6);
-  rt.vfx.ring(at, 'steel', r * 1.6);
-  rt.vfx.fx.dust(at, 5);
-  rt.vfx.burst(at.clone().setY(at.y + 0.3), 'steel', 1, 6);
-  pl.onShake?.(0.55);
-  pl.onHitStop?.(0.08);
-}

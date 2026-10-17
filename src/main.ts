@@ -589,7 +589,11 @@ async function boot() {
   const glenMore = setupGlenMoreQuests({ quests, scene: r.scene, fx, beasts: slimes, toast: (m) => hud.toast(m) });
   // Classes are learned through mentors' trials (Kaela, Magus Orren, Brother Aldous).
   const trials = setupClassTrials({ quests, paths: player.paths, toast: (m) => hud.toast(m) });
-  folkServices.set('aldous', (show, back) => mentorOptions(player.paths, { id: 'aldous' }, (t) => show(t, [{ label: 'Go on.', run: back }]), (m) => hud.toast(m), trials));
+  for (const id of ['aldous', 'ilse']) folkServices.set(id, (show, back) => mentorOptions(player.paths, { id }, (t) => show(t, [{ label: 'Go on.', run: back }]), (m) => hud.toast(m), trials));
+  // Corvin's trial counts blows turned aside; Ilse's counts strikes in rhythm.
+  events.on('blockImpact', ({ guardBroken }) => !guardBroken && quests.signal('trial-boundary'));
+  events.on('parrySuccess', () => quests.signal('trial-boundary'));
+  skillRt.cc.onBeat = () => quests.signal('trial-cross');
   const mainQuest = setupMainQuest(quests, { grukkDead: () => realm.progress.bossDead, gravewoodCleared: () => gravewood.cleared });
   // ---- Road encounters, caravans and the King's Road quests (phase 4) ------------------
   const encounters = new Encounters(r.scene, player, slimes, fx);

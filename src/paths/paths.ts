@@ -45,8 +45,9 @@ export const MASTERY_DISCOUNT = 0.035;
 export const RESPEC_REFUND = 0.75;
 /** nodes a branch needs before its gateway opens */
 export const GATE_NODES = 10;
-export const PATHS_VERSION = 2;
+export const PATHS_VERSION = 3;
 const REDESIGNED_V2 = ['pyromancer', 'lightbinder'];
+const REDESIGNED_V3 = ['gale', 'boundary', 'cross'];
 
 /** Full-price XP to go from level L to L+1 (learning, 0 to 1, is done by a mentor). */
 export function levelCost(L: number) {
@@ -365,7 +366,8 @@ export class Paths {
       this.mx[d.id] = Math.max(0, s.mx?.[d.id] ?? 0);
       const t = treeOf(d);
       // Redesigned trees: old nodes don't map onto the new ones, so they're refunded (points come back).
-      const saved = (s.v ?? 1) < 2 && REDESIGNED_V2.includes(d.id) ? {} : s.nodes?.[d.id] ?? {};
+      const v = s.v ?? 1;
+      const saved = (v < 2 && REDESIGNED_V2.includes(d.id)) || (v < 3 && REDESIGNED_V3.includes(d.id)) ? {} : s.nodes?.[d.id] ?? {};
       this.nodes[d.id] = {};
       if (t) for (const [nid, v] of Object.entries(saved)) if (t.map[nid]) this.nodes[d.id][nid] = { r: Math.max(1, Math.min(MAX_RANK, v.r | 0)), pick: v.pick };
     }

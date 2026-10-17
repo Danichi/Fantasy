@@ -25,6 +25,30 @@ export const CLASS_TRIALS: QuestDef[] = [
     rewards: { gold: 0, xp: 60 },
   },
   {
+    id: 'trial-boundary', title: 'Hold the Line', giver: 'corvin', region: 'cresha',
+    summary: 'Ser Corvin will teach the Boundary only to someone who can stand their ground and turn blows aside.',
+    offer: 'Anyone can swing a sword. The Boundary is the opposite: you choose a spot, and nothing gets past you. Show me you can stand. Turn aside fifteen blows, with a shield or a parry, it makes no difference to me. Then come back.',
+    acceptLabel: 'Fifteen blows. I\'ll hold.',
+    stages: [
+      { note: 'Turn aside 15 blows: block them with a shield or parry them (F).', objectives: [{ type: 'signal', id: 'trial-boundary', count: 15, text: 'Block or parry 15 blows' }] },
+      { note: 'Return to Ser Corvin at the north gate.', objectives: [{ type: 'talk', npc: 'corvin', text: 'Return to Ser Corvin', reply: 'Fifteen blows. I\'m still standing.', say: 'So you are. Now forget the shield for a moment. Plant your feet. Breathe. Draw a line around yourself in your mind. That ring is yours, and nothing crosses it unless you let it.' }] },
+    ],
+    done: 'That is the Boundary. Hold F and stand still to raise it. Open your Skills (K) and spend your XP on it.',
+    rewards: { gold: 0, xp: 60 },
+  },
+  {
+    id: 'trial-cross', title: 'Keep the Beat', giver: 'ilse', region: 'kingsRoad',
+    summary: 'Ilse Vantara, a travelling fencer at the Wayfarer\'s Rest, teaches two-sword Cross Style to anyone who can keep her rhythm.',
+    offer: 'Two blades are not twice one blade. They are a rhythm: left, right, left, right, and the enemy never finds the gap. Carry a sword in each hand and land twelve strikes in rhythm, alternating, no pauses. Then we\'ll talk.',
+    acceptLabel: 'Twelve in rhythm.',
+    stages: [
+      { note: 'With a sword in each hand, land 12 strikes alternating left (left mouse) and right (right mouse) without pausing.', objectives: [{ type: 'signal', id: 'trial-cross', count: 12, text: 'Land 12 alternating strikes with two swords' }] },
+      { note: 'Return to Ilse at the Wayfarer\'s Rest.', objectives: [{ type: 'talk', npc: 'ilse', text: 'Return to Ilse', reply: 'Left, right, left. Twelve.', say: 'I heard it from here. You have the beat. Now we make it faster.' }] },
+    ],
+    done: 'Cross Style is yours. Open your Skills (K). Keep the beat, and your blades will keep you.',
+    rewards: { gold: 0, xp: 60 },
+  },
+  {
     id: 'trial-pyro', title: 'Trial of the Ember', giver: 'magus', region: 'cresha',
     summary: 'Magus Orren will only teach fire to someone who has sat with it in the dark and not run.',
     offer: 'Fire is easy to make and hard to live with. Go to the mouth of the old crypt after nightfall and keep a vigil there. Feel how the dark presses on a small flame. If you come back, I will show you how to feed it.',
@@ -61,7 +85,7 @@ const VIGILS = [
 const inHours = (h: number, from: number, to: number) => (from <= to ? h >= from && h < to : h >= from || h < to);
 
 /** Which class each trial teaches. */
-const TEACHES: Record<string, string> = { 'trial-gale': 'gale', 'trial-pyro': 'pyromancer', 'trial-light': 'lightbinder' };
+const TEACHES: Record<string, string> = { 'trial-gale': 'gale', 'trial-boundary': 'boundary', 'trial-cross': 'cross', 'trial-pyro': 'pyromancer', 'trial-light': 'lightbinder' };
 
 export function setupClassTrials(o: { quests: QuestLog; paths: Paths; toast: (m: string) => void }) {
   o.quests.add(...CLASS_TRIALS);

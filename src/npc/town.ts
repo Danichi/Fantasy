@@ -28,7 +28,7 @@ export const NPCS: NpcSpec[] = [
     greeting: 'Feet apart. Shoulders loose. You hold that blade like it owes you money.',
     lines: [
       { q: 'Who are you?', a: 'Kaela Voss. I trained the town watch, and now I teach Gale Style to anyone who can keep up.' },
-      { q: 'Tell me about Gale.', a: 'Move like weather. Land your hits, dodge and parry, and your Flow builds for the techniques. The first lesson is free. The rest you buy with the XP you bring back (Skills, K).' },
+      { q: 'Tell me about Gale.', a: 'Be somewhere else when the blow lands. Roll through an attack at the last moment and your Flow rises, and so does your speed. Strike right after a dodge for more. Get hit and it drains. The rest you buy with the XP you bring back (Skills, K).' },
       { q: 'Any advice?', a: "Slimes crouch before they leap. Parry the leap, and they're yours for the taking. Big ones take longer to wind up. Be patient." },
     ],
   },
@@ -57,7 +57,7 @@ export const NPCS: NpcSpec[] = [
     greeting: 'A fighter who only knows how to attack is predictable. I was not. Once.',
     lines: [
       { q: 'Who are you?', a: 'Master Veyr. I fought with two blades for thirty years. My knees gave up before my hands did.' },
-      { q: 'Can you teach me Cross Style?', a: 'Not any more. Ilse, the travelling fencer, teaches it now: two blades, one rhythm. Find her on the roads, and keep the beat.' },
+      { q: 'Can you teach me Cross Style?', a: 'Not any more. Ilse Vantara teaches it now: two blades, one rhythm. She is staying at the Wayfarer\'s Rest on the King\'s Road. Take two swords, and keep the beat.' },
     ],
   },
   {
@@ -66,7 +66,7 @@ export const NPCS: NpcSpec[] = [
     greeting: 'You have the look of someone headed north. This town is the last safe roof before the hills.',
     lines: [
       { q: 'Why the black armour?', a: 'I swore an oath to guard this road, and failed it once. The armour remembers, even when the town forgets.' },
-      { q: 'Tell me about Boundary.', a: 'A shield is a promise that you will still be standing. Block, parry, take the hits, and Resolve builds. Ask, and I will teach you the first of it.' },
+      { q: 'Tell me about Boundary.', a: 'Stand still. Draw a line around yourself. Hold it (F) and anything that reaches into that ring is turned aside. It costs you Focus to hold, and if you move, it breaks. Small, quiet, and very hard to get through.' },
       { q: 'About the Warlord...', a: 'Grukk swings a blade taller than you and reaches for a bow when you back away. Watch the steel redden before his heavy cut. That is your moment to parry.' },
     ],
   },

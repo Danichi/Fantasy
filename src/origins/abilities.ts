@@ -194,7 +194,8 @@ export class OriginAbilities {
       case 'legendAwakened':
         this.buffs.set('legend', 20);
         rt.flow = rt.flowMax;
-        rt.resolve = 100;
+        rt.cc.focus = rt.cc.focusMax;
+        rt.cc.tempo = rt.cc.tempoMax;
         p.stamina = p.maxStamina;
         p.mana = p.maxMana;
         rt.vfx.pillar(at, 'light', 1.6, 12);

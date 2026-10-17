@@ -119,6 +119,13 @@ export class Player {
   private armsFromClips = false;
   private guardW = 1;
   private blockW = 0;
+  /** how long the parry key has been held, and whether you're still enough to raise a Boundary */
+  parryHeldT = 0;
+  stillForDomain = false;
+  /** Hold Fast: the Boundary survives walking */
+  domainMoves = false;
+  /** an attack passed through you during a dodge's i-frames (Gale Style's Slipstream) */
+  onDodged?: (att: IncomingAttack) => void;
   /** how long the shield has been up (it takes a moment to raise) */
   private blockT = 0;
   private blockHitT = 9;
@@ -388,6 +395,9 @@ export class Player {
 
     const now = performance.now() / 1000;
     const buf = (a: Buffered) => (this.buffer = { a, t: now });
+    // Boundary Style: F held while standing still raises the ring (the skill runtime decides if it can).
+    this.parryHeldT = input.held('parry') ? this.parryHeldT + SIM_STEP : 0;
+    this.stillForDomain = this.grounded && !this.mounted && !this.swimming && !this.sprinting && (this.moveIntent.lengthSq() < 0.001 || this.domainMoves);
     if (input.wasPressed('attack')) buf('attack');
     if (input.wasPressed('offhand') && this.equip.dualWield) buf('offhand');
     if (input.wasPressed('parry')) buf('parry');
@@ -1175,7 +1185,10 @@ export class Player {
   // ---- defence ----------------------------------------------------------------
   receiveAttack(att: IncomingAttack): DefenceResult {
     if (this.dead) return 'dodged';
-    if (this.inIframes()) return 'dodged';
+    if (this.inIframes()) {
+      this.onDodged?.(att);
+      return 'dodged';
+    }
     const toAtt = att.from.clone().sub(this.pos).setY(0).normalize();
     const facing = toAtt.dot(this.forward);
     const hooked = this.defend?.(att, facing);
@@ -1189,8 +1202,8 @@ export class Player {
       this.onShake?.(0.25);
       return 'parried';
     }
-    // A raised shield covers everything in front and a good way round the sides.
-    if (this.blocking && this.equip.hasShield && facing > -0.15 && this.blockT > 0.06) {
+    // A raised shield covers what's in front of you.
+    if (this.blocking && this.equip.hasShield && facing > 0.3 && this.blockT > 0.06) {
       const st = this.equip.offItem!.def.stats;
       const cost = (att.damage * (1 - (st.stability ?? 0.4)) * 1.1 + 4) * this.mods.blockCost;
       this.stamina -= cost;

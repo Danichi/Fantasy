@@ -162,6 +162,7 @@ test('mentors teach, switch the active class and respec', async ({ game }) => {
     const g = (window as any).__game, P = g.player.paths;
     const corvin = g.town.npcs.find((n: any) => n.spec.id === 'corvin').spec;
     P.teach('gale'); // so Boundary isn't automatically the active class
+    g.quests.state['trial-boundary'] = { status: 'done', stage: 0, progress: [] }; // Corvin's trial, already passed
     const labels = () => {
       const out: any[] = [];
       g.town.mentorOptions(corvin, (t: string) => out.push(t));

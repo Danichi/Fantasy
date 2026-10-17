@@ -59,7 +59,7 @@ const VOICES: Record<string, Voice> = {
     topics: [
       { q: 'How do I get better at fighting?', a: 'Lock on (middle mouse or Q) and the world gets smaller. Dodge through a blow rather than away from it. Parry (F) when you see the swing start, not when it lands. And never fight on an empty stamina bar.' },
       { q: 'What does a parry do?', a: 'A clean parry knocks the enemy reeling. You get a couple of seconds where every cut lands as a critical. Waste it on admiring yourself and they\'ll remind you.' },
-      { q: 'Shield or two blades?', a: 'Corvin will tell you a shield. Veyr would have told you two blades. I\'ll tell you to keep your feet moving, and carry whatever lets you do it.' },
+      { q: 'Shield or two blades?', a: 'Corvin will tell you to stand your ground. Ilse, at the Wayfarer\'s Rest, will tell you two blades. I\'ll tell you to keep your feet moving, and carry whatever lets you do it.' },
     ],
   },
   froest: {
@@ -116,7 +116,8 @@ const VOICES: Record<string, Voice> = {
       { text: 'Stand still a moment. You\'re carrying that shield like a tray.' },
     ],
     topics: [
-      { q: 'How do I block properly?', a: 'Hold your shield up (right mouse) and face what\'s coming. A raised shield covers your front and a good way round your sides, and you\'ll turn to meet whatever\'s closest. Every blow costs stamina; run dry and your guard breaks. Lower it now and then and breathe.' },
+      { q: 'How do I block properly?', a: 'Hold your shield up (right mouse) and face what\'s coming: a shield only covers your front, though you\'ll turn to meet whatever\'s closest. Every blow costs stamina; run dry and your guard breaks. Lower it now and then and breathe.' },
+      { q: 'What is the Boundary?', a: 'A ring you draw around yourself when you stand still and hold your ground (F). Anything that reaches into it, a blade, a claw, an arrow, is turned aside. Holding it costs Focus, and moving breaks it. Learn to hold it in the right moment, not all the time.' },
       { q: 'Block or parry?', a: 'Block when you\'re not sure. Parry when you are. A parry costs you nothing and leaves them reeling; a block costs you stamina but forgives bad timing.' },
     ],
   },
@@ -200,8 +201,9 @@ export function rumours(c: TalkCtx, inGlen = true): string[] {
     if (c.done('mq-crypt') && !c.done('mq-gravewood')) out.push('The Gravewood, south-west, has gone wrong. Folk heard bells there, and there\'s no bell in it. Magus Orren looks like he hasn\'t slept.');
     if (!c.learned('gale') && !c.active('trial-gale')) out.push('Kaela Voss at the drill yard teaches Gale Style, the quick sword. She sets you a test first: win three real fights and come back standing.');
     if (!c.learned('pyromancer') && !c.active('trial-pyro')) out.push('Magus Orren will teach fire, but only after you\'ve kept a night vigil at the crypt mouth. My cousin tried. Ran home by midnight.');
-    if (!c.learned('boundary')) out.push('Ser Corvin at the north gate teaches the shield. Grim fellow. Kind, underneath, if you can find the underneath.');
+    if (!c.learned('boundary') && !c.active('trial-boundary')) out.push('Ser Corvin at the north gate teaches the Boundary, standing your ground so nothing gets through. He\'ll want to see you turn aside fifteen blows first. Grim fellow. Kind, underneath.');
   }
+  if (!c.learned('cross') && !c.active('trial-cross')) out.push('A fencer called Ilse is staying at the Wayfarer\'s Rest on the King\'s Road. She fights with two swords and teaches anyone who can keep her rhythm.');
   if (!c.learned('lightbinder') && !c.active('trial-light')) out.push('There\'s a chapel out on the King\'s Road, the Chapel of the Dawn. Brother Aldous there teaches the binding of light to anyone who keeps the dawn vigil with him.');
   if (c.done('mq-gravewood') && inGlen) out.push('They say the Knight\'s Academy in Port Aurelle takes cadets from anywhere, if they can last a bout in the ring. Elder Maud has been asking after you about it.');
   out.push(

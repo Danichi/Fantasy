@@ -153,7 +153,7 @@ test('"be there at night" quests only count while it is night', async ({ game })
   expect(errors).toEqual([]);
 });
 
-test('a raised shield covers the sides, and you keep facing the threat', async ({ game }) => {
+test('a raised shield covers your front, and you keep facing the threat', async ({ game }) => {
   const { page, errors } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game, pl = g.player, W = (window as any).waitSteps;
@@ -163,17 +163,16 @@ test('a raised shield covers the sides, and you keep facing the threat', async (
     await W(30);
     const toThreat = Math.atan2(s.position.x - pl.pos.x, s.position.z - pl.pos.z);
     const facing = Math.cos(pl.yaw - toThreat);
-    const side = pl.pos.clone().add(new g.THREE.Vector3(pl.forward.z, 0, -pl.forward.x).multiplyScalar(2));
     const st0 = pl.stamina;
-    const r = pl.receiveAttack({ damage: 25, from: side, parryable: true, poise: 40 });
+    const front = pl.receiveAttack({ damage: 25, from: pl.pos.clone().addScaledVector(pl.forward, 2), parryable: true, poise: 40 });
     const cost = st0 - pl.stamina;
-    const behind = pl.receiveAttack({ damage: 5, from: pl.pos.clone().addScaledVector(pl.forward, -2), parryable: true, poise: 5 });
+    const side = pl.receiveAttack({ damage: 5, from: pl.pos.clone().add(new g.THREE.Vector3(pl.forward.z, 0, -pl.forward.x).multiplyScalar(2)), parryable: true, poise: 5 });
     g.input.release('Mouse2');
-    return { facing, r, cost, behind };
+    return { facing, front, cost, side };
   });
   expect(res.facing).toBeGreaterThan(0.8);
-  expect(res.r).toBe('blocked');
+  expect(res.front).toBe('blocked');
   expect(res.cost).toBeLessThan(25);
-  expect(res.behind).toBe('hit');
+  expect(res.side).toBe('hit');
   expect(errors).toEqual([]);
 });
