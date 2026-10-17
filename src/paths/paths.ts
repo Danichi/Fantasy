@@ -43,10 +43,14 @@ export const MASTERY_XP = [0, 100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500,
 export const MASTERY_NAMES = ['Untrained', 'Novice', 'Novice', 'Apprentice', 'Apprentice', 'Adept', 'Adept', 'Expert', 'Expert', 'Master', 'Grandmaster'];
 export const MASTERY_DISCOUNT = 0.035;
 export const RESPEC_REFUND = 0.75;
+/** nodes a branch needs before its gateway opens */
+export const GATE_NODES = 10;
+export const PATHS_VERSION = 2;
+const REDESIGNED_V2 = ['pyromancer', 'lightbinder'];
 
 /** Full-price XP to go from level L to L+1 (learning, 0 to 1, is done by a mentor). */
 export function levelCost(L: number) {
-  return L === 0 ? 100 : Math.round(100 * Math.pow(L, 1.5));
+  return L === 0 ? 100 : 150 * L * L;
 }
 export function masteryRank(xp: number) {
   let r = 0;
@@ -58,7 +62,7 @@ const trees: Record<string, Tree | null> = {};
 export function treeOf(d: DisciplineDef): Tree | null {
   if (d.id in trees) return trees[d.id];
   if (!d.branches) return (trees[d.id] = null);
-  const nodes: TreeNode[] = [{ id: 'c', type: 'center', name: d.name, tier: 0, branch: -1, k: 0, len: 1 }];
+  const nodes: TreeNode[] = [{ id: 'c', type: 'center', name: d.core ?? d.name, tier: 0, branch: -1, k: 0, len: 1 }];
   d.branches.forEach((b, bi) => {
     let prev: TreeNode[] = [];
     b.tiers.forEach((row, ti) => {
@@ -91,6 +95,8 @@ export interface PathsSave {
   nodes: Record<string, Record<string, LearnedNode>>;
   attrs: Record<AttrId, number>;
   active: string;
+  /** 2: the Pyromancer and Lightbinder trees were redesigned (their old nodes are refunded) */
+  v?: number;
 }
 
 export class Paths {
@@ -98,7 +104,8 @@ export class Paths {
   mx: Record<string, number> = {};
   nodes: Record<string, Record<string, LearnedNode>> = {};
   attrs: Record<AttrId, number> = { vig: 0, end: 0, mig: 0, fin: 0, int: 0, fai: 0, spi: 0 };
-  active = 'gale';
+  /** the active combat class ('' until one is learned) */
+  active = '';
 
   constructor(private prog: Progression) {
     this.reset();
@@ -115,7 +122,7 @@ export class Paths {
       this.nodes[d.id] = {};
     }
     this.attrs = { vig: 0, end: 0, mig: 0, fin: 0, int: 0, fai: 0, spi: 0 };
-    this.active = 'gale';
+    this.active = '';
     this.syncLevel(false);
   }
 
@@ -162,6 +169,8 @@ export class Paths {
   teach(id: string) {
     if (!this.canTeach(id)) return false;
     this.lv[id] = 1;
+    // Your first combat class becomes the active one.
+    if (DISC[id].fam === 'combat' && !this.learned(this.active)) this.active = id;
     events.emit('disciplineLearned', { id });
     events.emit('disciplineLevel', { id, level: 1 });
     this.syncLevel(true);
@@ -253,7 +262,24 @@ export class Paths {
     if (!n.parent || !this.has(id, n.parent)) return false;
     if (this.level(id) < TIER_GATE[n.tier]) return false;
     if (n.type === 'cap' && Object.keys(this.nodes[id]).some((k) => k.endsWith('-cap'))) return false;
+    if (n.type === 'cap' && this.gate(id, n) && this.branchCount(id, n.branch) < GATE_NODES) return false;
     return true;
+  }
+  /** The hidden class a capstone opens, if it is a gateway. */
+  gate(id: string, n: TreeNode) {
+    return n.type === 'cap' ? DISC[id].branches?.[n.branch]?.gate : undefined;
+  }
+  /** A node's name as the player may know it: gateways stay "???" until their hidden class is found. */
+  displayName(id: string, n: TreeNode, pick?: number) {
+    const g = this.gate(id, n);
+    if (g && !this.learned(g)) return '???';
+    if (n.type === 'choice') return pick === undefined ? n.name.replace('|', ' or ') : n.name.split('|')[pick];
+    return n.name;
+  }
+  /** Learned nodes in one branch (gateways need most of it). */
+  branchCount(id: string, branch: number) {
+    const t = treeOf(DISC[id]);
+    return Object.keys(this.nodes[id] ?? {}).filter((k) => t?.map[k]?.branch === branch && t.map[k].type !== 'cap').length;
   }
   canLearn(id: string, n: TreeNode) {
     return this.open(id, n) && this.points(id) >= NODE_COST[n.type];
@@ -264,7 +290,8 @@ export class Paths {
     if (!this.learned(id)) return `Learn ${d.name} from ${d.mentor}`;
     if (this.level(id) < TIER_GATE[n.tier]) return `Needs ${d.name} level ${TIER_GATE[n.tier]}`;
     if (!n.parent || !this.has(id, n.parent)) return 'Learn the node before it first';
-    if (n.type === 'cap' && !this.open(id, n)) return 'You already own a capstone in this tree';
+    if (n.type === 'cap' && Object.keys(this.nodes[id]).some((k) => k.endsWith('-cap'))) return this.gate(id, n) ? 'You have already opened a gateway in this tree' : 'You already own a capstone in this tree';
+    if (n.type === 'cap' && this.gate(id, n) && this.branchCount(id, n.branch) < GATE_NODES) return `Needs ${GATE_NODES} nodes in ${d.branches![n.branch].name} (you have ${this.branchCount(id, n.branch)})`;
     if (this.points(id) < NODE_COST[n.type]) return `Needs ${NODE_COST[n.type]} tree point${NODE_COST[n.type] > 1 ? 's' : ''}`;
     return null;
   }
@@ -319,7 +346,7 @@ export class Paths {
 
   // ---- save ------------------------------------------------------------------------
   serialize(): PathsSave {
-    return { lv: { ...this.lv }, mx: { ...this.mx }, nodes: structuredClone(this.nodes), attrs: { ...this.attrs }, active: this.active };
+    return { lv: { ...this.lv }, mx: { ...this.mx }, nodes: structuredClone(this.nodes), attrs: { ...this.attrs }, active: this.active, v: PATHS_VERSION };
   }
   load(s: PathsSave) {
     this.reset();
@@ -327,7 +354,8 @@ export class Paths {
       this.lv[d.id] = Math.max(0, Math.min(MAX_LEVEL, Math.floor(s.lv?.[d.id] ?? this.lv[d.id])));
       this.mx[d.id] = Math.max(0, s.mx?.[d.id] ?? 0);
       const t = treeOf(d);
-      const saved = s.nodes?.[d.id] ?? {};
+      // Redesigned trees: old nodes don't map onto the new ones, so they're refunded (points come back).
+      const saved = (s.v ?? 1) < 2 && REDESIGNED_V2.includes(d.id) ? {} : s.nodes?.[d.id] ?? {};
       this.nodes[d.id] = {};
       if (t) for (const [nid, v] of Object.entries(saved)) if (t.map[nid]) this.nodes[d.id][nid] = { r: Math.max(1, Math.min(MAX_RANK, v.r | 0)), pick: v.pick };
     }
@@ -337,8 +365,8 @@ export class Paths {
       const top = ATTRS.reduce((m, a) => (this.attrs[a.id] > this.attrs[m.id] ? a : m));
       this.attrs[top.id]--;
     }
-    this.active = DISC[s.active]?.fam === 'combat' && this.learned(s.active) ? s.active : 'gale';
-    if (!this.learned(this.active)) this.lv[this.active] = 1;
+    const combat = DISCIPLINES.find((d) => d.fam === 'combat' && this.learned(d.id));
+    this.active = DISC[s.active]?.fam === 'combat' && this.learned(s.active) ? s.active : combat?.id ?? '';
     this.syncLevel(false);
   }
 }

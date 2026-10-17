@@ -191,7 +191,9 @@ export function applySave(player: Player, d: SaveData) {
     if (u != null) eq.equip(u, slot as Slot);
   }
   eq.quick = d.quick.map(uid);
-  const moveRef = (k: number | string | null) => typeof k === 'string' ? k : uid(k);
+  // Saves from before the Pyromancer and Lightbinder redesign: their bar skills pointed at old nodes.
+  const oldTrees = (d.paths?.v ?? 1) < 2;
+  const moveRef = (k: number | string | null) => (typeof k === 'string' ? (oldTrees && /^skill:(pyromancer|lightbinder):/.test(k) ? null : k) : uid(k));
   eq.moves = d.moves.map(moveRef);
   const sp = uid(d.activeSpell);
   if (sp != null) eq.equip(sp);

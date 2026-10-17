@@ -34,6 +34,8 @@ test('passives change combat stats, and only while their class is active', async
     const learn = eval(learnSrc);
     const g = (window as any).__game, rt = g.skillRt, P = g.player.paths;
     await (window as any).waitSteps(2);
+    P.teach('gale');
+    await (window as any).waitSteps(2);
     const base = { move: g.player.mods.moveSpeed, dmgTaken: g.player.mods.dmgTaken, fire: rt.x('fireDmg') };
     learn('gale', 'Swift Feet');
     learn('pyromancer', 'Kindling');
@@ -63,6 +65,7 @@ test('skills on the moves bar cost resources, animate and hurt enemies', async (
   const res = await page.evaluate(async (learnSrc) => {
     const learn = eval(learnSrc);
     const g = (window as any).__game, rt = g.skillRt, pl = g.player, W = (window as any).waitSteps;
+    pl.paths.teach('gale');
     const step = learn('gale', 'Gale Step', 2);
     const fire = learn('pyromancer', 'Fireball');
     pl.equip.moves[0] = step;
@@ -118,7 +121,7 @@ test('skills on the bar are saved', async ({ page }) => {
   await page.evaluate(async (learnSrc) => {
     const learn = eval(learnSrc);
     const g = (window as any).__game;
-    g.player.equip.moves[3] = learn('lightbinder', 'Smite', 2);
+    g.player.equip.moves[3] = learn('lightbinder', 'Sentence', 2);
     g.save();
   }, LEARN);
   await page.reload();

@@ -11,6 +11,8 @@ export interface BranchDef {
   sub: string;
   tiers: string[][];
   cap: string;
+  /** the capstone is a gateway to this hidden class (shown as ??? until learned) */
+  gate?: string;
 }
 
 export interface DisciplineDef {
@@ -31,6 +33,12 @@ export interface DisciplineDef {
   secret?: boolean;
   /** learned at the start of a new game */
   starter?: boolean;
+  /** trial quest that teaches this discipline when it is completed */
+  trial?: string;
+  /** a skill granted by the foundation itself (the class's first spell) */
+  core?: string;
+  /** hidden class opened by a gateway in this discipline's tree */
+  gateFrom?: string;
   /** discipline id and level required before the mentor will teach it */
   requires?: [string, number];
   branches?: BranchDef[];
@@ -45,7 +53,7 @@ export const FAMILIES: Record<Family, { name: string; note: string; flavour: str
 export const DISCIPLINES: DisciplineDef[] = [
   // ---- combat classes ---------------------------------------------------------
   {
-    id: 'gale', fam: 'combat', name: 'Gale Style', color: '--c-gale', mentor: 'Kaela Voss, the drill yard', mentorNpc: 'kaela', res: 'Flow', starter: true,
+    id: 'gale', fam: 'combat', name: 'Gale Style', color: '--c-gale', mentor: 'Kaela Voss, the drill yard', mentorNpc: 'kaela', res: 'Flow', trial: 'trial-gale',
     flavour: 'Move like weather. Strike before they see the blade.', how: 'Land hits, dodge and parry while Gale Style is active.',
     branches: [
       { name: 'Tailwind', sub: 'Speed and movement', tiers: [['Swift Feet', 'Light Grip'], ['*Gale Step', 'Tailwind', 'Slipstream'], ['*Crescent Wind', '?Squall|Updraft', 'Flow Well'], ['*Cyclone', '!Storm Unbound', 'Wind Shear'], ['Hurricane Heart', 'Lingering Vortex']], cap: 'Eye of the Storm' },
@@ -91,12 +99,12 @@ export const DISCIPLINES: DisciplineDef[] = [
 
   // ---- magic classes ------------------------------------------------------------
   {
-    id: 'pyromancer', fam: 'magic', name: 'Pyromancer', color: '--c-fire', mentor: 'Magus Orren, the tower', mentorNpc: 'magus', res: 'Mana', starter: true,
-    flavour: 'Fire does not care about armour.', how: 'Deal fire damage and keep enemies burning.',
+    id: 'pyromancer', fam: 'magic', name: 'Pyromancer', color: '--c-fire', mentor: 'Magus Orren, the tower', mentorNpc: 'magus', res: 'Heat', trial: 'trial-pyro', core: 'Kindle',
+    flavour: 'Fire is a risk you manage. Run hot, then spend it before it spends you.', how: 'Deal fire damage and keep enemies burning.',
     branches: [
-      { name: 'Flame', sub: 'Projectiles', tiers: [['Kindling', 'Hot Hands'], ['*Fireball', 'Focused Heat', 'Wide Burst'], ['*Flame Wave', '?Cinder Volley|Meteor Form', 'Accelerant'], ['*Meteor', '!Pure Flame', 'Searing Speed'], ['Starfall', 'Scorch Trail']], cap: 'Heart of the Sun' },
-      { name: 'Ember', sub: 'Burning', tiers: [['Smoulder', 'Lingering Heat'], ['*Ignite', 'Stacking Heat', 'Char'], ['*Pyre', '?Wildfire|Controlled Burn', 'Fuel'], ['*Cinderstorm', '!Scorched Earth', 'Smoke Veil'], ['Ashfall', 'Everburn']], cap: 'Inferno' },
-      { name: 'Hearth', sub: 'Self and weapon', tiers: [['Warm Blood', 'Ash Skin'], ['*Firebrand', 'Ember Shield', 'Heat Haze'], ['*Immolation', '?Phoenix Down|Ash Cloak', 'Burning Will'], ['*Flame Step', '!Blood of Fire', 'Cauterize'], ['Rekindle', 'Hearthfire']], cap: 'Phoenix Crest' },
+      { name: 'Flame', sub: 'Ranged fire that grows with Heat', tiers: [['Kindling', 'Hot Hands'], ['*Fireball', 'Flashpoint', 'Searing'], ['*Cinder Volley', '?Seeking Embers|Scatter', 'Accelerant'], ['*Falling Star', '!Pure Flame', 'Wide Burst'], ['Starfire', 'Red Giant']], cap: 'Gate of the Sunbreaker', gate: 'sunbreaker' },
+      { name: 'Ember', sub: 'Burns that spread', tiers: [['Smoulder', 'Lingering Heat'], ['*Ignite', 'Char', 'Fuel'], ['*Wildfire', '?Controlled Burn|Hungry Flame', 'Stacking Heat'], ['*Funeral Pyre', '!Scorched Earth', 'Smoke Veil'], ['Inferno', 'Everburn']], cap: 'Gate of the Ashwalker', gate: 'ashwalker' },
+      { name: 'Hearth', sub: 'Steel and safe venting', tiers: [['Warm Blood', 'Ash Skin'], ['*Firebrand', 'Ember Shield', 'Burning Will'], ['*Vent', '?Cauterize|Backdraft', 'Heat Haze'], ['*Flame Step', '!Blood of Fire', 'Hearthfire'], ['Phoenix Down', 'Kindred Flame']], cap: 'Gate of the Phoenix', gate: 'phoenix' },
     ],
   },
   {
@@ -109,12 +117,12 @@ export const DISCIPLINES: DisciplineDef[] = [
     ],
   },
   {
-    id: 'lightbinder', fam: 'magic', name: 'Lightbinder', color: '--c-light', mentor: 'Sister Maren, the chapel', res: 'Mana', starter: true,
-    flavour: 'Mercy for friends. Judgment for the rest.', how: 'Heal, ward and deal holy damage.',
+    id: 'lightbinder', fam: 'magic', name: 'Lightbinder', color: '--c-light', mentor: 'Brother Aldous, the Chapel of the Dawn', mentorNpc: 'aldous', res: 'Radiance', trial: 'trial-light', core: 'Mote of Light',
+    flavour: 'You do not throw light. You bind it: to the ground, to your foes, to yourself.', how: 'Heal, mark and bind with light; stand in daylight.',
     branches: [
-      { name: 'Mercy', sub: 'Healing', tiers: [['Gentle Hands', 'Warm Glow'], ['*Healing Light', 'Lasting Light', 'Soothing'], ['*Renew', '?Mending|Surge', 'Grace'], ['*Sanctuary', "!Martyr's Gift", 'Devotion'], ['Second Wind', 'Dawnbreak']], cap: 'Resurrection Ward' },
-      { name: 'Judgment', sub: 'Holy damage', tiers: [['Zeal', 'Bright Eyes'], ['*Smite', 'Brand', 'Glare'], ['*Radiant Spear', '?Condemn|Purge', 'Righteous'], ['*Holy Brand', '!Wrathful', 'Blinding'], ['Verdict', 'Lightfall']], cap: 'Final Judgment' },
-      { name: 'Sanctum', sub: 'Wards', tiers: [['Faithful', 'Warded'], ['*Blessed Weapon', 'Aegis', 'Hallowed'], ['*Consecrate', '?Bulwark of Faith|Sacred Ground', 'Purity'], ['*Divine Barrier', '!Vow of Peace', 'Aura'], ['Cathedral Step', 'Halo']], cap: 'Cathedral' },
+      { name: 'Mercy', sub: 'Healing that rewards timing', tiers: [['Gentle Hands', 'Steady Prayer'], ['*Healing Light', 'Afterglow', 'Soft Light'], ['*Lightwell', '?Spring|Beacon', 'Warm Glow'], ['*Second Dawn', '!Vow of Mercy', 'Grace'], ['Unfading', 'Grace Under Fire']], cap: 'Gate of the Lifewarden', gate: 'lifewarden' },
+      { name: 'Judgment', sub: 'Mark, build, cash in', tiers: [['Zeal', 'Long Memory'], ['*Brand', 'Witness', 'Righteous'], ['*Sentence', '?Swift Justice|Final Word', 'Glare'], ['*Radiant Lance', '!Zealot', 'Bright Eyes'], ['Judgment Day', 'Unblinking']], cap: 'Gate of the Inquisitor', gate: 'inquisitor' },
+      { name: 'Binding', sub: 'Threads, wards and control', tiers: [['Warded', 'Firm Grip'], ['*Light Tether', 'Taut', 'Faithful'], ['*Halo Ward', '?Mirror Halo|Wide Halo', 'Steadfast'], ['*Chains of Dawn', "!Binder's Oath", 'Purity'], ['Sanctuary Line', 'Lantern Cage']], cap: 'Gate of the Lightweaver', gate: 'lightweaver' },
     ],
   },
   {
@@ -175,6 +183,13 @@ export const DISCIPLINES: DisciplineDef[] = [
     id: 'beastbinding', fam: 'calling', name: 'Beastbinding', color: '--c-herb', mentor: 'Unknown', secret: true,
     flavour: 'Every slime remembers what it ate.', how: 'Capture monster essences.',
   },
+  // ---- hidden classes behind tree gateways (no tree or teacher in the world yet) ----
+  { id: 'lifewarden', fam: 'magic', name: 'Lifewarden', color: '--c-light', mentor: 'Unknown', secret: true, gateFrom: 'lightbinder', flavour: 'Mercy, carried past the point of reason.', how: '' },
+  { id: 'inquisitor', fam: 'magic', name: 'Inquisitor', color: '--c-light', mentor: 'Unknown', secret: true, gateFrom: 'lightbinder', flavour: 'Judgment that does not wait for evidence.', how: '' },
+  { id: 'lightweaver', fam: 'magic', name: 'Lightweaver', color: '--c-light', mentor: 'Unknown', secret: true, gateFrom: 'lightbinder', flavour: 'Every thread of light, woven into one cloth.', how: '' },
+  { id: 'sunbreaker', fam: 'magic', name: 'Sunbreaker', color: '--c-fire', mentor: 'Unknown', secret: true, gateFrom: 'pyromancer', flavour: 'Some suns are meant to be broken.', how: '' },
+  { id: 'ashwalker', fam: 'magic', name: 'Ashwalker', color: '--c-fire', mentor: 'Unknown', secret: true, gateFrom: 'pyromancer', flavour: 'Where they walk, nothing grows for a year.', how: '' },
+  { id: 'phoenix', fam: 'magic', name: 'Phoenix', color: '--c-fire', mentor: 'Unknown', secret: true, gateFrom: 'pyromancer', flavour: 'Every ending is kindling.', how: '' },
 ];
 
 export const DISC: Record<string, DisciplineDef> = Object.fromEntries(DISCIPLINES.map((d) => [d.id, d]));

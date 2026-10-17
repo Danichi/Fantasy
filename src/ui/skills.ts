@@ -3,7 +3,7 @@ import type { Player } from '../player/player';
 import { events } from '../core/events';
 import { DISC, DISCIPLINES, FAMILIES, NODE_TEXT, type DisciplineDef, type Family } from '../paths/data';
 import {
-  ATTRS, MASTERY_DISCOUNT, MASTERY_NAMES, MASTERY_XP, MAX_LEVEL, MAX_RANK, NODE_COST, levelCost, masteryRank, treeOf,
+  ATTRS, GATE_NODES, MASTERY_DISCOUNT, MASTERY_NAMES, MASTERY_XP, MAX_LEVEL, MAX_RANK, NODE_COST, levelCost, masteryRank, treeOf,
   type TreeNode,
 } from '../paths/paths';
 import { ICONS, TreeView, drawSealed } from './skillTree';
@@ -348,7 +348,19 @@ export class SkillsUI {
 
   /** Plain text of what a node does (skills: at its current or first rank). */
   private nodeDesc(d: DisciplineDef, n: TreeNode) {
-    if (n.type === 'center') return `Foundation of ${d.name}.${d.res ? ` Grants the ${d.res} resource.` : ''} Tiers open at level 1, 5, 10, 15 and 20. Capstones at 25; you may own only one.`;
+    const gates = d.branches?.some((b) => b.gate);
+    const found = `Tiers open at level 1, 5, 10, 15 and 20. ${gates ? `Each branch ends in a gateway at 25 (and ${GATE_NODES} nodes in that branch); you may open only one.` : 'Capstones at 25; you may own only one.'}`;
+    if (n.type === 'center') {
+      const core = SkillRuntime.skill(d.id, n.name);
+      if (core) return `Core spell, known from the first lesson: ${core.text(1, this.runtime!)}. ${d.res ? `${d.name} uses ${d.res}. ` : ''}${found}`;
+      return `Foundation of ${d.name}.${d.res ? ` Grants the ${d.res} resource.` : ''} ${found}`;
+    }
+    const gate = this.paths.gate(d.id, n);
+    if (gate) {
+      const b = d.branches![n.branch];
+      if (!this.paths.learned(gate)) return `An undiscovered class lies beyond this gateway. Needs ${d.name} level 25 and ${GATE_NODES} nodes in ${b.name}. Opening it reveals where to look; then you must find whoever teaches it. You may open only one gateway in this tree.`;
+      return `The gateway to ${DISC[gate].name}.`;
+    }
     const skill = SkillRuntime.skill(d.id, n.name);
     const rank = this.paths.node(d.id, n.id)?.r ?? 1;
     if (skill) return skill.text(rank, this.runtime!) + '.';
@@ -365,16 +377,17 @@ export class SkillsUI {
 
   private nodeCard(d: DisciplineDef, n: TreeNode) {
     const P = this.paths, v = P.node(d.id, n.id), has = P.has(d.id, n.id);
-    const name = n.type === 'choice' ? (v ? n.name.split('|')[v.pick ?? 0] : n.name.replace('|', ' or ')) : n.name;
+    const name = P.displayName(d.id, n, n.type === 'choice' ? v?.pick : undefined);
     const cost = NODE_COST[n.type];
     const where = `${n.branch >= 0 ? esc(d.branches![n.branch].name) + ' · ' : ''}${n.tier === 0 ? 'Center' : n.tier === 6 ? 'Crown' : 'Tier ' + n.tier} · ${TYPE_LABEL[n.type]}${cost ? ` · ${cost} pt${cost > 1 ? 's' : ''}` : ''}`;
     let h = `<div class="sk-node"><span class="t">${where}</span><h4>${esc(name)}</h4><p>${esc(this.nodeDesc(d, n))}</p>`;
     if (v && n.type === 'active') h += `<div class="sk-ranks">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= v.r ? 'on' : ''}"></i>`).join('')}<span>RANK ${ROMAN[v.r - 1]}</span></div>`;
     const inactive = d.fam === 'combat' && P.active !== d.id;
-    if (n.type === 'center') h += `<span class="status${has ? '' : ' no'}">${has ? 'Learned' : 'Not learned'}</span>`;
+    const core = n.type === 'center' && SkillRuntime.skill(d.id, n.name);
+    if (n.type === 'center' && !(has && core)) h += `<span class="status${has ? '' : ' no'}">${has ? 'Learned' : 'Not learned'}</span>`;
     else if (has) {
       h += `<span class="status">Learned${inactive ? ' · no effect while inactive' : ''}</span>`;
-      if (n.type === 'active' && v!.r < MAX_RANK) h += `<div class="sk-actions"><button class="sk-btn primary" type="button" data-rank ${P.canRankUp(d.id, n) ? '' : 'disabled'}>Rank up to ${ROMAN[v!.r]} · 1 pt</button></div>`;
+      if (n.type === 'active' && v && v.r < MAX_RANK) h += `<div class="sk-actions"><button class="sk-btn primary" type="button" data-rank ${P.canRankUp(d.id, n) ? '' : 'disabled'}>Rank up to ${ROMAN[v!.r]} · 1 pt</button></div>`;
       const skill = SkillRuntime.skill(d.id, n.name);
       if (skill) {
         const ref = `skill:${d.id}:${n.id}`;
@@ -411,7 +424,8 @@ export class SkillsUI {
     const d = DISC[this.openId!], n = treeOf(d)?.map[this.selected];
     if (!n || !this.paths.learn(d.id, n, pick)) return;
     this.view?.burst(n, n.type === 'cap' ? 2.4 : 1.2);
-    this.toast(`Learned ${n.type === 'choice' ? n.name.split('|')[pick] : n.name}`);
+    if (this.paths.gate(d.id, n)) this.toast(`Gateway opened. ${SkillRuntime.effect(d.id, n).text.replace(/^Opens the way to a hidden class\. /, '')}`);
+    else this.toast(`Learned ${n.type === 'choice' ? n.name.split('|')[pick] : n.name}`);
   }
 
   private rankUp() {

@@ -1,6 +1,8 @@
 import type { CombatMods } from '../combat/mods';
 import type { Family } from './data';
 import { DUNGEONEERING_PASSIVES } from '../dungeon/kit/delving';
+import { FIRE_PASSIVES } from './classes/fire.passives';
+import { LIGHT_PASSIVES } from './classes/light.passives';
 
 // What every passive node does. `m` adds to the player's combat modifiers
 // (multipliers are written as fractions: 0.05 = +5%; flat maxima as numbers).
@@ -173,45 +175,7 @@ export const PASSIVES: Record<string, NodeEffect> = {
   'boundary:Undying Vow': { text: 'Last to Fall recovers in 60 seconds', x: { lastToFallFast: 1 } },
   'boundary:Beacon': { text: 'Rallying Cry also restores 30 mana', x: { beacon: 1 } },
 
-  // Pyromancer: Flame
-  'pyromancer:Kindling': { text: '+5% fire damage', x: { fireDmg: 0.05 } },
-  'pyromancer:Hot Hands': { text: '+6% cast speed', m: { castSpeed: 0.06 } },
-  'pyromancer:Focused Heat': { text: 'Fireball deals 20% more damage', x: { fireballDmg: 0.2 } },
-  'pyromancer:Wide Burst': { text: 'Fireball bursts 40% wider', x: { fireballArea: 0.4 } },
-  'pyromancer:Cinder Volley': { text: 'Fireball splits into three smaller fireballs', x: { volley: 1 } },
-  'pyromancer:Meteor Form': { text: 'Fireball is larger, slower and deals 60% more damage', x: { meteorForm: 1 } },
-  'pyromancer:Accelerant': { text: 'Deal 25% more damage to burning enemies', x: { accelerant: 0.25 } },
-  'pyromancer:Pure Flame': { text: '+35% fire damage, but 25 less max mana', m: { mana: -25 }, x: { fireDmg: 0.35 } },
-  'pyromancer:Searing Speed': { text: '+10% cast speed', m: { castSpeed: 0.1 } },
-  'pyromancer:Starfall': { text: 'Meteor falls three times', x: { starfall: 1 } },
-  'pyromancer:Scorch Trail': { text: 'Fireball leaves burning ground where it bursts', x: { scorch: 1 } },
-  // Pyromancer: Ember
-  'pyromancer:Smoulder': { text: 'Burns deal 20% more damage', x: { burnDmg: 0.2 } },
-  'pyromancer:Lingering Heat': { text: 'Burns last 2 seconds longer', x: { burnTime: 2 } },
-  'pyromancer:Stacking Heat': { text: 'Burns stack up to 8 times instead of 5', x: { burnStacks: 3 } },
-  'pyromancer:Char': { text: 'Burning enemies take 8% more damage from everything', x: { char: 0.08 } },
-  'pyromancer:Wildfire': { text: 'Burning enemies spread their burn when they die', x: { wildfire: 1 } },
-  'pyromancer:Controlled Burn': { text: 'Burns deal 40% more damage', x: { burnDmg: 0.4 } },
-  'pyromancer:Fuel': { text: 'Each burn tick you cause restores 1 mana', x: { fuel: 1 } },
-  'pyromancer:Scorched Earth': { text: 'Burns deal 50% more damage, but you take 10% more', m: { dmgTaken: 0.1 }, x: { burnDmg: 0.5 } },
-  'pyromancer:Smoke Veil': { text: 'Take 5% less damage', m: { dmgTaken: -0.05 } },
-  'pyromancer:Ashfall': { text: 'Cinderstorm lasts 50% longer', x: { ashfall: 0.5 } },
-  'pyromancer:Everburn': { text: 'Burns last twice as long', x: { everburn: 1 } },
-  'pyromancer:Inferno': { text: 'Burning enemies explode when they die', x: { inferno: 1 } },
-  // Pyromancer: Hearth
-  'pyromancer:Warm Blood': { text: '+10 max health', m: { hp: 10 } },
-  'pyromancer:Ash Skin': { text: 'Take 4% less damage', m: { dmgTaken: -0.04 } },
-  'pyromancer:Ember Shield': { text: 'Take 15% less damage while Firebrand burns', x: { emberShield: 1 } },
-  'pyromancer:Heat Haze': { text: 'Dodging costs 15% less stamina', m: { dodgeCost: -0.15 } },
-  'pyromancer:Phoenix Down': { text: 'Once every 5 minutes, a killing blow leaves you at 30% health instead', x: { phoenixDown: 1 } },
-  'pyromancer:Ash Cloak': { text: 'Take 12% less damage', m: { dmgTaken: -0.12 } },
-  'pyromancer:Burning Will': { text: '+15% stamina regen', m: { staminaRegen: 0.15 } },
-  'pyromancer:Blood of Fire': { text: '+25% spell damage, but 20 less max health', m: { spell: 0.25, hp: -20 } },
-  'pyromancer:Cauterize': { text: 'Flame Step heals 8% of your health', x: { cauterize: 1 } },
-  'pyromancer:Rekindle': { text: 'Immolation heals you 2 health a second', x: { rekindle: 1 } },
-  'pyromancer:Hearthfire': { text: '+15% healing received', m: { heal: 0.15 } },
-  'pyromancer:Phoenix Crest': { text: 'Once every 5 minutes, a killing blow rebirths you at 40% health in an explosion of fire', x: { phoenixCrest: 1 } },
-
+  ...FIRE_PASSIVES,
   // Windcaller: Gust
   'windcaller:Breeze': { text: '+5% wind damage', x: { windDmg: 0.05 } },
   'windcaller:Pressure': { text: '+10% poise damage', m: { poise: 0.1 } },
@@ -250,41 +214,5 @@ export const PASSIVES: Record<string, NodeEffect> = {
   "windcaller:Heaven's Breath": { text: 'Pressure Dome heals you 3 health a second', x: { domeHeal: 3 } },
   'windcaller:Stormglass': { text: '+10% area', m: { area: 0.1 } },
 
-  // Lightbinder: Mercy
-  'lightbinder:Gentle Hands': { text: '+8% healing', m: { heal: 0.08 } },
-  'lightbinder:Warm Glow': { text: '+10 max health', m: { hp: 10 } },
-  'lightbinder:Lasting Light': { text: 'Heals over time are 20% stronger and last 50% longer', x: { lasting: 1 } },
-  'lightbinder:Soothing': { text: '+10% healing', m: { heal: 0.1 } },
-  'lightbinder:Mending': { text: 'Renew also puts out burns', x: { mending: 1 } },
-  'lightbinder:Surge': { text: 'Renew heals 40% of its total at once', x: { surge: 1 } },
-  'lightbinder:Grace': { text: '+5% mana regen', m: { manaRegen: 0.05 } },
-  "lightbinder:Martyr's Gift": { text: '+40% healing, but 15% less spell damage', m: { heal: 0.4, spell: -0.15 } },
-  'lightbinder:Devotion': { text: 'Sanctuary lasts 2 seconds longer', x: { devotion: 2 } },
-  'lightbinder:Second Wind': { text: 'Falling below 30% health casts a free Renew (once a minute)', x: { secondWind: 1 } },
-  'lightbinder:Dawnbreak': { text: 'Healing Light also burns nearby enemies with holy light', x: { dawnbreak: 1 } },
-  'lightbinder:Resurrection Ward': { text: 'Once every 5 minutes, a killing blow is refused and you rise at 50% health', x: { resWard: 1 } },
-  // Lightbinder: Judgment
-  'lightbinder:Zeal': { text: '+5% holy damage', x: { holyDmg: 0.05 } },
-  'lightbinder:Bright Eyes': { text: '+3% crit chance', m: { crit: 0.03 } },
-  'lightbinder:Brand': { text: 'Smite also brands its targets', x: { smiteBrand: 1 } },
-  'lightbinder:Glare': { text: '+8% spell damage', m: { spell: 0.08 } },
-  'lightbinder:Condemn': { text: 'Radiant Spear deals 50% more damage to branded enemies', x: { condemn: 1 } },
-  'lightbinder:Purge': { text: 'Radiant Spear passes through every enemy in its path', x: { spearPierce: 1 } },
-  'lightbinder:Righteous': { text: '+6% holy damage', x: { holyDmg: 0.06 } },
-  'lightbinder:Wrathful': { text: '+30% holy damage, but 20% less healing', m: { heal: -0.2 }, x: { holyDmg: 0.3 } },
-  'lightbinder:Blinding': { text: 'Smite strikes 30% wider', x: { smiteArea: 0.3 } },
-  'lightbinder:Verdict': { text: 'Branded enemies take 40% more damage instead of 25%', x: { verdict: 1 } },
-  'lightbinder:Lightfall': { text: 'Smite strikes twice', x: { lightfall: 1 } },
-  // Lightbinder: Sanctum
-  'lightbinder:Faithful': { text: '+10 max health', m: { hp: 10 } },
-  'lightbinder:Warded': { text: 'Take 4% less damage', m: { dmgTaken: -0.04 } },
-  'lightbinder:Aegis': { text: 'Divine Barrier absorbs 40% more', x: { barrierAbsorb: 0.4 } },
-  'lightbinder:Hallowed': { text: 'Blessed Weapon lasts 5 seconds longer', x: { hallowed: 5 } },
-  'lightbinder:Bulwark of Faith': { text: 'Take 20% less damage while standing in Consecrate', x: { faithBulwark: 1 } },
-  'lightbinder:Sacred Ground': { text: 'Consecrate also heals you 3 health a second', x: { sacredGround: 3 } },
-  'lightbinder:Purity': { text: '+10% healing', m: { heal: 0.1 } },
-  'lightbinder:Vow of Peace': { text: 'Take 20% less damage, but deal 15% less damage', m: { dmgTaken: -0.2, melee: -0.15, spell: -0.15 } },
-  'lightbinder:Aura': { text: 'Consecrate reaches 30% farther', x: { consArea: 0.3 } },
-  'lightbinder:Cathedral Step': { text: 'Divine Barrier also restores 30 stamina', x: { cathedralStep: 1 } },
-  'lightbinder:Halo': { text: 'Blessed Weapon hits heal you 2 health', x: { halo: 2 } },
+  ...LIGHT_PASSIVES,
 };

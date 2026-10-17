@@ -10,6 +10,8 @@ test('XP is spent on disciplines and raises the character level', async ({ game 
   const res = await page.evaluate(() => {
     const g = (window as any).__game, P = g.player.paths, pr = g.player.prog;
     const start = { xp: pr.xp, lv: pr.level, gale: P.level('gale'), active: P.active };
+    // Nobody starts with a class: Kaela's trial teaches Gale Style (done here directly).
+    P.teach('gale');
     // Pickups only add to the pool: no automatic levelling.
     pr.addXp(5000);
     const afterPickup = { xp: pr.xp, lv: pr.level };
@@ -24,12 +26,12 @@ test('XP is spent on disciplines and raises the character level', async ({ game 
   });
   // (The world may already have paid a little XP: the River Mill is discovered from the spawn point.)
   const xp0 = res.start.xp;
-  expect(res.start).toEqual({ xp: xp0, lv: 2, gale: 1, active: 'gale' }); // gale, pyromancer, lightbinder at 1
-  expect(res.afterPickup).toEqual({ xp: xp0 + 5000, lv: 2 });
+  expect(res.start).toEqual({ xp: xp0, lv: 1, gale: 0, active: '' }); // no class until a mentor's trial
+  expect(res.afterPickup).toEqual({ xp: xp0 + 5000, lv: 1 });
   expect(res.ok).toBe(true);
   expect(res.afterInvest.gale).toBe(2);
-  expect(res.afterInvest.cost).toBe(100);
-  expect(res.afterInvest.xp).toBe(xp0 + 4900);
+  expect(res.afterInvest.cost).toBe(150); // 150 x level squared
+  expect(res.afterInvest.xp).toBe(xp0 + 4850);
   expect(res.locked).toBe(false);
   expect(res.broke).toBe(false);
   expect(errors).toEqual([]);
@@ -40,7 +42,8 @@ test('attributes change the player\'s real stats', async ({ game }) => {
   const errors = game.errors;
   const res = await page.evaluate(() => {
     const g = (window as any).__game, P = g.player.paths, p = g.player;
-    p.prog.addXp(20000);
+    P.teach('gale');
+    p.prog.addXp(60000);
     while (P.canInvest('gale')) P.invest('gale');
     const free = P.attrFree;
     const hp0 = p.maxHp, st0 = p.maxStamina, mp0 = p.maxMana, melee0 = P.meleePower(1);
@@ -69,7 +72,11 @@ test('attributes change the player\'s real stats', async ({ game }) => {
 test('the Skills screen opens with K, invests XP and learns tree nodes', async ({ game }) => {
   const { page } = game;
   const errors = game.errors;
-  await page.evaluate(() => (window as any).__game.player.prog.addXp(3000));
+  await page.evaluate(() => {
+    const g = (window as any).__game;
+    g.player.paths.teach('gale');
+    g.player.prog.addXp(3000);
+  });
   await page.evaluate(() => (window as any).__game.input.press('KeyK'));
   await page.waitForTimeout(200);
   await page.evaluate(() => (window as any).__game.input.release('KeyK'));
@@ -119,6 +126,8 @@ test('disciplines and attributes survive a save and reload', async ({ page }) =>
   await page.evaluate(() => {
     const g = (window as any).__game, P = g.player.paths;
     g.player.prog.addXp(8000);
+    P.teach('gale');
+    P.teach('pyromancer');
     P.invest('gale');
     P.invest('pyromancer');
     P.teach('boundary');
@@ -152,6 +161,7 @@ test('mentors teach, switch the active class and respec', async ({ game }) => {
   const res = await page.evaluate(() => {
     const g = (window as any).__game, P = g.player.paths;
     const corvin = g.town.npcs.find((n: any) => n.spec.id === 'corvin').spec;
+    P.teach('gale'); // so Boundary isn't automatically the active class
     const labels = () => {
       const out: any[] = [];
       g.town.mentorOptions(corvin, (t: string) => out.push(t));
@@ -173,6 +183,6 @@ test('mentors teach, switch the active class and respec', async ({ game }) => {
   expect(res.second).toContain('Make Boundary Style my fighting class.');
   expect(res.active).toBe('boundary');
   expect(res.lv).toBe(1);
-  expect(res.refund).toBe(Math.round((100 + 283) * 0.75));
+  expect(res.refund).toBe(Math.round((150 + 600) * 0.75));
   expect(errors).toEqual([]);
 });
