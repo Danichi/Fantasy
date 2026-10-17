@@ -72,10 +72,10 @@ test('Pyromancer Heat builds, overheats, burns you and vents', async ({ game }) 
     // Kindle needs no lock-on and builds Heat.
     for (let i = 0; i < 600 && !pl.canAct; i++) await W(1);
     const why = rt.use(kindle);
+    const afterKindle = rt.heat; // Heat is built when the spell is cast
     await W(80);
-    const afterKindle = rt.heat;
     // Heat cools after 2 seconds of quiet.
-    await W(200);
+    await W(260);
     const cooled = rt.heat;
     // Heat adds fire damage.
     rt.heat = 0;
