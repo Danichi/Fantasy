@@ -309,7 +309,12 @@ test('O3: the Legacy family shows in the Skills screen with Renown and the tree'
   // Put Rally on the moves bar from the page.
   await sk.locator('[data-bar="rally"][data-i="2"]').click();
   expect(await page.evaluate(() => (window as any).__game.player.equip.moves[2])).toBe('origin:rally');
-  await page.evaluate(() => (window as any).__game.skills.toggle(false));
+  // Back out to the atlas before closing (the screen reopens where it was left).
+  await page.evaluate(() => {
+    const s = (window as any).__game.skills;
+    s.closeTree();
+    s.toggle(false);
+  });
   expect(game.errors).toEqual([]);
 });
 
