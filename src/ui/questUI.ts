@@ -161,6 +161,7 @@ export class QuestUI {
       detail =
         `<h2>${esc(q.title)}</h2><div class="j-region">${st?.status === 'done' ? 'COMPLETED' : 'IN PROGRESS'} · ${q.region === 'cresha' ? 'Elder Glen, Kingdom of Cresha' : esc(q.region)}</div>` +
         `<p class="j-summary">${esc(q.summary)}</p>` +
+        this.quests.awayNotes(q.id).map((n) => `<p class="j-away">☾ ${esc(n)}</p>`).join('') +
         (lines.length ? `<div class="j-objs">${lines.map(([t, p, n]) => `<div class="${p >= n ? 'ok' : ''}"><i>${p >= n ? '✔' : '◇'}</i>${esc(t)}${n > 1 ? ` <span>${p}/${n}</span>` : ''}</div>`).join('')}</div>` : '') +
         `<div class="j-log">${stages.map((s, i) => `<div class="${st && (st.status === 'done' || i < st.stage) ? 'past' : ''}">${esc(s.note)}</div>`).join('')}</div>` +
         `<div class="j-rewards">Rewards · ${q.rewards.gold} gold · ${q.rewards.xp} XP${q.rewards.guildRep ? ` · ${q.rewards.guildRep} guild rep` : ''}${q.rewards.items?.length ? ' · items' : ''}</div>` +

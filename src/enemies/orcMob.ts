@@ -19,6 +19,7 @@ const CLIPS = ['idle', 'walk', 'run', 'walk_back', 'run_back', 'strafe_l', 'stra
 /** The swing, timed in clip seconds (the hero's light attack: slash1 clipTiming). */
 const SWING = { clip: 'attack_light_1', speed: 1.1, hitFrom: 0.5, hitTo: 0.72, lungeFrom: 0.3, lungeTo: 0.62 };
 const HURT = 0.55; // seconds of flinch
+const PARRY_DAZE = 2.2; // seconds reeling after a parry
 const DEATH_CLIP = 2.2; // seconds of the death clip to play before sinking away
 
 function fallbackOrcMob() {
@@ -118,6 +119,9 @@ export class OrcMob implements Target {
     }).catch((e) => console.warn('OrcMob model not found; using fallback:', e));
   }
 
+  /** seconds left reeling from a parry (wide open to a riposte) */
+  private daze = 0;
+
   takeHit(h: HitInfo) {
     if (!this.alive || this.state === 'dying') return;
     this.hp -= h.damage;
@@ -155,6 +159,7 @@ export class OrcMob implements Target {
   update(dt: number, player: Player) {
     this.st += dt;
     this.cooldown -= dt;
+    this.daze = Math.max(0, this.daze - dt);
 
     if (this.state === 'dying') {
       this.deathT += dt;
@@ -203,7 +208,7 @@ export class OrcMob implements Target {
     } else if (this.state === 'hurt') {
       this.vel.x *= Math.exp(-8 * dt);
       this.vel.z *= Math.exp(-8 * dt);
-      if (this.grounded && this.st > HURT) {
+      if (this.grounded && this.st > HURT && this.daze <= 0) {
         this.stunned = false;
         this.setState('chase');
       }
@@ -254,6 +259,7 @@ export class OrcMob implements Target {
       poise: 28,
       onParried: () => {
         this.stunned = true;
+        this.daze = PARRY_DAZE;
         this.setState('hurt');
         this.vel.set(-dir.x * 4, 3.5, -dir.z * 4);
       },

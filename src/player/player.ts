@@ -119,6 +119,8 @@ export class Player {
   private armsFromClips = false;
   private guardW = 1;
   private blockW = 0;
+  /** how long the shield has been up (it takes a moment to raise) */
+  private blockT = 0;
   private blockHitT = 9;
   private poseFrom: ProcPose | null = null;
   private poseFade = 1;
@@ -392,7 +394,12 @@ export class Player {
     if (input.wasPressed('dodge')) buf('dodge');
     if (input.wasPressed('cast')) buf('cast');
     if (input.wasPressed('originAbility')) buf('originAbility');
-    this.blocking = input.held('offhand') && this.equip.hasShield && this.mods.canBlock && (!this.act || this.act.def.id === 'parryShield');
+    // Raising the shield also cuts short the tail end of an attack (once it can be cancelled).
+    const wantBlock = input.held('offhand') && this.equip.hasShield && this.mods.canBlock;
+    const ac = this.act;
+    if (wantBlock && ac && ac.def.id !== 'parryShield' && !ac.def.roll && ac.def.id !== 'stagger' && ac.def.id !== 'guardBreak' && ac.t >= ac.def.cancel) this.act = null;
+    this.blocking = wantBlock && (!this.act || this.act.def.id === 'parryShield');
+    this.blockT = this.blocking ? this.blockT + SIM_STEP : 0;
     this.diveHeld = input.held('jump');
     if (input.wasPressed('jump') && this.grounded && !this.act) {
       this.vel.y = JUMP_V;
@@ -559,6 +566,17 @@ export class Player {
    * Melee aim assist: the lock-on target, or else the best enemy in a cone in
    * front of the player.
    */
+  /** Closest living enemy within `range`, in any direction. */
+  nearestThreat(range: number): Target | null {
+    let best: Target | null = null, bd = range;
+    for (const t of targets) {
+      if (!t.alive || !t.lockable || t.kind === 'dummy') continue;
+      const d = t.position.distanceTo(this.pos);
+      if (d < bd) (bd = d), (best = t);
+    }
+    return best;
+  }
+
   aimTarget(range: number): Target | null {
     if (this.lock?.alive) return this.lock;
     const f = this.forward;
@@ -758,6 +776,12 @@ export class Player {
       } else this.yawVel *= Math.exp(-20 * dt);
     } else if (toLock !== null && !this.sprinting) {
       this.turnToward(toLock, dt, 200);
+    } else if (this.blocking) {
+      // Shield up without a lock: square up to the nearest threat, and keep
+      // facing it while you step about, instead of turning your back.
+      const threat = this.nearestThreat(7);
+      if (threat) this.turnToward(Math.atan2(threat.position.x - this.pos.x, threat.position.z - this.pos.z), dt, 200);
+      else this.yawVel *= Math.exp(-16 * dt);
     } else if (intent.lengthSq() > 0) {
       this.turnToward(Math.atan2(intent.x, intent.z), dt, this.sprinting ? 110 : 160);
     } else this.yawVel *= Math.exp(-16 * dt);
@@ -1165,9 +1189,10 @@ export class Player {
       this.onShake?.(0.25);
       return 'parried';
     }
-    if (this.blocking && this.equip.hasShield && facing > 0.3 && this.blockW > 0.5) {
+    // A raised shield covers everything in front and a good way round the sides.
+    if (this.blocking && this.equip.hasShield && facing > -0.15 && this.blockT > 0.06) {
       const st = this.equip.offItem!.def.stats;
-      const cost = (att.damage * (1 - (st.stability ?? 0.4)) * 1.7 + 6) * this.mods.blockCost;
+      const cost = (att.damage * (1 - (st.stability ?? 0.4)) * 1.1 + 4) * this.mods.blockCost;
       this.stamina -= cost;
       this.staminaDelay = 0.8;
       this.blockHitT = 0;

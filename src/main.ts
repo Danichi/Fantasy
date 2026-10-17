@@ -41,6 +41,7 @@ import { Encounters } from './world/encounters';
 import { Caravans } from './world/caravans';
 import { setupRoadQuests } from './quests/roadQuests';
 import { setupClassTrials } from './quests/classTrials';
+import { rumours } from './npc/townTalk';
 import { buildPortAurelle, PORT_SPOTS } from './world/portAurelle';
 import { Fishing, type FishingSpot } from './world/fishing';
 import { Duel } from './combat/duel';
@@ -516,6 +517,16 @@ async function boot() {
         ...quests.options(n.rec.id, show, back),
         ...(folkServices.get(n.rec.id)?.(show, back) ?? []),
         ...town.sellOptions(n.rec.id, n.rec.name, title, back),
+        {
+          label: 'Heard any news?',
+          run: () => {
+            // Everyone has heard something; ask again for something else.
+            const news = rumours({ ...talkCtx(), met: true }, n.rec.settlement === 'elderGlen');
+            const k = folkNews.get(n.rec.id) ?? n.seed % news.length;
+            folkNews.set(n.rec.id, k + 1);
+            show(news[k % news.length], [{ label: 'Anything else?', run: () => folkTalk.action() }, { label: 'Farewell.', run: () => dialogue.close() }]);
+          },
+        },
         { label: 'Farewell.', run: () => dialogue.close() },
       ]);
     },
@@ -559,6 +570,7 @@ async function boot() {
     guildRep: (n) => town.guild.addRep(n),
     toast: (m) => hud.toast(m),
     npcPos: (id) => serviceNpc(id)?.pos ?? npcs.find(id)?.pos ?? null,
+    npcAway: (id) => (serviceNpc(id) ? null : npcs.whereabouts(id)),
     hour: () => time.hour,
   });
   const glenQuests = setupElderGlenQuests({
@@ -566,6 +578,13 @@ async function boot() {
     count: countItem, take: takeItem, give: giveItem, toast: (m) => hud.toast(m),
   });
   town.questOptions = (id, show, back) => quests.options(id, show, back);
+  // What townsfolk know: the hour, the weather, the story so far, your classes.
+  const talkCtx = () => ({
+    hour: time.hour, rain: weather.p.rain > 0.4, done: (id: string) => quests.isDone(id), active: (id: string) => quests.isActive(id),
+    learned: (id: string) => player.paths.learned(id), activeClass: player.paths.active, level: player.prog.level,
+  });
+  town.talkCtx = talkCtx;
+  const folkNews = new Map<string, number>();
   town.questDone = (id) => quests.isDone(id);
   const glenMore = setupGlenMoreQuests({ quests, scene: r.scene, fx, beasts: slimes, toast: (m) => hud.toast(m) });
   // Classes are learned through mentors' trials (Kaela, Magus Orren, Brother Aldous).
@@ -1575,6 +1594,7 @@ async function boot() {
       if (worldRunning) roadQuests.update(dt);
       if (worldRunning) {
         quests.update(dt, player.pos);
+        trials.update(dt, player.pos, time.hour);
         mainQuest.update(dt);
         guildContracts.update(dt);
         glenQuests.update(dt);

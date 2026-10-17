@@ -12,10 +12,13 @@ import { events } from '../core/events';
 import { ITEMS } from '../items/itemDefs';
 import { AdventurerGuild } from '../guild/adventurerGuild';
 import type { ShopUI, ShopOpts } from '../ui/shopUI';
+import { greetingFor, topicsFor, rumours, type TalkCtx } from './townTalk';
 
 // The townsfolk: who they are, where they stand, and what they teach or sell.
 
 const face = (x: number, z: number, tx = 0, tz = -4) => Math.atan2(tx - x, tz - z);
+/** townsfolk who keep a shop (or a room) */
+const SHOPKEEPERS = new Set(['innkeeper', 'apothecary', 'baker', 'tailor', 'carpenter', 'arcanist', 'stablemaster']);
 
 export const NPCS: NpcSpec[] = [
   {
@@ -334,27 +337,83 @@ export class Town {
   /** Extra replies from the discipline system (teach, switch class, respec). */
   mentorOptions?: (s: NpcSpec, say: (text: string) => void) => DialogueOption[];
 
-  talk(s: NpcSpec, text = s.greeting, skipQuests = false) {
+  /** the world as townsfolk see it (set by main): time, weather, story, your classes */
+  talkCtx?: () => Omit<TalkCtx, 'met'>;
+  private met = new Set<string>();
+  private visits = new Map<string, number>();
+  private asked = new Map<string, number>();
+  private greeted: { id: string; text: string } | null = null;
+
+  private ctxFor(id: string): TalkCtx | null {
+    const c = this.talkCtx?.();
+    return c ? { ...c, met: this.met.has(id) } : null;
+  }
+
+  /** A greeting for a new conversation (kept while the conversation goes on). */
+  private greet(s: NpcSpec) {
+    if (this.dialogue.open && this.greeted?.id === s.id) return this.greeted.text;
+    const c = this.ctxFor(s.id);
+    const n = this.visits.get(s.id) ?? 0;
+    const text = c ? greetingFor(s.id, s.greeting, c, n) : s.greeting;
+    this.met.add(s.id);
+    this.visits.set(s.id, n + 1);
+    this.greeted = { id: s.id, text };
+    return text;
+  }
+
+  /** The next piece of news this person has (a different one each time you ask). */
+  private rumour(s: NpcSpec) {
+    const c = this.ctxFor(s.id);
+    const list = c ? rumours(c) : [];
+    if (!list.length) return 'Nothing new. Quiet is good.';
+    let seed = 0;
+    for (const ch of s.id) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+    const k = this.asked.get(s.id) ?? 0;
+    this.asked.set(s.id, k + 1);
+    // The story's news comes first; after that, whatever this person happens to have heard.
+    return k < list.length - 5 ? list[k] : list[(seed + k) % list.length];
+  }
+
+  /**
+   * A conversation: quests and trade first, then whatever they teach, and
+   * "Let's talk" for their topics and the local news.
+   */
+  talk(s: NpcSpec, text?: string) {
+    text ??= this.greet(s);
     const npc = this.npcs.find((n) => n.spec.id === s.id);
-    if (npc) npc.talkT = 6 + text.length * 0.035;
-    // Quests and trade come first; "Something else" opens the usual menu.
-    if (!skipQuests) {
-      const show = (t: string, opts: DialogueOption[]) => this.dialogue.show(s.name, s.title, t, opts);
-      const quest = [...(this.questOptions?.(s.id, show, () => this.talk(s)) ?? []), ...(this.serviceOptions?.(s.id, show, () => this.talk(s)) ?? [])];
-      const sell = this.sellOptions(s.id, s.name, s.title, () => this.talk(s, s.greeting, true));
-      if (quest.length || sell.length) {
-        this.dialogue.show(s.name, s.title, text, [...quest, ...sell, { label: BUYS[s.id] || s.id === 'innkeeper' ? 'Let me see your wares.' : 'Something else…', run: () => this.talk(s, text, true) }, { label: 'Farewell.', run: () => this.dialogue.close() }]);
-        return;
-      }
-    }
-    if (this.talkShop(s)) return;
-    const opts: DialogueOption[] = s.lines.map((l) => ({ label: l.q, run: () => this.talk(s, l.a) }));
+    if (npc) npc.talkT = 1 + text.length / 60;
+    const back = () => this.talk(s);
+    const show = (t: string, opts: DialogueOption[]) => this.dialogue.show(s.name, s.title, t, opts);
+    const opts: DialogueOption[] = [
+      ...(this.questOptions?.(s.id, show, back) ?? []),
+      ...(this.serviceOptions?.(s.id, show, back) ?? []),
+      ...this.sellOptions(s.id, s.name, s.title, back),
+    ];
+    if (s.id === 'froest') opts.push({ label: "Browse Fröst's wares.", run: () => this.shop() });
+    else if (SHOPKEEPERS.has(s.id)) opts.push({ label: s.id === 'innkeeper' ? 'I need a room.' : 'Let me see your wares.', run: () => this.talkShop(s) });
     opts.push(...(this.mentorOptions?.(s, (t) => this.talk(s, t)) ?? []));
-    if (s.id === 'froest') {
-      opts.unshift({ label: "Browse Fröst's wares", run: () => this.shop() });
-    }
+    opts.push({ label: "Let's talk.", run: () => this.topics(s, this.chat(s)) });
     opts.push({ label: 'Farewell.', run: () => this.dialogue.close() });
     this.dialogue.show(s.name, s.title, text, opts);
+  }
+
+  /** An opening line for the topics page. */
+  private chat(s: NpcSpec) {
+    const lines = ['What would you like to know?', 'Ask away.', 'I have a minute. What is it?', 'Go on, then.'];
+    return lines[(this.visits.get(s.id) ?? 0) % lines.length];
+  }
+
+  /** Things to ask about, and the news. */
+  private topics(s: NpcSpec, text: string) {
+    const c = this.ctxFor(s.id);
+    const list = [...s.lines, ...(c ? topicsFor(s.id, c) : [])];
+    const npc = this.npcs.find((n) => n.spec.id === s.id);
+    if (npc) npc.talkT = 1 + text.length / 60;
+    this.dialogue.show(s.name, s.title, text, [
+      ...list.slice(0, 6).map((l) => ({ label: l.q, run: () => this.topics(s, l.a) })),
+      { label: 'Heard any news?', run: () => this.topics(s, this.rumour(s)) },
+      { label: 'Back.', run: () => this.talk(s) },
+    ]);
   }
 
   /**
@@ -394,6 +453,8 @@ export class Town {
   update(dt: number, player: THREE.Vector3) {
     for (const n of this.npcs) {
       if (!n.root.visible) continue;
+      // Keep talking (and facing you) for as long as the conversation is open.
+      if (this.dialogue.open && this.dialogue.speaker === n.spec.name) n.talkT = Math.max(n.talkT, this.dialogue.typing ? 0.5 : 0.2);
       n.update(dt, player);
       const tag = this.tags.get(n.spec.id)!;
       const d = n.pos.distanceTo(player);

@@ -215,6 +215,9 @@ export class Beast implements Target {
     this.attackDone = false;
   }
 
+  /** seconds left reeling from a parry (wide open to a riposte) */
+  private daze = 0;
+
   takeHit(hit: HitInfo) {
     if (!this.alive || this.state === 'dying') return;
     this.hp -= hit.damage;
@@ -256,6 +259,7 @@ export class Beast implements Target {
       poise: BEAST_VARIANTS[this.variantKind].damage * 1.8,
       onParried: () => {
         this.stunned = true;
+        this.daze = 2.0; // reeling: wide open to a riposte
         this.vel.copy(dir).multiplyScalar(-5);
         this.setState('hurt');
       },
@@ -268,6 +272,7 @@ export class Beast implements Target {
   update(dt: number, player: Player) {
     this.t += dt;
     this.cooldown -= dt;
+    this.daze = Math.max(0, this.daze - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
 
     if (this.state === 'dying') {
@@ -287,7 +292,7 @@ export class Beast implements Target {
     const attackDur = this.actions.get('attack')?.getClip().duration ?? 0.9;
     let speed = 0; // desired ground speed this step
     if (this.state === 'hurt') {
-      if (this.t > 0.55) {
+      if (this.t > 0.55 && this.daze <= 0) {
         this.stunned = false;
         this.setState('chase');
       }

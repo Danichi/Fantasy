@@ -16,6 +16,28 @@ import { damp, dampAngle } from '../core/math';
 //                                  and talks, and can be spoken to.
 // Characters are built once per look and reused (a small pool per look).
 
+/** Where a resident has gone (see NpcManager.whereabouts). */
+export interface Whereabouts {
+  name: string;
+  why: 'asleep' | 'inside' | 'away';
+  /** when they're back at their post */
+  back: string;
+  /** where they are now, in words ("the inn") */
+  where: string;
+  /** their usual post, if they have one */
+  post?: THREE.Vector3;
+}
+
+const PLACE_WORDS: Record<string, string> = {
+  tavern: 'the inn', plaza: 'the plaza', market: 'the market', forge: 'the forge', mill: 'the mill', guild: 'the guild hall',
+  training: 'the training yard', fields: 'the fields', pasture: 'the pasture', looms: 'the looms', lanes: 'the lanes', homes: 'home',
+  southGate: 'the south gate', northGate: 'the north gate', eastGate: 'the east gate', westGate: 'the west gate', home: 'home',
+};
+function placeLabel(id: string) {
+  if (/^home\d*$/.test(id) || /^yard\d*$/.test(id)) return 'home';
+  return PLACE_WORDS[id] ?? id.replace(/^post:/, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+}
+
 export type Activity = 'sleep' | 'idle' | 'work' | 'sit' | 'talk' | 'patrol' | 'play' | 'shop' | 'drink' | 'farm';
 
 export interface ScheduleEntry {
@@ -636,6 +658,32 @@ export class NpcManager {
       if (d < bd) (bd = d), (best = st);
     }
     return best;
+  }
+
+  /**
+   * Where a resident is when they're not where you'd expect: asleep, inside a
+   * building, or (for people with a post, like Elder Maud) off somewhere else.
+   * Null while they're at their post or out and about. `back` is when they're
+   * next back at their post (or at least up and outdoors).
+   */
+  whereabouts(id: string): Whereabouts | null {
+    const st = this.find(id);
+    if (!st) return null;
+    const s = this.settlements.get(st.rec.settlement)!;
+    const sched = st.rec.schedule;
+    const postIdx = sched.findIndex((x) => x.place.startsWith('post:'));
+    const post = postIdx >= 0 ? s.places.get(sched[postIdx].place)?.spots[0]?.clone() : undefined;
+    const e = this.effective(st);
+    const atPost = postIdx >= 0 ? e.place === sched[postIdx].place : true;
+    if (!st.hidden && atPost) return null;
+    const usable = (k: number) => (postIdx >= 0 ? sched[k].place === sched[postIdx].place : sched[k].activity !== 'sleep' && !s.places.get(sched[k].place)?.indoors);
+    const n = sched.length, idx = this.entryIndex(st.rec);
+    let next = -1;
+    for (let k = 1; k <= n && next < 0; k++) if (usable((idx + k) % n)) next = (idx + k) % n;
+    const h = next < 0 ? null : sched[next].from % 24;
+    const back = h === null ? '' : `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+    const why: Whereabouts['why'] = e.activity === 'sleep' ? 'asleep' : st.hidden ? 'inside' : 'away';
+    return { name: st.rec.name, why, back, where: placeLabel(e.place), post };
   }
 
   /** Something the NPC says right now (time-of-day aware). */

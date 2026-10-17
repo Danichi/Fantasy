@@ -125,6 +125,8 @@ export class SkillRuntime {
   chain: Target[] = [];
   private chainLeft = 0;
   private wildAcc = 0;
+  /** parried enemies, for the dazed sparkle over their heads */
+  private dazed: { t: Target; left: number }[] = [];
 
   constructor(scene: THREE.Scene, private player: Player, fx: FX, private spells: Spells) {
     this.vfx = new SkillFx(scene, fx);
@@ -677,6 +679,9 @@ export class SkillRuntime {
 
   private onParry(at: THREE.Vector3) {
     const p = this.player, P = this.paths;
+    // Whoever you parried reels: stars circle their head while they're open to a riposte.
+    const foe = this.nearestEnemy(at, 4);
+    if (foe) this.dazed.push({ t: foe, left: 2.1 });
     if (P.active === 'boundary') this.gainResolve(15);
     if (this.buff('lparryWindow')) {
       const hit = new Set<number>();
@@ -854,6 +859,16 @@ export class SkillRuntime {
       if (this.chainLeft <= 0 || this.chain.length < 2) this.chain = [];
     }
     this.updateMote(dt);
+    // Dazed by a parry: a little ring of gold sparks over the head.
+    this.dazed = this.dazed.filter((d) => (d.left -= dt) > 0 && d.t.alive);
+    for (const d of this.dazed) {
+      const top = d.t.center.y + (d.t.halfHeight ?? 0.6) + 0.35;
+      const a = this.time * 7;
+      for (let i = 0; i < 2; i++) {
+        const ang = a + i * Math.PI;
+        this.vfx.fx.add.spawn({ pos: new THREE.Vector3(d.t.center.x + Math.cos(ang) * 0.38, top, d.t.center.z + Math.sin(ang) * 0.38), spread: 0.05, count: 1, life: [0.25, 0.35], size: [0.13, 0.02], color: 0xfff2b0, color2: 0xffb030 });
+      }
+    }
     // Wildfire: burns leap to anything close.
     if (this.buff('wildfire') && !this.has('controlledBurn')) {
       this.wildAcc += dt;
