@@ -89,7 +89,7 @@ test('Cross: alternating blades builds Tempo and speed; the same hand twice cost
       hit(a);
       seq.push(rt.cc.tempo);
     }
-    await W(2);
+    rt['applyMods'](); // read the speed now (a wait could let the beat lapse)
     const speed = pl.mods.attackSpeed;
     hit('offslash2'); // same hand again
     const dropped = rt.cc.tempo;
