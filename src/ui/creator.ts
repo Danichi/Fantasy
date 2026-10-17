@@ -243,9 +243,9 @@ export class CharacterCreator {
       this.hero.parts.update(dt, { spread: this.spread ? 1 : 0, flap: this.spread ? performance.now() / 300 : 0, speed: 0 });
     }
     this.cam.aspect = w / h;
-    const dist = 2.2 + H * 1.55 + (this.spread ? 1.2 : 0);
+    const dist = 2.8 + H * 1.8 + (this.spread ? 1.2 : 0);
     this.cam.position.set(0, H * 0.62, dist);
-    this.cam.lookAt(0, H * 0.52, 0);
+    this.cam.lookAt(0, H * 0.46, 0);
     this.cam.updateProjectionMatrix();
     R.render(this.scene, this.cam);
   }

@@ -32,7 +32,8 @@ export class OriginAbilities {
   private lastRoll: unknown = null;
   private brimT = 0;
   private bannerT = 0;
-  private breathing = false;
+  /** Fire Breath is being channelled */
+  breathing = false;
   private breathT = 0;
   private veilMats: THREE.Material[] = [];
 

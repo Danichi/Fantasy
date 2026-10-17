@@ -86,7 +86,7 @@ export class Flight {
       p.flying = false;
       this.flaps = 0;
       this.heldT = 0;
-      if (p.grounded || p.swimming) this.energy = Math.min(ENERGY_MAX, this.energy + REGEN * dt);
+      if ((p.grounded || p.swimming) && !this.o.abilities.breathing) this.energy = Math.min(ENERGY_MAX, this.energy + REGEN * dt);
       this.landSpeed = 0;
       return;
     }
@@ -166,7 +166,7 @@ export class Flight {
       this.energy = Math.max(0, this.energy - GLIDE_DRAIN * dt);
       const pitch = clamp(cam.pitch, -0.2, 1.2);
       const target = 10 + Math.max(0, pitch - 0.25) * 9;
-      this.airSpeed = damp(this.airSpeed, target, 1.2, dt);
+      this.airSpeed = damp(this.airSpeed, target, 2, dt);
       const steer = p.moveIntent.lengthSq() > 0 ? p.moveIntent.clone().lerp(look, 0.3).normalize() : look;
       p.vel.x = damp(p.vel.x, steer.x * this.airSpeed, 2.5, dt);
       p.vel.z = damp(p.vel.z, steer.z * this.airSpeed, 2.5, dt);

@@ -2,7 +2,7 @@
 #ui .creator {
   position: fixed; inset: 0; z-index: 70; pointer-events: auto;
   display: grid; grid-template-columns: minmax(340px, 470px) 1fr;
-  background: radial-gradient(ellipse at 68% 45%, rgba(70, 52, 28, .55), rgba(8, 5, 2, .96) 72%);
+  background: radial-gradient(ellipse at 68% 45%, rgba(62, 47, 28, .97), rgba(8, 5, 2, .99) 72%);
   color: var(--ink-dark);
 }
 #ui .creator.hidden { display: none; }

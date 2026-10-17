@@ -192,7 +192,7 @@ export class Forms {
   frame(dt: number) {
     const root = this.p.char.root;
     const s = root.scale.x + (this.scale - root.scale.x) * Math.min(1, dt * 5);
-    root.scale.setScalar(Math.abs(s - this.scale) < 0.002 ? this.scale : s);
+    root.scale.setScalar(Math.abs(s - this.scale) < 0.01 ? this.scale : s);
     if (this.on('rage')) this.weaponsVisible(false);
   }
 
