@@ -88,6 +88,13 @@ interface Fireball {
   light: THREE.PointLight | null;
   damage: number;
   splash: number;
+  hooks?: FireballHooks;
+}
+
+/** Class skills route a fireball's hits through their own damage rules. */
+export interface FireballHooks {
+  strike?: (t: Target, damage: number, dir: THREE.Vector3) => void;
+  onImpact?: (at: THREE.Vector3, direct: Target | null) => void;
 }
 
 interface Flash {
@@ -133,7 +140,7 @@ export class Spells {
     };
   }
 
-  castFireball(from: THREE.Vector3, dir: THREE.Vector3, target: Target | null, damage?: number, scale = 1, splash = 2.6) {
+  castFireball(from: THREE.Vector3, dir: THREE.Vector3, target: Target | null, damage?: number, scale = 1, splash = 2.6, hooks?: FireballHooks) {
     const group = new THREE.Group();
     const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 3), this.fireMat);
     const glow = new THREE.Sprite(this.glowMat);
@@ -147,7 +154,7 @@ export class Spells {
       light.intensity = 18;
       light.distance = 9;
     }
-    this.balls.push({ phase: Math.random() * 6, group, vel: dir.clone().normalize().multiplyScalar(17), life: 3, target, light, splash, damage: damage ?? (ITEMS.fireball.stats.damage ?? 40) * this.player.paths.spellPower });
+    this.balls.push({ phase: Math.random() * 6, group, vel: dir.clone().normalize().multiplyScalar(17), life: 3, target, light, splash, hooks, damage: damage ?? (ITEMS.fireball.stats.damage ?? 40) * this.player.paths.spellPower });
     group.scale.setScalar(scale);
     this.fx.add.spawn({ pos: from, spread: 3, count: 18, life: [0.15, 0.35], size: [0.15, 0.02], color: 0xffe0a0, color2: 0xff4000 });
   }
@@ -167,6 +174,10 @@ export class Spells {
       const dir = t.position.clone().sub(at).setY(0);
       if (dir.lengthSq() < 1e-4) dir.copy(fb.vel).setY(0);
       dir.normalize();
+      if (fb.hooks?.strike) {
+        fb.hooks.strike(t, dmg, dir);
+        continue;
+      }
       t.takeHit({ damage: dmg, poise: 60, dir, at: t.center.clone(), crit: false, source: 'spell' });
       events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: false, enemyId: t.id });
     }
@@ -183,6 +194,7 @@ export class Spells {
     }
     this.flashes.push({ light, t: 0, dur: 0.45, peak: 60 });
     this.circles.shockwave(at.clone().setY(Math.max(at.y - 0.3, heightAt(at.x, at.z) + 0.08)), 'fire', 6.5);
+    fb.hooks?.onImpact?.(at.clone(), direct);
     events.emit('spellImpact', { at: at.clone(), spell: 'fireball' });
     const d = at.distanceTo(this.player.center);
     if (d < 12) this.player.onShake?.(0.35 * (1 - d / 12));

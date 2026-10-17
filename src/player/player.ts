@@ -92,7 +92,7 @@ export class Player {
   /** combat modifiers from skill passives and buffs, rewritten every step by the skill runtime */
   mods: CombatMods = baseMods();
   get maxHp() {
-    return Math.round(120 + this.paths.bonusHp + this.mods.hp + (this.equip?.bonus('maxHp') ?? 0));
+    return Math.round((120 + this.paths.bonusHp + this.mods.hp + (this.equip?.bonus('maxHp') ?? 0)) * Math.max(0.2, this.mods.hpMult));
   }
   get maxStamina() {
     return Math.round(100 + this.paths.bonusStamina + this.mods.stamina + (this.equip?.bonus('maxStamina') ?? 0));
@@ -148,6 +148,8 @@ export class Player {
   absorb?: (dmg: number) => number;
   /** return true to survive a killing blow (the hook sets health) */
   cheatDeath?: () => boolean;
+  /** healing that arrived at full health (Afterglow) */
+  onOverheal?: (amount: number) => void;
   /** per-target bonus for blade hits (brands, forced crits) */
   meleeBonus?: (t: Target) => { mult: number; crit: boolean };
 
@@ -1246,7 +1248,9 @@ export class Player {
     this.hp = Math.min(this.hp, this.maxHp);
     if (this.hot.left > 0 && !this.dead) {
       this.hot.left -= dt;
-      this.hp = Math.min(this.maxHp, this.hp + this.hot.rate * dt);
+      const want = this.hp + this.hot.rate * dt;
+      if (want > this.maxHp) this.onOverheal?.(want - this.maxHp);
+      this.hp = Math.min(this.maxHp, want);
     }
     if (this.burn.left > 0 && !this.dead) {
       this.burn.left -= dt;
@@ -1312,7 +1316,9 @@ export class Player {
 
   heal(amount: number) {
     if (this.dead) return;
-    this.hp = Math.min(this.maxHp, this.hp + amount * this.mods.heal * this.paths.healPower);
+    const want = this.hp + amount * this.mods.heal * this.paths.healPower;
+    if (want > this.maxHp) this.onOverheal?.(want - this.maxHp);
+    this.hp = Math.min(this.maxHp, want);
   }
 
   /** Heal over time (replaces a weaker one). */

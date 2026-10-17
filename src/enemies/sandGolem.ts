@@ -311,7 +311,7 @@ export class SandGolem implements Target {
       b.mesh.rotation.x += dt * 4;
       const p = b.mesh.position;
       if (!player.dead && p.distanceTo(player.center) < 1.4) {
-        player.receiveAttack({ damage: 30, from: p.clone().sub(b.vel.clone().normalize().multiplyScalar(4)), at: p.clone(), parryable: false, poise: 50 });
+        player.receiveAttack({ damage: 30, from: p.clone().sub(b.vel.clone().normalize().multiplyScalar(4)), at: p.clone(), parryable: false, poise: 50, projectile: true });
         b.life = 0;
       }
       if (p.y < heightAt(p.x, p.z)) b.life = 0;

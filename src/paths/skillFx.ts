@@ -219,6 +219,44 @@ export class SkillFx {
     this.fx.add.spawn({ pos: anchor().clone().setY(anchor().y + 1), spread: 3, count: 40, life: [0.3, 0.6], size: [0.12, 0.01], color: PALETTE[style].hot, color2: PALETTE[style].cool, jitter: radius * 0.8, drag: 2 });
   }
 
+  /** A small floating light (Mote of Light) that bobs at `anchor` until `alive()` says otherwise. */
+  orb(anchor: () => THREE.Vector3, style: Style, size: number, alive: () => boolean) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(this.geo.orb, solid(PALETTE[style].hot, 0.95)), new THREE.Mesh(this.geo.sphere, glow(PALETTE[style].body.clone().multiplyScalar(0.5), 0.45)));
+    g.children[0].scale.setScalar(0.5);
+    g.children[1].scale.setScalar(0.55);
+    g.scale.setScalar(size);
+    const t0 = performance.now();
+    this.addTimed(g, 9999, (o) => {
+      const s = (performance.now() - t0) / 1000;
+      o.position.copy(anchor()).setY(anchor().y + Math.sin(s * 2) * 0.12);
+      o.rotation.y += 0.02;
+      if (Math.random() < 0.5) this.fx.add.spawn({ pos: o.position, spread: 0.5, count: 1, life: [0.4, 0.8], size: [0.1 * size, 0.01], color: PALETTE[style].hot, color2: PALETTE[style].cool, upBias: 0.6, jitter: 0.2 * size });
+      if (!alive()) (this.timed.find((t) => t.obj === o)!).t = 1e9;
+    });
+  }
+
+  /** A taut beam between two moving points (tethers, chains) until `alive()` says otherwise. */
+  beam(a: () => THREE.Vector3, b: () => THREE.Vector3, style: Style, alive: () => boolean, width = 0.05) {
+    const g = new THREE.Group();
+    const core = new THREE.Mesh(this.geo.pillar, solid(PALETTE[style].hot, 0.85));
+    const aura = new THREE.Mesh(this.geo.pillar, glow(PALETTE[style].body.clone().multiplyScalar(0.6), 0.5));
+    core.scale.set(width, 1, width);
+    aura.scale.set(width * 3, 1, width * 3);
+    g.add(core, aura);
+    const up = new THREE.Vector3(0, 1, 0);
+    this.addTimed(g, 9999, (o) => {
+      const pa = a(), pb = b();
+      const d = pb.clone().sub(pa);
+      const len = Math.max(0.01, d.length());
+      o.position.copy(pa);
+      o.quaternion.setFromUnitVectors(up, d.divideScalar(len));
+      o.scale.set(1, len, 1);
+      if (Math.random() < 0.4) this.fx.add.spawn({ pos: pa.clone().lerp(pb, Math.random()), spread: 0.3, count: 1, life: [0.2, 0.4], size: [0.08, 0.01], color: PALETTE[style].hot, color2: PALETTE[style].cool });
+      if (!alive()) (this.timed.find((t) => t.obj === o)!).t = 1e9;
+    });
+  }
+
   /** A standing curtain (Wind Wall) that lives `life` seconds. */
   wall(pos: THREE.Vector3, yaw: number, width: number, height: number, style: Style, life: number) {
     const m = new THREE.Mesh(this.geo.wall, glow(PALETTE[style].body.clone().multiplyScalar(0.45), 0.3));

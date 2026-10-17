@@ -40,6 +40,7 @@ import { Horses } from './world/horses';
 import { Encounters } from './world/encounters';
 import { Caravans } from './world/caravans';
 import { setupRoadQuests } from './quests/roadQuests';
+import { setupClassTrials } from './quests/classTrials';
 import { buildPortAurelle, PORT_SPOTS } from './world/portAurelle';
 import { Fishing, type FishingSpot } from './world/fishing';
 import { Duel } from './combat/duel';
@@ -339,16 +340,16 @@ async function boot() {
 
   // ---- UI ------------------------------------------------------------------
   const hud = new HUD(player, r.camera);
-  hud.resource = () => skillRt.resource();
+  hud.resource = () => skillRt.resources();
+  skillRt.notify = (m) => hud.toast(m);
   hud.skillSlot = (ref) => {
     const sk = SkillRuntime.parse(ref);
     if (!sk?.def) return null;
-    const v = player.paths.node(sk.d.id, sk.n.id);
     const def = sk.def;
     const cost = def.mana ? `${skillRt.manaCost(def)}` : def.flow ? `${def.flow}F` : def.stamina ? `${def.stamina}` : '';
     const why = skillRt.blocked(ref);
     return {
-      svg: skillIcon(sk.d.id, sk.d.color, sk.n.name, v?.r ?? 0),
+      svg: skillIcon(sk.d.id, sk.d.color, sk.n.name, skillRt.rankOf(sk.d.id, sk.n.id)),
       name: `${sk.n.name} (${sk.d.name})`,
       cost,
       cd: def.cd > 0 ? skillRt.cooldown(sk.key) / def.cd : 0,
@@ -396,7 +397,7 @@ async function boot() {
   const town = new Town(r.scene, r.camera, dialogue, player);
   const shopUI = new ShopUI(player);
   town.shopUI = shopUI;
-  town.mentorOptions = (spec, say) => mentorOptions(player.paths, spec, say, (m) => hud.toast(m));
+  town.mentorOptions = (spec, say) => mentorOptions(player.paths, spec, say, (m) => hud.toast(m), trials);
   frontier = new FrontierRegion(
     r.scene, player, fx, dialogue, world.mats,
     (msg) => hud.toast(msg),
@@ -491,6 +492,8 @@ async function boot() {
       run: () => town.showShop('Village Trader', c.name, 'Scrap for water, water for scrap. Simple trade.', [['healthPotion', 18], ['manaPotion', 22], ['scrapCleaver', 55], ['shortsword', 40], ['honeycomb', 12]], { wants: [['scrapMetal', 11], ['sharkTooth', 34], ['duneGlass', 28]], buyRate: { default: 0.3 } }),
     }]);
   });
+  // Lightbinders gather Radiance under the open sky by day.
+  skillRt.env = () => ({ daylight: realm.mode === 'overworld' && time.hour >= 6 && time.hour < 19 && weather.p.rain < 0.5 });
   // Townsfolk: one interactable that follows whoever is nearest.
   const folkTalk = {
     pos: new THREE.Vector3(0, -999, 0),
@@ -565,6 +568,9 @@ async function boot() {
   town.questOptions = (id, show, back) => quests.options(id, show, back);
   town.questDone = (id) => quests.isDone(id);
   const glenMore = setupGlenMoreQuests({ quests, scene: r.scene, fx, beasts: slimes, toast: (m) => hud.toast(m) });
+  // Classes are learned through mentors' trials (Kaela, Magus Orren, Brother Aldous).
+  const trials = setupClassTrials({ quests, paths: player.paths, toast: (m) => hud.toast(m) });
+  folkServices.set('aldous', (show, back) => mentorOptions(player.paths, { id: 'aldous' }, (t) => show(t, [{ label: 'Go on.', run: back }]), (m) => hud.toast(m), trials));
   const mainQuest = setupMainQuest(quests, { grukkDead: () => realm.progress.bossDead, gravewoodCleared: () => gravewood.cleared });
   // ---- Road encounters, caravans and the King's Road quests (phase 4) ------------------
   const encounters = new Encounters(r.scene, player, slimes, fx);
@@ -1684,6 +1690,7 @@ async function boot() {
       guildContracts.restore();
       applySave(player, structuredClone(fresh));
       player.respawn(spawn.clone());
+      skillRt.reset();
       time.day = startDay;
       time.skipTo(startHour);
       weather.forced = null;

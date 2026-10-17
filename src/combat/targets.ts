@@ -37,6 +37,8 @@ export interface IncomingAttack {
   damage: number;
   from: THREE.Vector3; // attacker position or projectile origin
   at?: THREE.Vector3; // current impact/projectile position, when applicable
+  /** an arrow, bolt or thrown thing (wards can stop these) */
+  projectile?: boolean;
   parryable: boolean;
   poise: number;
   onParried?: () => void;

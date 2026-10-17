@@ -252,7 +252,7 @@ export class TreeView {
     const hv = this.hover;
     if (hv) {
       const v = P.node(d.id, hv.id);
-      const nm = hv.type === 'choice' ? (v ? hv.name.split('|')[v.pick ?? 0] : hv.name.replace('|', ' / ')) : hv.name;
+      const nm = hv.type === 'choice' ? (v ? hv.name.split('|')[v.pick ?? 0] : hv.name.replace('|', ' / ')) : P.displayName(d.id, hv);
       c.font = '15px Cinzel, serif';
       const tw = c.measureText(nm).width, bx = hv.x! - tw / 2 - 10, by = hv.y! - 52;
       c.fillStyle = 'rgba(7,8,12,.92)';

@@ -70,7 +70,7 @@ export class Bolts {
       const p = b.mesh.position;
       const a = player.pos.clone().setY(player.pos.y + 0.3), c = player.pos.clone().setY(player.pos.y + 1.6);
       if (!player.dead && segmentPointDistance(a, c, p) < 0.45) {
-        player.receiveAttack({ damage: b.damage, from: p.clone().sub(b.vel.clone().normalize().multiplyScalar(4)), at: p.clone(), parryable: false, poise: 12 });
+        player.receiveAttack({ damage: b.damage, from: p.clone().sub(b.vel.clone().normalize().multiplyScalar(4)), at: p.clone(), parryable: false, poise: 12, projectile: true });
         b.life = 0;
       }
     }

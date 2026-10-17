@@ -5,9 +5,18 @@ import type { Paths } from './paths';
 
 // What a mentor can do for you, as extra dialogue replies: teach their
 // disciplines, make one of their combat classes your active one, or undo
-// your training (respec, 75% of the XP back).
+// your training (respec, 75% of the XP back). Classes with a trial quest are
+// only taught once the trial is done (the quest's completion teaches them).
 
-export function mentorOptions(paths: Paths, s: NpcSpec, say: (text: string) => void, notify: (msg: string) => void): DialogueOption[] {
+/** The quest log, as far as trials need it. */
+export interface Trials {
+  status(id: string): 'active' | 'done' | 'available' | 'locked';
+  accept(id: string): void;
+  offer(id: string): string;
+  note(id: string): string;
+}
+
+export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: string) => void, notify: (msg: string) => void, trials?: Trials): DialogueOption[] {
   const out: DialogueOption[] = [];
   for (const d of DISCIPLINES) {
     if (d.mentorNpc !== s.id || d.secret) continue;
@@ -15,6 +24,16 @@ export function mentorOptions(paths: Paths, s: NpcSpec, say: (text: string) => v
       out.push({
         label: `Teach me ${d.name}.`,
         run: () => {
+          if (d.trial && trials && trials.status(d.trial) !== 'done') {
+            if (trials.status(d.trial) === 'active') {
+              say(`Not until you have finished my trial. ${trials.note(d.trial)}`);
+              return;
+            }
+            trials.accept(d.trial);
+            notify(`Trial accepted · ${d.name}`);
+            say(trials.offer(d.trial));
+            return;
+          }
           if (!paths.canTeach(d.id)) {
             const [req, lv] = d.requires!;
             say(`Not yet. Come back when your ${DISC[req].name} has reached level ${lv}.`);
@@ -31,10 +50,10 @@ export function mentorOptions(paths: Paths, s: NpcSpec, say: (text: string) => v
       out.push({
         label: `Make ${d.name} my fighting class.`,
         run: () => {
-          const prev = DISC[paths.active].name;
+          const prev = DISC[paths.active]?.name;
           paths.setActive(d.id);
           notify(`${d.name} is now your active combat class`);
-          say(`Then leave ${prev} at the door. Only one way of fighting lives in your hands at a time.`);
+          say(prev ? `Then leave ${prev} at the door. Only one way of fighting lives in your hands at a time.` : 'Good. Then this is how you fight now.');
         },
       });
     }
