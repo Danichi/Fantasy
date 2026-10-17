@@ -23,6 +23,7 @@ test('O1: a new save can be any origin, and every passive changes its number', a
     s.takeHit({ damage: 9999, poise: 0, dir: new g.THREE.Vector3(0, 0, 1), at: s.center.clone(), crit: false, source: 'melee' });
     out.humanXp = p.prog.xp - xp0;
     p.prog.addXp(60000);
+    if (!p.paths.learned('gale')) p.paths.teach('gale'); // nobody starts with a class: Kaela's trial teaches it
     while (p.paths.canInvest('gale')) p.paths.invest('gale');
     out.humanPoints = p.paths.earned('gale') - (p.paths.level('gale') + Math.floor(p.paths.level('gale') / 5));
     const hp0 = p.maxHp;
