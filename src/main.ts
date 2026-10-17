@@ -120,7 +120,7 @@ import { Town, NPCS } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
 import { loadArmourKit } from './enemies/armourKit';
 import { MINE_CLEARING } from './world/mineEntrance';
-import { loadSave, writeSave, buildSave, applySave, hasSave, clearSave } from './save';
+import { loadSave, writeSave, buildSave, applySave, clearSave } from './save';
 import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 import { afflictions } from './combat/afflictions';
@@ -1330,7 +1330,9 @@ async function boot() {
     const day = time.label.split(', ');
     overlays.showPaused(true, `<span><b>REGION</b>${regionName}</span><span><b>${day[0] ?? 'DAY'}</b>${day[1] ?? ''}</span><span><b>LEVEL</b>${player.prog.level}</span><span><b>GOLD</b>${player.prog.gold.toLocaleString()}</span>`);
   };
-  if (!TEST_MODE && hasSave()) {
+  // The save as it was at boot: a fresh game autosaves while booting (the main
+  // quest begins), and that must not hide the character creator.
+  if (!TEST_MODE && saveData) {
     overlays.lockOrigin();
     const cta = overlays.start.querySelector('.cta')!;
     cta.textContent = 'CLICK TO CONTINUE';
