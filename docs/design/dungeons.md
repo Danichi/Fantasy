@@ -1,5 +1,17 @@
 # Dungeons Reborn (update 3 plan)
 
+## Built (feat/dungeons, 2026-10)
+
+Every phase, D1 to D5. The kit is `src/dungeon/kit/` (grammar, room templates and
+themes, the builder, traps, secrets, puzzles, the boss template, Dungeoneering);
+the dungeons are `src/dungeon/dungeons/` (the crypt rebuilt with Grukk in three
+phases, Hollow Ridge Caves with Captain Vess, the Drowned Shrine with the
+Tide-Warden and its rising water, and a test dungeon). The automap is a layer in
+`ui/dungeonMap.ts`, a Cartographer's Eye perk with an Auto-ink switch; the
+hand-drawn map stays the default. Decisions taken at their defaults. Tests:
+`tests/dungeonsReborn.spec.ts`. Merge notes, the kit's API and the seams:
+[merge-notes/dungeons.md](merge-notes/dungeons.md).
+
 Status: plan, 2026-10-08. Nothing here is built yet beyond what "What exists"
 lists. It follows phase 7 of the World Expansion plan. Numbers are starting
 points to tune.

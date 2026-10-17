@@ -114,6 +114,7 @@ import { Flowers } from './world/flowers';
 import { Rewards, XP_FOR_KIND } from './progression/progression';
 import { DungeonMapUI } from './ui/dungeonMap';
 import { Realm } from './dungeon/realm';
+import { setupDungeonEntrances } from './dungeon/dungeons/entrances'; // Dungeons Reborn (feat/dungeons)
 import { Town, NPCS } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
 import { loadArmourKit } from './enemies/armourKit';
@@ -389,6 +390,8 @@ async function boot() {
     clearEnemies: () => { slimes.clear(); frontier?.dispose(); encounters?.clear(); },
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
   }, rewards, world.crypt.door, world.mineDoor);
+  // ---- Dungeons Reborn (feat/dungeons): Hollow Ridge Caves and the Drowned Shrine open onto the world ----
+  const dungeons = setupDungeonEntrances(r.scene, world.mats, realm);
   const dialogue = new DialogueUI();
   const town = new Town(r.scene, r.camera, dialogue, player);
   const shopUI = new ShopUI(player);
@@ -1693,6 +1696,7 @@ async function boot() {
       THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       origins, creator, // ---- Origins (feat/origins) ----
+      dungeons, // Dungeons Reborn (feat/dungeons)
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

@@ -73,7 +73,7 @@ test('the Skills screen opens with K, invests XP and learns tree nodes', async (
   await page.evaluate(() => (window as any).__game.input.press('KeyK'));
   await page.waitForTimeout(200);
   await page.evaluate(() => (window as any).__game.input.release('KeyK'));
-  await expect(page.locator('.sk')).toBeVisible();
+  await expect(page.locator('.sk:not(.sea)')).toBeVisible();
   // Secrets are hidden; unlearned basics are listed.
   await expect(page.locator('.sk-disc', { hasText: 'Oathbreaker' })).toHaveCount(0);
   await expect(page.locator('.sk-disc', { hasText: 'Boundary Style' })).toHaveCount(1);
@@ -110,7 +110,7 @@ test('the Skills screen opens with K, invests XP and learns tree nodes', async (
   await page.keyboard.press('Escape');
   await expect(page.locator('.sk-families')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.locator('.sk')).toBeHidden();
+  await expect(page.locator('.sk:not(.sea)')).toBeHidden();
   expect(errors).toEqual([]);
 });
 
