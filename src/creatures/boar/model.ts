@@ -235,7 +235,7 @@ export const boarPaint: PaintFn = (p, n, tag, out) => {
 };
 
 /** A tapering, curving horn/tusk along a spline. */
-export function tuskGeometry(points: V3[], r0: number, r1: number, seg = 18, radial = 10) {
+export function tuskGeometry(points: V3[], r0: number, r1: number, seg = 18, radial = 10, colors: [number, number] = [0x6e5a3e, 0xd8c9a6]) {
   const curve = new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(...p)));
   const g = new THREE.TubeGeometry(curve, seg, 1, radial, false);
   const pos = g.getAttribute('position');
@@ -259,7 +259,7 @@ export function tuskGeometry(points: V3[], r0: number, r1: number, seg = 18, rad
   tip.deleteAttribute('uv');
   g.deleteAttribute('uv');
   // Stained near the gum, clean ivory toward the point.
-  const base = new THREE.Color(0x6e5a3e), ivory = new THREE.Color(0xd8c9a6), cc = new THREE.Color();
+  const base = new THREE.Color(colors[0]), ivory = new THREE.Color(colors[1]), cc = new THREE.Color();
   const tint = (geo: THREE.BufferGeometry, at: (i: number) => number) => {
     const n = geo.getAttribute('position').count;
     const col = new Float32Array(n * 3);

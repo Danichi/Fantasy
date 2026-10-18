@@ -2,6 +2,8 @@ import type * as THREE from 'three';
 import { RELIEF } from '../world/worldMap';
 import { Boar } from './boar/boar';
 import { boarWallow } from './dens';
+import { Spider } from './spider/spider';
+import { spiderHollow } from './spider/webs';
 import type { Population, Habitat } from './population';
 import { creatureReady, prepareCreature } from './geometryStore';
 
@@ -12,7 +14,7 @@ import { creatureReady, prepareCreature } from './geometryStore';
 const TEMPERATE = new Set(['elderGlen', 'cresha', 'wildlands', 'southernMarches', 'verdantElves', 'royalCapital', 'portAurelle']);
 
 export function registerSpecies(pop: Population, scene: THREE.Scene) {
-  void prepareCreature('boar');
+  void prepareCreature('boar').then(() => prepareCreature('spider'));
   pop.add({
     id: 'boar',
     group: [1, 3],
@@ -26,5 +28,20 @@ export function registerSpecies(pop: Population, scene: THREE.Scene) {
     },
     make: (at, level, o) => new Boar(at, level, scene, pop.fx, o.leader && o.den ? { size: 1.38 } : {}),
     den: { name: 'Boar wallow', build: boarWallow },
+  });
+  pop.add({
+    id: 'spider',
+    group: [1, 2],
+    spread: 6,
+    minRoad: 25,
+    ready: () => creatureReady('spider'),
+    habitat: (h: Habitat) => {
+      if (!TEMPERATE.has(h.region)) return 0;
+      // Woods and their dark edges; far bolder at night.
+      const ground = h.relief === RELIEF.forest ? 2.4 : h.relief === RELIEF.marsh ? 0.6 : h.relief === RELIEF.open ? 0.15 : 0;
+      return ground * (h.night ? 1.8 : 1) * (h.road > 60 ? 1.3 : 1);
+    },
+    make: (at, level, o) => new Spider(at, level, scene, pop.fx, o.leader && o.den ? { size: 1.45 } : {}),
+    den: { name: 'Spider hollow', build: spiderHollow },
   });
 }

@@ -49,6 +49,11 @@ interface Foot {
   air: number;
   /** Just landed this frame. */
   landed: boolean;
+  /** Override blend (0 = walking, 1 = held at the override point) and that point. */
+  ow: number;
+  ovAt: THREE.Vector3;
+  /** Where the toe actually is this frame (gait position blended with any override). */
+  toeAt: THREE.Vector3;
 }
 
 const _w = new THREE.Vector3();
@@ -68,6 +73,10 @@ export class Gait {
   speed = 0;
   /** Set false to let the legs hang (falling, dying). */
   grounded = true;
+  /** Per-foot world targets that take a leg off the walk (raised in threat, curled in death). */
+  readonly override: (THREE.Vector3 | null)[] = [];
+  /** How quickly legs move to and from their overrides. */
+  overrideRate = 10;
 
   constructor(
     bones: Record<string, THREE.Bone>,
@@ -84,7 +93,7 @@ export class Gait {
         spec: s, ik, ankle: a, toe: t,
         restCannon: t.position.clone().negate(),
         home, planted: new THREE.Vector3(), from: new THREE.Vector3(), pos: new THREE.Vector3(),
-        swinging: false, lastP: 0, air: 0, landed: false,
+        swinging: false, lastP: 0, air: 0, landed: false, ow: 0, ovAt: new THREE.Vector3(), toeAt: new THREE.Vector3(),
       });
     }
   }
@@ -172,17 +181,24 @@ export class Gait {
       }
       f.lastP = p;
 
+      // Overrides (raised legs, curled legs) blend over the walk.
+      const ov = this.override[this.feet.indexOf(f)] ?? null;
+      if (ov) f.ovAt.copy(ov);
+      f.ow += ((ov ? 1 : 0) - f.ow) * (1 - Math.exp(-dt * this.overrideRate));
+      f.toeAt.copy(f.pos);
+      if (f.ow > 0.002) f.toeAt.lerp(f.ovAt, f.ow);
+
       // Pose: ankle sits above the toe along the rest cannon, curled back while in the air.
       _ankle.copy(f.restCannon).applyQuaternion(_q);
       if (f.air > 0) {
         _up.set(1, 0, 0).applyQuaternion(_q);
         _ankle.applyAxisAngle(_up, -(o.flick ?? 0.5) * f.air);
       }
-      _ankle.add(f.pos);
+      _ankle.add(f.toeAt);
       _bend.copy(f.ik.restBend).applyQuaternion(_q);
       solveTwoBone(f.ik, _ankle, _bend);
       f.ankle.getWorldPosition(_ankle);
-      _dir.subVectors(f.pos, _ankle);
+      _dir.subVectors(f.toeAt, _ankle);
       _up.set(0, 0, 1).applyQuaternion(_q);
       aim(f.ankle, f.toe.position.clone().normalize(), _restUp, _dir, _up);
     }

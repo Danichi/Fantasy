@@ -241,6 +241,40 @@ export const sfx = {
     vib.stop(t + dur + 0.05);
   },
 
+  /** A spider's hiss: a dry, rising rush of air. */
+  hiss(volume = 0.35) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.01, dur = 0.5 + Math.random() * 0.3;
+    const n = noise(c, t, dur + 0.05);
+    const f = c.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.setValueAtTime(2200, t);
+    f.frequency.linearRampToValueAtTime(4200, t + dur);
+    const g = c.createGain();
+    env(g, t, volume, 0.04, dur * 0.6, dur * 0.35);
+    n.connect(f).connect(g).connect(out);
+  },
+
+  /** A spider's chitter: a quick run of dry clicks. */
+  chitter(volume = 0.3) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.01;
+    const clicks = 6 + Math.floor(Math.random() * 6);
+    for (let i = 0; i < clicks; i++) {
+      const t0 = t + i * (0.028 + Math.random() * 0.02);
+      const n = noise(c, t0, 0.012);
+      const f = c.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 6;
+      f.frequency.value = 2600 + Math.random() * 1800;
+      const g = c.createGain();
+      env(g, t0, volume, 0.001, 0.002, 0.008);
+      n.connect(f).connect(g).connect(out);
+    }
+  },
+
   /** A dead thing's moan: a wavering low voice through a closing mouth. */
   groan(volume = 0.35) {
     if (!this.enabled) return;

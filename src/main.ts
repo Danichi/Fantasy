@@ -119,6 +119,7 @@ import { Population } from './creatures/population';
 import { registerSpecies } from './creatures/species';
 import { creatureView } from './creatures/view';
 import { tickBoarFur } from './creatures/boar/visual';
+import { tickSpiderFur } from './creatures/spider/visual';
 import { DungeonMapUI } from './ui/dungeonMap';
 import { Realm } from './dungeon/realm';
 import { setupDungeonEntrances } from './dungeon/dungeons/entrances'; // Dungeons Reborn (feat/dungeons)
@@ -1565,7 +1566,9 @@ async function boot() {
     cam.update(dt, renderPos, player.sprinting);
     creatureView.camera = r.camera.position;
     creatureView.player = player;
+    creatureView.night = time.hour < 5.5 || time.hour > 20.5;
     tickBoarFur(dt);
+    tickSpiderFur(dt);
     r.camera.getWorldDirection(player.aimDir);
     ground.update(r.camera.position);
     grass.update(dt, r.camera.position, renderPos);

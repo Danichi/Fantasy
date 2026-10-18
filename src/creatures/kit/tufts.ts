@@ -34,6 +34,8 @@ export interface TuftOpts {
   where?: (p: THREE.Vector3, fur: number) => boolean;
   /** Override lift per tuft (e.g. a crest that stands up). */
   liftAt?: (p: THREE.Vector3, n: THREE.Vector3, fur: number) => number;
+  /** 'lock' = a shaped lock of hair (9 triangles); 'hair' = a single fine spike (3 triangles). */
+  shape?: 'lock' | 'hair';
 }
 
 function rng(seed: number) {
@@ -88,6 +90,7 @@ export function growTufts(src: THREE.BufferGeometry, o: TuftOpts) {
   for (let t = 0; t < ntri; t++) {
     let k = want[t] * scale;
     while (k > 0) {
+      // (`continue` below moves on to the next tuft in this triangle)
       if (k < 1 && rand() > k) break;
       k -= 1;
       const i0 = idx[t * 3], i1 = idx[t * 3 + 1], i2 = idx[t * 3 + 2];
@@ -153,6 +156,19 @@ export function growTufts(src: THREE.BufferGeometry, o: TuftOpts) {
       };
       const out0 = side, out1 = side.clone().negate(), out2 = n;
       const outs = [out0, out1, out2];
+      if (o.shape === 'hair') {
+        // A fine spike: three faces from the root ring straight to a curved tip.
+        tipP.copy(base).addScaledVector(d1, L * 0.55).addScaledVector(d2, L * 0.45);
+        for (let s = 0; s < 3; s++) {
+          const s2 = (s + 1) % 3;
+          const o1 = outs[s].clone().add(outs[s2]).normalize();
+          push(ring[s], 0, o1);
+          push(ring[s2], 0, o1);
+          push(tipP, 1, d2);
+        }
+        made++;
+        continue;
+      }
       // Sides: root ring -> mid ring -> tip.
       for (let s = 0; s < 3; s++) {
         const s2 = (s + 1) % 3;
@@ -181,6 +197,7 @@ export function growTufts(src: THREE.BufferGeometry, o: TuftOpts) {
   fixWinding(g);
   g.computeBoundingSphere();
   g.userData.count = made;
+  g.userData.vertsPer = o.shape === 'hair' ? 9 : 27;
   return g;
 }
 

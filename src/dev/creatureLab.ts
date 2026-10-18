@@ -2,8 +2,10 @@ import '../render/stylize';
 import * as THREE from 'three';
 import { Sky } from '../render/sky';
 import { SUN_DIR } from '../render/renderer';
-import { BoarVisual, tickBoarFur, type BoarPose } from '../creatures/boar/visual';
+import { BoarVisual, tickBoarFur } from '../creatures/boar/visual';
 import { boarGeometry } from '../creatures/boar/model';
+import { SpiderVisual, tickSpiderFur } from '../creatures/spider/visual';
+import { spiderGeometry } from '../creatures/spider/model';
 
 // Dev page: a creature under the game's lighting, seen from several angles in
 // one frame, for quick visual iteration.
@@ -55,10 +57,12 @@ ground.receiveShadow = true;
 scene.add(ground);
 
 const t0 = performance.now();
-const geo = boarGeometry();
-const boar = new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
+const kind = P.get('c') ?? 'boar';
+const geo = kind === 'spider' ? spiderGeometry() : boarGeometry();
+type Look = { root: THREE.Group; gait: { reset: (r: THREE.Object3D, g: (x: number, z: number) => number) => void }; setPose: (p: never) => void; update: (dt: number, v: THREE.Vector3, g: (x: number, z: number) => number) => void; lod: (d: number, fur: boolean) => void };
+const boar: Look = kind === 'spider' ? new SpiderVisual() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
 scene.add(boar.root);
-boar.setPose((P.get('pose') ?? 'idle') as BoarPose);
+boar.setPose((P.get('pose') ?? 'idle') as never);
 const vel = new THREE.Vector3();
 const speed = Number(P.get('speed') ?? 0);
 boar.gait.reset(boar.root, () => 0);
@@ -71,6 +75,7 @@ const step = (sec: number) => {
     vel.set(0, 0, speed);
     boar.root.position.z += speed * dt;
     tickBoarFur(dt);
+    tickSpiderFur(dt);
     boar.update(dt, vel, () => 0);
   }
 };
@@ -97,6 +102,7 @@ const VIEWS: Record<string, View> = {
   top: { name: 'top', from: [0.6, 3.2, 0.2], at: [0, 0.5, 0.05], fov: 32 },
   flank: { name: 'flank', from: [1.1, 0.95, 0.1], at: [0.1, 0.75, 0.05], fov: 30 },
   crest: { name: 'crest', from: [0.9, 1.3, 0.5], at: [0, 0.9, 0.15], fov: 30 },
+  abdo: { name: 'abdomen', from: [0.9, 1.15, -1.25], at: [0, 0.6, -0.5], fov: 30 },
   low: { name: 'low', from: [1.4, 0.25, 1.8], at: [0, 0.5, 0.1], fov: 34 },
   game: { name: 'game cam', from: [2.5, 2.4, 4.5], at: [0, 0.7, 0], fov: 58 },
   far: { name: 'far', from: [6, 3, 12], at: [0, 0.5, 0], fov: 58 },
@@ -131,7 +137,7 @@ const render = () => {
   });
 };
 render();
-const info = { buildMs: Math.round(geo.ms), verts: geo.body.getAttribute('position').count, tris: geo.body.index!.count / 3, farTris: geo.far.index!.count / 3, totalMs: Math.round(performance.now() - t0) };
+const info = { buildMs: Math.round(geo.ms), verts: geo.body.getAttribute('position').count, tris: (geo.body.index?.count ?? 0) / 3, farTris: (geo.far.index?.count ?? 0) / 3, totalMs: Math.round(performance.now() - t0) };
 document.getElementById('info')!.textContent = JSON.stringify(info);
-(window as any).__lab = { step, render, boar, info, setPose: (p: BoarPose) => boar.setPose(p) };
+(window as any).__lab = { step, render, boar, info, setPose: (p: string) => boar.setPose(p as never) };
 (window as any).__done = true;

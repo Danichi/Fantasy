@@ -192,3 +192,65 @@ test('the wild is stronger and busier off the road, never in town, and dens hold
   expect(res.toasts.some((t: string) => /wallow cleared/i.test(t))).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test('a Giant Forest Spider rears up, webs your feet, bites with venom, and a parry flips it', async ({ game }) => {
+  const { page, errors } = game;
+  await meadow(page);
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, pl = g.player, T = g.THREE;
+    (await import('/src/creatures/geometryStore.ts')).prepareCreatureNow('spider');
+    const spawn = (dz: number) => {
+      const p = pl.pos;
+      const grp = g.population.spawnGroup(g.population.species.get('spider'), new T.Vector3(p.x, p.y, p.z + dz), 3);
+      for (const m of grp.members.slice(1)) m.dispose();
+      const s = grp.members[0];
+      s.yaw = Math.PI;
+      return s;
+    };
+    // It notices you and rears up.
+    const s = spawn(9);
+    let reared = false;
+    for (let i = 0; i < 30; i++) {
+      g.stepSim(1);
+      if (s.mode === 'threat') reared = true;
+    }
+    // Web: flung from its spinnerets, sticks your feet.
+    s.setMode('spit', 1.0);
+    s.spitCd = 0;
+    for (let i = 0; i < 150 && pl.webbed <= 0; i++) g.stepSim(1);
+    const webbed = pl.webbed;
+    pl.webbed = 0;
+    s.dispose();
+    // Venom: a bite leaves poison working.
+    const b = spawn(1.5);
+    b.angry = true;
+    b.setMode('bite', 0.75);
+    const hp0 = pl.hp;
+    for (let i = 0; i < 40 && pl.poison.left <= 0; i++) g.stepSim(1);
+    const poisoned = pl.poison.left > 0 && pl.hp < hp0;
+    pl.poison.left = 0;
+    pl.hp = pl.maxHp;
+    // Parry the next bite: it flips over, stunned.
+    b.dispose();
+    const c = spawn(1.5);
+    c.angry = true;
+    pl.yaw = 0;
+    c.setMode('bite', 0.75);
+    for (let i = 0; i < 60 && c.modeT < 0.35; i++) g.stepSim(1);
+    pl.startAction('parryShield');
+    pl.act.t = pl.act.def.parry[0] + 0.01;
+    let flipped = false;
+    for (let i = 0; i < 15; i++) {
+      g.stepSim(1);
+      if (c.mode === 'flipped') flipped = true;
+    }
+    return { reared, webbed, poisoned, flipped, stunned: c.stunned, label: c.label };
+  });
+  expect(res.reared).toBe(true);
+  expect(res.webbed).toBeGreaterThan(1);
+  expect(res.poisoned).toBe(true);
+  expect(res.flipped).toBe(true);
+  expect(res.stunned).toBe(true);
+  expect(res.label).toBe('Giant Forest Spider');
+  expect(errors).toEqual([]);
+});

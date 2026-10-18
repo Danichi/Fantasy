@@ -48,6 +48,10 @@ export interface IncomingAttack {
   burn?: number;
   /** shove (m/s) away from the attacker when it lands: charges, slams */
   knock?: number;
+  /** venom: damage per second for a few seconds after it lands */
+  poison?: number;
+  /** webbing: seconds you are slowed and stuck (a roll tears free sooner) */
+  web?: number;
 }
 
 export type DefenceResult = 'dodged' | 'parried' | 'blocked' | 'guardBroken' | 'hit';

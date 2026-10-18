@@ -103,6 +103,10 @@ export class Player {
   private staminaDelay = 0;
   private hot = { rate: 0, left: 0 };
   private burn = { dps: 0, left: 0 };
+  /** venom in the blood (spider bites) */
+  poison = { dps: 0, left: 0 };
+  /** seconds left stuck in webbing: slow, no sprinting */
+  webbed = 0;
   mounted = false;
   private mountVisual = new THREE.Group();
 
@@ -444,6 +448,8 @@ export class Player {
     this.lastPresentT = -1;
 
     if (def.roll) {
+      // Rolling tears you most of the way out of webbing.
+      this.webbed *= 0.25;
       const dir = def.roll.back ? this.forward.negate() : this.moveIntent.lengthSq() > 0 ? this.moveIntent.clone() : this.forward;
       this.act.rollDir = dir;
     }
@@ -699,6 +705,7 @@ export class Player {
       const ms = this.mountStats ?? { canter: 11.5, gallop: 15, accel: 8 };
       targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
+      if (this.webbed > 0 && !this.mounted) targetSpeed = Math.min(targetSpeed, 1.3);
       // Wading slows you down; deep water means swimming.
       const wade = waterDepthAt(this.pos.x, this.pos.z);
       if (wade > 0.25) targetSpeed *= 0.5;
@@ -1229,6 +1236,8 @@ export class Player {
     const armor = this.equip.armorValue;
     const dmg = att.damage * (100 / (100 + armor * 5)) * (att.burn ? 1 - this.fireResist : 1);
     this.applyDamage(dmg);
+    if (att.poison) this.poison = { dps: Math.max(att.poison, this.poison.left > 0 ? this.poison.dps : 0), left: 4 };
+    if (att.web) this.webbed = Math.max(this.webbed, att.web);
     if (att.burn) {
       const burnScale = 1 - this.fireResist;
       this.burn = { dps: att.burn * burnScale, left: 3 };
@@ -1278,6 +1287,8 @@ export class Player {
     this.stamina = this.maxStamina;
     this.mana = this.maxMana;
     this.burn.left = 0;
+    this.poison.left = 0;
+    this.webbed = 0;
     this.hot.left = 0;
     this.act = null;
     this.teleport(at);
@@ -1294,6 +1305,11 @@ export class Player {
       const want = this.hp + this.hot.rate * dt;
       if (want > this.maxHp) this.onOverheal?.(want - this.maxHp);
       this.hp = Math.min(this.maxHp, want);
+    }
+    this.webbed = Math.max(0, this.webbed - dt);
+    if (this.poison.left > 0 && !this.dead) {
+      this.poison.left -= dt;
+      this.applyDamage(this.poison.dps * dt);
     }
     if (this.burn.left > 0 && !this.dead) {
       this.burn.left -= dt;

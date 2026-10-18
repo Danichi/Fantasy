@@ -7,4 +7,6 @@ export const creatureView: {
   player: Player | null;
   /** fur and fine detail on (quality setting) */
   fur: boolean;
-} = { camera: null, player: null, fur: true };
+  /** it is night (creatures are bolder, see further) */
+  night: boolean;
+} = { camera: null, player: null, fur: true, night: false };
