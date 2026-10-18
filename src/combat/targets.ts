@@ -26,6 +26,9 @@ export interface Target {
   lockable: boolean;
   hp: number;
   maxHp: number;
+  /** name and level shown over the health bar */
+  label?: string;
+  level?: number;
   takeHit(h: HitInfo): void;
 }
 
@@ -43,6 +46,8 @@ export interface IncomingAttack {
   poise: number;
   onParried?: () => void;
   burn?: number;
+  /** shove (m/s) away from the attacker when it lands: charges, slams */
+  knock?: number;
 }
 
 export type DefenceResult = 'dodged' | 'parried' | 'blocked' | 'guardBroken' | 'hit';

@@ -10,7 +10,9 @@ export interface GameEvents {
   enemyHit: { at: Vector3; amount: number; crit: boolean; enemyId: number };
   /** the player's blade connected (after enemyHit) */
   meleeHit: { target: import('../combat/targets').Target; amount: number; crit: boolean; action: string };
-  enemyDied: { at: Vector3; enemyId: number; kind: string };
+  enemyDied: { at: Vector3; enemyId: number; kind: string; level?: number };
+  /** a creature den (boar wallow, spider hollow, bat roost) was emptied */
+  denCleared: { id: string; species: string };
   swing: { heavy: boolean };
   spellCast: { spell: string };
   spellImpact: { at: Vector3; spell: string };

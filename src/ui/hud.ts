@@ -382,6 +382,11 @@ export class HUD {
         const e = el('div', 'ehp', this.root);
         const b = el('b', '', e);
         const i = el('i', '', e);
+        if (t.label) {
+          // Name and level over the bar (hand-built creatures).
+          const n = el('span', 'ehp-name', e);
+          n.textContent = t.level ? `${t.label} · Lv ${t.level}` : t.label;
+        }
         h = { e, i, b, shown: 0, trail: 1 };
         this.ehp.set(t.id, h);
       }

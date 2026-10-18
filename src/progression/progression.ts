@@ -23,6 +23,8 @@ export const XP_FOR_KIND: Record<string, [xp: number, gold: number]> = {
   // the Golden Expanse
   sandGolem: [1500, 500], sandEel: [30, 6], sandCrab: [42, 9], duneJelly: [18, 4], rayRider: [95, 30],
   sandShark: [70, 12], sandRay: [32, 6], sawtooth: [1100, 400], scavenger: [44, 16], scavengerChief: [320, 160],
+  // hand-built creatures (src/creatures): base values at level 1, scaled by level
+  boar: [24, 4],
 };
 
 /** XP a level cost under the old auto-levelling system (used to refund old saves). */

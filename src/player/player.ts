@@ -1221,6 +1221,7 @@ export class Player {
         return 'guardBroken';
       }
       this.applyDamage(through);
+      if (att.knock) this.vel.addScaledVector(toAtt, -att.knock * 0.35);
       events.emit('blockImpact', { at, guardBroken: false });
       this.onShake?.(0.12);
       return 'blocked';
@@ -1237,6 +1238,10 @@ export class Player {
     if (!this.dead && !heavyArmor && !this.staggerImmune && att.poise > (this.equip.poise + this.poiseFlat) * this.poiseMul * 0.8) {
       this.startAction('stagger');
       this.vel.addScaledVector(toAtt, -3.5);
+    }
+    if (att.knock && !this.dead) {
+      this.vel.addScaledVector(toAtt, -att.knock);
+      this.vel.y = Math.max(this.vel.y, att.knock * 0.4);
     }
     this.onShake?.(0.3);
     return 'hit';

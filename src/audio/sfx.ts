@@ -173,6 +173,74 @@ export const sfx = {
     thud.stop(t + 0.5);
   },
 
+  /** A boar's snort: two quick bursts of breath through the snout. */
+  snort(volume = 0.4) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.01;
+    for (let i = 0; i < 2; i++) {
+      const t0 = t + i * (0.13 + Math.random() * 0.05);
+      const n = noise(c, t0, 0.18);
+      const f = c.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 2.5;
+      f.frequency.setValueAtTime(900 + Math.random() * 300, t0);
+      f.frequency.exponentialRampToValueAtTime(380, t0 + 0.16);
+      const g = c.createGain();
+      env(g, t0, volume * (i ? 0.7 : 1), 0.008, 0.03, 0.12);
+      n.connect(f).connect(g).connect(out);
+    }
+  },
+
+  /** A boar's grunt: a short rough low voice. */
+  grunt(volume = 0.35) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.01, dur = 0.16 + Math.random() * 0.12;
+    const o = c.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(95 + Math.random() * 30, t);
+    o.frequency.linearRampToValueAtTime(70, t + dur);
+    const f = c.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 650;
+    const ws = shaper(c, 3);
+    const g = c.createGain();
+    env(g, t, volume, 0.01, dur * 0.5, dur * 0.5);
+    o.connect(ws).connect(f).connect(g).connect(out);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  },
+
+  /** A boar's squeal: hurt or charging, a harsh rising scream. */
+  squeal(volume = 0.4) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.01, dur = 0.45 + Math.random() * 0.25;
+    const base = 520 + Math.random() * 160;
+    const o = c.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(base, t);
+    o.frequency.linearRampToValueAtTime(base * 1.7, t + dur * 0.35);
+    o.frequency.linearRampToValueAtTime(base * 1.2, t + dur);
+    const vib = c.createOscillator();
+    vib.frequency.value = 23;
+    const vg = c.createGain();
+    vg.gain.value = 40;
+    vib.connect(vg).connect(o.frequency);
+    const f = c.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 1.6;
+    f.frequency.value = 1500;
+    const g = c.createGain();
+    env(g, t, volume, 0.03, dur * 0.5, dur * 0.4);
+    o.connect(f).connect(g).connect(out);
+    o.start(t);
+    vib.start(t);
+    o.stop(t + dur + 0.05);
+    vib.stop(t + dur + 0.05);
+  },
+
   /** A dead thing's moan: a wavering low voice through a closing mouth. */
   groan(volume = 0.35) {
     if (!this.enabled) return;

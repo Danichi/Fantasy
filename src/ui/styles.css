@@ -222,6 +222,7 @@ html, body {
 }
 .ehp i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(#e0584f, #9c1d16); }
 .ehp b { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255, 230, 180, 0.6); }
+.ehp .ehp-name { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 3px; white-space: nowrap; font: 600 11px/1 'Cinzel', serif; letter-spacing: 0.06em; color: #f3ead6; text-shadow: 0 1px 2px #000, 0 0 4px rgba(0, 0, 0, 0.8); }
 .dmg {
   position: absolute; font: 700 18px/1 var(--serif); color: #f3e7cf;
   text-shadow: 0 2px 3px #000, 0 0 6px rgba(0, 0, 0, 0.6); white-space: nowrap;

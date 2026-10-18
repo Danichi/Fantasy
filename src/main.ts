@@ -114,6 +114,11 @@ import { Foliage } from './world/foliage';
 import { StylizedNature } from './world/stylizedNature';
 import { Flowers } from './world/flowers';
 import { Rewards, XP_FOR_KIND } from './progression/progression';
+import { levelScale } from './creatures/creature';
+import { Population } from './creatures/population';
+import { registerSpecies } from './creatures/species';
+import { creatureView } from './creatures/view';
+import { tickBoarFur } from './creatures/boar/visual';
 import { DungeonMapUI } from './ui/dungeonMap';
 import { Realm } from './dungeon/realm';
 import { setupDungeonEntrances } from './dungeon/dungeons/entrances'; // Dungeons Reborn (feat/dungeons)
@@ -178,6 +183,12 @@ async function boot() {
   afflictions.fx = fx;
   const slimes = new BeastSpawner(r.scene, fx);
   if (TEST_MODE) slimes.enabled = false;
+  // Wild creatures across Cresha (src/creatures): wanderers, dens, region levels.
+  const population = new Population(r.scene, fx, (m) => hud.toast(m));
+  registerSpecies(population, r.scene);
+  population.placeDens(7, { x0: -820, z0: -820, x1: 820, z1: 820 }, 7);
+  if (TEST_MODE) population.enabled = false;
+  creatureView.fur = !LEAN_TEST;
   const spells = new Spells(r.scene, fx, player);
   const skillRt = new SkillRuntime(r.scene, player, fx, spells);
   // The village leaves NPC spots, the guild and the stables open.
@@ -316,9 +327,10 @@ async function boot() {
   void ocean;
   mark('flowers');
   const rewards = new Rewards(r.scene, player.prog);
-  events.on('enemyDied', ({ at, kind }) => {
+  events.on('enemyDied', ({ at, kind, level }) => {
     const [xp, gold] = XP_FOR_KIND[kind] ?? [10, 2];
-    rewards.spawn(at, xp, gold);
+    const k = level ? levelScale(level).xp : 1;
+    rewards.spawn(at, Math.round(xp * k), Math.round(gold * k));
   });
   events.on('bossSlam', ({ at }) => cam.shake(Math.max(0.15, 0.6 - at.distanceTo(player.pos) * 0.04)));
   events.on('levelUp', () => {
@@ -560,6 +572,7 @@ async function boot() {
   const roads = buildRoadFurniture(r.scene, world.mats, (who, title, text) => dialogue.show(who, title, text, [{ label: 'Turn back.', run: () => dialogue.close() }]));
   const foraging = new Foraging(r.scene, giveItem, gameHours, () => time.hour);
   foraging.fromJSON(saveData?.world?.forage);
+  population.fromJSON(saveData?.world?.wilds);
   const serviceNpc = (id: string) => town.npcs.find((n) => n.spec.id === id) ?? null;
   const quests = new QuestLog({
     count: countItem,
@@ -1268,7 +1281,7 @@ async function boot() {
     if (TEST_MODE && !location.search.includes('save')) return;
     const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON() }, realm.mineProgress);
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   // Guild contracts show in the quest log (tracker, journal, map, waypoint).
@@ -1475,6 +1488,7 @@ async function boot() {
     origins.update(STEP); // ---- Origins (feat/origins) ----
     if (realm.mode === 'overworld') {
       slimes.update(STEP, player);
+      population.update(STEP, player, time.hour, time.day);
       frontier.update(STEP);
       encounters.update(STEP, time.hour, weather.p.rain);
       crownRoad.update(STEP, player, time.state.night);
@@ -1549,6 +1563,9 @@ async function boot() {
     if (!paused) realm.present(alpha, overlayUp || mapUI.open ? 0 : simDt);
     if (!paused && realm.mode === 'overworld') gravewood.present(alpha, overlayUp || worldMap.open ? 0 : simDt, player, r.camera);
     cam.update(dt, renderPos, player.sprinting);
+    creatureView.camera = r.camera.position;
+    creatureView.player = player;
+    tickBoarFur(dt);
     r.camera.getWorldDirection(player.aimDir);
     ground.update(r.camera.position);
     grass.update(dt, r.camera.position, renderPos);
@@ -1700,6 +1717,7 @@ async function boot() {
       fishing.stop();
       if (player.mounted) horses.dismount();
       player.vehicle = null;
+      population.clear();
       if (realm.mode === 'dungeon') await realm.leave();
       if (realm.mode === 'interior') await realm.leaveInterior();
       slimes.clear();
@@ -1726,7 +1744,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, population, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       origins, creator, // ---- Origins (feat/origins) ----
       dungeons, // Dungeons Reborn (feat/dungeons)
