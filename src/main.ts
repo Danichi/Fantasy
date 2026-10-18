@@ -17,7 +17,7 @@ import { loadWorldMap } from './world/worldMap';
 import { Input } from './core/input';
 import { Player } from './player/player';
 import { ThirdPersonCamera } from './player/camera';
-import { DEBUG, TEST_MODE, LEAN_TEST } from './core/settings';
+import { DEBUG, TEST_MODE, LEAN_TEST, Q } from './core/settings';
 import { setupLoadout } from './items/loadout';
 import { FX } from './fx/particles';
 import { BeastSpawner } from './enemies/beastSpawner';
@@ -118,8 +118,10 @@ import { levelScale } from './creatures/creature';
 import { Population } from './creatures/population';
 import { registerSpecies } from './creatures/species';
 import { creatureView } from './creatures/view';
+import { GuardArc } from './ui/guardArc';
 import { tickBoarFur } from './creatures/boar/visual';
 import { tickSpiderFur } from './creatures/spider/visual';
+import { tickBatFur } from './creatures/bat/visual';
 import { DungeonMapUI } from './ui/dungeonMap';
 import { Realm } from './dungeon/realm';
 import { setupDungeonEntrances } from './dungeon/dungeons/entrances'; // Dungeons Reborn (feat/dungeons)
@@ -187,9 +189,10 @@ async function boot() {
   // Wild creatures across Cresha (src/creatures): wanderers, dens, region levels.
   const population = new Population(r.scene, fx, (m) => hud.toast(m));
   registerSpecies(population, r.scene);
-  population.placeDens(7, { x0: -820, z0: -820, x1: 820, z1: 820 }, 7);
+  population.placeDens(7, { x0: -820, z0: -820, x1: 820, z1: 820 }, 10);
   if (TEST_MODE) population.enabled = false;
-  creatureView.fur = !LEAN_TEST;
+  // Fur locks are the heaviest part of a creature: medium quality and up.
+  creatureView.fur = !LEAN_TEST && Q.msaa;
   const spells = new Spells(r.scene, fx, player);
   const skillRt = new SkillRuntime(r.scene, player, fx, spells);
   // The village leaves NPC spots, the guild and the stables open.
@@ -226,7 +229,7 @@ async function boot() {
   const capital = new RoyalCapital(r.scene, world.mats, fx);
   mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -354,6 +357,8 @@ async function boot() {
 
   // ---- UI ------------------------------------------------------------------
   const hud = new HUD(player, r.camera);
+  // Where a raised shield covers, and a crosshair to aim it.
+  const guardArc = new GuardArc(r.scene, player);
   hud.resource = () => skillRt.resources();
   skillRt.notify = (m) => hud.toast(m);
   hud.skillSlot = (ref) => {
@@ -1569,6 +1574,8 @@ async function boot() {
     creatureView.night = time.hour < 5.5 || time.hour > 20.5;
     tickBoarFur(dt);
     tickSpiderFur(dt);
+    tickBatFur(dt);
+    guardArc.update(dt);
     r.camera.getWorldDirection(player.aimDir);
     ground.update(r.camera.position);
     grass.update(dt, r.camera.position, renderPos);

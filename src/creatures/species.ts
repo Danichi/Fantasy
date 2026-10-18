@@ -4,6 +4,9 @@ import { Boar } from './boar/boar';
 import { boarWallow } from './dens';
 import { Spider } from './spider/spider';
 import { spiderHollow } from './spider/webs';
+import { Bat } from './bat/bat';
+import { batRoost } from './bat/roost';
+import * as T3 from 'three';
 import type { Population, Habitat } from './population';
 import { creatureReady, prepareCreature } from './geometryStore';
 
@@ -14,7 +17,7 @@ import { creatureReady, prepareCreature } from './geometryStore';
 const TEMPERATE = new Set(['elderGlen', 'cresha', 'wildlands', 'southernMarches', 'verdantElves', 'royalCapital', 'portAurelle']);
 
 export function registerSpecies(pop: Population, scene: THREE.Scene) {
-  void prepareCreature('boar').then(() => prepareCreature('spider'));
+  void prepareCreature('boar').then(() => prepareCreature('spider')).then(() => prepareCreature('bat'));
   pop.add({
     id: 'boar',
     group: [1, 3],
@@ -43,5 +46,20 @@ export function registerSpecies(pop: Population, scene: THREE.Scene) {
     },
     make: (at, level, o) => new Spider(at, level, scene, pop.fx, o.leader && o.den ? { size: 1.45 } : {}),
     den: { name: 'Spider hollow', build: spiderHollow },
+  });
+  pop.add({
+    id: 'bat',
+    group: [3, 5],
+    spread: 4,
+    minRoad: 15,
+    ready: () => creatureReady('bat'),
+    habitat: (h: Habitat) => {
+      if (!TEMPERATE.has(h.region) && h.region !== 'whiteMountains') return 0;
+      // Only abroad at night; they roost among rocks in the hills and woods.
+      if (!h.night) return 0;
+      return h.relief === RELIEF.forest ? 1.2 : h.relief === RELIEF.mountain ? 1.6 : h.relief === RELIEF.open ? 0.7 : 0.4;
+    },
+    make: (at, level, o) => new Bat(at, level, scene, pop.fx, o.den ? { perch: at.clone().add(new T3.Vector3((Math.random() - 0.5) * 2.4, 3.1 + Math.random() * 0.4, (Math.random() - 0.5) * 2.4)) } : {}),
+    den: { name: 'Bat roost', build: batRoost },
   });
 }

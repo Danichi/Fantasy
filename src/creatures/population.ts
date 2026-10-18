@@ -3,6 +3,7 @@ import { REGIONS } from '../world/regionDefinitions';
 import { PLACE_DEFS, pxToWorld, regionAt, reliefAt, RELIEF } from '../world/worldMap';
 import { heightAt, roadDist, RIVER_LEVEL, TOWN_R } from '../world/terrainHeight';
 import { events } from '../core/events';
+import { GRASS_MASKS } from '../world/groundWindow';
 import type { Creature } from './creature';
 import type { FX } from '../fx/particles';
 import type { Player } from '../player/player';
@@ -118,11 +119,13 @@ export class Population {
       const x = area.x0 + r() * (area.x1 - area.x0), z = area.z0 + r() * (area.z1 - area.z0);
       if (!this.spotOk(x, z, 40)) continue;
       if (this.dens.some((d) => Math.hypot(d.x - x, d.z - z) < 120)) continue;
-      const h = this.habitatAt(x, z, 12);
-      const options = [...this.species.values()].filter((s) => s.den && s.habitat(h) > 0 && h.road >= Math.max(40, s.minRoad));
+      const h = this.habitatAt(x, z, 12), hn = this.habitatAt(x, z, 0);
+      const options = [...this.species.values()].filter((s) => s.den && Math.max(s.habitat(h), s.habitat(hn)) > 0 && h.road >= Math.max(40, s.minRoad));
       if (!options.length) continue;
       const s = options[Math.floor(r() * options.length)];
       this.dens.push({ id: `d${seed}-${this.dens.length}`, species: s.id, x, z, level: Math.min(zoneLevel(x, z, r) + 1, (REGIONS[h.region] ?? REGIONS.cresha).levels[1]) });
+      // Trampled ground: the grass thins out over the den.
+      GRASS_MASKS.push({ x, z, r: 7, amount: 0.85, tint: 1 });
     }
   }
 

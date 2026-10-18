@@ -6,6 +6,8 @@ import { BoarVisual, tickBoarFur } from '../creatures/boar/visual';
 import { boarGeometry } from '../creatures/boar/model';
 import { SpiderVisual, tickSpiderFur } from '../creatures/spider/visual';
 import { spiderGeometry } from '../creatures/spider/model';
+import { BatVisual, tickBatFur } from '../creatures/bat/visual';
+import { batGeometry } from '../creatures/bat/model';
 
 // Dev page: a creature under the game's lighting, seen from several angles in
 // one frame, for quick visual iteration.
@@ -58,9 +60,14 @@ scene.add(ground);
 
 const t0 = performance.now();
 const kind = P.get('c') ?? 'boar';
-const geo = kind === 'spider' ? spiderGeometry() : boarGeometry();
+const geo = kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
 type Look = { root: THREE.Group; gait: { reset: (r: THREE.Object3D, g: (x: number, z: number) => number) => void }; setPose: (p: never) => void; update: (dt: number, v: THREE.Vector3, g: (x: number, z: number) => number) => void; lod: (d: number, fur: boolean) => void };
-const boar: Look = kind === 'spider' ? new SpiderVisual() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
+const batLook = (): Look => {
+  const v = new BatVisual({ scale: Number(P.get('scale') ?? 2.5) });
+  v.root.position.y = 0.6;
+  return { root: v.root, gait: { reset: () => {} }, setPose: (p: never) => v.setPose(p), update: (dt) => v.update(dt, 0, 0), lod: (d, f) => v.lod(d, f) };
+};
+const boar: Look = kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
 scene.add(boar.root);
 boar.setPose((P.get('pose') ?? 'idle') as never);
 const vel = new THREE.Vector3();
@@ -76,6 +83,7 @@ const step = (sec: number) => {
     boar.root.position.z += speed * dt;
     tickBoarFur(dt);
     tickSpiderFur(dt);
+    tickBatFur(dt);
     boar.update(dt, vel, () => 0);
   }
 };

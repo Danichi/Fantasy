@@ -796,8 +796,10 @@ export class Player {
     } else if (this.blocking) {
       // Shield up without a lock: square up to the nearest threat, and keep
       // facing it while you step about, instead of turning your back.
+      // With nothing close, the shield follows the crosshair (the camera's aim).
       const threat = this.nearestThreat(7);
       if (threat) this.turnToward(Math.atan2(threat.position.x - this.pos.x, threat.position.z - this.pos.z), dt, 200);
+      else if (this.aimDir.x * this.aimDir.x + this.aimDir.z * this.aimDir.z > 0.01) this.turnToward(Math.atan2(this.aimDir.x, this.aimDir.z), dt, 160);
       else this.yawVel *= Math.exp(-16 * dt);
     } else if (intent.lengthSq() > 0) {
       this.turnToward(Math.atan2(intent.x, intent.z), dt, this.sprinting ? 110 : 160);
@@ -1233,6 +1235,7 @@ export class Player {
       this.onShake?.(0.12);
       return 'blocked';
     }
+    if (this.blocking && this.equip.hasShield) events.emit('guardMissed', { from: att.from.clone() });
     const armor = this.equip.armorValue;
     const dmg = att.damage * (100 / (100 + armor * 5)) * (att.burn ? 1 - this.fireResist : 1);
     this.applyDamage(dmg);

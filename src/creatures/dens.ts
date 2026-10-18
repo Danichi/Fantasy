@@ -25,11 +25,23 @@ export function groundPatch(at: THREE.Vector3, radius: number, color: (dx: numbe
   ring.setAttribute('color', new THREE.BufferAttribute(col, 3));
   ring.computeVertexNormals();
   const m = new THREE.Mesh(ring, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: rough, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
-  // fade the rim into the grass
-  (m.material as THREE.MeshStandardMaterial).onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vR;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvR = length(position.xz) / ' + radius.toFixed(3) + ';');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vR;').replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= 1.0 - smoothstep(0.7, 1.0, vR);');
+  // Fade the rim into the grass along a ragged, irregular edge (radius is a uniform:
+  // every patch shares one compiled program).
+  const mat = m.material as THREE.MeshStandardMaterial;
+  const uR = { value: radius };
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uPatchR = uR;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uPatchR;\nvarying vec2 vP;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvP = position.xz / uPatchR;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vP;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        float ang = atan(vP.y, vP.x);
+        float edge = 0.82 + 0.08 * sin(ang * 5.0 + 1.3) + 0.05 * sin(ang * 11.0 - 0.7) + 0.03 * sin(ang * 23.0);
+        diffuseColor.a *= 1.0 - smoothstep(edge - 0.25, edge, length(vP));`);
   };
+  mat.customProgramCacheKey = () => 'den-patch';
   m.receiveShadow = true;
   return m;
 }

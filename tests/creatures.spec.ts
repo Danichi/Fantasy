@@ -254,3 +254,61 @@ test('a Giant Forest Spider rears up, webs your feet, bites with venom, and a pa
   expect(res.label).toBe('Giant Forest Spider');
   expect(errors).toEqual([]);
 });
+
+test('Cave Bats come out at night, circle and dive to bite; a parry knocks one out of the air', async ({ game }) => {
+  const { page, errors } = game;
+  await meadow(page);
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, pl = g.player, T = g.THREE, P = g.population;
+    (await import('/src/creatures/geometryStore.ts')).prepareCreatureNow('bat');
+    const sp = P.species.get('bat');
+    const day = sp.habitat(P.habitatAt(pl.pos.x, pl.pos.z, 13));
+    const night = sp.habitat(P.habitatAt(pl.pos.x, pl.pos.z, 23));
+    g.time.skipTo(23);
+    const { creatureView } = await import('/src/creatures/view.ts');
+    creatureView.night = true;
+    const grp = P.spawnGroup(sp, pl.pos.clone().add(new T.Vector3(0, 0, 8)), 2);
+    const bats = grp.members;
+    const hp0 = pl.hp;
+    const modes = new Set<string>();
+    let flying = 0;
+    for (let i = 0; i < 900 && pl.hp >= hp0; i++) {
+      g.stepSim(1);
+      for (const b of bats) modes.add(b.mode);
+      flying = Math.max(flying, ...bats.map((b: any) => b.position.y - pl.pos.y));
+    }
+    const bitten = pl.hp < hp0;
+    for (const b of bats.slice(1)) b.dispose();
+    // Parry a dive.
+    const b = bats[0];
+    pl.hp = pl.maxHp;
+    b.setMode('dive', 1.4);
+    b.bit = false;
+    let grounded = false;
+    for (let i = 0; i < 200 && !grounded; i++) {
+      g.stepSim(1);
+      const d = b.center.distanceTo(pl.center.clone().setY(pl.center.y + 0.35));
+      if (d < 2.2 && pl.act?.def.id !== 'parryShield') {
+        pl.yaw = Math.atan2(b.center.x - pl.pos.x, b.center.z - pl.pos.z);
+        pl.startAction('parryShield');
+        pl.act.t = pl.act.def.parry[0] + 0.01;
+      }
+      if (b.mode === 'grounded') grounded = true;
+      if (b.mode !== 'dive' && !grounded) {
+        b.setMode('dive', 1.4);
+        b.bit = false;
+      }
+    }
+    return { day, night, n: bats.length, modes: [...modes], flying, bitten, grounded, stunned: b.stunned };
+  });
+  expect(res.day).toBe(0);
+  expect(res.night).toBeGreaterThan(0);
+  expect(res.n).toBeGreaterThanOrEqual(3);
+  expect(res.modes).toContain('harass');
+  expect(res.modes).toContain('dive');
+  expect(res.flying).toBeGreaterThan(1.5);
+  expect(res.bitten).toBe(true);
+  expect(res.grounded).toBe(true);
+  expect(res.stunned).toBe(true);
+  expect(errors).toEqual([]);
+});

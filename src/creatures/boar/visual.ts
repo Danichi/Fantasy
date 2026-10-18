@@ -80,7 +80,7 @@ export class BoarVisual {
       this.shells.push(s);
     }
     this.coat = mk(S.g.coat, S.tuft.mat);
-    this.coat.castShadow = true;
+    this.coat.castShadow = false; // the body's shadow is enough; the crest still casts
     this.crest = mk(S.g.crest, S.tuft.mat);
     this.crest.castShadow = true;
     this.extras.push(mk(S.g.ivory, S.ivory), mk(S.g.eyes, S.eye));

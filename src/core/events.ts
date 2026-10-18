@@ -7,6 +7,8 @@ export interface GameEvents {
   playerRespawned: {};
   parrySuccess: { at: Vector3 };
   blockImpact: { at: Vector3; guardBroken: boolean };
+  /** a blow got round a raised shield (from the side or behind) */
+  guardMissed: { from: Vector3 };
   enemyHit: { at: Vector3; amount: number; crit: boolean; enemyId: number };
   /** the player's blade connected (after enemyHit) */
   meleeHit: { target: import('../combat/targets').Target; amount: number; crit: boolean; action: string };

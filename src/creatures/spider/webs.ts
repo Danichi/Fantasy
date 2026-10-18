@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { heightAt } from '../../world/terrainHeight';
 import { groundPatch } from '../dens';
+import { tuskGeometry } from '../boar/model';
 
 // Silk: orb-web sheets strung between trunks, the sticky snare that holds a
 // victim's feet, wrapped cocoons and egg sacs. The web pattern is drawn once
@@ -108,18 +109,27 @@ export function spiderHollow(at: THREE.Vector3, seed: number) {
   const y = (x: number, z: number) => heightAt(at.x + x, at.z + z) - at.y;
   // Dead, silk-grey ground litter.
   g.add(groundPatch(at, 7, (_x, _z, rr) => new THREE.Color(0x5a5048).lerp(new THREE.Color(0x8c877c), (1 - rr) * 0.5)));
-  // Gnarled dead trunks to string webs from.
-  const bark = new THREE.MeshStandardMaterial({ color: 0x4e4239, roughness: 0.95 });
+  // Gnarled dead trees, bark gone grey, to string webs from.
+  const bark = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
   const trunks: THREE.Vector3[] = [];
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + r() * 0.9, d = 4 + r() * 2.5;
-    const x = Math.cos(a) * d, z = Math.sin(a) * d;
-    const h = 2.6 + r() * 2.2;
-    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.3, h, 9), bark);
-    t.position.set(x, y(x, z) + h / 2 - 0.1, z);
-    t.rotation.set((r() - 0.5) * 0.25, 0, (r() - 0.5) * 0.25);
+    const x = Math.cos(a) * d, z = Math.sin(a) * d, y0 = y(x, z) - 0.15;
+    const h = 2.8 + r() * 2.2;
+    const lean = (r() - 0.5) * 0.8, lean2 = (r() - 0.5) * 0.8;
+    const pts: [number, number, number][] = [[x, y0, z], [x + lean * 0.2, y0 + h * 0.35, z + lean2 * 0.2], [x + lean * 0.6, y0 + h * 0.7, z + lean2 * 0.5], [x + lean, y0 + h, z + lean2]];
+    const t = new THREE.Mesh(tuskGeometry(pts, 0.32, 0.06, 14, 9, [0x3d332c, 0x6d6258]), bark);
     t.castShadow = t.receiveShadow = true;
     g.add(t);
+    // Two or three broken-off branches.
+    for (let k = 0; k < 2 + Math.floor(r() * 2); k++) {
+      const u = 0.45 + r() * 0.45, ba = r() * Math.PI * 2, bl = 0.7 + r() * 1.1;
+      const sx = x + lean * u, sy = y0 + h * u, sz = z + lean2 * u;
+      const bp: [number, number, number][] = [[sx, sy, sz], [sx + Math.cos(ba) * bl * 0.5, sy + bl * 0.35, sz + Math.sin(ba) * bl * 0.5], [sx + Math.cos(ba) * bl, sy + bl * 0.45 + (r() - 0.5) * 0.3, sz + Math.sin(ba) * bl]];
+      const br = new THREE.Mesh(tuskGeometry(bp, 0.09, 0.025, 8, 6, [0x4a3f36, 0x70665b]), bark);
+      br.castShadow = true;
+      g.add(br);
+    }
     trunks.push(new THREE.Vector3(x, y(x, z), z));
   }
   // Webs between neighbouring trunks, and a few low sheets over the ground.
@@ -142,6 +152,10 @@ export function spiderHollow(at: THREE.Vector3, seed: number) {
     if (i < 2) {
       const t = trunks[i];
       c.position.set(t.x * 0.8, t.y + 1.4 + r(), t.z * 0.8);
+      // The thread it hangs from.
+      const thread = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.6, 4), new THREE.MeshStandardMaterial({ color: 0xf0ede4, roughness: 0.6 }));
+      thread.position.set(c.position.x, c.position.y + 1.1, c.position.z);
+      g.add(thread);
     } else {
       const a = r() * Math.PI * 2, d = 1 + r() * 3;
       c.position.set(Math.cos(a) * d, y(Math.cos(a) * d, Math.sin(a) * d) + 0.18, Math.sin(a) * d);

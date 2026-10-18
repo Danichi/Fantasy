@@ -1,6 +1,7 @@
 import { unpack, type PackedGeometry } from './kit/transfer';
 import { provideBoarGeometry, boarGeometry, type BoarGeometry } from './boar/model';
 import { provideSpiderGeometry, spiderGeometry, type SpiderGeometry } from './spider/model';
+import { provideBatGeometry, batGeometry, type BatGeometry } from './bat/model';
 
 // Creature meshes are sculpted in a worker so the game never stalls while a
 // new kind is built. Until a kind is ready, the population doesn't spawn it.
@@ -13,10 +14,12 @@ const waiters = new Map<string, () => void>();
 const PROVIDE: Record<string, (parts: Record<string, unknown>) => void> = {
   boar: (p) => provideBoarGeometry(p as unknown as BoarGeometry),
   spider: (p) => provideSpiderGeometry(p as unknown as SpiderGeometry),
+  bat: (p) => provideBatGeometry(p as unknown as BatGeometry),
 };
 const LOCAL: Record<string, () => void> = {
   boar: () => void boarGeometry(),
   spider: () => void spiderGeometry(),
+  bat: () => void batGeometry(),
 };
 
 function getWorker() {
