@@ -41,7 +41,7 @@ export interface Species {
   /** Can it be spawned yet (its look built)? */
   ready?: () => boolean;
   make(at: THREE.Vector3, level: number, opts: { leader: boolean; den: boolean }): Creature;
-  den?: { name: string; build: (at: THREE.Vector3, seed: number) => THREE.Object3D };
+  den?: { name: string; build: (at: THREE.Vector3, seed: number) => THREE.Object3D; found?: string };
 }
 
 export interface Den {
@@ -99,6 +99,8 @@ export class Population {
   private tick = 0;
   private spawnCd = 4;
   private denLooks = new Map<string, THREE.Object3D>();
+  /** dens already announced this session */
+  private announced = new Set<string>();
   private rand = Math.random;
 
   constructor(
@@ -203,6 +205,7 @@ export class Population {
       }
     }
     if (!this.enabled) return;
+    for (const s of this.species.values()) s.ready?.();
 
     // Dens: wake when you come near; build their look first.
     for (const d of this.dens) {
@@ -219,6 +222,10 @@ export class Population {
         this.denLooks.delete(d.id);
       }
       const cleared = this.cleared[d.id];
+      if (dist < 32 && !this.announced.has(d.id) && s.den?.found && (cleared === undefined || day - cleared >= 3)) {
+        this.announced.add(d.id);
+        this.toast(s.den.found);
+      }
       if (cleared !== undefined && day - cleared < 3) continue;
       if (cleared !== undefined) delete this.cleared[d.id];
       if (dist < 130 && !this.groups.some((g) => g.den === d) && s.ready?.() !== false) this.spawnGroup(s, new THREE.Vector3(d.x, heightAt(d.x, d.z), d.z), d.level, d);

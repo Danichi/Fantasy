@@ -85,14 +85,17 @@ test('parrying the tusks knocks a boar senseless, open to a riposte', async ({ g
   const { page, errors } = game;
   await meadow(page);
   const res = await page.evaluate(async () => {
-    const g = (window as any).__game, pl = g.player, W = (window as any).W;
+    const g = (window as any).__game, pl = g.player;
+    // Stepped one tick at a time: frame waits can run past the moment of the hook.
     const b = (window as any).__spawnBoar(0, 1.9);
     b.yaw = Math.PI;
     b.angry = true;
-    pl.yaw = 0; // face +Z, toward the boar
-    await W(2);
     b.setMode('gore', 0.95);
-    for (let i = 0; i < 60 && b.modeT < 0.31; i++) g.stepSim(1);
+    for (let i = 0; i < 60 && b.modeT < 0.31; i++) {
+      pl.yaw = Math.atan2(b.position.x - pl.pos.x, b.position.z - pl.pos.z); // face it
+      g.stepSim(1);
+    }
+    pl.act = null;
     pl.startAction('parryShield');
     pl.act.t = pl.act.def.parry[0] + 0.01;
     let parried = false;

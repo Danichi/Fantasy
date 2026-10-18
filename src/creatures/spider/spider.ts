@@ -28,6 +28,10 @@ interface Glob {
 }
 
 let snare: Snare | null = null;
+/** The web on the player's feet: shown while it holds, whoever spun it (main calls this each frame). */
+export function updateSnare(player: Player) {
+  snare?.update(player.pos, player.webbed);
+}
 let globGeo: THREE.BufferGeometry | null = null;
 let globMat: THREE.MeshStandardMaterial | null = null;
 
@@ -289,7 +293,6 @@ export class Spider extends Creature {
     L.lod(cam ? cam.distanceTo(this.position) : 10, creatureView.fur);
     L.update(dt, this.vel, this.groundAt);
     if (!this.alive && this.deadT > this.corpseTime - 1.5) L.root.position.y -= (this.deadT - (this.corpseTime - 1.5)) * 0.3;
-    snare?.update(player.pos, player.webbed);
   }
 
   protected disposeLook() {

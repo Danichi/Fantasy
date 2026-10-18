@@ -175,8 +175,7 @@ export class BoarVisual {
       case 'gore': {
         // Wind up low, then hook the tusks up and across.
         const wind = THREE.MathUtils.smoothstep(pt, 0, 0.28), hook = THREE.MathUtils.smoothstep(pt, 0.28, 0.42), back = THREE.MathUtils.smoothstep(pt, 0.55, 0.95);
-        hp = 0.45 * wind - 0.95 * hook * (1 - back) + 0.45 * back * 0 ;
-        hp = hp * (1 - back) ;
+        hp = (0.45 * wind - 0.95 * hook) * (1 - back);
         hy = this.side * (0.25 * wind - 0.55 * hook) * (1 - back);
         jaw = hook * 0.25 * (1 - back);
         ears = -1;

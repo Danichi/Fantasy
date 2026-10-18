@@ -121,6 +121,7 @@ import { creatureView } from './creatures/view';
 import { GuardArc } from './ui/guardArc';
 import { tickBoarFur } from './creatures/boar/visual';
 import { tickSpiderFur } from './creatures/spider/visual';
+import { updateSnare } from './creatures/spider/spider';
 import { tickBatFur } from './creatures/bat/visual';
 import { DungeonMapUI } from './ui/dungeonMap';
 import { Realm } from './dungeon/realm';
@@ -1576,6 +1577,7 @@ async function boot() {
     tickSpiderFur(dt);
     tickBatFur(dt);
     guardArc.update(dt);
+    updateSnare(player);
     r.camera.getWorldDirection(player.aimDir);
     ground.update(r.camera.position);
     grass.update(dt, r.camera.position, renderPos);
