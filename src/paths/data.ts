@@ -141,12 +141,14 @@ export const DISCIPLINES: DisciplineDef[] = [
 
   // ---- callings -----------------------------------------------------------------
   {
-    id: 'herbalism', fam: 'calling', name: 'Herbalism', color: '--c-herb', mentor: 'Ilyra Moss, the apothecary', mentorNpc: 'apothecary', res: 'Herbs',
-    flavour: 'Every root in these hills is a sword, if you know how to boil it.', how: 'Gather herbs and brew potions, tonics and oils.',
+    // The recipe nodes (Hearthroot Draught, Nightshade Oil...) are passives that
+    // teach recipes, not bar skills: the herbalism system (src/herbalism) reads them.
+    id: 'herbalism', fam: 'calling', name: 'Herbalism', color: '--c-herb', mentor: 'Wenna Thistledown, the Crown Road', mentorNpc: 'wenna', res: 'Herbs',
+    flavour: 'Every root in these hills is a sword, if you know how to boil it.', how: 'Gather herbs and brew tonics, elixirs, oils and flasks. Gathering and brewing raise Herbalism by themselves.',
     branches: [
-      { name: 'Tonics', sub: 'Healing brews', tiers: [['Clean Cuts', 'Steady Hands'], ['*Hearthroot Draught', 'Double Batch', 'Potent'], ['*Renewal Tea', '?Quick Sip|Slow Brew', 'Bitter Gold'], ['*Lifebloom Tonic', '!Apothecary', 'Distiller'], ['Panacea', 'Rare Roots']], cap: 'Elixir of Life' },
-      { name: 'Venoms', sub: 'Blade oils', tiers: [['Careful Gloves', 'Toxin Lore'], ['*Nightshade Oil', 'Lasting Coat', 'Numbroot'], ['*Wither Oil', '?Paralytic|Corrosive', 'Virulence'], ['*Plague Flask', '!Venomblood', 'Contagion'], ['Black Lotus', 'Deathcap']], cap: "Widow's Kiss" },
-      { name: 'Elixirs', sub: 'Combat power', tiers: [["Brewer's Eye", 'Steady Heat'], ['*Ironbark Tonic', 'Tempered', 'Longer Brews'], ['*Swiftroot Elixir', '?Berserker Brew|Sage Brew', 'Mixologist'], ['*Stormleaf Elixir', '!Master Brewer', 'Twin Elixir'], ['Moonpetal', 'Dragonbloom']], cap: "Philosopher's Draught" },
+      { name: 'Tonics', sub: 'Healing brews', tiers: [['Clean Cuts', 'Steady Hands'], ['Hearthroot Draught', 'Double Batch', 'Potent'], ['Renewal Tea', '?Quick Sip|Slow Brew', 'Bitter Gold'], ['Lifebloom Tonic', '!Apothecary', 'Distiller'], ['Panacea', 'Rare Roots']], cap: 'Elixir of Life' },
+      { name: 'Venoms', sub: 'Oils and flasks', tiers: [['Careful Gloves', 'Toxin Lore'], ['Nightshade Oil', 'Lasting Coat', 'Numbroot'], ['Wither Oil', '?Paralytic|Corrosive', 'Virulence'], ['Plague Flask', '!Venomblood', 'Contagion'], ['Black Lotus', 'Deathcap']], cap: "Widow's Kiss" },
+      { name: 'Elixirs', sub: 'Combat power', tiers: [["Brewer's Eye", 'Steady Heat'], ['Ironbark Tonic', 'Tempered', 'Longer Brews'], ['Swiftroot Elixir', '?Berserker Brew|Sage Brew', 'Mixologist'], ['Stormleaf Elixir', '!Master Brewer', 'Twin Elixir'], ['Moonpetal', 'Dragonbloom']], cap: "Philosopher's Draught" },
     ],
   },
   {

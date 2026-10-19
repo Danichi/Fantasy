@@ -7,7 +7,7 @@ import { heightAt, roadDist } from '../terrainHeight';
 import { sandWeight } from '../worldMap';
 import { WAYSTONES } from '../kingsRoad';
 import { sfx } from '../../audio/sfx';
-import { SUNSPIRE, SUNSPIRE_HALF, SUNSPIRE_GATE_Z, SCAV_CAMPS, CAMP_INFO, CARAVAN_ROAD, WEST_GATE, sunspirePad, sunspireY, campFloor, panAt } from './desertLayout';
+import { SUNSPIRE, SUNSPIRE_HALF, SUNSPIRE_GATE_Z, SCAV_CAMPS, CAMP_INFO, CARAVAN_ROAD, WEST_GATE, SUNKEN_GATE, sunspirePad, sunspireY, campFloor, panAt } from './desertLayout';
 import { MODEL, cellWorld, streetCells, worldCell, cellTop, cityDoors } from './cityGrid';
 import { registerDoor, type Door } from '../doors';
 import { SandGolem } from '../../enemies/sandGolem';
@@ -124,13 +124,15 @@ export class GoldenExpanse {
   private stormLeft = 0;
   private stormNext = 200 + Math.random() * 300;
   private stormOverlay: HTMLDivElement;
+  /** how far apart storms come (the Sunken Crown's fate can calm the Expanse) */
+  stormScale = 1;
 
   constructor(private scene: THREE.Scene, private fx: FX, private hooks: DesertHooks, private hour: () => number) {
     scene.add(this.group);
     this.group.add(this.cityDressing);
     this.bolts = new Bolts(scene);
     const rnd = mulberry32(4120);
-    const sheltered = (x: number, z: number) => sunspirePad(x, z) > 0 || SCAV_CAMPS.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r + 60) || roadDist(x, z) < 24 || SAWTOOTH_BASIN.distanceTo(new THREE.Vector3(x, 0, z)) < 140;
+    const sheltered = (x: number, z: number) => sunspirePad(x, z) > 0 || SCAV_CAMPS.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r + 60) || roadDist(x, z) < 24 || SAWTOOTH_BASIN.distanceTo(new THREE.Vector3(x, 0, z)) < 140 || Math.hypot(x - SUNKEN_GATE.x, z - SUNKEN_GATE.z) < SUNKEN_GATE.r + 120;
     // Shark and ray homes: deep sand round the city and along the caravan way.
     for (let tries = 0; tries < 4000 && (this.sharkHomes.length < 46 || this.rayHomes.length < 60); tries++) {
       const a = rnd() * Math.PI * 2, r = 260 + rnd() * 2600;
@@ -785,7 +787,7 @@ export class GoldenExpanse {
   /** Start a storm now (also used by tests and the console). */
   startStorm(seconds = 70 + Math.random() * 60) {
     this.stormLeft = seconds;
-    this.stormNext = 260 + Math.random() * 420;
+    this.stormNext = (260 + Math.random() * 420) * this.stormScale;
     this.hooks.toast('The horizon turns brown. A sandstorm is coming — find shelter or keep your head down.');
     sfx.rumble(3, 0.5);
   }
@@ -837,6 +839,15 @@ export class GoldenExpanse {
       this.storm = 0;
       this.stormOverlay.style.display = 'none';
     }
+  }
+
+  /** The trader caravans on the Caravan Way (quests meet them on the road). */
+  get caravanList(): { name: string; pos: THREE.Vector3 }[] {
+    return this.caravans.map((c) => ({ name: c.name, pos: c.pos }));
+  }
+  /** Seconds left of the current storm (0 when calm). */
+  get stormRemaining() {
+    return Math.max(0, this.stormLeft);
   }
 
   /** Debug and tests: is the city in? */

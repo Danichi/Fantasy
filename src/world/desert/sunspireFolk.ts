@@ -60,6 +60,9 @@ const LINES: Record<string, NpcRecord['lines']> = {
   scavenger: { any: ['Scrap\'s scrap. Glass, iron, bone — the city melts it down and pays us a tenth.', 'They threw us out when the wells ran low. Now they buy back what we dig up.', 'Watch the dune crests. If one moves, run.', 'A storm\'s coming. You can smell it: like hot copper.'], night: ['Keep the fire small. Light brings raiders.'] },
 };
 
+/** The shared line pools (citizens, guards, scavengers...): the Sunborn plot's ending adds to them. */
+export const CITY_LINES = LINES;
+
 function lookFor(job: string, variant: number): Look {
   const r = mulberry32(job.length * 97 + variant * 13 + job.charCodeAt(0));
   const female = variant === 1 || (variant === 2 && r() < 0.5);
@@ -211,8 +214,29 @@ function cityNamed(r: ReturnType<typeof placesFromGrid>): Named[] {
     {
       id: 'hassun', name: 'Bazaar Master Hassun', title: 'Merchant Prince of the Grand Bazaar',
       look: { body: 'male', outfit: 'peasant', hair: 'buzzed', beard: true, hairColor: 0x2a1a10, skin: 0xc08a5a, linen: 0xf2e6c8, cloth: CRIMSON, height: 1.7 },
-      post: off(r.bazaarCenter, 0, 0), activity: 'talk', hours: [7, 21],
+      post: off(r.bazaarCenter, 5, 4), activity: 'talk', hours: [7, 21],
       lines: { any: ['Blades of sunsteel, curved as the dunes!', 'Everything has a price. Even you, friend. Especially you.'] },
+    },
+    {
+      id: 'wennefer', name: 'Old Wennefer', title: 'Seer of the Grand Bazaar',
+      look: { body: 'female', outfit: 'peasant', hood: true, hair: 'long', hairColor: 0xd8d0c4, skin: 0x7a4e32, linen: 0x2a1a3a, cloth: PURPLE, height: 1.52 },
+      post: off(r.bazaarCenter, -6, 5), activity: 'idle', hours: [9, 23.5],
+      lines: { any: ['Sit, sit. The sand has been talking about you.', 'Ten coppers to know your road. Twenty to forget it again.', 'I read bones, palms and tea leaves. Mostly I read faces.'], night: ['The stars are clearer than the bones tonight. Sit.'] },
+    },
+    {
+      id: 'amenemope', name: 'High Priest Amenemope', title: 'First Servant of the Sun',
+      look: { body: 'male', outfit: 'peasant', hood: true, hair: null, beard: false, skin: 0x8a5a3a, linen: 0xfaf2dc, cloth: ROYAL_GOLD, height: 1.8 },
+      post: cw(196, 112), yaw: Math.PI / 2, activity: 'idle', hours: [5, 20],
+      lines: {
+        any: ['Every dawn we call the sun back over the walls. Every dawn, so far, it has come.', 'The rites are at first light and at sunset, before the Sun Disc. All may stand with us.'],
+        morning: ['You are up with the sun. Good. It notices.'], evening: ['Stay for the dusk rite. The court is never more beautiful.'],
+      },
+    },
+    {
+      id: 'tjeti', name: 'Tjeti the Water-Seller', title: 'Water-Seller of the Court',
+      look: { body: 'male', outfit: 'peasant', hood: false, hair: 'buzzed', beard: true, hairColor: 0x2a1a10, skin: 0x6a4028, linen: 0xe8dcc0, cloth: 0x2a5a8a, height: 1.7 },
+      post: cw(207, 103), activity: 'talk', hours: [6, 20],
+      lines: { any: ['Water! Cool water from the Great Well! ...Less of it every day, mind.', 'A copper a cup. The Queen\'s price — the Vizier\'s price is higher.', 'The Well used to sing when you dropped a stone in it. Now it just clicks.'] },
     },
     {
       id: 'ptah', name: 'Glassmaker Ptahmose', title: 'Master of the Furnace Street',

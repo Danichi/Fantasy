@@ -1,0 +1,46 @@
+/* Ghagrabba's street voices: criers, heralds, priests and performers, floating over whoever is speaking. */
+#ui .gh-voices { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+#ui .gh-voice {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  max-width: 300px;
+  padding: 5px 12px 6px;
+  font: italic 500 14px/1.3 var(--fell, 'Georgia', serif);
+  color: #3a2810;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(246, 232, 196, 0.94), rgba(222, 198, 146, 0.94));
+  border: 1px solid rgba(154, 111, 42, 0.85);
+  border-radius: 10px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  white-space: normal;
+}
+#ui .gh-voice.show { opacity: 1; }
+#ui .gh-voice::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  transform: translateX(-50%) rotate(45deg);
+  background: rgba(222, 198, 146, 0.94);
+  border-right: 1px solid rgba(154, 111, 42, 0.85);
+  border-bottom: 1px solid rgba(154, 111, 42, 0.85);
+}
+#ui .gh-voice .who {
+  display: block;
+  font: 600 10px/1.2 var(--serif, 'Georgia', serif);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7a1f12;
+  font-style: normal;
+  margin-bottom: 1px;
+}
+#ui .gh-voice.royal { border-color: #d4a640; color: #2a1a06; background: linear-gradient(180deg, rgba(255, 240, 200, 0.96), rgba(236, 206, 128, 0.96)); }
+#ui .gh-voice.chant { color: #4a2a06; font-size: 15px; letter-spacing: 0.04em; }
+#ui .gh-voice.night { color: #f2e2b4; background: linear-gradient(180deg, rgba(40, 30, 22, 0.9), rgba(24, 18, 12, 0.9)); border-color: rgba(212, 166, 64, 0.6); }
+#ui .gh-voice.night::after { background: rgba(24, 18, 12, 0.9); border-color: rgba(212, 166, 64, 0.6); }
+#ui .gh-voice.night .who { color: #f1d38a; }
+

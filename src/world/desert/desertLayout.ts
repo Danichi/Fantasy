@@ -49,6 +49,22 @@ export const CAMP_INFO: { name: string; friendly: boolean }[] = [
   { name: 'Old Oasis', friendly: true }, { name: 'Sandtrap', friendly: false }, { name: 'Kettle Rock', friendly: true },
 ];
 
+/**
+ * The Sunken Gate: a ring of dunes west of the Warden's sleep, where old
+ * Amaunet's throne-court lies under the sand. The ground sinks into a flat
+ * bowl (r metres across the floor) inside a raised rim the caravans won't cross.
+ */
+export const SUNKEN_GATE = { x: -6500, z: 1720, r: 40 };
+
+/** The bowl's floor: the macro terrain at its centre, sunk below the sand (cached once the map has loaded). */
+let gateFloor: number | null = null;
+export function sunkenFloor() {
+  if (gateFloor !== null) return gateFloor;
+  const y = Math.max(2, macroHeight(SUNKEN_GATE.x, SUNKEN_GATE.z)) - 3;
+  if (macroReady()) gateFloor = y;
+  return y;
+}
+
 /** The caravan road from the Crown Road (before its gate) to Ghagrabba's east gate. */
 export const CARAVAN_ROAD: [number, number][] = [
   [-700, 60], [-1050, 150], [-1500, 260], [-2000, 380], [-2600, 480], [-3200, 560], [-3800, 620], [-4400, 660], [-4900, 690], [-5250, 684], [-5390, 679],
@@ -118,6 +134,18 @@ export function shapeDesert(x: number, z: number, h: number, sand: number) {
       const t = smooth(r + 30, r * 0.6, d);
       const floor = campFloor(cx, cz);
       h = h * (1 - t) + floor * t;
+    }
+  }
+  // The Sunken Gate: a flat floor, a slope up to a rim of piled sand, then the dunes again.
+  {
+    const d = Math.hypot(x - SUNKEN_GATE.x, z - SUNKEN_GATE.z), R = SUNKEN_GATE.r;
+    if (d < R + 60) {
+      const floor = sunkenFloor();
+      const rim = Math.max(h, floor + 7) + 2.5 * smooth(R + 60, R + 34, d) * smooth(R + 8, R + 30, d);
+      const t = smooth(R + 60, R + 34, d);
+      h = h * (1 - t) + rim * t;
+      const f = smooth(R + 26, R, d);
+      h = h * (1 - f) + floor * f;
     }
   }
   const pad = sunspirePad(x, z);

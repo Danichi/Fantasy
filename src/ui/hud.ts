@@ -126,7 +126,9 @@ export class HUD {
     this.banner = el('div', 'banner', this.root);
     this.death = el('div', 'death', this.root, '<h1>YOU DIED</h1>');
     this.promptEl = el('div', 'prompt', this.root);
-    this.bossEl = el('div', 'bossbar', this.root, '<span class="nm"></span><div class="bb"><b></b><i></i></div>');
+    // The boss bar sits at the top centre, under the compass: a brass-framed
+    // bar under a parchment name plate, with notches where its phases turn.
+    this.bossEl = el('div', 'bossbar', this.root, '<div class="bb-plate"><i class="bb-orn"></i><span class="nm"></span><i class="bb-orn r"></i></div><div class="bb"><b></b><i></i><span class="bb-notches"></span></div>');
     this.fadeEl = el('div', 'fade', this.root);
     this.levelEl = el('div', 'levelup', this.root);
     events.on('levelUp', ({ level }) => {
@@ -169,11 +171,42 @@ export class HUD {
     this.promptEl.classList.add('show');
   }
 
-  bossBar(t: { hp: number; maxHp: number; alive: boolean } | null, name = 'Grukk, the Orc Warlord') {
+  /**
+   * The boss's health at the top of the screen (null hides it). `phases` are
+   * health fractions where the fight turns, marked as notches on the bar.
+   */
+  bossBar(t: { hp: number; maxHp: number; alive: boolean } | null, name = 'Grukk, the Orc Warlord', phases: number[] = []) {
     if (t && !this.boss) this.bossTrail = t.hp / t.maxHp;
     this.boss = t;
     this.bossEl.classList.toggle('show', !!t);
-    if (t) this.bossEl.querySelector('.nm')!.textContent = name;
+    // Other top-of-screen pieces (the region card, the waypoint) make room while it shows.
+    this.root.classList.toggle('boss-on', !!t);
+    if (!t) {
+      this.bossWp?.classList.remove('under-boss');
+      return;
+    }
+    const nm = this.bossEl.querySelector('.nm')!;
+    if (nm.textContent !== name) nm.textContent = name;
+    const key = phases.join(',');
+    const notches = this.bossEl.querySelector('.bb-notches') as HTMLElement;
+    if (notches.dataset.k !== key) {
+      notches.dataset.k = key;
+      notches.innerHTML = phases.map((f) => `<u style="left:${(f * 100).toFixed(1)}%"></u>`).join('');
+    }
+  }
+  private bossWp: HTMLElement | null = null;
+  private bossOverlapT = 0;
+  /** Dim the quest waypoint while it sits under the boss bar (checked a few times a second). */
+  private bossOverlap(dt: number) {
+    this.bossOverlapT -= dt;
+    if (this.bossOverlapT > 0) return;
+    this.bossOverlapT = 0.2;
+    this.bossWp ??= this.root.querySelector('.waypoint');
+    const wp = this.bossWp;
+    if (!wp) return;
+    const a = this.bossEl.getBoundingClientRect(), b = wp.getBoundingClientRect();
+    const over = b.width > 0 && b.left < a.right && b.right > a.left && b.top < a.bottom + 6 && b.bottom > a.top - 6;
+    wp.classList.toggle('under-boss', over);
   }
 
   /** Fade to black (true) or back (false); resolves when done. */
@@ -362,6 +395,9 @@ export class HUD {
       this.bossTrail = Math.max(f, this.bossTrail - dt * 0.35);
       (this.bossEl.querySelector('.bb i') as HTMLElement).style.transform = `scaleX(${f})`;
       (this.bossEl.querySelector('.bb b') as HTMLElement).style.transform = `scaleX(${this.bossTrail})`;
+      // Notches the bar has dropped past darken.
+      this.bossEl.querySelectorAll<HTMLElement>('.bb-notches u').forEach((u) => u.classList.toggle('past', parseFloat(u.style.left) / 100 >= f));
+      this.bossOverlap(dt);
       if (!this.boss.alive) this.bossBar(null);
     }
 

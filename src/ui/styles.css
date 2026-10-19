@@ -77,13 +77,26 @@ html, body {
 }
 .prompt.show { opacity: 1; }
 .prompt kbd { font: 700 12px/1 var(--sans); color: #1a140c; background: var(--gold-bright); padding: 4px 7px; }
-.bossbar { position: absolute; left: 50%; top: 62px; transform: translateX(-50%); width: min(620px, 60vw); display: none; text-align: center; }
-.bossbar.show { display: block; }
-.bossbar .nm { display: block; font: 700 16px/1 var(--serif); letter-spacing: 0.2em; color: var(--ink); text-shadow: 0 2px 4px #000; margin-bottom: 6px; }
-.bossbar .bb { position: relative; height: 10px; background: rgba(8, 7, 6, 0.8); border: 1px solid rgba(201, 165, 90, 0.55); }
+/* Boss health: top centre, under the compass strip (which ends at 44px; its target label at ~58px). */
+.bossbar { position: absolute; left: 50%; top: 66px; transform: translateX(-50%); width: min(540px, 44vw); display: none; text-align: center; z-index: 7; pointer-events: none; }
+.bossbar.show { display: block; animation: bossIn 0.5s ease-out; }
+.bossbar .bb-plate { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; padding: 4px 20px 5px; margin-bottom: 6px; background: linear-gradient(180deg, rgba(243, 230, 196, 0.95), rgba(220, 196, 147, 0.95)); box-shadow: inset 0 0 0 1px rgba(122, 90, 46, 0.75), 0 3px 10px rgba(0, 0, 0, 0.45); clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%); }
+.bossbar .nm { font: 700 14px/1.1 var(--serif); letter-spacing: 0.16em; color: #2e2112; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bossbar .bb-orn { flex: none; width: 7px; height: 7px; background: #7a1f12; transform: rotate(45deg); }
+.bossbar .bb { position: relative; height: 12px; background: rgba(12, 8, 4, 0.85); border: 1px solid #c99b47; border-radius: 2px; box-shadow: 0 0 0 1px rgba(47, 28, 14, 0.9), inset 0 1px 3px rgba(0, 0, 0, 0.8), 0 2px 8px rgba(0, 0, 0, 0.5); }
+.bossbar .bb::before, .bossbar .bb::after { content: ''; position: absolute; top: 50%; width: 10px; height: 10px; margin-top: -5px; background: linear-gradient(135deg, #f1d38a, #9a6f2a); transform: rotate(45deg); box-shadow: 0 0 0 1px #2f1c0e; z-index: 1; }
+.bossbar .bb::before { left: -7px; }
+.bossbar .bb::after { right: -7px; }
 .bossbar .bb i, .bossbar .bb b { position: absolute; inset: 1px; transform-origin: left center; }
 .bossbar .bb b { background: rgba(255, 236, 190, 0.55); }
-.bossbar .bb i { background: linear-gradient(180deg, #e2524a, #8a1a12); }
+.bossbar .bb i { background: linear-gradient(180deg, #e2524a, #9a1d14 60%, #6a100a); }
+.bossbar .bb-notches u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #f1d38a; box-shadow: 0 0 2px #000; }
+.bossbar .bb-notches u.past { background: rgba(90, 66, 34, 0.85); }
+@keyframes bossIn { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+/* While a boss bar shows, the region card drops below it and a quest waypoint under it fades. */
+#ui.boss-on .region-card { top: max(20%, 138px); }
+#ui .waypoint.under-boss { opacity: 0.25; }
+body.book-open .bossbar { display: none; }
 .fade { position: absolute; inset: 0; background: #000; opacity: 0; transition: opacity 0.45s; pointer-events: none; z-index: 20; }
 .fade.on { opacity: 1; }
 .levelup { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); text-align: center; opacity: 0;
