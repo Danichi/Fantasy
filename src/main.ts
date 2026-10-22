@@ -123,6 +123,7 @@ import { tickBoarFur } from './creatures/boar/visual';
 import { tickSpiderFur } from './creatures/spider/visual';
 import { updateSnare } from './creatures/spider/spider';
 import { tickBatFur } from './creatures/bat/visual';
+import { tickWolfFur } from './creatures/wolf/visual';
 import { DungeonMapUI } from './ui/dungeonMap';
 import { Realm } from './dungeon/realm';
 import { setupDungeonEntrances } from './dungeon/dungeons/entrances'; // Dungeons Reborn (feat/dungeons)
@@ -1594,6 +1595,7 @@ async function boot() {
     tickBoarFur(dt);
     tickSpiderFur(dt);
     tickBatFur(dt);
+    tickWolfFur(dt);
     guardArc.update(dt);
     updateSnare(player);
     r.camera.getWorldDirection(player.aimDir);

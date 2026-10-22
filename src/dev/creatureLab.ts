@@ -8,6 +8,8 @@ import { SpiderVisual, tickSpiderFur } from '../creatures/spider/visual';
 import { spiderGeometry } from '../creatures/spider/model';
 import { BatVisual, tickBatFur } from '../creatures/bat/visual';
 import { batGeometry } from '../creatures/bat/model';
+import { WolfVisual, tickWolfFur, type WolfLook } from '../creatures/wolf/visual';
+import { wolfGeometry } from '../creatures/wolf/model';
 
 // Dev page: a creature under the game's lighting, seen from several angles in
 // one frame, for quick visual iteration.
@@ -60,14 +62,14 @@ scene.add(ground);
 
 const t0 = performance.now();
 const kind = P.get('c') ?? 'boar';
-const geo = kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
+const geo = kind === 'wolf' ? wolfGeometry() : kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
 type Look = { root: THREE.Group; gait: { reset: (r: THREE.Object3D, g: (x: number, z: number) => number) => void }; setPose: (p: never) => void; update: (dt: number, v: THREE.Vector3, g: (x: number, z: number) => number) => void; lod: (d: number, fur: boolean) => void };
 const batLook = (): Look => {
   const v = new BatVisual({ scale: Number(P.get('scale') ?? 2.5) });
   v.root.position.y = 0.6;
   return { root: v.root, gait: { reset: () => {} }, setPose: (p: never) => v.setPose(p), update: (dt) => v.update(dt, 0, 0), lod: (d, f) => v.lod(d, f) };
 };
-const boar: Look = kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
+const boar: Look = kind === 'wolf' ? new WolfVisual({ look: (P.get('look') ?? 'grey') as WolfLook }) : kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
 scene.add(boar.root);
 boar.setPose((P.get('pose') ?? 'idle') as never);
 const vel = new THREE.Vector3();
@@ -84,6 +86,7 @@ const step = (sec: number) => {
     tickBoarFur(dt);
     tickSpiderFur(dt);
     tickBatFur(dt);
+    tickWolfFur(dt);
     boar.update(dt, vel, () => 0);
   }
 };
@@ -110,6 +113,7 @@ const VIEWS: Record<string, View> = {
   top: { name: 'top', from: [0.6, 3.2, 0.2], at: [0, 0.5, 0.05], fov: 32 },
   flank: { name: 'flank', from: [1.1, 0.95, 0.1], at: [0.1, 0.75, 0.05], fov: 30 },
   crest: { name: 'crest', from: [0.9, 1.3, 0.5], at: [0, 0.9, 0.15], fov: 30 },
+  whead: { name: 'wolf head', from: [0.6, 0.98, 1.35], at: [0, 0.86, 0.72], fov: 30 },
   abdo: { name: 'abdomen', from: [0.9, 1.15, -1.25], at: [0, 0.6, -0.5], fov: 30 },
   low: { name: 'low', from: [1.4, 0.25, 1.8], at: [0, 0.5, 0.1], fov: 34 },
   game: { name: 'game cam', from: [2.5, 2.4, 4.5], at: [0, 0.7, 0], fov: 58 },

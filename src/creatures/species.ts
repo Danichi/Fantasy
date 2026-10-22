@@ -6,6 +6,7 @@ import { Spider } from './spider/spider';
 import { spiderHollow } from './spider/webs';
 import { Bat } from './bat/bat';
 import { batRoost } from './bat/roost';
+import { Pack, Wolf } from './wolf/wolf';
 import * as T3 from 'three';
 import type { Population, Habitat } from './population';
 import { creatureReady, prepareCreature } from './geometryStore';
@@ -71,5 +72,24 @@ export function registerSpecies(pop: Population, scene: THREE.Scene) {
     },
     make: (at, level, o) => new Bat(at, level, scene, pop.fx, o.den ? { perch: at.clone().add(new T3.Vector3((Math.random() - 0.5) * 2.4, 3.1 + Math.random() * 0.4, (Math.random() - 0.5) * 2.4)) } : {}),
     den: { name: 'Bat roost', build: batRoost, found: 'A dark cleft under leaning stones, the ground white with droppings: a bat roost.' },
+  });
+  // Wolves: packs that roam the woods and fields, bolder from dusk.
+  let pack: Pack | null = null;
+  pop.add({
+    id: 'wolf',
+    group: [2, 4],
+    spread: 4,
+    minRoad: 12,
+    ready: ready('wolf'),
+    habitat: (h: Habitat) => {
+      if (!TEMPERATE.has(h.region) && h.region !== 'whiteMountains') return 0;
+      const ground = h.relief === RELIEF.forest ? 1.6 : h.relief === RELIEF.open ? 0.9 : h.relief === RELIEF.mountain ? 0.8 : 0.2;
+      const dusk = h.hour > 18 || h.hour < 6 ? 1.6 : 0.35;
+      return ground * dusk;
+    },
+    make: (at, level, o) => {
+      if (o.index === 0) pack = new Pack();
+      return new Wolf(at, level, scene, pop.fx, { pack: pack!, leader: o.leader });
+    },
   });
 }

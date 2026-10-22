@@ -40,7 +40,7 @@ export interface Species {
   minRoad: number;
   /** Can it be spawned yet (its look built)? */
   ready?: () => boolean;
-  make(at: THREE.Vector3, level: number, opts: { leader: boolean; den: boolean }): Creature;
+  make(at: THREE.Vector3, level: number, opts: { leader: boolean; den: boolean; index: number }): Creature;
   den?: { name: string; build: (at: THREE.Vector3, seed: number) => THREE.Object3D; found?: string };
 }
 
@@ -163,7 +163,7 @@ export class Population {
       const x = at.x + Math.cos(a) * r, z = at.z + Math.sin(a) * r;
       const p = new THREE.Vector3(x, heightAt(x, z), z);
       const leader = i === 0 && (!!den || n >= 3);
-      g.members.push(s.make(p, level + (leader && den ? 2 : 0) - (i > 0 && this.rand() < 0.3 ? 1 : 0), { leader, den: !!den }));
+      g.members.push(s.make(p, level + (leader && den ? 2 : 0) - (i > 0 && this.rand() < 0.3 ? 1 : 0), { leader, den: !!den, index: i }));
     }
     this.groups.push(g);
     return g;

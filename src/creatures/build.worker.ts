@@ -2,6 +2,7 @@
 import { boarGeometry } from './boar/model';
 import { spiderGeometry } from './spider/model';
 import { batGeometry } from './bat/model';
+import { wolfGeometry } from './wolf/model';
 import { pack } from './kit/transfer';
 import type * as THREE from 'three';
 
@@ -9,6 +10,7 @@ const BUILDERS: Record<string, () => Record<string, THREE.BufferGeometry | numbe
   boar: () => boarGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
   spider: () => spiderGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
   bat: () => batGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
+  wolf: () => wolfGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
 };
 
 self.onmessage = (e: MessageEvent<{ kind: string }>) => {

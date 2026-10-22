@@ -227,7 +227,7 @@ function fixWinding(g: THREE.BufferGeometry) {
 }
 
 /** Shading for tufts: soft, velvety, a gentle sway at the tips. */
-export function tuftMaterial(o: { sheen?: number; sheenColor?: THREE.ColorRepresentation; rough?: number } = {}) {
+export function tuftMaterial(o: { sheen?: number; sheenColor?: THREE.ColorRepresentation; rough?: number; tipGlow?: THREE.ColorRepresentation } = {}) {
   const m = new THREE.MeshPhysicalMaterial({
     vertexColors: true,
     roughness: o.rough ?? 0.82,
@@ -237,17 +237,24 @@ export function tuftMaterial(o: { sheen?: number; sheenColor?: THREE.ColorRepres
   });
   m.userData.styleRim = 0.45;
   const time = { value: 0 };
+  // Optional glow toward the tips (shadow-touched fur); black = none.
+  const glow = { value: new THREE.Color(o.tipGlow ?? 0x000000) };
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTuftTime = time;
+    sh.uniforms.uTipGlow = glow;
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float tip;\nuniform float uTuftTime;')
+      .replace('#include <common>', '#include <common>\nattribute float tip;\nuniform float uTuftTime;\nvarying float vTip;')
       .replace('#include <skinning_vertex>', `#include <skinning_vertex>
         {
+          vTip = tip;
           float w = tip * tip;
           float ph = dot(position, vec3(9.0, 7.0, 5.0));
           transformed += vec3(sin(uTuftTime * 2.1 + ph), 0.0, cos(uTuftTime * 1.7 + ph)) * 0.004 * w;
         }`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uTipGlow;\nvarying float vTip;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += uTipGlow * vTip * vTip * vTip;');
   };
   m.customProgramCacheKey = () => 'creature-tuft';
-  return { mat: m, time };
+  return { mat: m, time, glow };
 }

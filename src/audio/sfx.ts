@@ -275,6 +275,109 @@ export const sfx = {
     }
   },
 
+  /** A wolf's howl: a long rising-then-falling voice with a breathy edge. */
+  howl(volume = 0.4) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.02, dur = 2.4 + Math.random() * 0.6;
+    const base = 300 + Math.random() * 60;
+    const o = c.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(base * 0.8, t);
+    o.frequency.linearRampToValueAtTime(base * 1.35, t + dur * 0.3);
+    o.frequency.setValueAtTime(base * 1.35, t + dur * 0.6);
+    o.frequency.linearRampToValueAtTime(base * 0.9, t + dur);
+    const vib = c.createOscillator();
+    vib.frequency.value = 5.5;
+    const vg = c.createGain();
+    vg.gain.value = base * 0.015;
+    vib.connect(vg).connect(o.frequency);
+    const f = c.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 1.2;
+    f.frequency.value = base * 2.2;
+    const g = c.createGain();
+    env(g, t, volume, 0.35, dur - 0.9, 0.55);
+    const breath = noise(c, t, dur);
+    const bf = c.createBiquadFilter();
+    bf.type = 'bandpass';
+    bf.frequency.value = 1800;
+    const bg = c.createGain();
+    env(bg, t, volume * 0.12, 0.3, dur - 0.8, 0.5);
+    o.connect(f).connect(g).connect(out);
+    breath.connect(bf).connect(bg).connect(out);
+    o.start(t);
+    vib.start(t);
+    o.stop(t + dur + 0.1);
+    vib.stop(t + dur + 0.1);
+  },
+
+  /** A low growl: a rough rumble. */
+  growl(volume = 0.3) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.01, dur = 0.7 + Math.random() * 0.6;
+    const o = c.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(70 + Math.random() * 20, t);
+    const am = c.createOscillator();
+    am.frequency.value = 28;
+    const ag = c.createGain();
+    ag.gain.value = 0.5;
+    const g = c.createGain();
+    env(g, t, volume, 0.08, dur * 0.6, dur * 0.3);
+    am.connect(ag).connect(g.gain);
+    const f = c.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 500;
+    o.connect(shaper(c, 4)).connect(f).connect(g).connect(out);
+    o.start(t);
+    am.start(t);
+    o.stop(t + dur + 0.1);
+    am.stop(t + dur + 0.1);
+  },
+
+  /** A snapping snarl before a bite. */
+  snarl(volume = 0.35) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.01, dur = 0.35;
+    const n = noise(c, t, dur);
+    const f = c.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 1.5;
+    f.frequency.setValueAtTime(700, t);
+    f.frequency.linearRampToValueAtTime(1400, t + dur);
+    const o = c.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(140, t);
+    o.frequency.linearRampToValueAtTime(220, t + dur);
+    const g = c.createGain();
+    env(g, t, volume, 0.02, dur * 0.5, dur * 0.4);
+    n.connect(f).connect(g);
+    o.connect(shaper(c, 3)).connect(g);
+    g.connect(out);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  },
+
+  /** A hurt dog's yelp. */
+  yelp(volume = 0.35) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.01, dur = 0.22 + Math.random() * 0.1;
+    const o = c.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(900, t);
+    o.frequency.exponentialRampToValueAtTime(1600, t + dur * 0.3);
+    o.frequency.exponentialRampToValueAtTime(700, t + dur);
+    const g = c.createGain();
+    env(g, t, volume, 0.01, dur * 0.4, dur * 0.5);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  },
+
   /** A dead thing's moan: a wavering low voice through a closing mouth. */
   groan(volume = 0.35) {
     if (!this.enabled) return;

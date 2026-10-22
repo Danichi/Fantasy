@@ -315,3 +315,47 @@ test('Cave Bats come out at night, circle and dive to bite; a parry knocks one o
   expect(res.stunned).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test('a wolf pack howls, circles, bites two at a time at most, and breaks when its leader falls', async ({ game }) => {
+  const { page, errors } = game;
+  await meadow(page);
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, pl = g.player, T = g.THREE, P = g.population;
+    (await import('/src/creatures/geometryStore.ts')).prepareCreatureNow('wolf');
+    pl.hp = pl.maxHp = 5000;
+    // A pack of four: a leader and three.
+    const { Wolf, Pack } = await import('/src/creatures/wolf/wolf.ts');
+    const pack = new Pack();
+    const wolves: any[] = [];
+    for (let i = 0; i < 4; i++) {
+      const at = pl.pos.clone().add(new T.Vector3(i * 1.5 - 2, 0, 14 + (i % 2)));
+      wolves.push(new Wolf(at, 3, g.r.scene, g.fx, { pack, leader: i === 0 }));
+    }
+    P.groups.push({ members: wolves, at: wolves[0].position.clone() });
+    const modes = new Set<string>();
+    let maxBiting = 0, hits = 0;
+    const off = g.events.on('playerDamaged', () => hits++);
+    for (let i = 0; i < 900; i++) {
+      g.stepSim(1);
+      for (const w of pack.members) modes.add(w.mode);
+      maxBiting = Math.max(maxBiting, pack.members.filter((w: any) => w.mode === 'lunge' || w.mode === 'snarl').length);
+      if (hits >= 3) break;
+    }
+    off();
+    const leader = pack.leader;
+    const label = leader.label;
+    leader.takeHit({ damage: 1e5, poise: 0, dir: new T.Vector3(0, 0, 1), at: leader.center.clone(), crit: false, source: 'melee' });
+    g.stepSim(5);
+    return { size: pack.members.length, modes: [...modes], maxBiting, hits, label, broken: pack.broken, fled: pack.members.some((w: any) => w.mode === 'flee') };
+  });
+  expect(res.size).toBeGreaterThanOrEqual(3);
+  expect(res.modes).toContain('howl');
+  expect(res.modes).toContain('circle');
+  expect(res.modes).toContain('lunge');
+  expect(res.maxBiting).toBeLessThanOrEqual(2);
+  expect(res.hits).toBeGreaterThan(0);
+  expect(res.label).toBe('Pack Leader');
+  expect(res.broken).toBe(true);
+  expect(res.fled).toBe(true);
+  expect(errors).toEqual([]);
+});
