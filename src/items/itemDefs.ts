@@ -269,6 +269,10 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'warriorBelt', name: "Warrior's Belt", kind: 'accessory', slot: 'belt', rarity: 'common',
     desc: 'Thick leather with a brass buckle and a pouch.', stats: { poise: 8, maxStamina: 10 }, armor: 'belt',
   },
+  watchBanner: {
+    id: 'watchBanner', name: "Watch's Banner", kind: 'accessory', slot: 'trinket', rarity: 'rare',
+    desc: "A strip of Elder Glen's watch colours, blue and frayed, given to those who stood with the watch on the night of a raid. The watch fights harder beside whoever wears it.", stats: { maxHp: 25, poise: 10 },
+  },
   warlordTusk: {
     id: 'warlordTusk', name: "Warlord's Tusk", kind: 'accessory', slot: 'trinket', rarity: 'epic',
     desc: "Grukk's broken tusk on a cord of braided sinew. Wearing it makes your blows land heavier.", stats: { damagePct: 0.12, maxHp: 20 },

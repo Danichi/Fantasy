@@ -56,6 +56,8 @@ export abstract class Creature implements Target {
   protected accel = 10;
   /** last step was blocked by the world (ran into a wall or tree) */
   protected bumped = false;
+  /** standing on something this step */
+  protected grounded = true;
   /** flies: no gravity, wish.y steers up and down (it still drops when dead) */
   protected flying = false;
   /** lowest it will fly above the ground (m) */
@@ -141,6 +143,7 @@ export abstract class Creature implements Target {
       this.wish.set(0, 0, 0);
     } else {
       this.think(dt, player);
+      if (this.disposed) return; // it left (fled out of the world) while deciding
     }
     // Move: ease toward the wished velocity, fall, slide around the world.
     this.vel.x = damp(this.vel.x, this.wish.x, this.accel, dt);
@@ -158,7 +161,8 @@ export abstract class Creature implements Target {
     this.rb.setNextKinematicTranslation(next);
     this.col.setTranslation(next);
     this.position.set(next.x, next.y - (this.halfHeight + this.radius), next.z);
-    if (this.kcc.computedGrounded() && !flies) this.vel.y = Math.min(0, this.vel.y);
+    this.grounded = this.kcc.computedGrounded();
+    if (this.grounded && !flies) this.vel.y = Math.min(0, this.vel.y);
     // Never sink below the terrain (the controller can miss thin seams); fliers keep their height.
     const gy = this.groundAt(this.position.x, this.position.z);
     if (flies && this.position.y < gy + this.minAltitude) this.vel.y = Math.max(this.vel.y, (gy + this.minAltitude - this.position.y) * 6);

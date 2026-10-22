@@ -120,6 +120,30 @@ function paintAccessory(def: ItemDef) {
       g.arc(m, 34, 15, 0, Math.PI * 2);
       g.fill();
     }
+  } else if (def.id === 'watchBanner') {
+    // A swallow-tailed pennant in the watch's blue, on a short staff.
+    g.strokeStyle = '#6b4a33';
+    g.lineWidth = 7;
+    g.beginPath();
+    g.moveTo(34, 18);
+    g.lineTo(34, 112);
+    g.stroke();
+    const gr = g.createLinearGradient(34, 24, 104, 80);
+    gr.addColorStop(0, '#5b86c8');
+    gr.addColorStop(1, '#27477e');
+    g.fillStyle = gr;
+    g.beginPath();
+    g.moveTo(37, 24);
+    g.quadraticCurveTo(70, 18, 106, 30);
+    g.lineTo(84, 52);
+    g.lineTo(106, 74);
+    g.quadraticCurveTo(70, 64, 37, 72);
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#e8d9a8';
+    g.beginPath();
+    g.arc(62, 48, 9, 0, Math.PI * 2);
+    g.fill();
   } else if (def.id === 'warlordTusk') {
     // A curved tusk on a cord, set in gold.
     g.fillStyle = '#c9a24a';

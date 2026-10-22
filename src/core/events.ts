@@ -13,6 +13,9 @@ export interface GameEvents {
   /** the player's blade connected (after enemyHit) */
   meleeHit: { target: import('../combat/targets').Target; amount: number; crit: boolean; action: string };
   enemyDied: { at: Vector3; enemyId: number; kind: string; level?: number };
+  /** a night raid: the horn sounded / it was beaten back or ran its course */
+  raidStarted: { kind: string; front: string };
+  raidEnded: { kind: string; won: boolean; lost: number };
   /** a creature den (boar wallow, spider hollow, bat roost) was emptied */
   denCleared: { id: string; species: string };
   swing: { heavy: boolean };

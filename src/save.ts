@@ -34,6 +34,8 @@ export interface WorldSave {
   landmarks?: { ore?: number[] };
   /** picked forage nodes (id -> game hour) until they regrow */
   forage?: Record<string, number>;
+  /** night raids: the last one, how many beaten back */
+  raids?: import('./raid/raids').RaidSave;
   /** cleared creature dens (id -> game day) until they fill again */
   wilds?: { dens?: Record<string, number> };
   /** owned horses and where the active one stands */

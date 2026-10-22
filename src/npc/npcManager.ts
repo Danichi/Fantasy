@@ -300,6 +300,8 @@ export class NpcManager {
   private lastBuild = 0;
   /** The harvest festival: the town gathers on the plaza on this day's evening. */
   festivalDay = -1;
+  /** A night raid: everyone in this settlement bars their door (the watch fight as raid/watchman.ts). */
+  raidOn: string | null = null;
 
   /** A resident by id (quest markers, scripted scenes). */
   find(id: string) {
@@ -309,6 +311,10 @@ export class NpcManager {
   private effective(st: NpcState) {
     const e = st.rec.schedule[this.entryIndex(st.rec)];
     const h = this.time.hour;
+    if (this.raidOn === st.rec.settlement) {
+      const home = st.rec.schedule.find((x) => x.activity === 'sleep')?.place ?? e.place;
+      return { activity: 'sleep' as Activity, place: home };
+    }
     if (this.festivalDay === this.time.day && h >= 19 && h < 23.5 && st.rec.job !== 'guard' && st.rec.job !== 'brannoc') {
       return { activity: 'play' as Activity, place: 'plaza' };
     }

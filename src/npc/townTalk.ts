@@ -16,6 +16,8 @@ export interface TalkCtx {
   level: number;
   /** spoken to this person before (this session) */
   met: boolean;
+  /** today's date, and the last night raid (days since, beaten back, animals lost), if any */
+  raid?: { ago: number; won: boolean; lost: number; gloam: boolean; defended: number } | null;
 }
 
 type When = (c: TalkCtx) => boolean;
@@ -43,7 +45,22 @@ interface Voice {
   topics: Topic[];
 }
 
+const lastNight: When = (c) => !!c.raid && c.raid.ago <= 1;
+
 const VOICES: Record<string, Voice> = {
+  brannoc: {
+    greet: [
+      { when: (c) => lastNight(c) && !!c.raid?.won && !!c.raid?.gloam, text: 'You saw it too. That tear in the dark, and what came out of it. Those weren\'t wolves. I don\'t know what they were, and I\'ve been on the walls twenty years. Thank you for standing with us.' },
+      { when: (c) => lastNight(c) && !!c.raid?.won, text: 'There\'s the one who stood with us last night. The watch drinks to you tonight. And I\'ll say it plainly: we\'d have lost more than a few animals without you.' },
+      { when: (c) => lastNight(c) && !c.raid?.won && (c.raid?.lost ?? 0) > 0, text: 'We lost animals last night. Good ones. The watch did what it could, but there weren\'t enough of us. Next time the horn goes, I\'d be glad of another sword.' },
+      { when: (c) => lastNight(c) && !c.raid?.won, text: 'A long night. They came for the pens and we held them off until dawn, just. Next time the horn goes, I\'d be glad of another sword.' },
+      { when: night, text: 'Quiet so far. I don\'t trust quiet.' },
+    ],
+    topics: [
+      { q: 'What are these raids?', a: (c) => (c.raid?.gloam ? 'Wolves, we thought, at first. Then the tear opened past the pens and the things that came through it were wolves the way a shadow is a man. Something is wrong out there in the dark, and it\'s getting worse.' : 'Wolves, mostly, out of the north woods. Hungry ones. They go for the pens, and if the pens are empty they try the gates. When you hear the horn, come running. Or don\'t, and we\'ll manage. Mostly.') },
+      { q: 'How can I help the watch?', a: 'When the horn goes, find the pens it names and put yourself between them and whatever\'s coming. We\'ll be there. Stand with us often enough and you\'ll wear our colours.', when: (c) => (c.raid?.defended ?? 0) < 3 },
+    ],
+  },
   kaela: {
     greet: [
       { when: (c) => c.activeClass === 'gale' && grukkDead(c), text: 'There\'s my student. The whole yard heard about Grukk. Don\'t let it go to your feet: they still have to move.' },
@@ -196,6 +213,10 @@ export function topicsFor(id: string, c: TalkCtx) {
  */
 export function rumours(c: TalkCtx, inGlen = true): string[] {
   const out: string[] = [];
+  if (inGlen && c.raid && c.raid.ago <= 1) {
+    if (c.raid.gloam) out.push(c.raid.won ? 'Did you see the light past the pens last night? Like the night itself tore open. Black wolves came out of it. The watch says you drove them back in.' : 'Something tore the night open past the pens last night, and black wolves came out of it. Brannoc won\'t talk about it. That frightens me more than the wolves.');
+    else out.push(c.raid.won ? 'Wolves at the pens last night! The horn woke the whole village. They say you were out there with the watch. Well done.' : `Wolves got at the pens last night${c.raid.lost ? `, ${c.raid.lost} ${c.raid.lost === 1 ? 'animal' : 'animals'} lost` : ''}. Old Bren is bandaged to the elbow from trying to drive them off with a pitchfork.`);
+  }
   if (inGlen) {
     if (!c.done('mq-crypt')) out.push('There\'ve been lights up at the old crypt on the hill, north of here. Shepherds won\'t take the flocks past it any more. Orcs, they say.');
     if (c.done('mq-crypt') && !c.done('mq-gravewood')) out.push('The Gravewood, south-west, has gone wrong. Folk heard bells there, and there\'s no bell in it. Magus Orren looks like he hasn\'t slept.');

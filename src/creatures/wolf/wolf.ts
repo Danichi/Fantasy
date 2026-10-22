@@ -77,6 +77,18 @@ export class Wolf extends Creature {
     this.slot = (this.pack.members.length - 1) * 2.1 + Math.random() * 0.4;
   }
 
+  /** Running for it (out of the fight). */
+  get fleeing() {
+    return this.mode === 'flee';
+  }
+
+  /** Join a raid: lope for the objective, turning on whatever is in reach. */
+  beginRaid(objective: THREE.Vector3) {
+    this.raider = true;
+    this.objective = objective;
+    this.setMode('raid', 1);
+  }
+
   private setMode(m: Mode, len = 1) {
     // A turn at biting runs from the snarl through the lunge.
     if (this.biting && !(m === 'lunge' && this.mode === 'snarl')) {
@@ -146,6 +158,12 @@ export class Wolf extends Creature {
     const dist = to.length();
     const face = Math.atan2(to.x, to.z);
     if (!foe && this.mode !== 'roam' && this.mode !== 'raid' && this.mode !== 'flee' && this.mode !== 'hurt') this.setMode(this.raider ? 'raid' : 'roam', 2);
+
+    // Raiders clear fences and hedges at a bound when something blocks the way.
+    if (this.raider && this.bumped && this.grounded && this.vel.y <= 0.1 && this.mode !== 'hurt') {
+      this.vel.y = 7.2;
+      this.vel.addScaledVector(this.forward, 2);
+    }
 
     switch (this.mode) {
       case 'roam': {
@@ -273,7 +291,7 @@ export class Wolf extends Creature {
 
   protected onHurt(h: HitInfo) {
     const player = creatureView.player;
-    if (player && (this.mode === 'roam' || this.mode === 'raid')) this.rouse(playerFoe(player));
+    if (player && (this.mode === 'roam' || this.mode === 'raid') && player.pos.distanceTo(this.position) < 30) this.rouse(playerFoe(player));
     if (h.crit || h.poise > 35) {
       this.setMode('hurt', 0.45);
       sfx.yelp(this.volume());
@@ -288,7 +306,7 @@ export class Wolf extends Creature {
     if (this.pack.leader === this) {
       // The leader is down: the pack loses its nerve.
       this.pack.broken = true;
-      for (const w of this.pack.members) if (w !== this && w.alive && Math.random() < 0.6) w.setMode('flee', 8);
+      for (const w of this.pack.members) if (w !== this && w.alive) w.setMode('flee', 8);
     }
   }
 

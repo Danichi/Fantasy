@@ -41,7 +41,7 @@ import { Encounters } from './world/encounters';
 import { Caravans } from './world/caravans';
 import { setupRoadQuests } from './quests/roadQuests';
 import { setupClassTrials } from './quests/classTrials';
-import { rumours } from './npc/townTalk';
+import { rumours, greetingFor, topicsFor } from './npc/townTalk';
 import { buildPortAurelle, PORT_SPOTS } from './world/portAurelle';
 import { Fishing, type FishingSpot } from './world/fishing';
 import { Duel } from './combat/duel';
@@ -119,6 +119,7 @@ import { Population } from './creatures/population';
 import { registerSpecies } from './creatures/species';
 import { creatureView } from './creatures/view';
 import { GuardArc } from './ui/guardArc';
+import { Raids } from './raid/raids';
 import { tickBoarFur } from './creatures/boar/visual';
 import { tickSpiderFur } from './creatures/spider/visual';
 import { updateSnare } from './creatures/spider/spider';
@@ -539,8 +540,10 @@ async function boot() {
       const title = n.rec.title ?? n.rec.job.charAt(0).toUpperCase() + n.rec.job.slice(1) + ' of Elder Glen';
       const back = () => folkTalk.action();
       const show = (t: string, opts: { label: string; run: () => void }[]) => dialogue.show(n.rec.name, title, t, opts);
-      show(npcs.lineFor(n), [
+      const ctx = { ...talkCtx(), met: true };
+      show(greetingFor(n.rec.id, npcs.lineFor(n), ctx, 1), [
         ...quests.options(n.rec.id, show, back),
+        ...topicsFor(n.rec.id, ctx).map((t) => ({ label: t.q, run: () => show(t.a, [{ label: 'Anything else?', run: back }, { label: 'Farewell.', run: () => dialogue.close() }]) })),
         ...(folkServices.get(n.rec.id)?.(show, back) ?? []),
         ...town.sellOptions(n.rec.id, n.rec.name, title, back),
         {
@@ -609,6 +612,7 @@ async function boot() {
   const talkCtx = () => ({
     hour: time.hour, rain: weather.p.rain > 0.4, done: (id: string) => quests.isDone(id), active: (id: string) => quests.isActive(id),
     learned: (id: string) => player.paths.learned(id), activeClass: player.paths.active, level: player.prog.level,
+    raid: raids.save.last !== undefined ? { ago: time.day - raids.save.last, won: !!raids.save.lastWon, lost: raids.save.lastLost ?? 0, gloam: raids.save.lastKind === 'gloam', defended: raids.save.defended ?? 0 } : null,
   });
   town.talkCtx = talkCtx;
   const folkNews = new Map<string, number>();
@@ -1099,6 +1103,20 @@ async function boot() {
     return f && !f.hidden ? f.pos.clone().setY(f.pos.y + (f.rec.look.height ?? 1.75)) : null;
   }, () => questNpcIds);
   questUI.attachScene(r.scene);
+  // ---- Night raids (raid/raids.ts): the horn, the watch, the waves --------------------
+  const raids = new Raids({
+    scene: r.scene, fx, fauna,
+    toast: (m) => hud.toast(m),
+    addGold: (n) => player.prog.addGold(n),
+    give: (id, n) => giveItem(id, n),
+    bossBar: (t, name) => hud.bossBar(t, name),
+    unlocked: () => quests.isDone('mq-stranger'),
+    playerPos: () => player.pos,
+    outdoors: () => realm.mode === 'overworld' && !realm.interior,
+    mark: (m) => (questUI.urgent = m),
+  }, farm.ranges);
+  raids.fromJSON(saveData?.world?.raids);
+  if (TEST_MODE) raids.auto = false;
   // The Seamanship calling (N): the sea's skill tree.
   const seaPanel = new SeamanshipPanel(() => ({ level: sailing.level, xpFrac: seamanshipLevel(sailing.xp).frac, picks: sailing.picks, stats: sailing.stats, learn: (id) => sailing.learn(id) }));
   seaPanel.onToggle = (open) => {
@@ -1514,6 +1532,9 @@ async function boot() {
     if (realm.mode === 'overworld') {
       slimes.update(STEP, player);
       population.update(STEP, player, time.hour, time.day);
+      raids.update(STEP, player, time.hour, time.day);
+      raids.tail(STEP, player);
+      npcs.raidOn = raids.villageIndoors ? 'elderGlen' : null;
       frontier.update(STEP);
       encounters.update(STEP, time.hour, weather.p.rain);
       crownRoad.update(STEP, player, time.state.night);
@@ -1750,6 +1771,7 @@ async function boot() {
       if (player.mounted) horses.dismount();
       player.vehicle = null;
       population.clear();
+      raids.clear();
       if (realm.mode === 'dungeon') await realm.leave();
       if (realm.mode === 'interior') await realm.leaveInterior();
       slimes.clear();
@@ -1777,7 +1799,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, population, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, population, raids, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       origins, creator, // ---- Origins (feat/origins) ----

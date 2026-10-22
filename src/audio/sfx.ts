@@ -378,6 +378,35 @@ export const sfx = {
     o.stop(t + dur + 0.05);
   },
 
+  /** The watch's horn: a swelling, slightly ragged brass call, twice. */
+  horn(volume = 0.6) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    for (let k = 0; k < 2; k++) {
+      const t = c.currentTime + 0.02 + k * 1.9, dur = 1.5;
+      const bus = c.createGain();
+      env(bus, t, volume, 0.25, dur - 0.55, 0.3);
+      const f = c.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.setValueAtTime(500, t);
+      f.frequency.linearRampToValueAtTime(1400, t + 0.4);
+      f.Q.value = 2;
+      for (const [mul, det] of [[1, 0], [1, 7], [2, -5], [3, 3]]) {
+        const o = c.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(110 * mul * 0.97, t);
+        o.frequency.linearRampToValueAtTime(110 * mul, t + 0.25);
+        o.detune.value = det;
+        const g = c.createGain();
+        g.gain.value = 0.3 / mul;
+        o.connect(g).connect(f);
+        o.start(t);
+        o.stop(t + dur + 0.1);
+      }
+      f.connect(bus).connect(out);
+    }
+  },
+
   /** A dead thing's moan: a wavering low voice through a closing mouth. */
   groan(volume = 0.35) {
     if (!this.enabled) return;

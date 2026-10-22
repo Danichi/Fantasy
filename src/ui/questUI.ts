@@ -245,8 +245,15 @@ export class QuestUI {
     this.cmpTarget.title = best.label;
   }
 
+  /** Something urgent (a raid) overrides the tracked quest on the compass and in the world. */
+  urgent: { x: number; z: number; label: string } | null = null;
+
   /** The tracked quest's nearest unfinished objective. */
   private pickTarget(player: THREE.Vector3) {
+    if (this.urgent) {
+      this.target = { ...this.urgent, d: Math.hypot(this.urgent.x - player.x, this.urgent.z - player.z) };
+      return;
+    }
     const tracked = this.quests.tracked ?? this.quests.active()[0]?.id;
     let best: QuestUI['target'] = null;
     for (const m of this.quests.markers()) {
