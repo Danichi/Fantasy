@@ -70,13 +70,13 @@ function veinModel(ore: number, glow: boolean, seed: number): Part[] {
   const stones: [number, number, number, number][] = [[0, 0.45, 0, 0.75], [0.7, 0.3, 0.3, 0.5], [-0.55, 0.25, 0.35, 0.45], [0.2, 0.2, -0.6, 0.42]];
   for (const [x, y, z, s] of stones) parts.push([rock(rnd, s).translate(x, y, z), 0x7c7a74]);
   // Ore showing through the rock: chunky nuggets and a streak.
-  for (let i = 0; i < 7; i++) {
-    const a = rnd() * Math.PI * 2, r = 0.35 + rnd() * 0.45;
-    const g = new THREE.OctahedronGeometry(0.1 + rnd() * 0.09, 0);
-    g.rotateY(rnd() * 3).rotateX(rnd() * 3).translate(Math.cos(a) * r, 0.35 + rnd() * 0.5, Math.sin(a) * r);
+  for (let i = 0; i < 11; i++) {
+    const a = rnd() * Math.PI * 2, r = 0.3 + rnd() * 0.5;
+    const g = new THREE.OctahedronGeometry(0.14 + rnd() * 0.12, 0);
+    g.rotateY(rnd() * 3).rotateX(rnd() * 3).translate(Math.cos(a) * r, 0.4 + rnd() * 0.5, Math.sin(a) * r);
     parts.push([g, ore]);
   }
-  parts.push([new THREE.BoxGeometry(0.9, 0.08, 0.14).rotateZ(0.35).translate(0.05, 0.62, 0.55), ore]);
+  parts.push([new THREE.BoxGeometry(1.0, 0.12, 0.18).rotateZ(0.35).translate(0.05, 0.62, 0.58), ore]);
   if (glow) parts.push([new THREE.OctahedronGeometry(0.09, 0).translate(-0.2, 0.95, 0.2), 0xffffff]);
   return parts;
 }
@@ -110,7 +110,7 @@ function bake(parts: Part[]) {
 }
 
 const MODELS: Record<NodeKindId, () => Part[]> = {
-  iron: () => veinModel(0x9a5a3a, false, 11),
+  iron: () => veinModel(0xc0683a, false, 11),
   coal: () => veinModel(0x1c1c20, false, 12),
   copper: () => veinModel(0x3aa08a, false, 13),
   silver: () => veinModel(0xe8eef2, true, 14),
