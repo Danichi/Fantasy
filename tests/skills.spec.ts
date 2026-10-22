@@ -122,6 +122,7 @@ test('the Skills screen opens with K, invests XP and learns tree nodes', async (
 });
 
 test('disciplines and attributes survive a save and reload', async ({ page }) => {
+  test.setTimeout(420_000 * Number(process.env.PW_SLOW ?? '1')); // boots the game twice
   await boot(page, '?test&save');
   await page.evaluate(() => {
     const g = (window as any).__game, P = g.player.paths;
