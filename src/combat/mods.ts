@@ -24,6 +24,8 @@ export interface CombatMods {
   canBlock: boolean;
   /** flat bonuses to maxima */
   hp: number;
+  /** max health multiplier (Blood of Fire) */
+  hpMult: number;
   stamina: number;
   mana: number;
   staminaRegen: number;
@@ -39,6 +41,6 @@ export function baseMods(): CombatMods {
   return {
     melee: 1, lightAttack: 1, poise: 1, spell: 1, heal: 1, dmgTaken: 1, moveSpeed: 1, attackSpeed: 1, castSpeed: 1,
     staminaCost: 1, dodgeCost: 1, parryWindow: 1, blockCost: 1, crit: 0, canBlock: true,
-    hp: 0, stamina: 0, mana: 0, staminaRegen: 0, manaRegen: 0, manaCost: 1, duration: 1, area: 1,
+    hp: 0, hpMult: 1, stamina: 0, mana: 0, staminaRegen: 0, manaRegen: 0, manaCost: 1, duration: 1, area: 1,
   };
 }

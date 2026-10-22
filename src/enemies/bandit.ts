@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ignoresPlayer } from '../origins/stealth';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
 import { dampAngle, segmentPointDistance } from '../core/math';
@@ -69,7 +70,7 @@ export class Bolts {
       const p = b.mesh.position;
       const a = player.pos.clone().setY(player.pos.y + 0.3), c = player.pos.clone().setY(player.pos.y + 1.6);
       if (!player.dead && segmentPointDistance(a, c, p) < 0.45) {
-        player.receiveAttack({ damage: b.damage, from: p.clone().sub(b.vel.clone().normalize().multiplyScalar(4)), at: p.clone(), parryable: false, poise: 12 });
+        player.receiveAttack({ damage: b.damage, from: p.clone().sub(b.vel.clone().normalize().multiplyScalar(4)), at: p.clone(), parryable: false, poise: 12, projectile: true });
         b.life = 0;
       }
     }
@@ -181,6 +182,9 @@ export class Bandit implements Target {
     this.clip = name;
   }
 
+  /** seconds left reeling from a parry (wide open to a riposte) */
+  private daze = 0;
+
   takeHit(h: HitInfo) {
     if (!this.alive) return;
     this.hp -= h.damage;
@@ -210,6 +214,7 @@ export class Bandit implements Target {
   update(dt: number, player: Player) {
     this.st += dt;
     this.cooldown -= dt;
+    this.daze = Math.max(0, this.daze - dt);
     this.built?.mixer.update(dt);
     if (this.state === 'dying') {
       if (this.st > 4 && !this.dead) {
@@ -220,7 +225,7 @@ export class Bandit implements Target {
     }
     const to = player.pos.clone().sub(this.position);
     const dist = Math.hypot(to.x, to.z);
-    const aware = !player.dead && (dist < (this.alerted ? 34 : 18));
+    const aware = !player.dead && !ignoresPlayer(this) && (dist < (this.alerted ? 34 : 18));
     if (aware) this.alerted = true;
     const wantYaw = Math.atan2(to.x, to.z);
     const ranged = this.role !== 'sword';
@@ -313,7 +318,8 @@ export class Bandit implements Target {
         }
         break;
       case 'hurt':
-        if (this.st > 0.5) {
+        if (this.st > 0.5 && this.daze <= 0) {
+          this.stunned = false;
           this.state = ranged ? 'aim' : 'chase';
           this.st = 0;
         }
@@ -356,10 +362,10 @@ export class Bandit implements Target {
       onParried: () => {
         this.stunned = true;
         this.state = 'hurt';
-        this.st = -0.6; // a longer opening after a parry
+        this.st = 0;
+        this.daze = 2.0; // reeling: wide open to a riposte
         this.play('hit', true);
         this.vel.set(-dir.x * 3, 2, -dir.z * 3);
-        setTimeout(() => (this.stunned = false), 1200);
       },
     });
   }

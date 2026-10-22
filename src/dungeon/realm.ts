@@ -1,5 +1,12 @@
 import * as THREE from 'three';
-import { DungeonInstance, DUNGEON_ORIGIN, CELL, type DungeonProgress, type Interactable } from './instance';
+import { type DungeonProgress, type Interactable } from './instance';
+// ---- Dungeons Reborn (feat/dungeons): the kit's dungeons ----
+import { KitInstance, type KitDungeonDef, type KitHooks } from './kit/build';
+import { freshProgress, type KitProgress } from './kit/types';
+import { theme as kitTheme, type Theme } from './kit/theme';
+import { perksOf, addMastery } from './kit/delving';
+import { cryptDef } from './dungeons/crypt';
+import { events } from '../core/events';
 import { MineInstance, type MineProgress } from './mine';
 import { setGroundOverride, heightAt } from '../world/terrain';
 import { Q } from '../core/settings';
@@ -52,10 +59,17 @@ export class Realm {
   onInterior?: (it: Interior) => Interactable[];
   onInteriorLeave?: (it: Interior) => void;
   private interiorExtras: Interactable[] = [];
-  floor: 1 | 2 = 1;
-  instance: DungeonInstance | null = null;
+  floor = 1;
+  /** the kit dungeon you're in (the crypt, the caves, the shrine) */
+  instance: KitInstance | null = null;
   mineInstance: MineInstance | null = null;
-  active: 'crypt' | 'mine' | null = null;
+  /** which dungeon: 'mine', or a kit dungeon's id ('crypt', 'hollowRidge', 'drownedShrine') */
+  active: string | null = null;
+  /** the kit dungeon being run, and where each one lets you out */
+  kit: KitDungeonDef | null = null;
+  readonly crypt = cryptDef();
+  private kitExits: Record<string, { pos: THREE.Vector3; yaw: number }> = {};
+  private autoT = 0;
   progress: DungeonProgress = { gateOpen: false, bossDead: false, chests: [] };
   mineProgress: MineProgress = { gateOpen: false, guardianDead: false };
   maps: Record<string, MapData> = {};
@@ -104,13 +118,128 @@ export class Realm {
   /** Where to respawn after dying. */
   get respawnPoint() {
     if (this.mode === 'dungeon' && this.active === 'mine' && this.mineInstance) return this.mineInstance.spawnPoint;
-    if (this.mode === 'dungeon' && this.instance) return this.instance.spawnPoint;
+    if (this.mode === 'dungeon' && this.instance) return this.instance.respawnPoint;
     if (this.interior) return this.interior.spawn.clone();
     return new THREE.Vector3(0, heightAt(0, 10), 10);
   }
 
   mapKey(floor: number) {
-    return `${this.seed}:${floor}`;
+    // (the rebuilt crypt's maps: the old maze's keys were `${seed}:${floor}`)
+    return `crypt:${this.seed}:${floor}`;
+  }
+
+  // ---- Dungeons Reborn (feat/dungeons) ----
+  /** Dungeoneering (and the origin's eyes) as they stand now. */
+  get perks() {
+    return perksOf(this.player.paths, this.player.prog.origin as string);
+  }
+
+  /** A kit dungeon's saved progress (made on the first visit). */
+  kitProgress(def: KitDungeonDef): KitProgress {
+    const all = (this.progress.kit ??= {});
+    let kp = all[def.id];
+    if (!kp) {
+      kp = freshProgress(def.seed ?? Math.floor(Math.random() * 1e6) + 1);
+      if (def.id === 'crypt') {
+        // A crypt opened or cleared in the old maze stays opened and cleared.
+        if (this.progress.gateOpen) kp.doors.push('f1-portcullis', 'f1-seal'), kp.mech.push('crypt-dial');
+        if (this.progress.bossDead) kp.boss = true;
+      }
+      all[def.id] = kp;
+    }
+    return kp;
+  }
+
+  /** A kit dungeon's door in the overworld: where you come back out, facing which way. */
+  registerKit(def: KitDungeonDef, door: THREE.Vector3, out: THREE.Vector3, yaw: number, label: string) {
+    this.kitExits[def.id] = { pos: out.clone(), yaw };
+    this.overworldInteractables.push({
+      pos: door, radius: 3.2, label: () => label, enabled: () => true,
+      action: () => void this.enterKit(def, 1, 'entrance'),
+    });
+  }
+
+  /** The secrets near a point in the dungeon you're in (seam: Keen Sight, Deep Sense). */
+  secretsNear(pos: THREE.Vector3, r: number) {
+    return this.instance?.secrets.near(pos, r) ?? [];
+  }
+
+  private kitHooks(def: KitDungeonDef, floor: number): KitHooks {
+    const p = this.player;
+    const base = this.hooks();
+    return {
+      ...base,
+      descend: () => void this.enterKit(def, floor + 1, 'entrance'),
+      ascend: () => void this.enterKit(def, floor - 1, 'stairs'),
+      card: (name, sub) => this.hud.regionCard(name, sub, true),
+      banner: (t) => this.hud.showBanner(t),
+      rest: () => {
+        p.hp = p.maxHp;
+        p.stamina = p.maxStamina;
+        p.mana = p.maxMana;
+        this.hud.toast('You rest by the fire. If you fall, you will wake here.');
+        this.onSave?.();
+      },
+      mastery: (n) => addMastery(p.paths, n),
+      deed: (id, renown, label) => events.emit('deed', { id, renown, label }),
+      onDoor: (id) => {
+        if (def.id === 'crypt' && id === 'f1-portcullis') this.progress.gateOpen = true;
+      },
+      onBoss: () => {
+        if (def.id === 'crypt') this.progress.bossDead = true;
+      },
+      perks: () => this.perks,
+    };
+  }
+
+  /** Enter (or change floors in) a dungeon built with the kit. */
+  async enterKit(def: KitDungeonDef, floor: number, at: 'entrance' | 'stairs') {
+    if (this.busy) return;
+    this.busy = true;
+    await this.hud.fade(true);
+    this.instance?.dispose();
+    this.instance = null;
+    this.mineInstance?.dispose();
+    this.mineInstance = null;
+    const th = kitTheme(def.theme);
+    if (this.mode === 'overworld') {
+      this.overworld.clearEnemies();
+      this.overworld.enemiesEnabled(false);
+      this.overworld.hide(true);
+      this.atmosphere(true, false, false, th);
+    }
+    this.mode = 'dungeon';
+    this.active = def.id;
+    this.kit = def;
+    this.floor = floor;
+    const kp = this.kitProgress(def);
+    const first = !kp.visited.includes('entry');
+    this.instance = new KitInstance(def, floor, kp.seed, this.r.scene, this.fx, kp, this.kitHooks(def, floor));
+    setGroundOverride(this.instance.groundAt);
+    await this.instance.ready;
+    const fg = this.instance.fg;
+    const key = def.id === 'crypt' ? this.mapKey(floor) : `${def.id}:${kp.seed}:${floor}`;
+    this.maps[key] ??= emptyMap(fg.w, fg.h);
+    this.mapUI.setFloor(this.maps[key], fg.plan.name);
+    this.mapUI.setAuto(null);
+    this.autoT = 0;
+    const p = at === 'stairs' ? this.instance.stairsPoint : this.instance.spawnPoint;
+    this.player.teleport(p.clone().setY(p.y + 0.3));
+    const face = at === 'stairs' ? 0 : this.instance.entranceYaw;
+    this.player.yaw = face;
+    this.player.lock = null;
+    this.cam.yaw = face;
+    this.cam.distance = 3.2; // tighter camera for corridors
+    this.cam.snapTo(this.player.pos);
+    if (first) {
+      kp.visited.push('entry');
+      events.emit('deed', { id: `place:${def.id}`, renown: 1, label: `Found ${def.name}` });
+    }
+    this.onSave?.();
+    await new Promise((r) => setTimeout(r, 120));
+    this.hud.toast(def.arrive(floor));
+    await this.hud.fade(false);
+    this.busy = false;
   }
 
   private hooks() {
@@ -132,7 +261,7 @@ export class Realm {
     };
   }
 
-  private atmosphere(dungeon: boolean, indoors = false, mine = false) {
+  private atmosphere(dungeon: boolean, indoors = false, mine = false, kit?: Theme) {
     const r = this.r, s = r.scene;
     const u = r.post?.finalMat.uniforms;
     if (dungeon && !this.saved) {
@@ -160,6 +289,13 @@ export class Realm {
         (u.uHazeColor.value as THREE.Color).setRGB(0.015, 0.016, 0.022);
         (u.uSunColor.value as THREE.Color).setRGB(0.015, 0.016, 0.022);
         u.uClouds.value = 0;
+      }
+      if (kit) {
+        // A kit dungeon's own air (feat/dungeons): the caves warmer, the shrine sea-green.
+        r.hemi.intensity = kit.hemi.intensity;
+        r.hemi.color.set(kit.hemi.sky);
+        r.hemi.groundColor.set(kit.hemi.ground);
+        if (!Q.post) s.fog = new THREE.Fog(kit.fog[0], kit.fog[1], kit.fog[2]);
       }
       if (indoors) {
         // Warm and lamplit rather than crypt-dark.
@@ -201,42 +337,9 @@ export class Realm {
     r.camera.updateProjectionMatrix();
   }
 
-  /** Enter (or change) a dungeon floor, arriving at its entrance or its stairs. */
+  /** Enter (or change) a crypt floor, arriving at its entrance or its stairs. */
   async enter(floor: 1 | 2, at: 'entrance' | 'stairs') {
-    if (this.busy) return;
-    this.busy = true;
-    await this.hud.fade(true);
-    this.instance?.dispose();
-    this.mineInstance?.dispose();
-    this.mineInstance = null;
-    if (this.mode === 'overworld') {
-      this.overworld.clearEnemies();
-      this.overworld.enemiesEnabled(false);
-      this.overworld.hide(true);
-      this.atmosphere(true);
-    }
-    this.mode = 'dungeon';
-    this.active = 'crypt';
-    this.floor = floor;
-    this.instance = new DungeonInstance(this.seed, floor, this.r.scene, this.fx, this.progress, this.hooks());
-    setGroundOverride(this.instance.groundAt);
-    await this.instance.ready;
-    const L = this.instance.layout;
-    this.maps[this.mapKey(floor)] ??= emptyMap(L.w, L.h);
-    this.mapUI.setFloor(this.maps[this.mapKey(floor)], floor === 1 ? 'B1F · UPPER CRYPT' : 'B2F · LOWER CRYPT');
-    const p = at === 'stairs' ? this.instance.stairsPoint : this.instance.spawnPoint;
-    this.player.teleport(p.clone().setY(p.y + 0.3));
-    const face = at === 'stairs' ? 0 : this.instance.entranceYaw;
-    this.player.yaw = face; // face down the open passage
-    this.player.lock = null;
-    this.cam.yaw = face;
-    this.cam.distance = 3.2; // tighter camera for corridors
-    this.cam.snapTo(this.player.pos);
-    this.onSave?.();
-    await new Promise((r) => setTimeout(r, 120));
-    this.hud.toast(floor === 1 ? 'The Upper Crypt. Press M to draw your map.' : 'The Lower Crypt');
-    await this.hud.fade(false);
-    this.busy = false;
+    return this.enterKit(this.crypt, floor, at);
   }
 
   async enterMine() {
@@ -246,6 +349,7 @@ export class Realm {
     this.instance?.dispose();
     this.instance = null;
     this.mineInstance?.dispose();
+    this.kit = null;
     this.overworld.clearEnemies();
     this.overworld.enemiesEnabled(false);
     this.overworld.hide(true);
@@ -287,6 +391,7 @@ export class Realm {
     this.busy = true;
     await this.hud.fade(true);
     const leavingMine = this.active === 'mine';
+    const out = this.active ? this.kitExits[this.active] : undefined;
     this.instance?.dispose();
     this.instance = null;
     this.mineInstance?.dispose();
@@ -294,16 +399,18 @@ export class Realm {
     setGroundOverride(null);
     this.mode = 'overworld';
     this.active = null;
+    this.kit = null;
+    this.mapUI.setAuto(null);
     this.mapUI.setFloor(null);
     this.overworld.hide(false);
     this.overworld.enemiesEnabled(true);
     this.atmosphere(false);
     // Back out in front of the dungeon door, facing down the valley.
-    const p = (leavingMine ? this.mineDoor : this.cryptDoor).clone().add(new THREE.Vector3(0, 0, leavingMine ? 5 : 7));
+    const p = out ? out.pos.clone() : (leavingMine ? this.mineDoor : this.cryptDoor).clone().add(new THREE.Vector3(0, 0, leavingMine ? 5 : 7));
     p.y = heightAt(p.x, p.z);
     this.player.teleport(p.setY(p.y + 0.3));
-    this.player.yaw = 0;
-    this.cam.yaw = 0;
+    this.player.yaw = out?.yaw ?? 0;
+    this.cam.yaw = out?.yaw ?? 0;
     this.cam.distance = 3.9;
     this.cam.snapTo(this.player.pos);
     this.onSave?.();
@@ -380,9 +487,14 @@ export class Realm {
     if (!inst) return;
     inst.update(dt, this.player);
     // Map: player position in cells, facing (0 = north, clockwise).
-    const L = inst.layout;
-    const pp = this.player.pos;
-    const cx = (pp.x - DUNGEON_ORIGIN.x) / CELL + L.w / 2, cy = (pp.z - DUNGEON_ORIGIN.z) / CELL + L.h / 2;
+    const [cx, cy] = inst.cellAtF(this.player.pos);
     this.mapUI.setPlayer(cx, cy, Math.PI - this.player.yaw);
+    // The automap (Cartographer's Eye, Treasure Nose, Sense the Boss), redrawn twice a second.
+    this.autoT -= dt;
+    if (this.autoT <= 0) {
+      this.autoT = 0.5;
+      const pk = this.perks;
+      this.mapUI.setAuto(pk.automap || pk.treasureNose || pk.senseBoss ? inst.autoLayer(pk) : null);
+    }
   }
 }

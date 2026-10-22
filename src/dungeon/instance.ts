@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { events } from '../core/events';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { physics } from '../physics/physics';
 import { pbr } from '../world/props';
@@ -35,6 +36,8 @@ export interface DungeonProgress {
   gateOpen: boolean;
   bossDead: boolean;
   chests: string[]; // "floor:i,j" of opened chests
+  /** Dungeons Reborn (feat/dungeons): each kit dungeon's progress, by id */
+  kit?: Record<string, import('./kit/types').KitProgress>;
 }
 
 export interface DungeonHooks {
@@ -558,6 +561,7 @@ export class DungeonInstance {
           o.onDeath = (dead) => {
             const first = !this.progress.bossDead;
             this.progress.bossDead = true;
+            events.emit('deed', { id: 'boss:grukk', renown: 2, label: 'Grukk the Orc Warlord' });
             if (first) {
               this.hooks.giveGold(dead.center, 300);
               const a = this.hooks.giveItem('warlordTusk');

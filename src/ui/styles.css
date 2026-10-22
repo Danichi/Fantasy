@@ -195,7 +195,11 @@ html, body {
 .slot.skill svg { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); }
 .slot.skill.dim svg { opacity: 0.45; }
 .slot.skill .cd { border-radius: 2px; z-index: 2; }
-.resrow { display: flex; align-items: center; gap: 5px; margin-top: 4px; --rc: #6fd6c6; }
+.resbox { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+.resrow { display: flex; align-items: center; gap: 5px; --rc: #6fd6c6; }
+.resrow .rn { min-width: 62px; }
+.resrow.hot .rbar { animation: heatpulse 0.5s ease-in-out infinite alternate; }
+@keyframes heatpulse { from { box-shadow: 0 0 2px #ff3b1f; } to { box-shadow: 0 0 10px #ff3b1f; } }
 .resrow .rn { font: 600 9px/1 var(--sans); letter-spacing: 0.16em; color: var(--rc); text-shadow: 0 1px 2px #000; margin-right: 3px; }
 .resrow .pip { width: 10px; height: 10px; transform: rotate(45deg); border: 1px solid var(--rc); background: rgba(0, 0, 0, 0.5); transition: background 0.15s, box-shadow 0.15s; }
 .resrow .pip.on { background: var(--rc); box-shadow: 0 0 8px var(--rc); }
@@ -218,6 +222,7 @@ html, body {
 }
 .ehp i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(#e0584f, #9c1d16); }
 .ehp b { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255, 230, 180, 0.6); }
+.ehp .ehp-name { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 3px; white-space: nowrap; font: 600 11px/1 'Cinzel', serif; letter-spacing: 0.06em; color: #f3ead6; text-shadow: 0 1px 2px #000, 0 0 4px rgba(0, 0, 0, 0.8); }
 .dmg {
   position: absolute; font: 700 18px/1 var(--serif); color: #f3e7cf;
   text-shadow: 0 2px 3px #000, 0 0 6px rgba(0, 0, 0, 0.6); white-space: nowrap;
@@ -971,3 +976,13 @@ body.book-open .quest-mark { display: none !important; }
 .waypoint.off span { margin-top: 34px; font-size: 12px; }
 @keyframes wp-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 body.book-open .waypoint { display: none !important; }
+.journal .j-away { margin: -8px 0 16px; padding: 8px 12px; font: italic 400 14px/1.45 var(--sans); color: #f3d9a0; background: rgba(120, 90, 40, .22); border-left: 3px solid #c99b47; }
+
+/* Shield crosshair (ui/guardArc.ts): a ring and dot in the middle of the screen while the shield is up. */
+.guard-xhair { position: fixed; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 5; }
+.guard-xhair.on { opacity: 0.9; }
+.guard-xhair.on.locked { opacity: 0.35; }
+.guard-xhair i { position: absolute; inset: 0; border: 2px solid rgba(255, 214, 140, 0.95); border-radius: 50%; border-left-color: transparent; border-right-color: transparent; box-shadow: 0 0 6px rgba(255, 190, 90, 0.5); }
+.guard-xhair b { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: rgba(255, 236, 200, 0.95); box-shadow: 0 0 4px rgba(0, 0, 0, 0.7); }
+.guard-xhair.hit i { animation: guard-hit 0.35s ease-out; }
+@keyframes guard-hit { 0% { transform: scale(1.5); border-color: #fff3c8; } 100% { transform: scale(1); } }

@@ -17,7 +17,7 @@ import { loadWorldMap } from './world/worldMap';
 import { Input } from './core/input';
 import { Player } from './player/player';
 import { ThirdPersonCamera } from './player/camera';
-import { DEBUG, TEST_MODE, LEAN_TEST } from './core/settings';
+import { DEBUG, TEST_MODE, LEAN_TEST, Q } from './core/settings';
 import { setupLoadout } from './items/loadout';
 import { FX } from './fx/particles';
 import { BeastSpawner } from './enemies/beastSpawner';
@@ -40,6 +40,8 @@ import { Horses } from './world/horses';
 import { Encounters } from './world/encounters';
 import { Caravans } from './world/caravans';
 import { setupRoadQuests } from './quests/roadQuests';
+import { setupClassTrials } from './quests/classTrials';
+import { rumours } from './npc/townTalk';
 import { buildPortAurelle, PORT_SPOTS } from './world/portAurelle';
 import { Fishing, type FishingSpot } from './world/fishing';
 import { Duel } from './combat/duel';
@@ -112,19 +114,33 @@ import { Foliage } from './world/foliage';
 import { StylizedNature } from './world/stylizedNature';
 import { Flowers } from './world/flowers';
 import { Rewards, XP_FOR_KIND } from './progression/progression';
+import { levelScale } from './creatures/creature';
+import { Population } from './creatures/population';
+import { registerSpecies } from './creatures/species';
+import { creatureView } from './creatures/view';
+import { GuardArc } from './ui/guardArc';
+import { tickBoarFur } from './creatures/boar/visual';
+import { tickSpiderFur } from './creatures/spider/visual';
+import { updateSnare } from './creatures/spider/spider';
+import { tickBatFur } from './creatures/bat/visual';
 import { DungeonMapUI } from './ui/dungeonMap';
 import { Realm } from './dungeon/realm';
+import { setupDungeonEntrances } from './dungeon/dungeons/entrances'; // Dungeons Reborn (feat/dungeons)
 import { Town, NPCS } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
 import { loadArmourKit } from './enemies/armourKit';
 import { MINE_CLEARING } from './world/mineEntrance';
-import { loadSave, writeSave, buildSave, applySave, hasSave, clearSave } from './save';
+import { loadSave, writeSave, buildSave, applySave, clearSave } from './save';
 import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 import { afflictions } from './combat/afflictions';
 import { ShopUI } from './ui/shopUI';
 import { setupArms } from './crafting/arms'; // Arms and Crafting (feat/arms)
 import { withArms } from './items/armsShops';
+// ---- Origins (feat/origins) ----
+import { prepareHero } from './origins/hero';
+import { wireOrigins } from './origins/wiring';
+import { CharacterCreator } from './ui/creator';
 
 const STEP = 1 / 60;
 
@@ -153,6 +169,8 @@ async function boot() {
   mark('terrain');
 
   const player = new Player();
+  // ---- Origins (feat/origins): build the saved hero's look from the start ----
+  prepareHero(player, TEST_MODE && !location.search.includes('save') ? null : loadSave());
   const spawn = new THREE.Vector3(0, heightAt(0, 10), 10);
   terrain.warm(spawn);
   await player.init(r.scene, spawn);
@@ -171,6 +189,13 @@ async function boot() {
   afflictions.fx = fx;
   const slimes = new BeastSpawner(r.scene, fx);
   if (TEST_MODE) slimes.enabled = false;
+  // Wild creatures across Cresha (src/creatures): wanderers, dens, region levels.
+  const population = new Population(r.scene, fx, (m) => hud.toast(m));
+  registerSpecies(population, r.scene);
+  population.placeDens(7, { x0: -820, z0: -820, x1: 820, z1: 820 }, 10);
+  if (TEST_MODE) population.enabled = false;
+  // Fur locks are the heaviest part of a creature: medium quality and up.
+  creatureView.fur = !LEAN_TEST && Q.msaa;
   const spells = new Spells(r.scene, fx, player);
   const skillRt = new SkillRuntime(r.scene, player, fx, spells);
   // The village leaves NPC spots, the guild and the stables open.
@@ -207,7 +232,7 @@ async function boot() {
   const capital = new RoyalCapital(r.scene, world.mats, fx);
   mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -309,9 +334,10 @@ async function boot() {
   void ocean;
   mark('flowers');
   const rewards = new Rewards(r.scene, player.prog);
-  events.on('enemyDied', ({ at, kind }) => {
+  events.on('enemyDied', ({ at, kind, level }) => {
     const [xp, gold] = XP_FOR_KIND[kind] ?? [10, 2];
-    rewards.spawn(at, xp, gold);
+    const k = level ? levelScale(level).xp : 1;
+    rewards.spawn(at, Math.round(xp * k), Math.round(gold * k));
   });
   events.on('bossSlam', ({ at }) => cam.shake(Math.max(0.15, 0.6 - at.distanceTo(player.pos) * 0.04)));
   events.on('levelUp', () => {
@@ -334,16 +360,18 @@ async function boot() {
 
   // ---- UI ------------------------------------------------------------------
   const hud = new HUD(player, r.camera);
-  hud.resource = () => skillRt.resource();
+  // Where a raised shield covers, and a crosshair to aim it.
+  const guardArc = new GuardArc(r.scene, player);
+  hud.resource = () => skillRt.resources();
+  skillRt.notify = (m) => hud.toast(m);
   hud.skillSlot = (ref) => {
     const sk = SkillRuntime.parse(ref);
     if (!sk?.def) return null;
-    const v = player.paths.node(sk.d.id, sk.n.id);
     const def = sk.def;
     const cost = def.mana ? `${skillRt.manaCost(def)}` : def.flow ? `${def.flow}F` : def.stamina ? `${def.stamina}` : '';
     const why = skillRt.blocked(ref);
     return {
-      svg: skillIcon(sk.d.id, sk.d.color, sk.n.name, v?.r ?? 0),
+      svg: skillIcon(sk.d.id, sk.d.color, sk.n.name, skillRt.rankOf(sk.d.id, sk.n.id)),
       name: `${sk.n.name} (${sk.d.name})`,
       cost,
       cd: def.cd > 0 ? skillRt.cooldown(sk.key) / def.cd : 0,
@@ -388,11 +416,13 @@ async function boot() {
     clearEnemies: () => { slimes.clear(); frontier?.dispose(); encounters?.clear(); },
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
   }, rewards, world.crypt.door, world.mineDoor);
+  // ---- Dungeons Reborn (feat/dungeons): Hollow Ridge Caves and the Drowned Shrine open onto the world ----
+  const dungeons = setupDungeonEntrances(r.scene, world.mats, realm);
   const dialogue = new DialogueUI();
   const town = new Town(r.scene, r.camera, dialogue, player);
   const shopUI = new ShopUI(player);
   town.shopUI = shopUI;
-  town.mentorOptions = (spec, say) => mentorOptions(player.paths, spec, say, (m) => hud.toast(m));
+  town.mentorOptions = (spec, say) => mentorOptions(player.paths, spec, say, (m) => hud.toast(m), trials);
   frontier = new FrontierRegion(
     r.scene, player, fx, dialogue, world.mats,
     (msg) => hud.toast(msg),
@@ -487,6 +517,8 @@ async function boot() {
       run: () => town.showShop('Village Trader', c.name, 'Scrap for water, water for scrap. Simple trade.', [['healthPotion', 18], ['manaPotion', 22], ['scrapCleaver', 55], ['shortsword', 40], ['honeycomb', 12]], { wants: [['scrapMetal', 11], ['sharkTooth', 34], ['duneGlass', 28]], buyRate: { default: 0.3 } }),
     }]);
   });
+  // Lightbinders gather Radiance under the open sky by day.
+  skillRt.env = () => ({ daylight: realm.mode === 'overworld' && time.hour >= 6 && time.hour < 19 && weather.p.rain < 0.5 });
   // Townsfolk: one interactable that follows whoever is nearest.
   const folkTalk = {
     pos: new THREE.Vector3(0, -999, 0),
@@ -509,6 +541,16 @@ async function boot() {
         ...quests.options(n.rec.id, show, back),
         ...(folkServices.get(n.rec.id)?.(show, back) ?? []),
         ...town.sellOptions(n.rec.id, n.rec.name, title, back),
+        {
+          label: 'Heard any news?',
+          run: () => {
+            // Everyone has heard something; ask again for something else.
+            const news = rumours({ ...talkCtx(), met: true }, n.rec.settlement === 'elderGlen');
+            const k = folkNews.get(n.rec.id) ?? n.seed % news.length;
+            folkNews.set(n.rec.id, k + 1);
+            show(news[k % news.length], [{ label: 'Anything else?', run: () => folkTalk.action() }, { label: 'Farewell.', run: () => dialogue.close() }]);
+          },
+        },
         { label: 'Farewell.', run: () => dialogue.close() },
       ]);
     },
@@ -542,6 +584,7 @@ async function boot() {
   const roads = buildRoadFurniture(r.scene, world.mats, (who, title, text) => dialogue.show(who, title, text, [{ label: 'Turn back.', run: () => dialogue.close() }]));
   const foraging = new Foraging(r.scene, giveItem, gameHours, () => time.hour);
   foraging.fromJSON(saveData?.world?.forage);
+  population.fromJSON(saveData?.world?.wilds);
   const serviceNpc = (id: string) => town.npcs.find((n) => n.spec.id === id) ?? null;
   const quests = new QuestLog({
     count: countItem,
@@ -552,6 +595,7 @@ async function boot() {
     guildRep: (n) => town.guild.addRep(n),
     toast: (m) => hud.toast(m),
     npcPos: (id) => serviceNpc(id)?.pos ?? npcs.find(id)?.pos ?? null,
+    npcAway: (id) => (serviceNpc(id) ? null : npcs.whereabouts(id)),
     hour: () => time.hour,
   });
   const glenQuests = setupElderGlenQuests({
@@ -559,8 +603,22 @@ async function boot() {
     count: countItem, take: takeItem, give: giveItem, toast: (m) => hud.toast(m),
   });
   town.questOptions = (id, show, back) => quests.options(id, show, back);
+  // What townsfolk know: the hour, the weather, the story so far, your classes.
+  const talkCtx = () => ({
+    hour: time.hour, rain: weather.p.rain > 0.4, done: (id: string) => quests.isDone(id), active: (id: string) => quests.isActive(id),
+    learned: (id: string) => player.paths.learned(id), activeClass: player.paths.active, level: player.prog.level,
+  });
+  town.talkCtx = talkCtx;
+  const folkNews = new Map<string, number>();
   town.questDone = (id) => quests.isDone(id);
   const glenMore = setupGlenMoreQuests({ quests, scene: r.scene, fx, beasts: slimes, toast: (m) => hud.toast(m) });
+  // Classes are learned through mentors' trials (Kaela, Magus Orren, Brother Aldous).
+  const trials = setupClassTrials({ quests, paths: player.paths, toast: (m) => hud.toast(m) });
+  for (const id of ['aldous', 'ilse']) folkServices.set(id, (show, back) => mentorOptions(player.paths, { id }, (t) => show(t, [{ label: 'Go on.', run: back }]), (m) => hud.toast(m), trials));
+  // Corvin's trial counts blows turned aside; Ilse's counts strikes in rhythm.
+  events.on('blockImpact', ({ guardBroken }) => !guardBroken && quests.signal('trial-boundary'));
+  events.on('parrySuccess', () => quests.signal('trial-boundary'));
+  skillRt.cc.onBeat = () => quests.signal('trial-cross');
   const mainQuest = setupMainQuest(quests, { grukkDead: () => realm.progress.bossDead, gravewoodCleared: () => gravewood.cleared });
   // ---- Road encounters, caravans and the King's Road quests (phase 4) ------------------
   const encounters = new Encounters(r.scene, player, slimes, fx);
@@ -1201,6 +1259,8 @@ async function boot() {
   // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
   quests.fromJSON(saveData?.world?.quests);
+  // ---- Origins (feat/origins): passives, Renown, legendary abilities, flight, NPC reactions ----
+  const origins = wireOrigins({ player, skillRt, fx, scene: r.scene, input, cam, hud, dialogue, shopUI, quests, realm, time, weather, gravewood, foraging });
   events.on('mapRevealed', () => worldMap.markFogDirty());
   events.on('regionEntered', ({ name, subtitle, first }) => {
     regionName = name;
@@ -1276,6 +1336,9 @@ async function boot() {
   }, player.prog.origin, music);
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
+  // ---- Origins (feat/origins): a new game opens the character creator ----
+  const creator = new CharacterCreator(origins);
+  overlays.creator = (begin) => creator.show(begin);
   hud.onSlotDrop = (mode, slot, ref) => {
     const eq = player.equip;
     const uid = typeof ref === 'number' ? ref : 0;
@@ -1315,7 +1378,9 @@ async function boot() {
     const day = time.label.split(', ');
     overlays.showPaused(true, `<span><b>REGION</b>${regionName}</span><span><b>${day[0] ?? 'DAY'}</b>${day[1] ?? ''}</span><span><b>LEVEL</b>${player.prog.level}</span><span><b>GOLD</b>${player.prog.gold.toLocaleString()}</span>`);
   };
-  if (!TEST_MODE && hasSave()) {
+  // The save as it was at boot: a fresh game autosaves while booting (the main
+  // quest begins), and that must not hide the character creator.
+  if (!TEST_MODE && saveData) {
     overlays.lockOrigin();
     const cta = overlays.start.querySelector('.cta')!;
     cta.textContent = 'CLICK TO CONTINUE';
@@ -1433,8 +1498,10 @@ async function boot() {
     player.update(STEP, input, cam);
     skillRt.update(STEP);
     arms.update(STEP, input); // Arms and Crafting (feat/arms)
+    origins.update(STEP); // ---- Origins (feat/origins) ----
     if (realm.mode === 'overworld') {
       slimes.update(STEP, player);
+      population.update(STEP, player, time.hour, time.day);
       frontier.update(STEP);
       encounters.update(STEP, time.hour, weather.p.rain);
       crownRoad.update(STEP, player, time.state.night);
@@ -1510,6 +1577,14 @@ async function boot() {
     if (!paused && realm.mode === 'overworld') gravewood.present(alpha, overlayUp || worldMap.open ? 0 : simDt, player, r.camera);
     arms.frame(dt); // Arms and Crafting (feat/arms): aim camera, reticle
     cam.update(dt, renderPos, player.sprinting);
+    creatureView.camera = r.camera.position;
+    creatureView.player = player;
+    creatureView.night = time.hour < 5.5 || time.hour > 20.5;
+    tickBoarFur(dt);
+    tickSpiderFur(dt);
+    tickBatFur(dt);
+    guardArc.update(dt);
+    updateSnare(player);
     r.camera.getWorldDirection(player.aimDir);
     ground.update(r.camera.position);
     grass.update(dt, r.camera.position, renderPos);
@@ -1559,6 +1634,7 @@ async function boot() {
       if (worldRunning) roadQuests.update(dt);
       if (worldRunning) {
         quests.update(dt, player.pos);
+        trials.update(dt, player.pos, time.hour);
         mainQuest.update(dt);
         guildContracts.update(dt);
         glenQuests.update(dt);
@@ -1600,6 +1676,7 @@ async function boot() {
     dialogue.update(dt);
     if (realm.mode === 'overworld') town.update(dt, player.pos);
     physDebug?.update();
+    origins.frame(paused ? 0 : dt); // ---- Origins (feat/origins) ----
     r.followShadow(renderPos);
     if (!CATCH_UP || now - lastDraw > 250) {
       lastDraw = now;
@@ -1659,6 +1736,7 @@ async function boot() {
       fishing.stop();
       if (player.mounted) horses.dismount();
       player.vehicle = null;
+      population.clear();
       if (realm.mode === 'dungeon') await realm.leave();
       if (realm.mode === 'interior') await realm.leaveInterior();
       slimes.clear();
@@ -1676,6 +1754,7 @@ async function boot() {
       guildContracts.restore();
       applySave(player, structuredClone(fresh));
       player.respawn(spawn.clone());
+      skillRt.reset();
       time.day = startDay;
       time.skipTo(startHour);
       weather.forced = null;
@@ -1685,9 +1764,11 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, population, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
+      origins, creator, // ---- Origins (feat/origins) ----
+      dungeons, // Dungeons Reborn (feat/dungeons)
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {
@@ -1699,6 +1780,12 @@ async function boot() {
         paused = true;
         player.debugPose(id, t);
       },
+    };
+    // ---- Origins (feat/origins): tests also reset abilities, flight, forms and the hero's body ----
+    const g = (window as any).__game, resetBase = g.resetForTest;
+    g.resetForTest = async () => {
+      await resetBase();
+      await origins.resetForTest();
     };
   }
   (window as any).__ready = true;

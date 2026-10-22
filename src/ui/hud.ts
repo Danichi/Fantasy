@@ -1,3 +1,4 @@
+import { DISCIPLINES } from '../paths/data';
 import * as THREE from 'three';
 import type { Player } from '../player/player';
 import { targets } from '../combat/targets';
@@ -61,8 +62,8 @@ export class HUD {
   onSlotDrop?: (mode: 'items' | 'moves', slot: number, ref: number | string) => void;
   /** class skills on the moves bar: how to draw one, and its live cooldown (0..1) */
   skillSlot?: (ref: string) => { svg: string; name: string; cost: string; cd: number; ready: boolean } | null;
-  /** the active class's resource (Flow pips, Resolve bar) */
-  resource?: () => { name: string; value: number; max: number; kind: 'pips' | 'bar'; color: string } | null;
+  /** class resources (Flow pips, Resolve, Heat and Radiance bars) */
+  resource?: () => { name: string; value: number; max: number; kind: 'pips' | 'bar'; color: string; hot?: boolean }[];
   private resEl!: HTMLElement;
 
   constructor(private player: Player, private camera: THREE.Camera) {
@@ -86,7 +87,7 @@ export class HUD {
     this.goldEl = xpRow.querySelector('.gold')!;
     this.xpVal = xpRow.querySelector('.xpv')!;
     this.xpBar = xpRow.querySelector('.xpbar')!;
-    this.resEl = el('div', 'resrow', vit);
+    this.resEl = el('div', 'resbox', vit);
 
     const wrap = el('div', 'loadout-wrap', this.root);
     const handRow = el('div', 'hands', wrap);
@@ -324,25 +325,31 @@ export class HUD {
         s.classList.toggle('dim', !sk.ready);
       });
     }
-    const res = this.resource?.();
-    if (!res) this.resEl.style.display = 'none';
-    else {
-      this.resEl.style.display = '';
-      const key = `${res.name}|${res.kind}|${res.max}`;
-      if (this.resEl.dataset.k !== key) {
-        this.resEl.dataset.k = key;
-        this.resEl.innerHTML = `<span class="rn">${res.name}</span>` + (res.kind === 'pips' ? Array.from({ length: res.max }, () => '<i class="pip"></i>').join('') : '<span class="rbar"><i></i></span>');
-        this.resEl.style.setProperty('--rc', res.color);
-      }
-      if (res.kind === 'pips') this.resEl.querySelectorAll('.pip').forEach((e, i) => e.classList.toggle('on', i < Math.floor(res.value + 1e-6)));
-      else (this.resEl.querySelector('.rbar i') as HTMLElement).style.transform = `scaleX(${res.value / res.max})`;
+    const list = this.resource?.() ?? [];
+    this.resEl.style.display = list.length ? '' : 'none';
+    const key = list.map((r) => `${r.name}|${r.kind}|${r.max}`).join(';');
+    if (this.resEl.dataset.k !== key) {
+      this.resEl.dataset.k = key;
+      this.resEl.innerHTML = list
+        .map((r) => `<div class="resrow" style="--rc:${r.color}"><span class="rn">${r.name}</span>` + (r.kind === 'pips' ? Array.from({ length: r.max }, () => '<i class="pip"></i>').join('') : '<span class="rbar"><i></i></span>') + '</div>')
+        .join('');
     }
+    const rows = this.resEl.children;
+    list.forEach((r, i) => {
+      const row = rows[i] as HTMLElement | undefined;
+      if (!row) return;
+      row.style.setProperty('--rc', r.color);
+      row.classList.toggle('hot', !!r.hot);
+      if (r.kind === 'pips') row.querySelectorAll('.pip').forEach((e, j) => e.classList.toggle('on', j < Math.floor(r.value + 1e-6)));
+      else (row.querySelector('.rbar i') as HTMLElement).style.transform = `scaleX(${r.value / r.max})`;
+    });
     const pr = p.prog;
     // The tracked quest (the old "study the three schools" starter quest is gone:
     // classes are learned from mentors and levelled on the Skills screen).
     this.questEl.innerHTML = this.sideQuestHtml;
     // XP is spent, not auto-levelled: the bar fills towards the active class's next level.
-    const need = p.paths.nextCost(p.paths.active);
+    const xpFor = p.paths.active || DISCIPLINES.find((d) => p.paths.learned(d.id))?.id;
+    const need = xpFor ? p.paths.nextCost(xpFor) : 150;
     const ready = pr.xp >= need;
     this.xpFill.style.transform = `scaleX(${Math.min(1, pr.xp / need)})`;
     this.xpBar.classList.toggle('ready', ready);
@@ -375,6 +382,11 @@ export class HUD {
         const e = el('div', 'ehp', this.root);
         const b = el('b', '', e);
         const i = el('i', '', e);
+        if (t.label) {
+          // Name and level over the bar (hand-built creatures).
+          const n = el('span', 'ehp-name', e);
+          n.textContent = t.level ? `${t.label} · Lv ${t.level}` : t.label;
+        }
         h = { e, i, b, shown: 0, trail: 1 };
         this.ehp.set(t.id, h);
       }

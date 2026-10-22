@@ -26,6 +26,9 @@ export interface Target {
   lockable: boolean;
   hp: number;
   maxHp: number;
+  /** name and level shown over the health bar */
+  label?: string;
+  level?: number;
   takeHit(h: HitInfo): void;
 }
 
@@ -37,10 +40,18 @@ export interface IncomingAttack {
   damage: number;
   from: THREE.Vector3; // attacker position or projectile origin
   at?: THREE.Vector3; // current impact/projectile position, when applicable
+  /** an arrow, bolt or thrown thing (wards can stop these) */
+  projectile?: boolean;
   parryable: boolean;
   poise: number;
   onParried?: () => void;
   burn?: number;
+  /** shove (m/s) away from the attacker when it lands: charges, slams */
+  knock?: number;
+  /** venom: damage per second for a few seconds after it lands */
+  poison?: number;
+  /** webbing: seconds you are slowed and stuck (a roll tears free sooner) */
+  web?: number;
 }
 
 export type DefenceResult = 'dodged' | 'parried' | 'blocked' | 'guardBroken' | 'hit';

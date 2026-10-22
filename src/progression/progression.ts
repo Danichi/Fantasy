@@ -1,8 +1,15 @@
 import * as THREE from 'three';
 import { events } from '../core/events';
 import { heightAt } from '../world/terrain';
-/** The origin picked when a new game starts (it grants the V ability). */
-export type Origin = 'human' | 'dragon' | 'demon';
+import type { OriginLook } from '../origins/data';
+import type { LegacySave } from '../origins/legacy';
+/** The origin picked when a new game starts (origins/data.ts: passives, the V ability, the legendary tree). */
+export type Origin = 'human' | 'elf' | 'dwarf' | 'beastfolk' | 'demon' | 'dragonkin';
+/** Saves from before the six peoples called the dragonkin 'dragon'. */
+export function normalizeOrigin(o: unknown): Origin {
+  if (o === 'dragon') return 'dragonkin';
+  return o === 'elf' || o === 'dwarf' || o === 'beastfolk' || o === 'demon' || o === 'dragonkin' ? o : 'human';
+}
 
 // XP and gold, plus the glowing orbs and coins that
 // burst out of defeated enemies and fly to the player.
@@ -11,9 +18,13 @@ export const XP_FOR_KIND: Record<string, [xp: number, gold: number]> = {
   green: [12, 3], blue: [26, 6], magma: [30, 8], cave: [22, 5], armour: [48, 14], orc: [420, 0], dummy: [0, 0],
   rat: [4, 1], dire: [140, 30], bandit: [34, 12], banditChief: [260, 120],
   zombie: [28, 5], skeleton: [32, 7], abomination: [650, 240],
+  // Dungeons Reborn (feat/dungeons): the three dungeon bosses
+  grukk: [420, 0], captainVess: [520, 160], tideWarden: [900, 300],
   // the Golden Expanse
   sandGolem: [1500, 500], sandEel: [30, 6], sandCrab: [42, 9], duneJelly: [18, 4], rayRider: [95, 30],
   sandShark: [70, 12], sandRay: [32, 6], sawtooth: [1100, 400], scavenger: [44, 16], scavengerChief: [320, 160],
+  // hand-built creatures (src/creatures): base values at level 1, scaled by level
+  boar: [24, 4], spider: [30, 6], bat: [9, 2],
 };
 
 /** XP a level cost under the old auto-levelling system (used to refund old saves). */
@@ -33,6 +44,10 @@ export class Progression {
   totalXp = 0;
   gold = 0;
   origin: Origin = 'human';
+  /** the character creator's choices (origins/data.ts); a default look for saves from before it */
+  look: OriginLook | null = null;
+  /** Renown and the great deeds that earned it (origins/legacy.ts) */
+  legacy: LegacySave = { renown: 0, deeds: {} };
 
   addXp(n: number) {
     this.xp += n;

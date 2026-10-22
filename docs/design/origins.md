@@ -1,5 +1,15 @@
 # Origins and the Legendary Hero (update 1 plan)
 
+## Built
+
+All five phases are built on `feat/origins` (see `merge-notes/origins.md`): the six
+origins with their passives, NPC lines and price nudges, old saves migrating
+('dragon' -> Dragonkin, a default look); the character creator on the title screen
+with procedural ears, horns, tails, wings and markings on the bones; Renown from
+deeds and the Legacy family in the Skills screen; every tier 1 to 5 ability;
+dragonkin flight with Draconic Energy; Demon Form, Primal Rage and stone skin.
+Tests: `tests/origins.spec.ts`. Defaults were taken for every decision in §11.
+
 Status: plan, 2026-10-08. Nothing here is built yet beyond what "What exists"
 lists. It follows §5.1 of the World Expansion plan and the progression model
 in `combat-paths.md` (XP invested in disciplines; Callings are real power).

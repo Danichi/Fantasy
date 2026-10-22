@@ -69,6 +69,19 @@ const DEFS: Record<string, Def> = {
     dur: 3.5, stamina: 0, clip: 'skill_combo', iframes: [0, 3.3], events: ev('cuts', 0.45, 0.7, 0.95, 1.26, 1.6, 1.95, 2.3, 2.6),
     cancel: 3.2, track: 3.2, clipTiming: { speed: 1.5 },
   },
+  // ---- Cross Style -------------------------------------------------------------------
+  /** both blades at once: an X cut */
+  sk_crossCut: {
+    flair: [F('lean', 0.15, 0.7, 0.32), F('crouch', 0.2, 0.7, 0.14), F('bank', 0.25, 0.6, 0.12)],
+    dur: 1.0, stamina: 0, clip: 'attack_light_2', weaponSpeed: true, boost: { dist: 0.9, from: 0.15, to: 0.45 },
+    events: ev('x', 0.42), cancel: 0.62, track: 0.4, clipTiming: { speed: 1.05 },
+  },
+  /** an eight-cut flurry */
+  sk_bladeDance: {
+    flair: [F('spin', 0.3, 2.4, 1.5), F('lean', 0.3, 2.6, 0.22), F('bank', 0.5, 1.5, 0.12), F('bank', 1.4, 2.4, -0.12)],
+    dur: 3.5, stamina: 0, clip: 'skill_combo', events: ev('dance', 0.4, 0.7, 1.0, 1.3, 1.6, 1.9, 2.2, 2.5),
+    cancel: 2.9, track: 2.6, clipTiming: { speed: 1.35 },
+  },
   // ---- Boundary Style --------------------------------------------------------------
   sk_guardUp: { dur: 0.62, stamina: 0, clip: 'parry_shield', events: ev('guard', 0.12), cancel: 0.36, track: 0.1 },
   sk_deflect: { dur: 0.62, stamina: 0, clip: 'parry_shield', parry: [0.02, 0.5], events: ev('deflect', 0.02), cancel: 0.45, track: 0.1 },
@@ -91,6 +104,21 @@ const DEFS: Record<string, Def> = {
   sk_castBig: { flair: [F('lean', 0.3, 1.6, -0.2), F('hop', 0.3, 1.7, 0.2)], dur: 2.96, stamina: 0, clip: 'cast_big', events: ev('cast', 1.35), cancel: 2.2, track: 1.2, clipTiming: { speed: 1.5 } },
   /** prayer: heals, wards, blessings */
   sk_castSelf: { flair: [F('lean', 0.2, 1.1, -0.12), F('crouch', 0.2, 1.1, 0.08)], dur: 2.33, stamina: 0, clip: 'cast_heal', events: ev('cast', 0.55), cancel: 1.3, track: 0, clipTiming: { speed: 1.7 } },
+  /** channelled prayer (Healing Light): a pulse of healing at each 'pray' */
+  sk_pray: {
+    flair: [F('lean', 0.1, 2.2, -0.14), F('crouch', 0.1, 2.2, 0.1)], dur: 2.33, stamina: 0, clip: 'cast_heal',
+    events: ev('pray', 0.3, 0.7, 1.1, 1.5, 1.9), cancel: 0.3, track: 0, clipTiming: { speed: 0.8 },
+  },
+  /** five embers loosed one after another (Cinder Volley) */
+  sk_volley: {
+    flair: [F('lean', 0.15, 0.9, 0.16)], dur: 1.0, stamina: 0, clip: 'cast_fireball',
+    events: ev('ember', 0.3, 0.42, 0.54, 0.66, 0.78), cancel: 0.85, track: 0.85, clipTiming: { speed: 0.75 },
+  },
+  /** throwing all the Heat out at once (Vent) */
+  sk_vent: {
+    flair: [F('crouch', 0.1, 0.9, 0.3), F('hop', 0.9, 1.6, 0.25), F('lean', 0.9, 1.6, -0.25)], dur: 2.96, stamina: 0, clip: 'cast_big',
+    events: ev('vent', 1.2), cancel: 1.8, track: 0, clipTiming: { speed: 2.4 },
+  },
   /** a dodge that is also a spell (Flame Step) */
   sk_dash: {
     ...ACTIONS.roll, stamina: 0, dur: 1.95, clip: 'roll', startAt: 0.22, iframes: [0.25, 1.2], roll: { dist: 4.6 },

@@ -78,6 +78,28 @@ export interface QuestContext {
   /** world position of an NPC (for markers), null if unknown */
   npcPos(id: string): THREE.Vector3 | null;
   hour(): number;
+  /** a quest NPC who isn't where you'd expect (asleep, indoors, off their post), and when they're back */
+  npcAway?(id: string): Away | null;
+}
+
+export interface Away {
+  name: string;
+  why: 'asleep' | 'inside' | 'away';
+  back: string;
+  where: string;
+  post?: THREE.Vector3;
+}
+
+/** "Elder Maud has gone to bed. She'll be back at her post around 8:00." */
+export function awayNote(a: Away, short = false) {
+  if (short) {
+    if (a.why === 'away') return `at ${a.where} now`;
+    return `${a.why === 'asleep' ? 'asleep' : 'indoors'}${a.back ? `, back ${a.back}` : ''}`;
+  }
+  const first = a.name.split(' ').slice(-2).join(' ');
+  if (a.why === 'away') return `${a.name} isn't at the usual spot: gone to ${a.where} for now.${a.back ? ` Back around ${a.back}.` : ''}`;
+  if (a.why === 'asleep') return `${a.name} has gone to bed for the night.${a.back ? ` ${first} will be up and about around ${a.back}.` : ''}`;
+  return `${a.name} is indoors and can't be reached right now.${a.back ? ` Try again around ${a.back}.` : ''}`;
 }
 
 const inHours = (h: number, from: number, to: number) => (from <= to ? h >= from && h < to : h >= from || h < to);
@@ -237,10 +259,20 @@ export class QuestLog {
   }
 
   /** A world trigger fired (repairs, lures, glyph rubbings...). */
+  /**
+   * A stage with an hour objective ("after midnight", "at dawn") wants the
+   * rest of it done during those hours: standing in the circle at noon and then
+   * waiting for midnight somewhere else doesn't count.
+   */
+  private inWindow(q: QuestDef, st: QuestState) {
+    const w = q.stages[st.stage]?.objectives.find((o) => o.type === 'hour') as Extract<Objective, { type: 'hour' }> | undefined;
+    return !w || inHours(this.ctx.hour(), w.from, w.to);
+  }
+
   signal(id: string, n = 1) {
     let hit = false;
     this.forEachObjective((q, o, i, st) => {
-      if (o.type === 'signal' && o.id === id && st.progress[i] < (o.count ?? 1) && !q.contract) {
+      if (o.type === 'signal' && o.id === id && st.progress[i] < (o.count ?? 1) && !q.contract && this.inWindow(q, st)) {
         this.bump(q, i, n);
         hit = true;
       }
@@ -258,10 +290,14 @@ export class QuestLog {
   }
 
   private t = 0;
+  /** last away state per NPC (to refresh the tracker when it changes) and who we've already warned about */
+  private awaySig = '';
+  private warned = new Set<string>();
   update(dt: number, player: THREE.Vector3) {
     this.t += dt;
     if (this.t < 0.25) return;
     this.t = 0;
+    this.checkAway(player);
     this.forEachObjective((q, o, i, st) => {
       if (st.progress[i] >= this.target(o)) {
         // Collected items can be lost again (sold, eaten) before the stage ends.
@@ -271,12 +307,43 @@ export class QuestLog {
         }
         return;
       }
-      if (o.type === 'reach' && Math.hypot(player.x - o.at[0], player.z - o.at[1]) < o.radius) this.bump(q, i, 1);
+      if (o.type === 'reach' && Math.hypot(player.x - o.at[0], player.z - o.at[1]) < o.radius && this.inWindow(q, st)) this.bump(q, i, 1);
       else if (o.type === 'collect') {
         const c = Math.min(o.count, this.ctx.count(o.item));
         if (c !== st.progress[i]) this.bump(q, i, c - st.progress[i]);
       } else if (o.type === 'hour' && inHours(this.ctx.hour(), o.from, o.to)) this.bump(q, i, 1);
     });
+  }
+
+  /**
+   * Quest NPCs keep hours. When one you need has gone to bed or indoors, the
+   * tracker says so, and walking up to where they are tells you when to come back.
+   */
+  private checkAway(player: THREE.Vector3) {
+    if (!this.ctx.npcAway) return;
+    let sig = '';
+    this.forEachObjective((q, o, i, st) => {
+      if ((o.type !== 'talk' && o.type !== 'deliver') || st.progress[i] >= this.target(o)) return;
+      const a = this.ctx.npcAway!(o.npc);
+      if (!a) {
+        for (const k of [...this.warned]) if (k.startsWith(o.npc + ':')) this.warned.delete(k);
+        return;
+      }
+      sig += o.npc + a.why + a.where + ';';
+      // Warn once, near where you'd look for them (their post, or their door).
+      const key = o.npc + ':' + a.why;
+      const near = (v: THREE.Vector3 | null | undefined) => !!v && Math.hypot(player.x - v.x, player.z - v.z) < 20;
+      const at = a.why === 'away' ? null : this.ctx.npcPos(o.npc);
+      if (!this.warned.has(key) && (near(a.post) || near(at))) {
+        for (const k of [...this.warned]) if (k.startsWith(o.npc + ':')) this.warned.delete(k);
+        this.warned.add(key);
+        this.ctx.toast(awayNote(a));
+      }
+    });
+    if (sig !== this.awaySig) {
+      this.awaySig = sig;
+      this.changed();
+    }
   }
 
   /** Advance an objective; returns true if the quest finished. */
@@ -334,7 +401,24 @@ export class QuestLog {
     const q = this.defs.get(id);
     const st = this.state[id];
     if (!q || !st || st.status !== 'active') return [];
-    return q.stages[st.stage].objectives.map((o, i) => [o.text, st.progress[i], this.target(o)]);
+    return q.stages[st.stage].objectives.map((o, i) => {
+      // Someone you need is asleep or indoors: say so, and when they're back.
+      const a = (o.type === 'talk' || o.type === 'deliver') && st.progress[i] < this.target(o) ? this.ctx.npcAway?.(o.npc) : null;
+      return [a ? `${o.text} (${awayNote(a, true)})` : o.text, st.progress[i], this.target(o)];
+    });
+  }
+
+  /** Away notes for the tracked/active objectives, for the journal. */
+  awayNotes(id: string) {
+    const q = this.defs.get(id), st = this.state[id];
+    if (!q || !st || st.status !== 'active') return [];
+    const out: string[] = [];
+    q.stages[st.stage].objectives.forEach((o, i) => {
+      if ((o.type !== 'talk' && o.type !== 'deliver') || st.progress[i] >= this.target(o)) return;
+      const a = this.ctx.npcAway?.(o.npc);
+      if (a) out.push(awayNote(a));
+    });
+    return out;
   }
 
   /** Where the current objectives are (for the map, minimap and compass). */

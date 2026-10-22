@@ -1,0 +1,135 @@
+import type { NodeEffect } from '../effects';
+
+// Passives for the three sword styles (Gale, Cross, Boundary). The x-keys are
+// read by classes/combat.ts and the skills; m-keys go straight into the
+// player's combat modifiers. Each class's core (the tree's centre) is written
+// here too, so the Skills screen can describe it.
+
+const gate = (hint: string): NodeEffect => ({ text: `Opens the way to a hidden class. ${hint}` });
+
+export const GALE_PASSIVES: Record<string, NodeEffect> = {
+  'gale:Slipstream': { text: 'When an attack passes through your dodge, the world catches its breath: you gain 2 Flow and your next strike within 1.5 seconds deals 30% more. Each point of Flow makes you 3% faster on your feet and with the blade' },
+  // Tailwind
+  'gale:Swift Feet': { text: '+5% movement speed', m: { moveSpeed: 0.05 } },
+  'gale:Light Grip': { text: '+8% damage while your off-hand is empty', x: { lightGrip: 0.08 } },
+  'gale:Afterimage': { text: 'When you dodge through an attack, a copy of you cuts the attacker for 60% weapon damage', x: { afterimage: 1 } },
+  'gale:Flow Well': { text: '+1 maximum Flow', x: { flowMax: 1 } },
+  'gale:Follow Through': { text: 'The third strike of your combo deals 30% more damage', x: { followThrough: 0.3 } },
+  'gale:Updraft': { text: 'The third strike of your combo knocks small foes off their feet', x: { updraft: 1 } },
+  'gale:Fleet': { text: 'Dodging costs 10% less stamina', m: { dodgeCost: -0.1 } },
+  'gale:Storm Unbound': { text: 'At 3 or more Flow your dodges are free, but you cannot block and take 20% more damage', x: { stormUnbound: 1 } },
+  'gale:Quick Hands': { text: '+5% attack speed', m: { attackSpeed: 0.05 } },
+  'gale:Hurricane Heart': { text: 'Kills restore 1 Flow and 15 stamina', x: { hurricane: 1 } },
+  'gale:Ceaseless': { text: 'Cyclone deals 50% more damage', x: { ceaseless: 0.5 } },
+  'gale:Gate of the Stormdancer': gate('Somewhere a dancer moves through storms and never gets wet.'),
+  // Drawn Steel
+  'gale:Keen Edge': { text: '+3% crit chance', m: { crit: 0.03 } },
+  'gale:Whetted': { text: '+4% damage', m: { melee: 0.04 } },
+  'gale:Pressure': { text: 'Each Moonlit Draw that lands as a critical in a row adds 10% to the next (up to 3)', x: { pressure: 1 } },
+  'gale:Edge Work': { text: '+5% crit chance', m: { crit: 0.05 } },
+  'gale:Quickdraw': { text: 'Moonlit Draw is drawn 40% faster', x: { quickdraw: 1 } },
+  'gale:Heavy Draw': { text: 'Moonlit Draw deals 40% more damage', x: { heavyDraw: 1 } },
+  'gale:Sure Hands': { text: '+10% poise damage', m: { poise: 0.1 } },
+  'gale:One Breath': { text: 'Moonlit Draw is always a critical hit, but it spends all your Flow', x: { oneBreath: 1 } },
+  'gale:Honed': { text: '+6% damage', m: { melee: 0.06 } },
+  'gale:Blood on the Snow': { text: 'Critical hits make enemies bleed', x: { critBleed: 1 } },
+  'gale:Gate of the Moonblade': gate('An old story speaks of a swordsman who only ever drew once.'),
+  // Stillwind
+  'gale:Read the Blade': { text: '+10% parry window', m: { parryWindow: 0.1 } },
+  'gale:Calm Breath': { text: 'Parries restore 10 stamina', x: { parryStamina: 10 } },
+  'gale:Calm': { text: 'Each parry in a row without being hit builds Calm (up to 5); Riposte deals 6% more per Calm', x: { calm: 1 } },
+  'gale:Wide Guard': { text: '+15% parry window', m: { parryWindow: 0.15 } },
+  'gale:Disarm': { text: 'Parries knock the attacker\'s guard wide open (a heavier stagger)', x: { disarm: 1 } },
+  'gale:Guard Crush': { text: 'Your next 2 hits after a parry are critical', x: { guardCrush: 1 } },
+  'gale:Rebuke': { text: 'Parries cut the attacker for 40% weapon damage', x: { rebuke: 1 } },
+  'gale:Mirror Guard': { text: 'Parries refill your stamina, but any hit you take empties your Flow and Calm', x: { mirrorGuard: 1, calm: 1 } },
+  'gale:Composure': { text: '+20% damage for 4 seconds after a parry', x: { composure: 1 } },
+  "gale:Duelist's Pride": { text: 'Each point of Calm also adds 3% to all your damage', x: { pride: 1, calm: 1 } },
+  'gale:Quiet Mind': { text: 'Flow fades half as fast', x: { quietMind: 1 } },
+  'gale:Gate of the Sword Saint': gate('They say a woman in the mountains has not been touched by a blade in forty years.'),
+};
+
+export const CROSS_PASSIVES: Record<string, NodeEffect> = {
+  // Twin Fang
+  'cross:Balanced Grip': { text: '+4% damage', m: { melee: 0.04 } },
+  'cross:Quick Wrists': { text: '+4% attack speed', m: { attackSpeed: 0.04 } },
+  'cross:Ambidextrous': { text: 'Off-hand strikes deal 25% more damage', x: { ambidextrous: 0.25 } },
+  'cross:Tempo Well': { text: '+2 maximum Tempo', x: { tempoMax: 2 } },
+  'cross:Crimson Mark': { text: 'Every fourth hit makes the target bleed', x: { crimsonMark: 1 } },
+  'cross:Hamstring': { text: 'Every fourth hit staggers the target', x: { hamstring: 1 } },
+  'cross:Twin Edge': { text: '+5% crit chance', m: { crit: 0.05 } },
+  'cross:Glass Dancer': { text: '+25% damage, but you take 25% more damage', m: { melee: 0.25, dmgTaken: 0.25 } },
+  'cross:Twin Echo': { text: '+6% damage', m: { melee: 0.06 } },
+  'cross:Endless Waltz': { text: 'Kills give 2 Tempo', x: { endlessWaltz: 1 } },
+  'cross:Double Time': { text: 'Tempo drains half as fast when the beat stops', x: { doubleTime: 1 } },
+  'cross:Gate of the Reaver': gate('Two blades, and no mercy between them: someone on the roads still fights that way.'),
+  // Feint
+  'cross:Light Feet': { text: 'Dodging costs 8% less stamina', m: { dodgeCost: -0.08 } },
+  'cross:Poker Face': { text: '+8% poise damage', m: { poise: 0.08 } },
+  'cross:False Opening': { text: 'A Feint that opens an enemy gives 2 Tempo', x: { falseOpening: 1 } },
+  'cross:Cheap Shot': { text: 'Hits on an opened enemy deal 15% more damage', x: { cheapShot: 0.15 } },
+  'cross:Mirror Step': { text: 'Dodging through an attack leaves the attacker open', x: { mirrorStep: 1 } },
+  'cross:Shadow Feint': { text: 'Feint reaches farther and opens every enemy in front of you', x: { shadowFeint: 1 } },
+  'cross:Cruel Timing': { text: '+5% crit chance', m: { crit: 0.05 } },
+  'cross:Grand Deception': { text: 'Every dodge through an attack leaves the attacker open, but you cannot parry', x: { grandDeception: 1 } },
+  'cross:Sleight of Hand': { text: '+6% attack speed', m: { attackSpeed: 0.06 } },
+  "cross:Trickster's Luck": { text: '10% of blows simply miss you', x: { trickster: 0.1 } },
+  'cross:Pickpocket': { text: 'Hits on an opened enemy steal 2 gold', x: { sleight: 2 } },
+  'cross:Gate of the Nightblade': gate('Watch the wrong hand long enough, and someone will teach you why.'),
+  // Dancer
+  'cross:Spin Step': { text: 'Dodging costs 10% less stamina', m: { dodgeCost: -0.1 } },
+  'cross:Light Frame': { text: '+5% movement speed', m: { moveSpeed: 0.05 } },
+  'cross:Momentum': { text: 'Moving keeps your Tempo from draining for 3 seconds', x: { momentum: 1 } },
+  'cross:Slip': { text: '+8 max stamina', m: { stamina: 8 } },
+  'cross:Pirouette': { text: 'Dodging through an attack spins your blades through everything around you', x: { pirouette: 1 } },
+  'cross:Cartwheel': { text: 'After dodging through an attack, your next hit is critical', x: { cartwheel: 1 } },
+  'cross:Balance': { text: '+6% poise damage', m: { poise: 0.06 } },
+  'cross:Perpetual Motion': { text: 'Tempo never drains while you move, but standing still for a second loses all of it', x: { perpetualMotion: 1 } },
+  'cross:Swallow Cut': { text: '+5% damage while moving', x: { swallowCut: 1 } },
+  "cross:Dancer's Grace": { text: 'Take 15% less damage at full Tempo', x: { dancersGrace: 1 } },
+  'cross:Last Step': { text: 'Tempest Waltz ends with a finishing cross-cut', x: { lastStep: 1 } },
+  'cross:Gate of the Bladedancer': gate('Somewhere, a dancer fights with the music still playing.'),
+};
+
+export const BOUNDARY_PASSIVES: Record<string, NodeEffect> = {
+  'boundary:Boundary': { text: 'Hold F while standing still to raise a small blue Boundary around you. Any attack that reaches into it is turned aside (the attacker reels) and arrows stop dead. Holding it spends Focus; moving, or a blow it can\'t turn, breaks it. Focus refills when you let go' },
+  // Stillpoint
+  'boundary:Wide Stance': { text: 'Your Boundary reaches 10% farther', x: { wideStance: 0.1 } },
+  'boundary:Deep Breath': { text: 'Focus refills 20% faster', x: { deepBreath: 0.2 } },
+  'boundary:Anchor': { text: 'Your Boundary reaches full size twice as fast', x: { anchor: 1 } },
+  'boundary:Clear Mind': { text: '+15 maximum Focus', x: { focusMax: 15 } },
+  'boundary:Thorns': { text: 'Attacks your Boundary turns aside cut the attacker for 30% weapon damage', x: { thorns: 1 } },
+  'boundary:Still Water': { text: 'Each attack your Boundary turns aside restores 6 stamina', x: { stillWater: 1 } },
+  'boundary:Patience': { text: 'Turning an attack aside costs 2 less Focus', x: { patience: 2 } },
+  'boundary:Rooted': { text: 'Your Boundary opens at full size and drains 40% less Focus, but raising it costs 15 Focus', x: { rooted: 1 } },
+  'boundary:Steady': { text: 'Take 5% less damage', m: { dmgTaken: -0.05 } },
+  'boundary:Unmoved': { text: 'Blows your Boundary can\'t turn no longer break it; they land at half strength instead', x: { unmoved: 1 } },
+  'boundary:Second Breath': { text: 'When your Focus runs dry, it refills twice as fast', x: { secondBreath: 1 } },
+  'boundary:Gate of the Stillmind': gate('A hermit on the north road, they say, has not moved from one spot in eleven years.'),
+  // Recoil
+  'boundary:Hard Edge': { text: '+5% damage', m: { melee: 0.05 } },
+  'boundary:Ready Hands': { text: '+8% poise damage', m: { poise: 0.08 } },
+  'boundary:Counterweight': { text: 'After your Boundary turns an attack aside, your next strike within 3 seconds is a Guard Counter: 35% more damage and a heavy stagger', x: { counterweight: 1 } },
+  'boundary:Heavy Hand': { text: '+5% poise damage', m: { poise: 0.05 } },
+  'boundary:Shatter': { text: 'Attacks your Boundary turns aside break the attacker\'s guard (a heavy stagger)', x: { shatter: 1 } },
+  'boundary:Echo': { text: 'Each attack your Boundary turns aside sends a ripple that staggers everything inside it', x: { echo: 1 } },
+  'boundary:Grip': { text: '+8 max stamina', m: { stamina: 8 } },
+  'boundary:Retaliation': { text: 'Attacks your Boundary turns aside also cut the attacker for 40% weapon damage, but Focus refills 40% slower', x: { retaliation: 1 } },
+  'boundary:True Edge': { text: '+4% crit chance', m: { crit: 0.04 } },
+  'boundary:Closing Ring': { text: 'Collapse leaves everything it catches dazed', x: { closingRing: 1 } },
+  'boundary:Overflow': { text: 'At full Focus your strikes deal 15% more damage', x: { overflow: 1 } },
+  'boundary:Gate of the Ironwall': gate('Whatever reaches in comes back broken: an old soldier teaches that, somewhere.'),
+  // Warden
+  'boundary:Watchful': { text: 'Your Boundary stops arrows a metre farther out', x: { watchful: 1 } },
+  'boundary:Stout Heart': { text: '+10 max health', m: { hp: 10 } },
+  'boundary:Shelter': { text: 'Each arrow or thrown thing your Boundary stops restores 8 Focus', x: { shelter: 8 } },
+  'boundary:Tough': { text: 'Take 4% less damage', m: { dmgTaken: -0.04 } },
+  'boundary:Martyr': { text: 'Taking a hit restores 10 Focus', x: { martyr: 1 } },
+  'boundary:Bulwark': { text: 'Oath Ward absorbs 50% more', x: { wardAbsorb: 0.5 } },
+  'boundary:Endurance': { text: '+10 max stamina', m: { stamina: 10 } },
+  'boundary:Oathbound': { text: '+30% max health, but healing is 30% weaker', m: { hpMult: 0.3, heal: -0.3 } },
+  'boundary:Iron Skin': { text: 'Take 5% less damage', m: { dmgTaken: -0.05 } },
+  'boundary:Last to Fall': { text: 'Once every 2 minutes, a killing blow leaves you at 1 health', x: { lastToFall: 120 } },
+  'boundary:Undying Vow': { text: 'Rallying Cry also refills your Focus', x: { undyingVow: 1 } },
+  'boundary:Gate of the Shieldwarden': gate('Those behind the line sleep soundly. Find who keeps it.'),
+};

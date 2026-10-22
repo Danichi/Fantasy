@@ -385,6 +385,9 @@ export class Undead implements Target {
     return this.state !== 'rising';
   }
 
+  /** seconds left reeling from a parry (wide open to a riposte) */
+  private daze = 0;
+
   takeHit(h: HitInfo) {
     if (!this.alive || this.state === 'dying' || this.state === 'rising') return;
     // Skeletons catch blows on the shield when facing them and not mid-swing.
@@ -430,6 +433,7 @@ export class Undead implements Target {
   update(dt: number, player: Player, crowd: Undead[]) {
     this.st += dt;
     this.cooldown -= dt;
+    this.daze = Math.max(0, this.daze - dt);
     this.flash = Math.max(0, this.flash - dt * 5);
 
     if (this.state === 'dying') {
@@ -516,7 +520,7 @@ export class Undead implements Target {
     } else if (this.state === 'hurt') {
       this.vel.x *= Math.exp(-8 * dt);
       this.vel.z *= Math.exp(-8 * dt);
-      if (this.grounded && this.st > 0.55) {
+      if (this.grounded && this.st > 0.55 && this.daze <= 0) {
         this.stunned = false;
         this.setState('chase');
       }
@@ -593,6 +597,7 @@ export class Undead implements Target {
       poise,
       onParried: () => {
         this.stunned = true;
+        this.daze = 2.2; // reeling: wide open to a riposte
         this.setState('hurt');
         this.vel.set(-dir.x * 3.5, 3, -dir.z * 3.5);
       },

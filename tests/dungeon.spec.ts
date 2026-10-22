@@ -177,6 +177,7 @@ test('a crypt orc attacks and can be killed', async ({ page }) => {
 });
 
 test('hand-drawn maps and progress survive a reload', async ({ page }) => {
+  test.setTimeout(420_000 * Number(process.env.PW_SLOW ?? '1')); // boots the game twice
   await boot(page, '?test&save');
   await page.evaluate(async () => {
     localStorage.clear();

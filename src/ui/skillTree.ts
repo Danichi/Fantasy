@@ -32,7 +32,7 @@ export const ICONS: Record<string, string> = {
 /** Hex values of the discipline colour tokens (the canvas and HUD can't read CSS variables). */
 export const HEX: Record<string, string> = {
   '--c-gale': '#6fd6c6', '--c-fire': '#ff8246', '--c-frost': '#9cc8ff', '--c-wind': '#b7e38a', '--c-herb': '#8fcf6a',
-  '--c-steel': '#aeb8cc', '--c-light': '#ffe08a', '--c-shadow': '#b48cff', '--c-blood': '#d8574a', '--c-gold': '#d9b15a',
+  '--c-steel': '#aeb8cc', '--c-ward': '#5fa8ff', '--c-light': '#ffe08a', '--c-shadow': '#b48cff', '--c-blood': '#d8574a', '--c-gold': '#d9b15a',
 };
 
 /** Hotbar icon for a skill: its class sigil in a ring, with the skill's initials. */
@@ -252,7 +252,7 @@ export class TreeView {
     const hv = this.hover;
     if (hv) {
       const v = P.node(d.id, hv.id);
-      const nm = hv.type === 'choice' ? (v ? hv.name.split('|')[v.pick ?? 0] : hv.name.replace('|', ' / ')) : hv.name;
+      const nm = hv.type === 'choice' ? (v ? hv.name.split('|')[v.pick ?? 0] : hv.name.replace('|', ' / ')) : P.displayName(d.id, hv);
       c.font = '15px Cinzel, serif';
       const tw = c.measureText(nm).width, bx = hv.x! - tw / 2 - 10, by = hv.y! - 52;
       c.fillStyle = 'rgba(7,8,12,.92)';

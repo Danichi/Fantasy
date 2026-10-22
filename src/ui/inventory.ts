@@ -1,4 +1,5 @@
 import type { Player } from '../player/player';
+import type { Origin } from '../progression/progression';
 import { ARMOR_SLOTS, ACCESSORY_SLOTS, STAT_LABEL, traitLines, type ItemKind, type ItemStats, type Slot } from '../items/itemDefs';
 import type { ItemInstance } from '../items/equipment';
 import { events } from '../core/events';
@@ -391,7 +392,7 @@ export class InventoryUI {
   }
 }
 
-export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon' | null) => void, initialOrigin: 'human' | 'dragon' | 'demon' = 'human', music?: { muted: boolean; setMuted(m: boolean): void }) {
+export function buildOverlays(onStart: (origin: Origin | null) => void, initialOrigin: Origin = 'human', music?: { muted: boolean; setMuted(m: boolean): void }) {
   const root = document.getElementById('ui')!;
   const controls = `
     <div class="controls">
@@ -407,23 +408,10 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon' | n
   const start = document.createElement('div');
   start.className = 'overlay';
   start.innerHTML = `<div class="title-card"><div class="pause-banner">THE WORLD WAITS</div><h1>ELDERGLEN TOWN</h1><div class="pause-status"></div><p class="sub">A thriving frontier town. Choose your origin, shape your Heroic Legacy, take Guild contracts, and explore beyond the walls.</p>
-  <div class="origin-picker">
-    <button class="origin-choice" data-origin="human"><b>HUMAN</b><span>Adaptable learning</span></button>
-    <button class="origin-choice" data-origin="dragon"><b>DRAGON</b><span>Fire resistance · flight · breath</span></button>
-    <button class="origin-choice" data-origin="demon"><b>DEMON</b><span>Regeneration · infernal abilities</span></button>
-  </div>
+  <div class="origin-picker creator-launch"><span>Six peoples · your face, build and colours · a name: the character creator opens when you begin.</span></div>
   <span class="cta">CLICK TO BEGIN</span><p class="mobile-note">Best played with a keyboard and mouse on a larger screen.</p>${controls}</div>`;
   root.appendChild(start);
-  let selectedOrigin = initialOrigin;
-  const originChoices = [...start.querySelectorAll<HTMLButtonElement>('.origin-choice')];
-  originChoices.forEach((b) => {
-    b.classList.toggle('selected', b.dataset.origin === selectedOrigin);
-    b.addEventListener('click', (e) => {
-      e.stopPropagation();
-      selectedOrigin = b.dataset.origin as 'human' | 'dragon' | 'demon';
-      originChoices.forEach((x) => x.classList.toggle('selected', x === b));
-    });
-  });
+  const selectedOrigin = initialOrigin;
   const help = document.createElement('div');
   help.className = 'overlay hidden';
   help.innerHTML = `<div class="title-card"><h1>CONTROLS</h1><p class="sub">Parry a slime's leap with good timing to stagger it, then strike for a critical riposte.</p>${controls}<p class="sub" style="margin-top:22px">Press H or click to close</p></div>`;
@@ -437,6 +425,15 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon' | n
     picker.style.display = 'none';
   };
   start.addEventListener('click', () => {
+    // A new game opens the character creator (ui/creator.ts) first.
+    if (!originLocked && api.creator) {
+      api.creator(() => {
+        start.classList.add('hidden');
+        onStart(null);
+        lockOrigin();
+      });
+      return;
+    }
     start.classList.add('hidden');
     onStart(originLocked ? null : selectedOrigin);
     lockOrigin();
@@ -461,7 +458,9 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon' | n
   });
   if (row.childElementCount) start.querySelector('.title-card')!.appendChild(row);
   help.addEventListener('click', () => help.classList.add('hidden'));
-  return {
+  const api = {
+    /** opens the character creator; it calls `begin` when the hero is made */
+    creator: undefined as ((begin: () => void) => void) | undefined,
     start,
     help,
     showPaused(show: boolean, status = '') {
@@ -489,4 +488,5 @@ export function buildOverlays(onStart: (origin: 'human' | 'dragon' | 'demon' | n
     },
     lockOrigin,
   };
+  return api;
 }

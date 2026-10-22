@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { events } from '../../core/events';
 import { heightAt } from '../terrainHeight';
 import { SEA_LEVEL } from '../worldMap';
 import { waterSurfaceAt } from '../waterLevel';
@@ -578,6 +579,7 @@ export class Sailing {
       if (port.id !== 'portAurelle') {
         this.addXp(150, 'first landfall');
         this.hooks.toast(`First landfall at ${port.name}!`);
+        events.emit('deed', { id: 'landfall:' + port.id, renown: 1, label: `First landfall at ${port.name}` });
       }
     }
     // The customs cutter on your heels catches you at the quay.
@@ -1184,6 +1186,7 @@ export class Sailing {
       this.addXp(Math.round(220 + danger * 80), 'slew a sea serpent');
       this.stats.monsters++;
       this.hooks.signal?.('serpent-slain');
+      events.emit('deed', { id: 'beast:serpent', renown: 2, label: 'Slew a sea serpent' });
       this.wishProgress('beast');
       this.cheer(0.1);
     };
@@ -1611,6 +1614,7 @@ export class Sailing {
     if (pr.tag === 'scout') this.hooks.signal?.('bt-scout');
     if (pr.tag === 'calloway') {
       this.hooks.signal?.('bt-calloway');
+      events.emit('deed', { id: 'boss:calloway', renown: 2, label: 'Broke the Black Tide: Captain Rook Calloway' });
       if (sunk) this.dropLoot(pr.ship.pos.clone(), 300, [['blackTideColours', 1]]);
       else this.hooks.give('blackTideColours', 1);
       this.hooks.toast(sunk ? 'Calloway\'s colours float free of the wreck: haul them in!' : 'You strike the Black Tide\'s colours from Calloway\'s mast with your own hands.');
@@ -1635,6 +1639,7 @@ export class Sailing {
         action: () => {
           self.lightUp(ip.def.id);
           self.addXp(80, 'relit a lighthouse');
+          events.emit('deed', { id: 'lighthouse:' + ip.def.id, renown: 1, label: `Relit the lighthouse of ${ip.def.name}` });
           self.hooks.reveal?.(at.x, at.z, 1600);
           self.hooks.toast(`The lamp of ${ip.def.name} burns again. Ships will see it for leagues, and so will you: the waters around are charted.`);
           self.hooks.save();
@@ -2305,6 +2310,7 @@ export class Sailing {
     this.addXp(l.xp, `beat ${BEAST_NAMES[b.id]}`);
     this.stats.monsters++;
     this.hooks.signal?.('beast-' + b.id);
+    events.emit('deed', { id: 'beast:' + b.id, renown: 2, label: `Beat ${BEAST_NAMES[b.id]}` });
     this.wishProgress('beast');
     this.cheer(0.1);
     this.hooks.save();

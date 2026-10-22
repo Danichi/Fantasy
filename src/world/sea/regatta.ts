@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { events } from '../../core/events';
 import { SEA_LEVEL } from '../worldMap';
 import { waveAt, windAt } from './seaState';
 import { Ship, NO_CONTROL, NEUTRAL_PERKS } from './ship';
@@ -188,6 +189,7 @@ export class Regatta {
       this.host.xp(first ? c.xp : Math.round(c.xp / 3), `won ${c.name}`);
       this.host.toast(`You win ${c.name} in ${mins}:${String(secs).padStart(2, '0')}! ${c.prize}g purse. Quint: ${c.say[1]}`);
       if (c.id === 'streamRace' && first) this.host.give('regattaPennant', 1);
+      if (first) events.emit('deed', { id: 'regatta:' + c.id, renown: 1, label: `Won ${c.name}` });
     } else this.host.toast(`Quint crosses the line ahead of you. "Better luck next year, sweetheart." (${mins}:${String(secs).padStart(2, '0')})`);
     this.end();
     this.host.save();

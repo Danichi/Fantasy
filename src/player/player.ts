@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { HERO } from '../npc/cast';
+import type { Look } from '../npc/charBuilder';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Character } from './character';
 import { RigLayer, blendPose, overlayPose, type ProcPose } from './rigLayer';
@@ -62,7 +63,8 @@ const MANA_REGEN = 0.7;
 const MOUNT_TIME = 0.5;
 
 export class Player {
-  readonly char = new Character();
+  /** the hero's body (replaced whole by rebuildBody when the look changes) */
+  char = new Character();
   rig!: RigLayer;
   anim!: Animator;
   equip!: Equipment;
@@ -90,7 +92,7 @@ export class Player {
   /** combat modifiers from skill passives and buffs, rewritten every step by the skill runtime */
   mods: CombatMods = baseMods();
   get maxHp() {
-    return Math.round(120 + this.paths.bonusHp + this.mods.hp + (this.equip?.bonus('maxHp') ?? 0));
+    return Math.round((120 + this.paths.bonusHp + this.mods.hp + (this.equip?.bonus('maxHp') ?? 0)) * Math.max(0.2, this.mods.hpMult));
   }
   get maxStamina() {
     return Math.round(100 + this.paths.bonusStamina + this.mods.stamina + (this.equip?.bonus('maxStamina') ?? 0));
@@ -101,9 +103,12 @@ export class Player {
   private staminaDelay = 0;
   private hot = { rate: 0, left: 0 };
   private burn = { dps: 0, left: 0 };
+  /** venom in the blood (spider bites) */
+  poison = { dps: 0, left: 0 };
+  /** seconds left stuck in webbing: slow, no sprinting */
+  webbed = 0;
   mounted = false;
   private mountVisual = new THREE.Group();
-  private originCooldown = 0;
 
   act: ActiveAction | null = null;
   private buffer: { a: Buffered; t: number } | null = null;
@@ -118,6 +123,15 @@ export class Player {
   private armsFromClips = false;
   private guardW = 1;
   private blockW = 0;
+  /** how long the parry key has been held, and whether you're still enough to raise a Boundary */
+  parryHeldT = 0;
+  stillForDomain = false;
+  /** Hold Fast: the Boundary survives walking */
+  domainMoves = false;
+  /** an attack passed through you during a dodge's i-frames (Gale Style's Slipstream) */
+  onDodged?: (att: IncomingAttack) => void;
+  /** how long the shield has been up (it takes a moment to raise) */
+  private blockT = 0;
   private blockHitT = 9;
   private poseFrom: ProcPose | null = null;
   private poseFade = 1;
@@ -147,6 +161,8 @@ export class Player {
   absorb?: (dmg: number) => number;
   /** return true to survive a killing blow (the hook sets health) */
   cheatDeath?: () => boolean;
+  /** healing that arrived at full health (Afterglow) */
+  onOverheal?: (amount: number) => void;
   /** per-target bonus for blade hits (brands, forced crits) */
   meleeBonus?: (t: Target) => { mult: number; crit: boolean };
   // ---- Arms and Crafting (feat/arms): the weapon families (combat/armsRuntime.ts) ----
@@ -165,9 +181,34 @@ export class Player {
   /** how far round a block reaches (cos of the angle from straight ahead; a greatsword's Boundary guard covers 180 degrees) */
   blockFacing = 0.3;
 
+  // ---- origins (feat/origins): hooks only; the logic lives in src/origins ----
+  /** the look the body is built from (the character creator) and its standing height (0: the default) */
+  look: Look = HERO;
+  lookHeight = 0;
+  /** proportions and procedural parts (npc/charParts), applied right after the body loads */
+  shapeBody?: (char: Character) => void;
+  /** flight (origins/flight.ts), every step; sets `flying` while it owns the velocity */
+  flight?: (dt: number, input: Input, cam: ThirdPersonCamera) => void;
+  flying = false;
+  /** the V key (origins/abilities.ts) */
+  originAbility?: () => void;
+  /** swap an action for another (forms' movesets, the beastfolk pounce) */
+  remapAction?: (id: string) => string;
+  /** stagger resistance: (gear poise + flat) x mul; immune ignores staggers */
+  poiseMul = 1;
+  poiseFlat = 0;
+  staggerImmune = false;
+  /** fraction of fire damage and burning shrugged off */
+  fireResist = 0;
+  /** lock-on reach in metres */
+  lockRange = 24;
+  /** unseen (Moonveil): enemies that check it lose track of you */
+  veiled = false;
+
   async init(scene: THREE.Scene, spawn: THREE.Vector3) {
     // The stylised hero (docs/ART-DIRECTION.md §7), playing the Mixamo clips.
-    await this.char.load(undefined, undefined, HERO);
+    await this.char.load(undefined, this.lookHeight ? { height: this.lookHeight } : undefined, this.look);
+    this.shapeBody?.(this.char);
     scene.add(this.char.root);
     this.anim = new Animator(this.char);
     // Real clips hold the sword and shield themselves; the placeholder's
@@ -195,6 +236,30 @@ export class Player {
     this.kcc = physics.createCharacterController(0.02);
     this.pos.copy(spawn);
     this.prevPos.copy(spawn);
+  }
+
+  /** Rebuild the hero's body for a new look (origins: the character creator), keeping gear, place and state. */
+  async rebuildBody() {
+    const old = this.char;
+    const char = new Character();
+    await char.load(undefined, this.lookHeight ? { height: this.lookHeight } : undefined, this.look);
+    this.shapeBody?.(char);
+    char.root.position.copy(old.root.position);
+    char.root.rotation.copy(old.root.rotation);
+    old.root.parent?.add(char.root);
+    old.root.removeFromParent();
+    this.char = char;
+    this.anim = new Animator(char);
+    this.armsFromClips = char.has('attack_light_1') || char.has('block_idle');
+    this.anim.update(0.3, { local: { x: 0, z: 0 }, grounded: true });
+    char.root.updateMatrixWorld(true);
+    this.rig = new RigLayer(char);
+    this.rig.setup();
+    this.equip.rebind(char, this.rig);
+    char.root.add(this.mountVisual);
+    for (const b of ['Head', 'Spine2', 'RightArm', 'LeftArm', 'RightForeArm', 'LeftForeArm', 'RightHand', 'LeftHand', 'RightUpLeg', 'LeftUpLeg', 'RightLeg', 'LeftLeg', 'RightFoot', 'LeftFoot']) this.equip.limb(b);
+    this.lastPose = {};
+    this.poseFrom = null;
   }
 
   private buildMountVisual() {
@@ -332,10 +397,7 @@ export class Player {
       this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0;
       return;
     }
-    if (this.prog.origin === 'dragon' && !this.grounded && input.held('jump')) {
-      // Dragon origin: hold jump in the air to glide down slowly.
-      this.vel.y = Math.max(this.vel.y, -1.25);
-    }
+    this.flight?.(dt, input, cam);
     this.updateAction(dt, input);
     this.updateLock(cam);
     this.move(dt);
@@ -352,13 +414,22 @@ export class Player {
 
     const now = performance.now() / 1000;
     const buf = (a: Buffered) => (this.buffer = { a, t: now });
+    // Boundary Style: F held while standing still raises the ring (the skill runtime decides if it can).
+    this.parryHeldT = input.held('parry') ? this.parryHeldT + SIM_STEP : 0;
+    this.stillForDomain = this.grounded && !this.mounted && !this.swimming && !this.sprinting && (this.moveIntent.lengthSq() < 0.001 || this.domainMoves);
     if (input.wasPressed('attack') && !this.aiming) buf('attack');
     if (input.wasPressed('offhand') && this.equip.dualWield) buf('offhand');
     if (input.wasPressed('parry')) buf('parry');
     if (input.wasPressed('dodge')) buf('dodge');
     if (input.wasPressed('cast')) buf('cast');
     if (input.wasPressed('originAbility')) buf('originAbility');
-    this.blocking = input.held('offhand') && (this.equip.hasShield || !!this.weaponGuard?.()) && this.mods.canBlock && (!this.act || this.act.def.id === 'parryShield' || this.act.def.id === 'parryWeapon');
+    // Raising the shield (or a weapon that can guard) also cuts short the tail end of an attack (once it can be cancelled).
+    const wantBlock = input.held('offhand') && (this.equip.hasShield || !!this.weaponGuard?.()) && this.mods.canBlock;
+    const ac = this.act;
+    const guardAct = (id: string) => id === 'parryShield' || id === 'parryWeapon';
+    if (wantBlock && ac && !guardAct(ac.def.id) && !ac.def.roll && ac.def.id !== 'stagger' && ac.def.id !== 'guardBreak' && ac.t >= ac.def.cancel) this.act = null;
+    this.blocking = wantBlock && (!this.act || guardAct(this.act.def.id));
+    this.blockT = this.blocking ? this.blockT + SIM_STEP : 0;
     this.diveHeld = input.held('jump');
     if (input.wasPressed('jump') && this.grounded && !this.act) {
       this.vel.y = JUMP_V;
@@ -371,6 +442,7 @@ export class Player {
 
   // ---- actions --------------------------------------------------------------
   private startAction(id: string, t0?: number): boolean {
+    id = this.remapAction?.(id) ?? id;
     const raw = this.actionFor?.(id) ?? ACTIONS[id];
     if (!raw) return false;
     const usingClip = !!raw.clip && this.char.has(raw.clip);
@@ -392,6 +464,8 @@ export class Player {
     this.lastPresentT = -1;
 
     if (def.roll) {
+      // Rolling tears you most of the way out of webbing.
+      this.webbed *= 0.25;
       const dir = def.roll.back ? this.forward.negate() : this.moveIntent.lengthSq() > 0 ? this.moveIntent.clone() : this.forward;
       this.act.rollDir = dir;
     }
@@ -525,6 +599,17 @@ export class Player {
    * Melee aim assist: the lock-on target, or else the best enemy in a cone in
    * front of the player.
    */
+  /** Closest living enemy within `range`, in any direction. */
+  nearestThreat(range: number): Target | null {
+    let best: Target | null = null, bd = range;
+    for (const t of targets) {
+      if (!t.alive || !t.lockable || t.kind === 'dummy') continue;
+      const d = t.position.distanceTo(this.pos);
+      if (d < bd) (bd = d), (best = t);
+    }
+    return best;
+  }
+
   aimTarget(range: number): Target | null {
     if (this.lock?.alive) return this.lock;
     const f = this.forward;
@@ -560,7 +645,7 @@ export class Player {
       if (!t.alive || !t.lockable) continue;
       const to = t.center.clone().sub(cam.camera.position);
       const dist = t.center.distanceTo(this.center);
-      if (dist > 24) continue;
+      if (dist > this.lockRange) continue;
       const ang = to.normalize().angleTo(camF);
       if (ang > 0.9) continue;
       if (!this.canSee(t)) continue; // no locking on through walls
@@ -585,7 +670,7 @@ export class Player {
   }
 
   private updateLock(cam: ThirdPersonCamera) {
-    if (this.lock && (!this.lock.alive || this.lock.center.distanceTo(this.center) > 30)) this.lock = null;
+    if (this.lock && (!this.lock.alive || this.lock.center.distanceTo(this.center) > this.lockRange * 1.25)) this.lock = null;
     if (this.lock) {
       this.lockHidden = this.canSee(this.lock) ? 0 : this.lockHidden + 1 / 60;
       if (this.lockHidden > 1.2) this.lock = null;
@@ -637,6 +722,7 @@ export class Player {
       const ms = this.mountStats ?? { canter: 11.5, gallop: 15, accel: 8 };
       targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking || this.aiming ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
+      if (this.webbed > 0 && !this.mounted) targetSpeed = Math.min(targetSpeed, 1.3);
       // Wading slows you down; deep water means swimming.
       const wade = waterDepthAt(this.pos.x, this.pos.z);
       if (wade > 0.25) targetSpeed *= 0.5;
@@ -704,7 +790,7 @@ export class Player {
       hv.multiplyScalar(keep).addScaledVector(dir, v * (1 - keep));
     } else if (a) {
       hv.multiplyScalar(Math.exp(-12 * dt));
-    } else {
+    } else if (!this.flying) {
       const want = intent.clone().multiplyScalar(targetSpeed);
       const accel = this.grounded ? (targetSpeed > hv.length() ? 8 : 11) : 2.5;
       hv.x = damp(hv.x, want.x, accel, dt);
@@ -726,6 +812,14 @@ export class Player {
       this.turnToward(Math.atan2(this.aimDir.x, this.aimDir.z), dt, 400, 18);
     } else if (toLock !== null && !this.sprinting) {
       this.turnToward(toLock, dt, 200);
+    } else if (this.blocking) {
+      // Shield up without a lock: square up to the nearest threat, and keep
+      // facing it while you step about, instead of turning your back.
+      // With nothing close, the shield follows the crosshair (the camera's aim).
+      const threat = this.nearestThreat(7);
+      if (threat) this.turnToward(Math.atan2(threat.position.x - this.pos.x, threat.position.z - this.pos.z), dt, 200);
+      else if (this.aimDir.x * this.aimDir.x + this.aimDir.z * this.aimDir.z > 0.01) this.turnToward(Math.atan2(this.aimDir.x, this.aimDir.z), dt, 160);
+      else this.yawVel *= Math.exp(-16 * dt);
     } else if (intent.lengthSq() > 0) {
       this.turnToward(Math.atan2(intent.x, intent.z), dt, this.sprinting ? 110 : 160);
     } else this.yawVel *= Math.exp(-16 * dt);
@@ -734,7 +828,7 @@ export class Player {
     if (this.swimming && surface !== null) {
       // Buoyancy: ease toward treading water at the surface.
       this.vel.y = (surface - 1.25 - this.diveDepth - this.pos.y) * 5;
-    } else {
+    } else if (!this.flying) {
       this.vel.y -= GRAVITY * dt;
       if (this.grounded && this.vel.y < 0) this.vel.y = 0;
     }
@@ -1120,7 +1214,10 @@ export class Player {
   // ---- defence ----------------------------------------------------------------
   receiveAttack(att: IncomingAttack): DefenceResult {
     if (this.dead) return 'dodged';
-    if (this.inIframes()) return 'dodged';
+    if (this.inIframes()) {
+      this.onDodged?.(att);
+      return 'dodged';
+    }
     const toAtt = att.from.clone().sub(this.pos).setY(0).normalize();
     const facing = toAtt.dot(this.forward);
     const hooked = this.defend?.(att, facing);
@@ -1134,10 +1231,11 @@ export class Player {
       this.onShake?.(0.25);
       return 'parried';
     }
+    // A raised shield (or a guarding weapon) covers what's in front of you.
     const guard = this.equip.hasShield ? null : this.weaponGuard?.() ?? null;
-    if (this.blocking && (this.equip.hasShield || guard) && facing > this.blockFacing && this.blockW > 0.5) {
+    if (this.blocking && (this.equip.hasShield || guard) && facing > this.blockFacing && this.blockT > 0.06) {
       const st = guard ?? this.equip.offItem!.def.stats;
-      const cost = (att.damage * (1 - (st.stability ?? 0.4)) * 1.7 + 6) * this.mods.blockCost;
+      const cost = (att.damage * (1 - (st.stability ?? 0.4)) * 1.1 + 4) * this.mods.blockCost;
       this.stamina -= cost;
       this.staminaDelay = 0.8;
       this.blockHitT = 0;
@@ -1153,22 +1251,30 @@ export class Player {
         return 'guardBroken';
       }
       this.applyDamage(through);
+      if (att.knock) this.vel.addScaledVector(toAtt, -att.knock * 0.35);
       events.emit('blockImpact', { at, guardBroken: false });
       this.onShake?.(0.12);
       return 'blocked';
     }
+    if (this.blocking && this.equip.hasShield) events.emit('guardMissed', { from: att.from.clone() });
     const armor = this.equip.armorValue;
-    const dmg = att.damage * (100 / (100 + armor * 5));
+    const dmg = att.damage * (100 / (100 + armor * 5)) * (att.burn ? 1 - this.fireResist : 1);
     this.applyDamage(dmg);
+    if (att.poison) this.poison = { dps: Math.max(att.poison, this.poison.left > 0 ? this.poison.dps : 0), left: 4 };
+    if (att.web) this.webbed = Math.max(this.webbed, att.web);
     if (att.burn) {
-      const burnScale = this.prog.origin === 'dragon' ? 0.35 : 1;
+      const burnScale = 1 - this.fireResist;
       this.burn = { dps: att.burn * burnScale, left: 3 };
     }
     // Hyper-armour through the middle of heavy swings.
     const heavyArmor = ((a?.def.id === 'heavy' || a?.def.id === 'airAttack') && a.def.hit && a.t > a.def.hit.from - 0.2 && a.t < a.def.hit.to) || !!this.hyperArmour?.();
-    if (!this.dead && !heavyArmor && att.poise > this.equip.poise * 0.8) {
+    if (!this.dead && !heavyArmor && !this.staggerImmune && att.poise > (this.equip.poise + this.poiseFlat) * this.poiseMul * 0.8) {
       this.startAction('stagger');
       this.vel.addScaledVector(toAtt, -3.5);
+    }
+    if (att.knock && !this.dead) {
+      this.vel.addScaledVector(toAtt, -att.knock);
+      this.vel.y = Math.max(this.vel.y, att.knock * 0.4);
     }
     this.onShake?.(0.3);
     return 'hit';
@@ -1205,6 +1311,8 @@ export class Player {
     this.stamina = this.maxStamina;
     this.mana = this.maxMana;
     this.burn.left = 0;
+    this.poison.left = 0;
+    this.webbed = 0;
     this.hot.left = 0;
     this.act = null;
     this.teleport(at);
@@ -1212,15 +1320,20 @@ export class Player {
   }
 
   private updateStats(dt: number) {
-    this.originCooldown = Math.max(0, this.originCooldown - dt);
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
     else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen + this.mods.staminaRegen) * dt);
     this.mana = Math.min(this.maxMana, this.mana + MANA_REGEN * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen + this.mods.manaRegen) * dt);
-    if (this.prog.origin === 'demon' && !this.dead) this.hp = Math.min(this.maxHp, this.hp + 0.8 * dt);
     this.hp = Math.min(this.hp, this.maxHp);
     if (this.hot.left > 0 && !this.dead) {
       this.hot.left -= dt;
-      this.hp = Math.min(this.maxHp, this.hp + this.hot.rate * dt);
+      const want = this.hp + this.hot.rate * dt;
+      if (want > this.maxHp) this.onOverheal?.(want - this.maxHp);
+      this.hp = Math.min(this.maxHp, want);
+    }
+    this.webbed = Math.max(0, this.webbed - dt);
+    if (this.poison.left > 0 && !this.dead) {
+      this.poison.left -= dt;
+      this.applyDamage(this.poison.dps * dt);
     }
     if (this.burn.left > 0 && !this.dead) {
       this.burn.left -= dt;
@@ -1254,36 +1367,10 @@ export class Player {
   }
 
 
+  /** V: the origin's slotted ability (origins/abilities.ts). */
   private useOriginAbility() {
-    if (this.originCooldown > 0 || this.dead) return;
-    const origin = this.prog.origin;
-    if (origin === 'dragon') {
-      const f = this.forward;
-      const center = this.center;
-      for (const t of targets) {
-        if (!t.alive) continue;
-        const to = t.center.clone().sub(center).setY(0);
-        const d = to.length();
-        if (d > 6.5 || d < 0.01) continue;
-        if (to.normalize().dot(f) < 0.62) continue;
-        if (!this.reachable(t)) continue;
-        const dmg = Math.round(26 + this.prog.level * 2.5);
-        t.takeHit({ damage: dmg, poise: 35, dir: f.clone(), at: t.center.clone(), crit: false, source: 'melee' });
-        events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: false, enemyId: t.id });
-      }
-      this.originCooldown = 4.5;
-      events.emit('originAbility', { origin, ability: 'Dragon Breath' });
-    } else if (origin === 'demon') {
-      this.hot = { rate: Math.max(10, this.maxHp * 0.08), left: 2.5 };
-      this.stamina = Math.min(this.maxStamina, this.stamina + 30);
-      this.originCooldown = 5.5;
-      events.emit('originAbility', { origin, ability: 'Blood Awakening' });
-    } else {
-      this.mana = Math.min(this.maxMana, this.mana + 22);
-      this.stamina = Math.min(this.maxStamina, this.stamina + 22);
-      this.originCooldown = 6;
-      events.emit('originAbility', { origin, ability: 'Heroic Adaptation' });
-    }
+    if (this.dead) return;
+    this.originAbility?.();
   }
 
   /**
@@ -1313,7 +1400,9 @@ export class Player {
 
   heal(amount: number) {
     if (this.dead) return;
-    this.hp = Math.min(this.maxHp, this.hp + amount * this.mods.heal * this.paths.healPower);
+    const want = this.hp + amount * this.mods.heal * this.paths.healPower;
+    if (want > this.maxHp) this.onOverheal?.(want - this.maxHp);
+    this.hp = Math.min(this.maxHp, want);
   }
 
   /** Heal over time (replaces a weaker one). */

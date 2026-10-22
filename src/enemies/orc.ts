@@ -359,6 +359,17 @@ export class OrcWarlord implements Target {
       this.onRoar?.(this);
     }
   }
+  /** Speed the dungeon boss template raises in later phases (dungeon/kit/boss.ts). */
+  phaseSpeed = 1;
+  /** A phase change (dungeon/kit/boss.ts): he breaks off whatever he's doing and roars. */
+  phaseRoar() {
+    if (!this.alive || this.state === 'dormant' || this.state === 'emerging' || this.state === 'dying') return;
+    this.move = null;
+    this.arrowNocked.visible = false;
+    this.sheathe(false);
+    this.setState('roar');
+    this.onRoar?.(this);
+  }
   get enraged() {
     return this.hp < this.maxHp * 0.5;
   }
@@ -518,7 +529,7 @@ export class OrcWarlord implements Target {
     const toP = player.pos.clone().sub(this.position).setY(0);
     const dist = toP.length();
     const want = Math.atan2(toP.x, toP.z);
-    const speedMul = this.enraged ? 1.15 : 1;
+    const speedMul = (this.enraged ? 1.15 : 1) * this.phaseSpeed;
     let moveSpeed = 0;
     let turn = true;
 
@@ -683,7 +694,7 @@ export class OrcWarlord implements Target {
       const pa = player.pos.clone().setY(player.pos.y + 0.35), pb = player.pos.clone().setY(player.pos.y + 1.5);
       const close = Math.min(segmentPointDistance(pa, pb, a.pos), segmentPointDistance(pa, pb, prev.lerp(a.pos, 0.5)));
       if (close < 0.4 && !player.dead) {
-        const res = player.receiveAttack({ damage: 20, from: a.pos.clone().sub(a.vel.clone().normalize()), parryable: true, poise: 30 });
+        const res = player.receiveAttack({ damage: 20, from: a.pos.clone().sub(a.vel.clone().normalize()), parryable: true, poise: 30, projectile: true });
         if (res === 'blocked' || res === 'guardBroken') this.fx.sparks(a.pos.clone());
         if (res !== 'dodged') a.life = 0;
       }

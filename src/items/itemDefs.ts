@@ -7,6 +7,7 @@ import { FISH_ITEMS } from '../world/fishing';
 import { DESERT_ITEMS } from './desertItems';
 import { ARMS_ITEMS } from './armsItems';
 import { isWeaponKind } from './weapons/kinds';
+import { DUNGEON_ITEMS } from './dungeonItems';
 
 export type Slot =
   | 'main' | 'off'
@@ -433,6 +434,7 @@ export const ITEMS: Record<string, ItemDef> = {
   ...FISH_ITEMS,
   ...DESERT_ITEMS,
   ...ARMS_ITEMS,
+  ...DUNGEON_ITEMS,
 };
 
 // The four original herbs use the foraging models for their icons too.
