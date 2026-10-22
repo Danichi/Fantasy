@@ -120,6 +120,8 @@ import { registerSpecies } from './creatures/species';
 import { creatureView } from './creatures/view';
 import { GuardArc } from './ui/guardArc';
 import { Raids } from './raid/raids';
+import { FieldBosses } from './bosses/fieldBosses';
+import { GREYJAW } from './bosses/greyjaw';
 import { tickBoarFur } from './creatures/boar/visual';
 import { tickSpiderFur } from './creatures/spider/visual';
 import { updateSnare } from './creatures/spider/spider';
@@ -234,7 +236,7 @@ async function boot() {
   const capital = new RoyalCapital(r.scene, world.mats, fx);
   mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...[GREYJAW].filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -554,6 +556,7 @@ async function boot() {
             const news = rumours({ ...talkCtx(), met: true }, n.rec.settlement === 'elderGlen');
             const k = folkNews.get(n.rec.id) ?? n.seed % news.length;
             folkNews.set(n.rec.id, k + 1);
+            bosses.heard(news[k % news.length]);
             show(news[k % news.length], [{ label: 'Anything else?', run: () => folkTalk.action() }, { label: 'Farewell.', run: () => dialogue.close() }]);
           },
         },
@@ -614,6 +617,7 @@ async function boot() {
     hour: time.hour, rain: weather.p.rain > 0.4, done: (id: string) => quests.isDone(id), active: (id: string) => quests.isActive(id),
     learned: (id: string) => player.paths.learned(id), activeClass: player.paths.active, level: player.prog.level,
     raid: raids.save.last !== undefined && (raids.save.lastSite ?? 'glen') === 'glen' ? { ago: time.day - raids.save.last, won: !!raids.save.lastWon, lost: raids.save.lastLost ?? 0, gloam: raids.save.lastKind === 'gloam', defended: raids.save.defended ?? 0 } : null,
+    bossNews: bosses.rumours(),
   });
   town.talkCtx = talkCtx;
   const folkNews = new Map<string, number>();
@@ -1117,6 +1121,20 @@ async function boot() {
     mark: (m) => (questUI.urgent = m),
   }, farm.ranges, { flock: kingsRoad.flock, paddock: kingsRoad.paddock });
   raids.fromJSON(saveData?.world?.raids);
+  // ---- Field bosses (bosses/fieldBosses.ts): named beasts with territories and bounties ----
+  const bosses = new FieldBosses({
+    scene: r.scene, fx,
+    toast: (m) => hud.toast(m),
+    give: (id, n) => giveItem(id, n),
+    addGold: (n) => player.prog.addGold(n),
+    bossBar: (t, name) => hud.bossBar(t, name),
+    outdoors: () => realm.mode === 'overworld' && !realm.interior,
+  });
+  bosses.add(GREYJAW);
+  bosses.fromJSON(saveData?.world?.bosses);
+  if (TEST_MODE) bosses.enabled = false;
+  town.guild.bounties = () => bosses.bounties();
+  town.guild.onBounty = (id) => bosses.hear(id);
   let shutters = 1;
   if (TEST_MODE) raids.auto = false;
   // The Seamanship calling (N): the sea's skill tree.
@@ -1191,6 +1209,7 @@ async function boot() {
   const discovery = new Discovery();
   if (saveData) discovery.fromJSON(saveData.world?.discovery);
   const worldMap = new WorldMapUI(discovery);
+  worldMap.bossMarkers = () => bosses.markers();
   // The sea's marks: your ships, wrecks, lit lighthouses, storms, sea routes and currents.
   worldMap.seaMarkers = () => sailing.seaMarkers();
   worldMap.seaLines = () => sailing.seaLines();
@@ -1325,7 +1344,7 @@ async function boot() {
     if (TEST_MODE && !location.search.includes('save')) return;
     const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   // Guild contracts show in the quest log (tracker, journal, map, waypoint).
@@ -1536,6 +1555,7 @@ async function boot() {
       population.update(STEP, player, time.hour, time.day);
       raids.update(STEP, player, time.hour, time.day);
       raids.tail(STEP, player);
+      bosses.update(STEP, player, time.hour, time.day);
       npcs.raidOn = raids.hidingSettlement;
       frontier.update(STEP);
       encounters.update(STEP, time.hour, weather.p.rain);
@@ -1776,6 +1796,9 @@ async function boot() {
       player.vehicle = null;
       population.clear();
       raids.clear();
+      raids.fromJSON({});
+      bosses.clear();
+      bosses.fromJSON({});
       if (realm.mode === 'dungeon') await realm.leave();
       if (realm.mode === 'interior') await realm.leaveInterior();
       slimes.clear();
@@ -1793,6 +1816,7 @@ async function boot() {
       guildContracts.restore();
       applySave(player, structuredClone(fresh));
       player.respawn(spawn.clone());
+      player.invulnerable = false;
       skillRt.reset();
       time.day = startDay;
       time.skipTo(startHour);
@@ -1803,7 +1827,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, population, raids, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, population, raids, bosses, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       origins, creator, // ---- Origins (feat/origins) ----

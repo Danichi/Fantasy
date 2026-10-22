@@ -273,6 +273,10 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'watchBanner', name: "Watch's Banner", kind: 'accessory', slot: 'trinket', rarity: 'rare',
     desc: "A strip of Elder Glen's watch colours, blue and frayed, given to those who stood with the watch on the night of a raid. The watch fights harder beside whoever wears it.", stats: { maxHp: 25, poise: 10 },
   },
+  greyjawFang: {
+    id: 'greyjawFang', name: "Greyjaw's Fang", kind: 'accessory', slot: 'trinket', rarity: 'epic',
+    desc: "One of Old Greyjaw's fangs, yellow and as long as your finger, on a leather thong. He hunted the north woods for longer than anyone can remember. Wear it and you hunt as he did: hard, and without tiring.", stats: { damagePct: 0.08, staminaRegen: 0.2, maxHp: 15 },
+  },
   warlordTusk: {
     id: 'warlordTusk', name: "Warlord's Tusk", kind: 'accessory', slot: 'trinket', rarity: 'epic',
     desc: "Grukk's broken tusk on a cord of braided sinew. Wearing it makes your blows land heavier.", stats: { damagePct: 0.12, maxHp: 20 },

@@ -18,6 +18,8 @@ export interface TalkCtx {
   met: boolean;
   /** today's date, and the last night raid (days since, beaten back, animals lost), if any */
   raid?: { ago: number; won: boolean; lost: number; gloam: boolean; defended: number } | null;
+  /** field bosses: what folk are saying about the beasts out there */
+  bossNews?: string[];
 }
 
 type When = (c: TalkCtx) => boolean;
@@ -217,6 +219,7 @@ export function rumours(c: TalkCtx, inGlen = true): string[] {
     if (c.raid.gloam) out.push(c.raid.won ? 'Did you see the light past the pens last night? Like the night itself tore open. Black wolves came out of it. The watch says you drove them back in.' : 'Something tore the night open past the pens last night, and black wolves came out of it. Brannoc won\'t talk about it. That frightens me more than the wolves.');
     else out.push(c.raid.won ? 'Wolves at the pens last night! The horn woke the whole village. They say you were out there with the watch. Well done.' : `Wolves got at the pens last night${c.raid.lost ? `, ${c.raid.lost} ${c.raid.lost === 1 ? 'animal' : 'animals'} lost` : ''}. Old Bren is bandaged to the elbow from trying to drive them off with a pitchfork.`);
   }
+  if (c.bossNews) out.push(...c.bossNews);
   if (inGlen) {
     if (!c.done('mq-crypt')) out.push('There\'ve been lights up at the old crypt on the hill, north of here. Shepherds won\'t take the flocks past it any more. Orcs, they say.');
     if (c.done('mq-crypt') && !c.done('mq-gravewood')) out.push('The Gravewood, south-west, has gone wrong. Folk heard bells there, and there\'s no bell in it. Magus Orren looks like he hasn\'t slept.');

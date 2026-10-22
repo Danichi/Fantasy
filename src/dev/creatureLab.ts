@@ -10,6 +10,8 @@ import { BatVisual, tickBatFur } from '../creatures/bat/visual';
 import { batGeometry } from '../creatures/bat/model';
 import { WolfVisual, tickWolfFur, type WolfLook } from '../creatures/wolf/visual';
 import { wolfGeometry } from '../creatures/wolf/model';
+import { greyjawGeometry } from '../creatures/wolf/greyjaw';
+import { greyjawDark } from '../creatures/wolf/visual';
 
 // Dev page: a creature under the game's lighting, seen from several angles in
 // one frame, for quick visual iteration.
@@ -62,15 +64,17 @@ scene.add(ground);
 
 const t0 = performance.now();
 const kind = P.get('c') ?? 'boar';
-const geo = kind === 'wolf' ? wolfGeometry() : kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
+const geo = kind === 'greyjaw' ? greyjawGeometry() : kind === 'wolf' ? wolfGeometry() : kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
 type Look = { root: THREE.Group; gait: { reset: (r: THREE.Object3D, g: (x: number, z: number) => number) => void }; setPose: (p: never) => void; update: (dt: number, v: THREE.Vector3, g: (x: number, z: number) => number) => void; lod: (d: number, fur: boolean) => void };
 const batLook = (): Look => {
   const v = new BatVisual({ scale: Number(P.get('scale') ?? 2.5) });
   v.root.position.y = 0.6;
   return { root: v.root, gait: { reset: () => {} }, setPose: (p: never) => v.setPose(p), update: (dt) => v.update(dt, 0, 0), lod: (d, f) => v.lod(d, f) };
 };
-const boar: Look = kind === 'wolf' ? new WolfVisual({ look: (P.get('look') ?? 'grey') as WolfLook }) : kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
+const boar: Look = kind === 'greyjaw' ? new WolfVisual({ look: 'greyjaw', geometry: greyjawGeometry() }) : kind === 'wolf' ? new WolfVisual({ look: (P.get('look') ?? 'grey') as WolfLook }) : kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
 scene.add(boar.root);
+if (P.get('dark')) greyjawDark(Number(P.get('dark')));
+if (P.get('air')) (boar as unknown as { airborne: boolean }).airborne = true;
 boar.setPose((P.get('pose') ?? 'idle') as never);
 const vel = new THREE.Vector3();
 const speed = Number(P.get('speed') ?? 0);
@@ -113,6 +117,9 @@ const VIEWS: Record<string, View> = {
   top: { name: 'top', from: [0.6, 3.2, 0.2], at: [0, 0.5, 0.05], fov: 32 },
   flank: { name: 'flank', from: [1.1, 0.95, 0.1], at: [0.1, 0.75, 0.05], fov: 30 },
   crest: { name: 'crest', from: [0.9, 1.3, 0.5], at: [0, 0.9, 0.15], fov: 30 },
+  hl: { name: 'head left', from: [0.42, 0.93, 1.02], at: [0, 0.88, 0.74], fov: 30 },
+  hr: { name: 'head right', from: [-0.42, 0.93, 1.02], at: [0, 0.88, 0.74], fov: 30 },
+  hf: { name: 'head front', from: [0.0, 0.95, 1.25], at: [0, 0.87, 0.74], fov: 26 },
   whead: { name: 'wolf head', from: [0.6, 0.98, 1.35], at: [0, 0.86, 0.72], fov: 30 },
   abdo: { name: 'abdomen', from: [0.9, 1.15, -1.25], at: [0, 0.6, -0.5], fov: 30 },
   low: { name: 'low', from: [1.4, 0.25, 1.8], at: [0, 0.5, 0.1], fov: 34 },

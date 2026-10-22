@@ -14,7 +14,7 @@ export interface MapMarker {
   x: number;
   z: number;
   /** quest: an objective; offer: someone with a quest for you; pin: your own */
-  kind: 'quest' | 'offer' | 'pin';
+  kind: 'quest' | 'offer' | 'pin' | 'boss' | 'bossRumour' | 'bossSlain';
   label?: string;
   /** the tracked quest's objective (drawn larger, with a ring) */
   tracked?: boolean;
@@ -24,6 +24,10 @@ const MARK_STYLE: Record<MapMarker['kind'], { glyph: string; color: string }> = 
   quest: { glyph: '❗', color: '#ffd76a' },
   offer: { glyph: '!', color: '#ffe9a8' },
   pin: { glyph: '⚑', color: '#ff7ad9' },
+  // Field bosses: seen, only heard of, and slain this week.
+  boss: { glyph: '✪', color: '#ff5a44' },
+  bossRumour: { glyph: '?', color: '#ff8a6a' },
+  bossSlain: { glyph: '✕', color: '#b8aa98' },
 };
 
 const KIND_ICON: Record<string, { color: string; glyph: string }> = {
@@ -55,6 +59,8 @@ export class WorldMapUI {
   seaMarkers: () => { x: number; z: number; kind: string; label?: string }[] = () => [];
   seaLines: () => { pts: [number, number][]; kind: 'route' | 'current' }[] = () => [];
   pins: MapMarker[] = [];
+  /** Field bosses (fieldBosses.ts). */
+  bossMarkers: () => MapMarker[] = () => [];
   private el: HTMLDivElement;
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -94,6 +100,7 @@ export class WorldMapUI {
           <div><i style="color:#ffd76a">★</i> Capital</div>
           <div><i style="color:#ff8a7a">☠</i> Dungeon</div>
           <div><i style="color:#b9f0c8">◆</i> Point of Interest</div>
+          <div><i style="color:#ff5a44">✪</i> Field Boss</div>
           <div><i style="color:#8fd3ff">⚓</i> Port</div>
           <div><i class="lg-road"></i> Road</div>
           <div><i class="lg-sea"></i> Sea Route</div>
@@ -360,7 +367,7 @@ export class WorldMapUI {
       }
     }
     // Quest objectives, quest givers and pins (the tracked objective on top, ringed).
-    const marks = [...this.questMarkers(), ...this.pins].sort((a, b) => Number(!!a.tracked) - Number(!!b.tracked));
+    const marks = [...this.bossMarkers(), ...this.questMarkers(), ...this.pins].sort((a, b) => Number(!!a.tracked) - Number(!!b.tracked));
     const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 280);
     for (const m of marks) {
       const p = this.mapToScreen(m.x / 14.8 + 620, m.z / 14.8 + 445);
@@ -383,6 +390,14 @@ export class WorldMapUI {
       g.lineWidth = 3;
       g.strokeText(st.glyph, p.x, p.y + (m.kind === 'offer' ? 5 : 6));
       g.fillText(st.glyph, p.x, p.y + (m.kind === 'offer' ? 5 : 6));
+      const bossy = m.kind === 'boss' || m.kind === 'bossRumour' || m.kind === 'bossSlain';
+      if (bossy && m.label && this.zoom > 1.6 && !m.tracked) {
+        g.font = 'italic 600 11px Inter, sans-serif';
+        g.lineWidth = 3;
+        g.strokeText(m.label, p.x, p.y + 22);
+        g.fillStyle = '#ffd8c8';
+        g.fillText(m.label, p.x, p.y + 22);
+      }
       if (m.tracked && m.label) {
         g.font = '600 12px Inter, sans-serif';
         g.lineWidth = 4;

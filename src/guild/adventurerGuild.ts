@@ -55,7 +55,7 @@ const RANK_COLORS: Record<GuildRank, string> = {
   SSS: '#c08af0',
 };
 
-interface QuestTemplate {
+export interface QuestTemplate {
   id: string;
   title: string;
   description: string;
@@ -149,6 +149,9 @@ export class AdventurerGuild {
   private rank: GuildRank = 'D';
   onToggle?: (open: boolean) => void;
   onSave?: () => void;
+  /** field boss bounties on offer (fieldBosses.ts); taking one marks the beast on your map */
+  bounties?: () => (QuestTemplate & { bossId: string })[];
+  onBounty?: (bossId: string) => void;
   /** contracts taken, finished or dropped (the quest log mirrors them) */
   onContract?: (q: GuildQuest, what: 'accepted' | 'completed' | 'abandoned') => void;
   openState = false;
@@ -255,11 +258,24 @@ export class AdventurerGuild {
     this.onContract?.(q, 'accepted');
   }
 
+  /** Take a bounty off the board (it counts as one of your four contracts). */
+  acceptBounty(templateId: string) {
+    const t = this.bounties?.().find((b) => b.id === templateId);
+    if (!t || this.active.length >= 4 || this.active.some((q) => q.templateId === templateId) || t.minRank > rankIndex(this.rank)) return false;
+    const q = this.makeQuest(t);
+    this.active.push(q);
+    this.onBounty?.(t.bossId);
+    this.onSave?.();
+    this.render();
+    this.onContract?.(q, 'accepted');
+    return true;
+  }
+
   abandon(id: string) {
     const i = this.active.findIndex((q) => q.id === id);
     if (i < 0) return;
     const [q] = this.active.splice(i, 1);
-    this.available.push(q);
+    if (!q.templateId.startsWith('bounty:')) this.available.push(q);
     this.onSave?.();
     this.render();
     this.onContract?.(q, 'abandoned');
@@ -370,7 +386,12 @@ export class AdventurerGuild {
     const board = this.available.map((q) =>
       '<article class="guild-quest"><div class="quest-top"><span class="quest-rank">RANK ' + RANKS[q.minRank].name.toUpperCase() + '</span><h3>' + q.title + '</h3></div><p>' + q.description + '</p><b class="quest-progress">' + progressText(q) + '</b><div class="quest-reward">+' + q.rewardGold + ' gold · +' + q.rewardXp + ' XP · +' + q.rewardRep + ' rep</div><button data-accept="' + q.id + '" ' + (this.active.length >= 4 || !this.canOffer(q) ? 'disabled' : '') + '>ACCEPT CONTRACT</button></article>',
     ).join('');
-    this.boardEl.innerHTML = '<section class="guild-section"><h2>ACTIVE CONTRACTS <span>' + this.active.length + ' / 4</span></h2>' + (active ? '<div class="guild-grid">' + active + '</div>' : '<p class="guild-empty">No active contracts. Take a job from the board.</p>') + '</section><section class="guild-section"><h2>AVAILABLE CONTRACTS</h2><div class="guild-grid">' + board + '</div></section>';
+    const offered = (this.bounties?.() ?? []).filter((b) => !this.active.some((q) => q.templateId === b.id));
+    const bounties = offered.map((b) =>
+      '<article class="guild-quest bounty"><div class="quest-top"><span class="quest-rank">BOUNTY · RANK ' + RANKS[b.minRank].name + '</span><h3>' + b.title + '</h3></div><p>' + b.description + '</p><b class="quest-progress">Wanted: ' + b.targetName + '</b><div class="quest-reward">+' + b.rewardGold + ' gold · +' + b.rewardXp + ' XP · +' + b.rewardRep + ' rep</div><button data-bounty="' + b.id + '" ' + (this.active.length >= 4 || b.minRank > rankIndex(this.rank) ? 'disabled' : '') + '>TAKE THE BOUNTY</button></article>',
+    ).join('');
+    this.boardEl.innerHTML = '<section class="guild-section"><h2>ACTIVE CONTRACTS <span>' + this.active.length + ' / 4</span></h2>' + (active ? '<div class="guild-grid">' + active + '</div>' : '<p class="guild-empty">No active contracts. Take a job from the board.</p>') + '</section>' + (bounties ? '<section class="guild-section"><h2>BOUNTIES</h2><div class="guild-grid">' + bounties + '</div></section>' : '') + '<section class="guild-section"><h2>AVAILABLE CONTRACTS</h2><div class="guild-grid">' + board + '</div></section>';
+    this.boardEl.querySelectorAll<HTMLButtonElement>('[data-bounty]').forEach((b) => b.addEventListener('click', () => this.acceptBounty(b.dataset.bounty!)));
     this.boardEl.querySelectorAll<HTMLButtonElement>('[data-accept]').forEach((b) => b.addEventListener('click', () => this.accept(b.dataset.accept!)));
     this.boardEl.querySelectorAll<HTMLButtonElement>('[data-abandon]').forEach((b) => b.addEventListener('click', () => this.abandon(b.dataset.abandon!)));
   }

@@ -16,6 +16,9 @@ export interface GameEvents {
   /** a night raid: the horn sounded / it was beaten back or ran its course */
   raidStarted: { kind: string; front: string };
   raidEnded: { kind: string; won: boolean; lost: number };
+  /** field bosses: first seen, and killed */
+  bossFound: { id: string };
+  bossSlain: { id: string; first: boolean };
   /** a creature den (boar wallow, spider hollow, bat roost) was emptied */
   denCleared: { id: string; species: string };
   swing: { heavy: boolean };

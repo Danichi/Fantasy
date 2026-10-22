@@ -32,12 +32,17 @@ export class Pack {
   /** the pack has lost its nerve (leader dead) */
   broken = false;
   howled = false;
+  /** most wolves biting the player at once */
+  maxBiting = 2;
+  /** something bigger the pack runs with (Old Greyjaw): they keep near it */
+  follow: { position: THREE.Vector3; alive: boolean } | null = null;
 }
 
 const NAMES: Record<WolfLook, [string, string]> = {
   grey: ['Grey Wolf', 'Pack Leader'],
   leader: ['Grey Wolf', 'Pack Leader'],
   gloam: ['Gloam Wolf', 'Gloam Alpha'],
+  greyjaw: ['Old Greyjaw', 'Old Greyjaw'],
 };
 
 export class Wolf extends Creature {
@@ -80,6 +85,16 @@ export class Wolf extends Creature {
   /** Running for it (out of the fight). */
   get fleeing() {
     return this.mode === 'flee';
+  }
+
+  /** Turn on a foe now (a boss calls its pack in). */
+  rally(foe: Foe) {
+    this.foe = foe;
+    if (this.mode === 'roam' || this.mode === 'raid') this.setMode('stalk', 0.8 + Math.random());
+  }
+  /** Lose its nerve and run. */
+  panic() {
+    if (this.alive) this.setMode('flee', 8);
   }
 
   /** Join a raid: lope for the objective, turning on whatever is in reach. */
@@ -169,8 +184,11 @@ export class Wolf extends Creature {
       case 'roam': {
         // Follow the leader in a loose file; the leader picks the way.
         const lead = this.pack.leader;
+        const big = this.pack.follow;
         let target: THREE.Vector3;
-        if (lead && lead !== this && lead.alive) {
+        if (big && big.alive) {
+          target = big.position.clone().add(new THREE.Vector3(Math.cos(this.slot) * 5, 0, Math.sin(this.slot) * 5));
+        } else if (lead && lead !== this && lead.alive) {
           target = lead.position.clone().add(new THREE.Vector3(Math.cos(this.slot) * 3, 0, Math.sin(this.slot) * 3));
         } else {
           if (!this.wander || this.wander.distanceTo(this.position) < 1.5 || this.bumped) {
@@ -225,7 +243,7 @@ export class Wolf extends Creature {
           sfx.growl(this.volume() * 0.7);
         }
         // My turn? Never more than two biting at once.
-        const limit = foe.kind === 'player' ? 2 : 1;
+        const limit = foe.kind === 'player' ? this.pack.maxBiting : 1;
         if (this.biteCd <= 0 && this.pack.biting < limit && dist < 8 && this.modeT > 0.6) {
           this.setMode('snarl', this.isLeader ? 0.5 : 0.38);
           this.pack.biting++;

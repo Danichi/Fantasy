@@ -36,6 +36,8 @@ export interface WorldSave {
   forage?: Record<string, number>;
   /** night raids: the last one, how many beaten back */
   raids?: import('./raid/raids').RaidSave;
+  /** field bosses: found, heard of, last slain */
+  bosses?: Record<string, import('./bosses/fieldBosses').BossState>;
   /** cleared creature dens (id -> game day) until they fill again */
   wilds?: { dens?: Record<string, number> };
   /** owned horses and where the active one stands */

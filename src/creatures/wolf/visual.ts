@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WOLF_RIG, wolfGeometry } from './model';
+import { WOLF_RIG, wolfGeometry, type WolfGeometry } from './model';
 import { eyeMaterial, hardMaterial, skinMaterial } from '../kit/materials';
 import { Gait } from '../kit/gait';
 import { tuftMaterial } from '../kit/tufts';
@@ -13,8 +13,8 @@ import { tuftMaterial } from '../kit/tufts';
 // a wolf come through from the Dark: near-black, its fur tips smouldering
 // violet and its eyes lit.
 
-export type WolfPose = 'idle' | 'stalk' | 'alert' | 'snarl' | 'lunge' | 'howl' | 'hurt' | 'dead';
-export type WolfLook = 'grey' | 'leader' | 'gloam';
+export type WolfPose = 'idle' | 'stalk' | 'alert' | 'snarl' | 'lunge' | 'howl' | 'hurt' | 'pounce' | 'dead';
+export type WolfLook = 'grey' | 'leader' | 'gloam' | 'greyjaw';
 
 interface Mats {
   skin: THREE.MeshPhysicalMaterial;
@@ -24,6 +24,7 @@ interface Mats {
 const mats = new Map<WolfLook, Mats>();
 let teeth: THREE.MeshPhysicalMaterial | null = null;
 let pupil: THREE.MeshPhysicalMaterial | null = null;
+let milky: THREE.MeshPhysicalMaterial | null = null;
 const coats: ReturnType<typeof tuftMaterial>[] = [];
 
 function matsFor(look: WolfLook): Mats {
@@ -31,7 +32,7 @@ function matsFor(look: WolfLook): Mats {
   if (m) return m;
   const skin = skinMaterial({ relief: 1.0, strand: 130, drift: 0.12, rough: 0.86, wetRough: 0.25, sheen: 0.4, sheenColor: 0xc8bca8 });
   const coat = tuftMaterial({ sheen: 0.5, sheenColor: look === 'gloam' ? 0x8a6ab8 : 0xd0c4ae, tipGlow: look === 'gloam' ? 0x22104a : 0x000000 });
-  const eye = eyeMaterial(look === 'gloam' ? 0x0c0612 : 0xc88a1c);
+  const eye = eyeMaterial(look === 'gloam' ? 0x0c0612 : look === 'greyjaw' ? 0xd89a22 : 0xc88a1c);
   if (look === 'leader') {
     skin.color.set(0x7c7a80);
     coat.mat.color.set(0x76747a);
@@ -41,6 +42,11 @@ function matsFor(look: WolfLook): Mats {
     coat.mat.color.set(0x1e1b24);
     eye.emissive.set(0xb070ff);
     eye.emissiveIntensity = 2.2;
+  } else if (look === 'greyjaw') {
+    // Old Greyjaw: his coat is painted near-white already; a cold sheen, a fierce gold eye.
+    coat.mat.sheenColor.set(0xcfc6b4);
+    eye.emissive.set(0x5a3000);
+    eye.emissiveIntensity = 0.8;
   } else {
     eye.emissive.set(0x2a1600);
     eye.emissiveIntensity = 0.4;
@@ -49,6 +55,15 @@ function matsFor(look: WolfLook): Mats {
   mats.set(look, m);
   coats.push(coat);
   return m;
+}
+/** Old Greyjaw's coat smoulders when the Dark wakes in him (0..1). */
+export function greyjawDark(k: number) {
+  const m = mats.get('greyjaw');
+  if (!m) return;
+  m.coat.glow.value.setRGB(0.09 * k, 0.025 * k, 0.2 * k);
+  m.skin.emissive.setRGB(0.012 * k, 0.0, 0.03 * k);
+  m.eye.emissive.setRGB(0.35 + 0.4 * k, 0.19 - 0.1 * k, 0.6 * k);
+  m.eye.emissiveIntensity = 0.8 + 1.6 * k;
 }
 export function tickWolfFur(dt: number) {
   for (const c of coats) c.time.value += dt;
@@ -79,8 +94,11 @@ export class WolfVisual {
   private deadT = 0;
   private side = Math.random() < 0.5 ? 1 : -1;
 
-  constructor(opts: { scale?: number; look?: WolfLook } = {}) {
-    const g = wolfGeometry();
+  /** in the air (a pounce): the legs reach out instead of walking */
+  airborne = false;
+
+  constructor(opts: { scale?: number; look?: WolfLook; geometry?: WolfGeometry & { blind?: THREE.BufferGeometry } } = {}) {
+    const g: WolfGeometry & { blind?: THREE.BufferGeometry } = opts.geometry ?? wolfGeometry();
     this.look = opts.look ?? 'grey';
     const M = matsFor(this.look);
     teeth ??= hardMaterial(0xffffff, { vertexColors: true, rough: 0.35, clearcoat: 0.5 });
@@ -104,6 +122,15 @@ export class WolfVisual {
     this.coat = mk(g.coat, M.coat.mat);
     this.coat.castShadow = true;
     this.details.push(mk(g.teeth, teeth), mk(g.eyes, M.eye), mk(g.pupils, pupil));
+    if (g.blind) {
+      milky ??= (() => {
+        const m = eyeMaterial(0xb8c8cc);
+        m.roughness = 0.35;
+        m.transmission = 0;
+        return m;
+      })();
+      this.details.push(mk(g.blind, milky));
+    }
     const sc = opts.scale ?? 1;
     this.root.scale.setScalar(sc);
     this.gait = new Gait(this.bones, [
@@ -150,7 +177,7 @@ export class WolfVisual {
     const pitch = Math.atan2(front - hind, 0.8 * sc);
     const phase = g.phase * Math.PI * 2;
     const run = THREE.MathUtils.smoothstep(speed, 3, 6);
-    const crouch = this.pose === 'stalk' ? 1 : this.pose === 'snarl' ? 0.55 : this.pose === 'lunge' ? 0.2 : 0;
+    const crouch = this.pose === 'stalk' ? 1 : this.pose === 'snarl' ? 0.55 : this.pose === 'lunge' ? 0.2 : this.pose === 'pounce' && !this.airborne ? 1.3 : 0;
     this.crouch += (crouch - this.crouch) * k(6);
     const bob = speed > 0.1 ? Math.abs(Math.sin(phase * (run > 0.5 ? 1 : 2))) * (0.01 + run * 0.03) : 0;
     const breathe = Math.sin(t * (speed > 3 || this.pose === 'snarl' ? 7 : 2.2));
@@ -180,6 +207,16 @@ export class WolfVisual {
         jaw = 0.55 * open * (1 - shut);
         break;
       }
+      case 'pounce':
+        // Gathering: haunches down, head low and still. In the air: stretched long, jaws wide.
+        if (this.airborne) {
+          hp = -0.1; ears = -1; tail = 0.5;
+          jaw = 0.5;
+        } else {
+          hp = 0.35; ears = -1; tail = -0.1;
+          jaw = 0.22 + Math.sin(t * 26) * 0.03;
+        }
+        break;
       case 'howl': {
         // Muzzle to the sky.
         const up = THREE.MathUtils.smoothstep(pt, 0, 0.5) * (1 - THREE.MathUtils.smoothstep(pt, 2.6, 3.1));
@@ -230,7 +267,18 @@ export class WolfVisual {
     b.tail4.rotation.set(0, sway, 0);
 
     this.root.updateMatrixWorld(true);
-    g.grounded = true;
+    // A pounce: forelegs reach for the prey, hind legs trail.
+    for (let i = 0; i < 4; i++) {
+      if (!this.airborne) {
+        g.override[i] = null;
+        continue;
+      }
+      const s = i % 2 === 0 ? 1 : -1, fr = i < 2;
+      const v = (g.override[i] as THREE.Vector3 | null) ?? new THREE.Vector3();
+      g.override[i] = v.set(s * 0.09, fr ? 0.26 : 0.52, fr ? 0.7 : -1.08).applyMatrix4(this.root.matrixWorld);
+    }
+    g.overrideRate = this.airborne ? 18 : 10;
+    g.grounded = !this.airborne;
     g.update(dt, this.root, vel, groundAt);
   }
 

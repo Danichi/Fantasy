@@ -144,6 +144,34 @@ function paintAccessory(def: ItemDef) {
     g.beginPath();
     g.arc(62, 48, 9, 0, Math.PI * 2);
     g.fill();
+  } else if (def.id === 'greyjawFang') {
+    // A long yellowed fang on a leather thong, a tuft of grey fur at the root.
+    g.strokeStyle = '#5a3b22';
+    g.lineWidth = 5;
+    g.beginPath();
+    g.moveTo(22, 22);
+    g.quadraticCurveTo(m, 50, 106, 22);
+    g.stroke();
+    const gr = g.createLinearGradient(m - 14, 40, m + 14, 116);
+    gr.addColorStop(0, '#f2ead2');
+    gr.addColorStop(0.6, '#d8c48e');
+    gr.addColorStop(1, '#9a7a3e');
+    g.fillStyle = gr;
+    g.beginPath();
+    g.moveTo(m - 15, 44);
+    g.quadraticCurveTo(m - 16, 86, m + 6, 118);
+    g.quadraticCurveTo(m + 2, 84, m + 15, 46);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = 'rgba(90,60,30,0.5)';
+    g.lineWidth = 2;
+    g.stroke();
+    g.fillStyle = '#9a968c';
+    for (let i = 0; i < 9; i++) {
+      g.beginPath();
+      g.ellipse(m - 12 + i * 3, 42 + (i % 2) * 3, 4, 9, (i - 4) * 0.2, 0, Math.PI * 2);
+      g.fill();
+    }
   } else if (def.id === 'warlordTusk') {
     // A curved tusk on a cord, set in gold.
     g.fillStyle = '#c9a24a';

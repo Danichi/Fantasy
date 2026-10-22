@@ -162,7 +162,8 @@ export abstract class Creature implements Target {
     this.col.setTranslation(next);
     this.position.set(next.x, next.y - (this.halfHeight + this.radius), next.z);
     this.grounded = this.kcc.computedGrounded();
-    if (this.grounded && !flies) this.vel.y = Math.min(0, this.vel.y);
+    // On the ground: no rising, and no falling speed building up underfoot.
+    if (this.grounded && !flies) this.vel.y = Math.max(-1, Math.min(0, this.vel.y));
     // Never sink below the terrain (the controller can miss thin seams); fliers keep their height.
     const gy = this.groundAt(this.position.x, this.position.z);
     if (flies && this.position.y < gy + this.minAltitude) this.vel.y = Math.max(this.vel.y, (gy + this.minAltitude - this.position.y) * 6);
