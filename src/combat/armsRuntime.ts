@@ -64,6 +64,14 @@ export class ArmsRuntime {
     p.poseHook = (pose, act, at) => this.pose(pose, act, at);
     p.hyperArmour = () => this.hyperArmour();
     p.weaponGuard = () => this.weaponGuard();
+    // A dagger's thrust lands on what is right in front of you, even when the short blade's sweep slips past it.
+    p.hitAssist = (t) => {
+      const f = this.family;
+      if (f?.id !== 'dagger') return false;
+      const to = t.center.clone().sub(p.center).setY(0);
+      if (to.length() - t.radius > f.reach) return false;
+      return to.normalize().dot(p.forward) > 0.6;
+    };
     // Blade-hit bonuses stack with the skill runtime's (brands, forced crits).
     const prev = p.meleeBonus;
     p.meleeBonus = (t) => {
@@ -216,9 +224,10 @@ export class ArmsRuntime {
     if (bleed > 0 && t.alive) rt.bleed(t, bleed);
     if (f.id === 'mace') this.cracked.set(t.id, CRACK_TIME);
     if (gale) {
-      // The skill runtime already gave 1 Flow; adjust to the family's rate.
-      let extra = gale.flow - 1;
-      if (gale.tipFlow && t.center.distanceTo(p.center) > 2.1) extra += gale.tipFlow;
+      // Gale Style already gave this hit its Flow (a quarter, or a whole point just after a dodge); scale it to the family's rate.
+      const base = rt.cc.lastHitFlow;
+      let extra = (gale.flow - 1) * base;
+      if (gale.tipFlow && t.center.distanceTo(p.center) > 2.1) extra += gale.tipFlow * base;
       if (gale.stagger && t.alive) t.takeHit({ damage: 0, poise: (p.act?.def.hit?.poise ?? 20) * (gale.stagger - 1), dir: t.position.clone().sub(p.pos).setY(0).normalize(), at: t.center.clone(), crit: false, source: 'melee' });
       rt.flow = clamp(rt.flow + extra, 0, rt.flowMax);
     }

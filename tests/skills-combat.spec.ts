@@ -136,6 +136,7 @@ test('skills on the moves bar cost resources, animate and hurt enemies', async (
 });
 
 test('skills on the bar are saved', async ({ page }) => {
+  test.setTimeout(420_000 * Number(process.env.PW_SLOW ?? '1')); // boots the game twice
   await boot(page, '?test&save');
   await setup(page);
   await page.evaluate(async (learnSrc) => {

@@ -1,5 +1,14 @@
 # Arms and Crafting (update 2 plan)
 
+## Built (feat/arms, 2026-10)
+
+All five phases, A1 to A5: eight new weapon families with movesets and school
+adapters; bows, crossbows and staves; about 90 recipes across six stations, the
+craft page with its timing step, quality, salvage, runes, recipe books and
+discovery; Runecraft's tree and Tailoring; ore veins, windfall timber and hides
+from the hunt. Tests: `tests/arms.spec.ts`, `tests/crafting.spec.ts`. Merge notes,
+seams and what's left: [merge-notes/arms.md](merge-notes/arms.md).
+
 Status: plan, 2026-10-08. Nothing here is built yet beyond what "What exists"
 lists. It follows §5.2 to §5.4 of the World Expansion plan and the discipline
 model in `combat-paths.md`. Numbers are starting points to tune.

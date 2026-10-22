@@ -46,6 +46,8 @@ interface ActiveAction {
   landed: boolean;
   /** skill damage multiplier on this action's blade hits */
   mult: number;
+  /** action time of the last frame hits were checked on */
+  hitCheckedAt?: number;
   /** index of the next entry in def.events */
   ev: number;
 }
@@ -174,6 +176,8 @@ export class Player {
   hyperArmour?: () => boolean;
   /** a two-handed weapon held up as a guard: its block and stability (null: can't guard) */
   weaponGuard?: () => { block: number; stability: number } | null;
+  /** a hit for a target the blade's sweep missed (short-blade assist: combat/armsRuntime.ts) */
+  hitAssist?: (t: Target) => boolean;
   /** a consumable was used (meals and elixirs start their buffs) */
   onConsume?: (def: import('../items/itemDefs').ItemDef) => void;
   /** aiming a bow or crossbow: walk slowly, face where the camera looks, no melee */
@@ -1169,7 +1173,11 @@ export class Player {
     const seg = this.bladeSegment(h.hand);
     const prev = this.bladePrev[h.hand];
     this.bladePrev[h.hand] = seg;
-    if (!seg || at < h.from || at > h.to) return;
+    // Hits are checked against the drawn pose. A slow frame can jump right over a fast blade's
+    // window (a dagger's is a tenth of a second), so a frame that passes it still counts.
+    const before = a.hitCheckedAt ?? -1;
+    a.hitCheckedAt = at;
+    if (!seg || at < h.from || before > h.to) return;
     const from = prev ?? seg;
     const weapon = h.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
     const base = weapon?.def.stats.damage ?? 10;
@@ -1179,35 +1187,36 @@ export class Player {
       if (tg.center.distanceTo(this.center) > 3.6) continue;
       if (!this.reachable(tg)) continue; // the blade stops at the wall
       // Sweep between the blade's previous and current positions.
-      for (let i = 0; i <= 6; i++) {
+      let swept = false;
+      for (let i = 0; i <= 6 && !swept; i++) {
         const u = i / 6;
         b.lerpVectors(from[0], seg[0], u);
         t.lerpVectors(from[1], seg[1], u);
         const [ha, hb] = hurtSegment(tg);
-        if (segmentSegmentDistance(b, t, ha, hb) < tg.radius + 0.06) {
-          a.hitSet.add(tg.id);
-          const extra = this.meleeBonus?.(tg);
-          const ws = weapon?.def.stats ?? {};
-          const crit = tg.stunned || !!extra?.crit || Math.random() < this.mods.crit + (ws.crit ?? 0);
-          const charge = 1 + a.charge * 0.6;
-          const light = a.def.id.startsWith('slash') || a.def.id.startsWith('offslash') ? this.mods.lightAttack : 1;
-          const bonus = (1 + this.equip.bonus('damagePct')) * this.paths.meleePower(weapon?.def.stats.speed ?? 1) * this.mods.melee * light * a.mult * (extra?.mult ?? 1);
-          const dmg = Math.round(base * h.dmg * charge * bonus * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
-          const dir = tg.position.clone().sub(this.pos).setY(0).normalize();
-          const at2 = tg.center.clone().addScaledVector(dir, -tg.radius * 0.8);
-          tg.takeHit({ damage: dmg, poise: h.poise * charge * this.paths.poisePower * this.mods.poise * (ws.stagger ?? 1), dir, at: at2, crit, source: 'melee' });
-          // The weapon's own nature: fire that lingers, frost that locks, a blade that feeds you.
-          if (ws.burn && tg.alive) afflictions.burn(tg, ws.burn);
-          if (ws.frost && tg.alive && Math.random() < ws.frost) afflictions.freeze(tg);
-          if (ws.lifesteal && !this.dead) this.hp = Math.min(this.maxHp, this.hp + dmg * ws.lifesteal);
-          events.emit('enemyHit', { at: at2, amount: dmg, crit, enemyId: tg.id });
-          events.emit('meleeHit', { target: tg, amount: dmg, crit, action: a.def.id });
-          const heavy = a.def.id === 'heavy' || a.def.id === 'airAttack';
-          this.onHitStop?.(crit ? 0.16 : heavy ? 0.12 : 0.07);
-          this.onShake?.(crit ? 0.4 : heavy ? 0.3 : 0.16);
-          break;
-        }
+        swept = segmentSegmentDistance(b, t, ha, hb) < tg.radius + 0.06;
       }
+      // Short blades (the dagger) also land on whatever is right in front at the height of the thrust.
+      if (!swept && !(at >= (h.from + h.to) / 2 && this.hitAssist?.(tg))) continue;
+      a.hitSet.add(tg.id);
+      const extra = this.meleeBonus?.(tg);
+      const ws = weapon?.def.stats ?? {};
+      const crit = tg.stunned || !!extra?.crit || Math.random() < this.mods.crit + (ws.crit ?? 0);
+      const charge = 1 + a.charge * 0.6;
+      const light = a.def.id.startsWith('slash') || a.def.id.startsWith('offslash') ? this.mods.lightAttack : 1;
+      const bonus = (1 + this.equip.bonus('damagePct')) * this.paths.meleePower(weapon?.def.stats.speed ?? 1) * this.mods.melee * light * a.mult * (extra?.mult ?? 1);
+      const dmg = Math.round(base * h.dmg * charge * bonus * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
+      const dir = tg.position.clone().sub(this.pos).setY(0).normalize();
+      const at2 = tg.center.clone().addScaledVector(dir, -tg.radius * 0.8);
+      tg.takeHit({ damage: dmg, poise: h.poise * charge * this.paths.poisePower * this.mods.poise * (ws.stagger ?? 1), dir, at: at2, crit, source: 'melee' });
+      // The weapon's own nature: fire that lingers, frost that locks, a blade that feeds you.
+      if (ws.burn && tg.alive) afflictions.burn(tg, ws.burn);
+      if (ws.frost && tg.alive && Math.random() < ws.frost) afflictions.freeze(tg);
+      if (ws.lifesteal && !this.dead) this.hp = Math.min(this.maxHp, this.hp + dmg * ws.lifesteal);
+      events.emit('enemyHit', { at: at2, amount: dmg, crit, enemyId: tg.id });
+      events.emit('meleeHit', { target: tg, amount: dmg, crit, action: a.def.id });
+      const heavy = a.def.id === 'heavy' || a.def.id === 'airAttack';
+      this.onHitStop?.(crit ? 0.16 : heavy ? 0.12 : 0.07);
+      this.onShake?.(crit ? 0.4 : heavy ? 0.3 : 0.16);
     }
   }
 

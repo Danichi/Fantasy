@@ -44,6 +44,8 @@ export class CombatClasses {
   private lastDodgeProc = -99;
   /** Stillwind: parries in a row without being hit */
   calm = 0;
+  /** Flow the last Gale hit gave (weapon families scale theirs from it: crafting/armsRuntime.ts) */
+  lastHitFlow = 0;
   // ---- Cross ----
   tempo = 0;
   private lastHand: 'main' | 'off' | '' = '';
@@ -125,7 +127,8 @@ export class CombatClasses {
   onMeleeHit(t: Target, action: string) {
     const rt = this.rt;
     if (this.active === 'gale') {
-      this.addFlow(this.now - this.lastDodge < 2 ? 1 : 0.25);
+      this.lastHitFlow = this.now - this.lastDodge < 2 ? 1 : 0.25;
+      this.addFlow(this.lastHitFlow);
       if (action === 'slash3' && rt.has('updraft')) rt.hit(t, 1, { poise: 160, source: 'melee', noVerdict: true });
     }
     if (this.active === 'cross' && this.p.equip.dualWield) {
