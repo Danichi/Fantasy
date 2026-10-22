@@ -384,7 +384,7 @@ async function boot() {
   const skills = new SkillsUI(player);
   skills.runtime = skillRt;
   // ---- Arms and Crafting (feat/arms): weapon families, bows, crafting ----
-  const arms = setupArms({ scene: r.scene, player, cam, skillRt, toast: (m) => hud.toast(m) });
+  const arms = setupArms({ scene: r.scene, player, cam, skillRt, fx, toast: (m) => hud.toast(m), hours: () => gameHours(), overworld: () => realm.mode === 'overworld' && !realm.interior });
   arms.fromJSON(saveData?.world?.arms);
   const mapUI = new DungeonMapUI();
   let frontier!: FrontierRegion;
@@ -400,6 +400,7 @@ async function boot() {
       fauna.setVisible(!h);
       questUI?.setVisible(!h);
       foraging?.setVisible(!h);
+      arms.gathering.setVisible(!h); // Arms and Crafting: ore veins and timber
       horses?.setVisible(!h);
       riverLife?.setVisible(!h);
       caravans?.setVisible(!h);
@@ -947,6 +948,7 @@ async function boot() {
       },
     }]);
   }
+  realm.overworldInteractables.push(...arms.interactables); // Arms and Crafting: the port's forge, gathering
   realm.overworldInteractables.push(encounters.interactable, ...roadQuests.interactables, horses.interactable, ...roads.interactables, foraging.interactable, ...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables, ...glenMore.interactables);
 
   // ---- Buildings you can walk into ----------------------------------------------------
@@ -1149,6 +1151,15 @@ async function boot() {
     input.uiMode = open || inv.open || skills.open || mapUI.open || dialogue.open;
     if (open) input.exitLock();
     else if (!dialogue.open) input.requestLock();
+  };
+  // Arms and Crafting: the craft page at a station.
+  arms.craft.onToggle = (open) => {
+    input.uiMode = open || inv.open || skills.open || mapUI.open || dialogue.open || shopUI.open;
+    if (open) input.exitLock();
+    else if (!dialogue.open && !shopUI.open) {
+      input.requestLock();
+      save();
+    }
   };
   if (saveData) {
     realm.progress = saveData.dungeon;

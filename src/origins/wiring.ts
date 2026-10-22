@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ORE_SENSE } from '../world/gatheringNodes';
 import type { Player } from '../player/player';
 import type { Input } from '../core/input';
 import type { ThirdPersonCamera } from '../player/camera';
@@ -63,6 +64,8 @@ export function wireOrigins(w: OriginsWiring) {
         if (/\b(ore|vein|gem|crystal|mithril|star-iron)\b/i.test(l) && !/mined out/i.test(l)) ore.push(it.pos);
         else if (/secret|hidden|loose stone/i.test(l)) secrets.push(it.pos);
       }
+      // Ore veins (Arms and Crafting's gathering nodes) glint for the dwarf.
+      if (ORE_SENSE.near) ore.push(...ORE_SENSE.near(player.pos, 32));
       return { herbs, ore, secrets };
     },
     foes: () => [...targets],

@@ -1,5 +1,5 @@
 /* Arms and Crafting (feat/arms): the bow reticle, the ammo count and the buff
-   chips. The Crafting page has its own styles (ui/craft.css). */
+   chips. The craft page has its own styles (ui/craft.css). */
 
 .arms-reticle {
   --spread: 20px;

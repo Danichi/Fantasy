@@ -308,6 +308,7 @@ export const ARMS_ITEMS: Record<string, ItemDef> = {
   ashWood: mat('ashWood', 'Ash Timber', 'Pale, springy ash (tier 2): shafts, hafts and longbows.', 2, logs(0x9a9488, 0xe0cfa8)),
   yewWood: mat('yewWood', 'Yew Timber', 'Red-hearted yew (tier 3): the best bow wood there is.', 3, logs(0x6a4a3a, 0xb0502a), 'fine'),
   rawHide: mat('rawHide', 'Raw Hide', 'A skinned hide from a hunt. A tanning rack makes leather of it.', 1, sheet(0x9a7a5a, 0.95)),
+  rawMeat: mat('rawMeat', 'Raw Meat', 'Fresh game from a hunt. A cooking fire makes a meal of it; it will not keep forever.', 1, lumps(0x9a3a32)),
   drakeHide: mat('drakeHide', 'Drake Hide', 'Scaled hide from a wild drake, tough as boot-soles.', 3, sheet(0x5a6a3a, 0.7), 'fine'),
   leather: mat('leather', 'Leather', 'Tanned leather (tier 1): grips, straps, jerkins.', 1, sheet(0x8a5a32)),
   hardenedLeather: mat('hardenedLeather', 'Hardened Leather', 'Leather boiled in wax and pressed (tier 2). Stiff as wood, light as cloth.', 2, sheet(0x5a3a22, 0.6)),

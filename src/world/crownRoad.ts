@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { stationHook } from './interior';
 import { registerDoor, type Door } from './doors';
 import { buildHouse, worldUV, type WorldMats, type HouseSpec } from './buildings';
 import { heightAt } from './terrainHeight';
@@ -122,6 +123,13 @@ export function buildCrownRoad(scene: THREE.Scene, m: WorldMats, fx: FX, beasts:
   };
   const campfire = (x: number, z: number, size = 1) => {
     const y = heightAt(x, z);
+    // Anyone can cook over a camp's fire (Arms and Crafting).
+    interactables.push({
+      pos: new THREE.Vector3(x, y + 0.4, z), radius: 1.8 * size,
+      label: () => stationHook.label?.('kitchen') ?? '',
+      enabled: () => !!stationHook.use,
+      action: () => stationHook.use?.('kitchen', 'the campfire', 0),
+    });
     for (let k = 0; k < 8; k++) {
       const a = (k / 8) * Math.PI * 2;
       add(new THREE.IcosahedronGeometry(0.22 * size, 0), m.stone, x + Math.cos(a) * 0.75 * size, y + 0.1, z + Math.sin(a) * 0.75 * size);

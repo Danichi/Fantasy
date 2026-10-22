@@ -294,7 +294,7 @@ export class Town {
         this.showShop(s.name, s.title, 'Travel provisions — and seed for anyone working a plot. Plant it, water it, and it is ready in half a day.', [['healthPotion', 15], ['manaPotion', 20], ['wheatSeed', 3], ['carrotSeed', 3], ['cabbageSeed', 4], ['pumpkinSeed', 6]], { wants: BUYS.baker });
         return true;
       case 'tailor':
-        this.showShop(s.name, s.title, 'Cloaks and belts made for long expeditions.', [['wayfarerCloak', 95], ['warriorBelt', 80], ['luckyCharm', 140]], { wants: BUYS.tailor, buyRate: { armor: 0.45, accessory: 0.45, default: 0.3 } });
+        this.showShop(s.name, s.title, 'Cloaks and belts made for long expeditions.', [['wayfarerCloak', 95], ['warriorBelt', 80], ['luckyCharm', 140], ...ARMS_STOCK.tailor], { wants: BUYS.tailor, buyRate: { armor: 0.45, accessory: 0.45, default: 0.3 } });
         return true;
       case 'carpenter':
         this.showShop(s.name, s.title, 'Reliable beginner gear, built to survive rough travel.', [['shortsword', 45], ['armingSword', 60], ['roundShield', 55], ['buckler', 115], ...ARMS_STOCK.carpenter], { buyRate: { sword: 0.4, shield: 0.4, default: 0.3 } });

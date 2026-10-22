@@ -136,6 +136,13 @@ export interface Seat {
   seated: boolean;
 }
 
+/**
+ * Crafting stations inside rooms (Arms and Crafting): the smithy's forge and
+ * runestone, the apothecary's table, the tailor's and carpenter's benches, a
+ * tavern's hearth. main.ts sets `use` once; rooms only say where they are.
+ */
+export const stationHook: { use?: (kind: string, where: string, bonus: number) => void; label?: (kind: string) => string } = {};
+
 export class Interior {
   readonly group = new THREE.Group();
   readonly interactables: Interactable[] = [];
@@ -689,6 +696,43 @@ export class Interior {
     this.seats.push({ pos: this.at(x, z), yaw, seated });
   }
 
+  /** A crafting station at a furnishing (see stationHook). */
+  private station(kind: string, x: number, z: number, where: string) {
+    this.interactables.push({
+      pos: this.at(x, z, 0.4),
+      radius: 1.1,
+      label: () => stationHook.label?.(kind) ?? '',
+      enabled: () => !!stationHook.use,
+      action: () => stationHook.use?.(kind, where, 0),
+    });
+  }
+
+  /** A waist-high runestone with glowing cuts (the smithy's Runecraft station). */
+  private runestone(x: number, z: number, ry: number) {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    g.rotation.y = ry;
+    this.group.add(g);
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.15, 0.32), this.m.stone);
+    slab.position.y = 0.575;
+    slab.rotation.z = 0.04;
+    const glow = new THREE.MeshStandardMaterial({ color: 0x3a6a9a, emissive: 0x4aa8ff, emissiveIntensity: 1.4, roughness: 0.5 });
+    for (let i = 0; i < 4; i++) {
+      const cut = new THREE.Mesh(new THREE.BoxGeometry(0.06 + (i % 2) * 0.12, 0.04, 0.02), glow);
+      cut.position.set((i % 2 ? 0.08 : -0.1), 0.42 + i * 0.17, 0.165);
+      cut.rotation.z = (i - 1.5) * 0.5;
+      g.add(cut);
+    }
+    const wire = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.018, 6, 14), new THREE.MeshStandardMaterial({ color: 0xb87333, metalness: 0.8, roughness: 0.35 }));
+    wire.position.set(0.5, 0.06, 0.1);
+    wire.rotation.x = Math.PI / 2;
+    const chisel = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.22), new THREE.MeshStandardMaterial({ color: 0x55585e, metalness: 0.8, roughness: 0.4 }));
+    chisel.position.set(0.45, 0.03, -0.1);
+    slab.castShadow = slab.receiveShadow = true;
+    g.add(slab, wire, chisel);
+    this.colliders.push(physics.addBox(this.at(x, z, 0.6), new THREE.Vector3(0.36, 0.6, 0.18), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0))));
+  }
+
   private inspectProp(x: number, z: number, label: string, text: string) {
     const pos = this.at(x, z, 0.4);
     this.interactables.push({
@@ -735,14 +779,17 @@ export class Interior {
       this.bottleRack(left + 1.0, back + 1.0, 2.1);
       this.bottleRack(right - 1.0, back + 0.9, 1.8);
       for (const [x, mat] of [[-0.7, this.cloth[0]], [0, this.cloth[2]], [0.7, this.cloth[4]]] as const) this.smallProp(mat, x, 0.18, 0.3, 0.12);
+      this.station('alchemy', 1.1, back + 1.6, 'the apothecary’s table');
       this.inspectProp(0, back + 1.0, 'Inspect the apothecary table', 'Dried herbs, crushed roots and colored tinctures cover the workbench. A little brass mortar is still warm.');
     } else if (keeper === 'tailor') {
       for (const x of [-1.0, 0, 1.0]) this.box(this.cloth[Math.round((x + 1) * 2) % this.cloth.length], 0.55, 0.25, 0.55, x, 0.55, 0.4, 0.15);
       this.shelf(right - 1.0, back + 1.0, Math.PI / 2, 1.7, 'cloth');
+      this.station('loom', 1.2, 1.2, 'the tailor’s loom');
       this.inspectProp(0, 0.7, 'Inspect the cutting table', 'Pins, chalk and folded cloth cover a broad cutting table. A half-finished travel cloak hangs from a peg.');
     } else if (keeper === 'carpenter') {
       this.table(left + 1.8, back + 1.0, 2.3, 0.9, 0.08);
       for (const z of [back + 0.9, back + 1.45, back + 2.0]) this.box(this.m.timber, 0.18, 0.18, 2.6, right - 1.0, 0.25, z, 0.05);
+      this.station('workbench', left + 1.8, back + 1.85, 'the carpenter’s bench');
       this.inspectProp(0, back + 1.0, 'Inspect the carpenter’s bench', 'Fresh curls of wood cover the bench beside a square, a plane and a half-carved shield rim.');
     } else if (keeper === 'arcanist') {
       this.table(0, back + 1.5, 2.8, 1.0);
@@ -968,6 +1015,7 @@ export class Interior {
       this.keeperSpot = { pos: this.at(0.8, back + 1.8), yaw: Math.PI * 0.9, seated: false };
     } else if (kind === 'tavern') {
       this.hearth(right - 0.45, back + D * 0.35, -Math.PI / 2);
+      this.station('kitchen', right - 1.6, back + D * 0.35, 'the tavern hearth');
       // Bar along the back, barrels behind.
       const barLen = Math.min(W * 0.55, 6);
       this.counter(left + barLen / 2 + 0.6, back + 1.6, barLen, 0);
@@ -1015,6 +1063,9 @@ export class Interior {
       this.barrel(right - 0.7, back + 2.1);
       this.crate(right - 0.8, D / 2 - 1.4);
       for (const x of [-0.8, 0, 0.8]) this.box(this.m.timber, 0.12, 0.75, 0.12, x, 0.9, 0.2);
+      this.station('forge', 0, back + 1.55, 'the forge');
+      this.runestone(right - 0.8, back + 3.3, -Math.PI / 2);
+      this.station('runestone', right - 1.5, back + 3.3, 'the runestone');
       this.inspectProp(left + 1.0, 0.3, 'Inspect the forge', 'An anvil, quench barrel and unfinished blades make it clear this forge is a workplace, not a showroom.');
       this.keeperSpot = { pos: this.at(0.9, back + 2.6), yaw: -Math.PI / 2, seated: false };
     } else if (kind === 'guild') {

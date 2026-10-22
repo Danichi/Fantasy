@@ -681,7 +681,8 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
 const SEA_Y = -1.2;
 const ships: { g: THREE.Object3D; phase: number; y: number }[] = [];
 const fountainAt = new THREE.Vector3();
-const forgeAt = new THREE.Vector3();
+/** The Dwarven Quarter's open forge (a master's forge for crafting: set when the port is built). */
+export const forgeAt = new THREE.Vector3();
 let forgeLight: THREE.PointLight | null = null;
 let lighthouseBeam: THREE.Mesh | null = null;
 

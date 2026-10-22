@@ -39,13 +39,14 @@ const MINORS: Record<Family, NodeEffect[]> = {
     { text: '+4% area', m: { area: 0.04 } },
   ],
   legacy: [{ text: '+4% damage', m: { melee: 0.04 } }],
+  // Read by the crafting rules (crafting/crafter.ts) for the Calling they belong to.
   calling: [
-    { text: '+10% yield', craft: true },
-    { text: '+8% effect strength', craft: true },
-    { text: '-10% gathering time', craft: true },
-    { text: '+1 recipe slot', craft: true },
-    { text: '+6% duration', craft: true },
-    { text: '+5% rare find chance', craft: true },
+    { text: '+10% gathering yield', craft: true, x: { yield: 0.1 } },
+    { text: '+8% quality of what you make', craft: true, x: { potency: 0.08 } },
+    { text: '-10% gathering time', craft: true, x: { gather: 0.1 } },
+    { text: '+8% chance to make two', craft: true, x: { twice: 0.08 } },
+    { text: '+6% quality of what you make', craft: true, x: { potency: 0.06 } },
+    { text: '+5% rare find chance', craft: true, x: { rare: 0.05 } },
   ],
 };
 
@@ -75,7 +76,9 @@ function scale(e: NodeEffect, k: number): NodeEffect {
 function merge(a: NodeEffect, b: NodeEffect): NodeEffect {
   const m = { ...a.m };
   for (const [k, v] of Object.entries(b.m ?? {})) m[k as NumMod] = (m[k as NumMod] ?? 0) + v;
-  return { text: `${a.text} and ${b.text}`, m, x: { ...a.x, ...b.x }, craft: a.craft || b.craft };
+  const x = { ...a.x };
+  for (const [k, v] of Object.entries(b.x ?? {})) x[k] = (x[k] ?? 0) + v;
+  return { text: `${a.text} and ${b.text}`, m, x, craft: a.craft || b.craft };
 }
 
 /** Generic effect for a node without a written one. */

@@ -141,7 +141,7 @@ export const DISCIPLINES: DisciplineDef[] = [
 
   // ---- callings -----------------------------------------------------------------
   {
-    id: 'herbalism', fam: 'calling', name: 'Herbalism', color: '--c-herb', mentor: 'Old Wenna, the meadow', res: 'Herbs',
+    id: 'herbalism', fam: 'calling', name: 'Herbalism', color: '--c-herb', mentor: 'Ilyra Moss, the apothecary', mentorNpc: 'apothecary', res: 'Herbs',
     flavour: 'Every root in these hills is a sword, if you know how to boil it.', how: 'Gather herbs and brew potions, tonics and oils.',
     branches: [
       { name: 'Tonics', sub: 'Healing brews', tiers: [['Clean Cuts', 'Steady Hands'], ['*Hearthroot Draught', 'Double Batch', 'Potent'], ['*Renewal Tea', '?Quick Sip|Slow Brew', 'Bitter Gold'], ['*Lifebloom Tonic', '!Apothecary', 'Distiller'], ['Panacea', 'Rare Roots']], cap: 'Elixir of Life' },
@@ -168,7 +168,7 @@ export const DISCIPLINES: DisciplineDef[] = [
     ],
   },
   {
-    id: 'cooking', fam: 'calling', name: 'Cooking', color: '--c-fire', mentor: 'Hilde, the tavern', res: 'Pantry',
+    id: 'cooking', fam: 'calling', name: 'Cooking', color: '--c-fire', mentor: 'Mara Bell, the Wayfarer Inn', mentorNpc: 'innkeeper', res: 'Pantry',
     flavour: 'Nobody storms a crypt on an empty stomach.', how: 'Cook meals at campfires and inns.',
     branches: [
       { name: 'Feasts', sub: 'Big buffs', tiers: [['Seasoning', 'Good Knife'], ['*Hearty Stew', 'Big Pot', 'Savoury'], ["*Hunter's Feast", '?Rich|Light', 'Spice Trade'], ['*Banquet', '!Head Chef', 'Share Plate'], ['Royal Table', 'Legendary Dish']], cap: 'Feast of Heroes' },
@@ -178,7 +178,21 @@ export const DISCIPLINES: DisciplineDef[] = [
   },
   {
     id: 'runecraft', fam: 'calling', name: 'Runecraft', color: '--c-shadow', mentor: 'Master Fröst, once you can smith', mentorNpc: 'froest', requires: ['smithing', 5],
-    flavour: 'Words cut into steel.', how: 'Inscribe runes on weapons and armour.',
+    flavour: 'Words cut into steel.', how: 'Cut runes at a runestone and inscribe them on weapons and armour.',
+    branches: [
+      { name: 'Edges', sub: 'Weapon runes', tiers: [['Steady Chisel', 'Copper Lore'], ['*Rune of the Anvil', 'Deep Cuts', 'Clean Lines'], ['*Rune of the Swift', '?Bold Strokes|Fine Strokes', 'Bright Wire'], ['Twin Runes', '!Runeblade', 'Glyph Lore'], ['Star Script', 'Living Edge']], cap: 'The First Word' },
+      { name: 'Wards', sub: 'Armour runes', tiers: [['Patient Hand', 'Ward Lore'], ['*Rune of Warding', 'Layered Ward', 'Silver Inlay'], ['Ward of Thorns', '?Bulwark|Mirror Ward', 'Steady Lines'], ['Aegis Glyph', '!Wardsmith', 'Old Tongue'], ['Sunwheel Script', 'Unbroken Ward']], cap: 'Name of Shelter' },
+      { name: 'Script', sub: 'Lore and craft', tiers: [['Rubbings', 'Ink Lore'], ['Read the Stones', 'Quick Chisel', 'Copper Saver'], ['Runed Temper', '?Scholar|Artisan', 'Steady Light'], ['Glyph Memory', '!Lorekeeper', 'Elder Words'], ['Starfall Script', 'Speaking Stone']], cap: 'Speaker of Stone' },
+    ],
+  },
+  {
+    id: 'tailoring', fam: 'calling', name: 'Tailoring', color: '--c-light', mentor: 'Vela Thread, the tailor’s', mentorNpc: 'tailor', res: 'Cloth',
+    flavour: 'A good cloak has saved more lives than a good sword.', how: 'Tan hides, weave cloth and sew armour, cloaks and bags at a loom.',
+    branches: [
+      { name: 'Leather', sub: 'Jerkins and boots', tiers: [['Awl and Thread', 'Supple Hide'], ['Double Stitch', 'Waxed Thread', 'Hide Lore'], ['Tooled Leather', '?Light Leather|Sturdy Leather', "Tanner's Eye"], ['Boiled Leather', '!Leatherworker', 'Quick Hands'], ['Drakeskin', 'Second Skin']], cap: 'Wyrmhide' },
+      { name: 'Cloth', sub: 'Cloaks and gambesons', tiers: [['Spindle', 'Warp and Weft'], ['Quilting', 'Dyer', 'Fine Weave'], ['Layered Cloth', '?Warm Cloth|Light Cloth', 'Loom Sense'], ['Court Cut', '!Clothier', 'Silk Road'], ['Moonweave', 'Royal Mantle']], cap: 'Ash Silk' },
+      { name: 'Packs', sub: 'Bags and belts', tiers: [['Pockets', 'Straps'], ['Saddlebags', 'Deep Pockets', 'Buckles'], ['Quiver Maker', '?Forager|Traveller', 'Waterproof'], ['Bottomless Bag', '!Packmaster', 'Light Load'], ['Pack Mule', 'Everything Has a Place']], cap: 'Bag of Holding' },
+    ],
   },
   {
     id: 'beastbinding', fam: 'calling', name: 'Beastbinding', color: '--c-herb', mentor: 'Unknown', secret: true,

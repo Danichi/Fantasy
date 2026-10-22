@@ -283,7 +283,7 @@ export class ArmsRuntime {
       case 'push':
       case 'ward':
         rt.hit(t, w * 0.25, { poise: 90, dir, source: 'melee' });
-        if (kind === 'ward') rt.resolve = Math.min(100, rt.resolve + 6);
+        if (kind === 'ward') rt.cc.focus = Math.min(rt.cc.focusMax, rt.cc.focus + 6);
         break;
       case 'pull':
         rt.hit(t, w * 0.2, { poise: 70, dir: dir.clone().negate(), source: 'melee' });
@@ -302,7 +302,7 @@ export class ArmsRuntime {
         this.ranged.loose(Math.max(0.6, this.ranged.draw));
         break;
       case 'block':
-        rt.resolve = Math.min(100, rt.resolve + 3);
+        rt.cc.focus = Math.min(rt.cc.focusMax, rt.cc.focus + 3);
         break;
     }
     rt.vfx.ring(this.player.pos, 'steel', this.zoneRadius());
