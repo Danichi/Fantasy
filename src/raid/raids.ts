@@ -13,6 +13,7 @@ import type { Creature } from '../creatures/creature';
 import type { Player } from '../player/player';
 import type { FX } from '../fx/particles';
 import type { DefenceResult, IncomingAttack, Target } from '../combat/targets';
+import type { Look } from '../npc/charBuilder';
 
 // Night raids on Elder Glen. Some nights, once the village knows you, a horn
 // sounds from one of the gates: something is coming for the pens. The
@@ -28,16 +29,64 @@ import type { DefenceResult, IncomingAttack, Target } from '../combat/targets';
 // animals gone and people talking. Nothing that can't be mended.
 
 export type RaidKind = 'wolves' | 'gloam';
+/** Elder Glen, or one of the King's Road stops (smaller raids, wolves only) */
+export type RaidSite = 'glen' | 'millbrook' | 'rest';
 
 export interface Front {
   id: string;
+  site: RaidSite;
   /** what the raiders are after */
   pen: Range;
   penName: string;
   /** where they'd break into the village */
   gate: THREE.Vector2;
   gateName: string;
+  /** the alarm (road stops have no horn of their own) */
+  alarm?: string;
 }
+
+interface SiteDef {
+  name: string;
+  /** the middle of the settlement: raiders come from the far side of the pen */
+  center: THREE.Vector3;
+  /** NPC settlement that hides indoors (null: nobody there at night anyway) */
+  settlement: string | null;
+  /** who turns out: the first is the captain */
+  defenders: { name: string; look: Look }[];
+  waves: { n: number; leader: boolean }[];
+}
+
+const SITES: Record<RaidSite, SiteDef> = {
+  glen: {
+    name: 'Elder Glen', center: new THREE.Vector3(0, 0, -4), settlement: 'elderGlen',
+    defenders: [
+      { name: 'Captain Brannoc', look: BRANNOC_LOOK },
+      { name: 'Watchman Edric', look: WATCH_LOOKS[0] },
+      { name: 'Watchwoman Hale', look: WATCH_LOOKS[1] },
+      { name: 'Watchman Tobin', look: WATCH_LOOKS[2] },
+      { name: 'Watchman Rusk', look: WATCH_LOOKS[3] },
+    ],
+    waves: [{ n: 3, leader: false }, { n: 3, leader: false }, { n: 2, leader: true }],
+  },
+  millbrook: {
+    name: 'Millbrook', center: new THREE.Vector3(600, 0, 104), settlement: null,
+    defenders: [
+      { name: 'Old Garth', look: { body: 'male', outfit: 'ranger', hair: 'simpleparted', beard: true, hairColor: 0xb8b4ae, skin: 0xe0b894, cloth: 0x6a7f3a, hood: true, height: 1.72 } },
+      { name: 'Wenna Cole', look: { body: 'female', outfit: 'peasant', hair: 'buns', hairColor: 0x6a4428, skin: 0xe0b894, linen: 0xe8d8b8, cloth: 0x5a6a3a, height: 1.68 } },
+      { name: 'Tam Reeve', look: { body: 'male', outfit: 'peasant', hair: 'buzzed', beard: true, hairColor: 0x3a2618, skin: 0xa8744e, linen: 0xd8c8a0, cloth: 0x6a4a2a, height: 1.8 } },
+    ],
+    waves: [{ n: 2, leader: false }, { n: 2, leader: true }],
+  },
+  rest: {
+    name: "the Wayfarer's Rest", center: new THREE.Vector3(1385, 0, 92), settlement: 'wayfarersRest',
+    defenders: [
+      { name: 'Sergeant Tove', look: { body: 'female', outfit: 'ranger', hair: 'buns', hairColor: 0x3a2618, skin: 0xa8744e, cloth: 0x3a5f9e, pauldron: true, height: 1.74 } },
+      { name: 'Col Dunmore', look: { body: 'male', outfit: 'ranger', hair: 'simpleparted', beard: true, hairColor: 0x6a4428, skin: 0xe0b894, cloth: 0x7a5a3a, height: 1.82 } },
+      { name: 'Stablehand Pell', look: { body: 'male', outfit: 'peasant', hair: 'buzzed', beard: false, hairColor: 0x8a3f22, skin: 0xfff0e6, linen: 0xe8d8b8, cloth: 0x5a4a3a, height: 1.74 } },
+    ],
+    waves: [{ n: 2, leader: false }, { n: 2, leader: true }],
+  },
+};
 
 export interface RaidSave {
   /** day of the last raid, raids beaten back, banner given */
@@ -48,6 +97,10 @@ export interface RaidSave {
   lastWon?: boolean;
   lastLost?: number;
   lastKind?: RaidKind;
+  /** where the last raid fell (older saves: Elder Glen) */
+  lastSite?: RaidSite;
+  /** raids beaten back at the road stops */
+  roadDefended?: number;
 }
 
 interface Hooks {
@@ -96,8 +149,6 @@ class Stock implements Foe {
   }
 }
 
-const TOWN = new THREE.Vector3(0, 0, -4);
-
 export class Raids {
   state: 'idle' | 'warning' | 'waves' | 'done' = 'idle';
   kind: RaidKind = 'wolves';
@@ -129,14 +180,27 @@ export class Raids {
   get villageIndoors() {
     return this.state === 'warning' || this.state === 'waves';
   }
+  /** which settlement's people are hiding (NpcManager.raidOn) */
+  get hidingSettlement() {
+    return this.villageIndoors && this.front ? SITES[this.front.site].settlement : null;
+  }
+  get site(): RaidSite {
+    return this.front?.site ?? 'glen';
+  }
 
-  constructor(private h: Hooks, ranges: Record<string, Range>) {
+  constructor(private h: Hooks, ranges: Record<string, Range>, road?: { flock: Range; paddock: Range }) {
     this.fronts = [
-      { id: 'sheep', pen: ranges.sheep, penName: 'the sheep pens', gate: GATES.north, gateName: 'the north gate' },
-      { id: 'cows', pen: ranges.cows, penName: 'the cow pasture', gate: GATES.west, gateName: 'the west gate' },
-      { id: 'horses', pen: ranges.horses, penName: 'the horse paddock', gate: GATES.north, gateName: 'the north gate' },
-      { id: 'pigs', pen: ranges.pigs, penName: 'the pigsties', gate: GATES.east, gateName: 'the east gate' },
+      { id: 'sheep', site: 'glen', pen: ranges.sheep, penName: 'the sheep pens', gate: GATES.north, gateName: 'the north gate' },
+      { id: 'cows', site: 'glen', pen: ranges.cows, penName: 'the cow pasture', gate: GATES.west, gateName: 'the west gate' },
+      { id: 'horses', site: 'glen', pen: ranges.horses, penName: 'the horse paddock', gate: GATES.north, gateName: 'the north gate' },
+      { id: 'pigs', site: 'glen', pen: ranges.pigs, penName: 'the pigsties', gate: GATES.east, gateName: 'the east gate' },
     ];
+    if (road) {
+      this.fronts.push(
+        { id: 'millbrook', site: 'millbrook', pen: road.flock, penName: "Old Garth's flock", gate: new THREE.Vector2(600, 104), gateName: 'Millbrook', alarm: "The chapel bell clangs over Millbrook! Wolves are after Old Garth's flock." },
+        { id: 'rest', site: 'rest', pen: road.paddock, penName: "the Rest's paddock", gate: new THREE.Vector2(1385, 92), gateName: "the Wayfarer's Rest", alarm: "Shouting from the stables at the Wayfarer's Rest! Wolves are at the paddock." },
+      );
+    }
   }
 
   /** Living raiders (the watch fights these). */
@@ -159,8 +223,14 @@ export class Raids {
       }
       if (this.planned > 0 && this.plannedDay === day && hour >= this.planned && hour < 24) {
         this.planned = -1;
-        const kind: RaidKind = this.save.defended && this.save.defended >= 2 && seeded(day * 13) < 0.45 ? 'gloam' : 'wolves';
-        this.start(kind);
+        // Staying at a road stop tonight? That's where the wolves come.
+        const road = this.fronts.find((f) => f.site !== 'glen' && SITES[f.site].center.distanceTo(this.h.playerPos()) < 200);
+        if (road) this.start('wolves', road.id);
+        else {
+          const kind: RaidKind = this.save.defended && this.save.defended >= 2 && seeded(day * 13) < 0.45 ? 'gloam' : 'wolves';
+          const glen = this.fronts.filter((f) => f.site === 'glen');
+          this.start(kind, glen[Math.floor(seeded(day * 5 + 1) * glen.length)].id);
+        }
       }
       return;
     }
@@ -206,7 +276,11 @@ export class Raids {
     if (this.state === 'warning' || this.state === 'waves') return;
     void prepareCreature('wolf');
     this.kind = kind;
-    this.front = this.fronts.find((f) => f.id === frontId) ?? this.fronts[Math.floor(Math.random() * this.fronts.length)];
+    const glen = this.fronts.filter((f) => f.site === 'glen');
+    this.front = this.fronts.find((f) => f.id === frontId) ?? glen[Math.floor(Math.random() * glen.length)];
+    const site = SITES[this.front.site];
+    if (this.front.site !== 'glen') kind = 'wolves';
+    this.kind = kind;
     this.state = 'warning';
     this.startDay = this.today;
     this.t = 0;
@@ -218,15 +292,15 @@ export class Raids {
     this.pack = new Pack();
     const f = this.front;
     this.level = Math.max(2, zoneLevel(f.pen.center.x, f.pen.center.z) + (kind === 'gloam' ? 2 : 0));
-    this.waves = kind === 'gloam' ? [{ n: 3, leader: false }, { n: 4, leader: false }, { n: 2, leader: true }] : [{ n: 3, leader: false }, { n: 3, leader: false }, { n: 2, leader: true }];
+    this.waves = kind === 'gloam' ? [{ n: 3, leader: false }, { n: 4, leader: false }, { n: 2, leader: true }] : site.waves.map((w) => ({ ...w }));
     // Where they come from: out beyond the pen, away from the village.
-    const away = f.pen.center.clone().sub(TOWN).setY(0).normalize();
+    const away = f.pen.center.clone().sub(site.center).setY(0).normalize();
     const side = new THREE.Vector3(-away.z, 0, away.x).multiplyScalar((Math.random() - 0.5) * 30);
     this.spawnAt.copy(f.pen.center).addScaledVector(away, 70).add(side);
     this.spawnAt.y = heightAt(this.spawnAt.x, this.spawnAt.z);
     sfx.horn(0.7);
     const what = kind === 'gloam' ? 'Something is coming out of the dark' : 'Wolves are coming';
-    this.h.toast(`A horn from ${f.gateName}! ${what} for ${f.penName}.`);
+    this.h.toast(f.alarm ?? `A horn from ${f.gateName}! ${what} for ${f.penName}.`);
     this.h.mark({ x: f.pen.center.x, z: f.pen.center.z, label: `Raid: ${f.penName}` });
     // The watch turns out: they take their stand on the far side of the pen,
     // between it and the dark, coming round from the gate.
@@ -234,13 +308,13 @@ export class Raids {
     const post = f.pen.center.clone().addScaledVector(away, reach);
     post.y = heightAt(post.x, post.z);
     const sideStep = new THREE.Vector3(-away.z, 0, away.x);
-    const names = ['Captain Brannoc', 'Watchman Edric', 'Watchwoman Hale', 'Watchman Tobin', 'Watchman Rusk'];
-    for (let i = 0; i < 5; i++) {
-      const at = post.clone().addScaledVector(sideStep, (i - 2) * 2.2).addScaledVector(away, -8);
+    const n = site.defenders.length, mid = (n - 1) / 2;
+    site.defenders.forEach((d, i) => {
+      const at = post.clone().addScaledVector(sideStep, (i - mid) * 2.2).addScaledVector(away, -8);
       at.y = heightAt(at.x, at.z);
-      const p = post.clone().addScaledVector(sideStep, (i - 2) * 2.5);
-      this.watch.push(new Watchman(names[i], at, p, this.h.scene, i === 0 ? BRANNOC_LOOK : WATCH_LOOKS[(i - 1) % WATCH_LOOKS.length], () => this.living, i === 0));
-    }
+      const p = post.clone().addScaledVector(sideStep, (i - mid) * 2.5);
+      this.watch.push(new Watchman(d.name, at, p, this.h.scene, d.look, () => this.living, i === 0));
+    });
     for (const w of this.watch) extraFoes.add(w);
     // The animals in the pen.
     for (const a of this.h.fauna.animals) {
@@ -299,11 +373,20 @@ export class Raids {
     this.save.lastWon = won;
     this.save.lastLost = this.lost;
     this.save.lastKind = this.kind;
-    if (won) {
+    this.save.lastSite = f.site;
+    const lostText = this.lost ? `, for the loss of ${this.lost} ${this.lost === 1 ? 'animal' : 'animals'}` : '';
+    if (won && f.site !== 'glen') {
+      this.save.roadDefended = (this.save.roadDefended ?? 0) + 1;
+      const gold = 25 + this.level * 8;
+      this.h.addGold(gold);
+      const who = f.site === 'rest' ? "Hester stands you a meal and the Rest's purse" : 'Millbrook passes round a hat';
+      this.h.toast(`The wolves are driven off${lostText}. ${who}: ${gold} gold.`);
+      events.emit('deed', { id: 'raid:road', renown: 1, label: "Stood with the King's Road folk against a night raid" });
+    } else if (won) {
       this.save.defended = (this.save.defended ?? 0) + 1;
       const gold = 40 + this.level * 12 + (this.kind === 'gloam' ? 60 : 0);
       this.h.addGold(gold);
-      this.h.toast(`The raid is beaten back${this.lost ? `, for the loss of ${this.lost} ${this.lost === 1 ? 'animal' : 'animals'}` : ''}. The watch's purse: ${gold} gold.`);
+      this.h.toast(`The raid is beaten back${lostText}. The watch's purse: ${gold} gold.`);
       if (this.save.defended === 1) events.emit('deed', { id: 'raid:first', renown: 1, label: 'Held Elder Glen against a night raid' });
       if (this.kind === 'gloam') events.emit('deed', { id: 'raid:gloam', renown: 2, label: 'Drove the Gloaming back into the Dark' });
       if (this.save.defended >= 3 && !this.save.banner) {
@@ -312,7 +395,7 @@ export class Raids {
         this.h.toast("Captain Brannoc presses the Watch's Banner into your hands. 'You've stood with us three times. Wear it.'");
       }
     } else {
-      this.h.toast(`Dawn. The raid on ${f.penName} is over: ${this.lost ? `${this.lost} ${this.lost === 1 ? 'animal' : 'animals'} lost` : 'nothing lost'}. The watch is bruised.`);
+      this.h.toast(`Dawn. The raid on ${f.penName} is over: ${this.lost ? `${this.lost} ${this.lost === 1 ? 'animal' : 'animals'} lost` : 'nothing lost'}. ${f.site === 'glen' ? 'The watch is bruised.' : 'Nobody slept much.'}`);
     }
     events.emit('raidEnded', { kind: this.kind, won, lost: this.lost });
     this.cleanup();

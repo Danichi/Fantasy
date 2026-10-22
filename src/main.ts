@@ -315,6 +315,7 @@ async function boot() {
   fauna.addHerd('shiba', 1, farm.ranges.dogs);
   fauna.addHerd('horse', 3, kingsRoad.paddock);
   fauna.addHerd('horse_white', 1, kingsRoad.paddock);
+  fauna.addHerd('sheep', 6, kingsRoad.flock);
   fauna.addHerd('sheep', 6, { center: new THREE.Vector3(600, 0, 34), radius: 22 });
   fauna.addHerd('cat', 3, { center: new THREE.Vector3(0, 0, -4), radius: 45 });
   fauna.addHerd('pigeon', 8, { center: new THREE.Vector3(0, 0, -4), radius: 14 });
@@ -612,7 +613,7 @@ async function boot() {
   const talkCtx = () => ({
     hour: time.hour, rain: weather.p.rain > 0.4, done: (id: string) => quests.isDone(id), active: (id: string) => quests.isActive(id),
     learned: (id: string) => player.paths.learned(id), activeClass: player.paths.active, level: player.prog.level,
-    raid: raids.save.last !== undefined ? { ago: time.day - raids.save.last, won: !!raids.save.lastWon, lost: raids.save.lastLost ?? 0, gloam: raids.save.lastKind === 'gloam', defended: raids.save.defended ?? 0 } : null,
+    raid: raids.save.last !== undefined && (raids.save.lastSite ?? 'glen') === 'glen' ? { ago: time.day - raids.save.last, won: !!raids.save.lastWon, lost: raids.save.lastLost ?? 0, gloam: raids.save.lastKind === 'gloam', defended: raids.save.defended ?? 0 } : null,
   });
   town.talkCtx = talkCtx;
   const folkNews = new Map<string, number>();
@@ -1114,7 +1115,7 @@ async function boot() {
     playerPos: () => player.pos,
     outdoors: () => realm.mode === 'overworld' && !realm.interior,
     mark: (m) => (questUI.urgent = m),
-  }, farm.ranges);
+  }, farm.ranges, { flock: kingsRoad.flock, paddock: kingsRoad.paddock });
   raids.fromJSON(saveData?.world?.raids);
   if (TEST_MODE) raids.auto = false;
   // The Seamanship calling (N): the sea's skill tree.
@@ -1534,7 +1535,7 @@ async function boot() {
       population.update(STEP, player, time.hour, time.day);
       raids.update(STEP, player, time.hour, time.day);
       raids.tail(STEP, player);
-      npcs.raidOn = raids.villageIndoors ? 'elderGlen' : null;
+      npcs.raidOn = raids.hidingSettlement;
       frontier.update(STEP);
       encounters.update(STEP, time.hour, weather.p.rain);
       crownRoad.update(STEP, player, time.state.night);

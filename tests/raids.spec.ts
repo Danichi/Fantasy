@@ -143,3 +143,63 @@ test('the Gloaming: a rift tears open past the pens and gloam wolves come throug
   expect(res.won).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test('a smaller raid at the Wayfarer\'s Rest: the stablefolk turn out, two waves, the Rest pays', async ({ game }) => {
+  const { page, errors } = game;
+  await night(page, [1345, 60]); // by the paddock
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, R = g.raids;
+    const toasts: string[] = [];
+    const t0 = g.hud.toast.bind(g.hud);
+    g.hud.toast = (m: string) => (toasts.push(m), t0(m));
+    let ended: any = null;
+    const off = g.events.on('raidEnded', (e: any) => (ended = e));
+    const gold0 = g.player.prog.gold;
+    R.start('gloam', 'rest'); // road stops only ever see wolves
+    g.stepSim(2);
+    const warned = { kind: R.kind, indoors: g.npcs.raidOn, watch: R.watch.map((w: any) => w.name), stock: R.stock.length };
+    let maxWave = 0;
+    for (let i = 0; i < 6000 && R.state !== 'idle'; i++) {
+      g.stepSim(1);
+      maxWave = Math.max(maxWave, R.wave);
+      if (i % 40 === 0) {
+        const r = R.raiders.find((x: any) => x.alive);
+        r?.takeHit({ damage: 1e5, poise: 0, dir: new g.THREE.Vector3(0, 0, 1), at: r.center.clone(), crit: false, source: 'melee' });
+      }
+    }
+    off();
+    g.hud.toast = t0;
+    return { warned, maxWave, ended, gold: g.player.prog.gold - gold0, save: { ...R.save }, toasts };
+  });
+  expect(res.warned.kind).toBe('wolves');
+  expect(res.warned.indoors).toBe('wayfarersRest');
+  expect(res.warned.watch).toEqual(['Sergeant Tove', 'Col Dunmore', 'Stablehand Pell']);
+  expect(res.warned.stock).toBeGreaterThan(1);
+  expect(res.toasts[0]).toMatch(/Wayfarer's Rest/);
+  expect(res.maxWave).toBe(2);
+  expect(res.ended?.won).toBe(true);
+  expect(res.gold).toBeGreaterThan(20);
+  expect(res.save.roadDefended).toBe(1);
+  expect(res.save.defended ?? 0).toBe(0);
+  expect(res.save.lastSite).toBe('rest');
+  expect(res.toasts.some((t) => /Hester/.test(t))).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('Millbrook has a flock, and a raid there goes for it', async ({ game }) => {
+  const { page, errors } = game;
+  await night(page, [575, 150]);
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, R = g.raids;
+    R.start('wolves', 'millbrook');
+    g.stepSim(2);
+    const out = { watch: R.watch.length, stock: R.stock.length, indoors: g.npcs.raidOn, mark: g.questUI?.urgent?.label ?? null };
+    R.clear();
+    return out;
+  });
+  expect(res.watch).toBe(3);
+  expect(res.stock).toBeGreaterThanOrEqual(4);
+  expect(res.indoors).toBeNull();
+  expect(res.mark).toContain('Garth');
+  expect(errors).toEqual([]);
+});

@@ -63,6 +63,8 @@ export interface KingsRoad {
   settlements: { settlement: Settlement; records: NpcRecord[] }[];
   /** paddock for the Wayfarer's Rest horses (fauna range) */
   paddock: { center: THREE.Vector3; radius: number; half: THREE.Vector2; yaw: number };
+  /** Old Garth's flock: the fenced pasture south of Millbrook (fauna range) */
+  flock: { center: THREE.Vector3; radius: number };
   /** hitching spot where bought horses are brought round */
   stableYard: THREE.Vector3;
   /** the inn's bed: rest here */
@@ -192,6 +194,8 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
   house(560, 128, Math.PI - 0.1, { w: 7, d: 6, floors: 1, roof: 'tile', seed: 605 });
   fenceRun([[580, 30], [640, 22], [700, 36]]);
   fenceRun([[540, 140], [520, 180], [580, 200], [610, 150]]);
+  const flock = { center: new THREE.Vector3(562, 0, 170), radius: 13 };
+  clearings.push([flock.center.x, flock.center.z, 16]);
   signBoard('MILLBROOK', 'Welcome, traveller', 590, 96, Math.PI + 0.1);
   {
     // The chapel: a stone nave, a tiled roof, a bell tower and a dawn-sun window.
@@ -538,6 +542,7 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
   return {
     settlements,
     paddock,
+    flock,
     stableYard,
     innDoor,
     clearings,
