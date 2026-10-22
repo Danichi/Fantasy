@@ -1117,6 +1117,7 @@ async function boot() {
     mark: (m) => (questUI.urgent = m),
   }, farm.ranges, { flock: kingsRoad.flock, paddock: kingsRoad.paddock });
   raids.fromJSON(saveData?.world?.raids);
+  let shutters = 1;
   if (TEST_MODE) raids.auto = false;
   // The Seamanship calling (N): the sea's skill tree.
   const seaPanel = new SeamanshipPanel(() => ({ level: sailing.level, xpFrac: seamanshipLevel(sailing.xp).frac, picks: sailing.picks, stats: sailing.stats, learn: (id) => sailing.learn(id) }));
@@ -1641,7 +1642,9 @@ async function boot() {
       grass.setWind(0.45 + wp.wind * 1.35);
       terrain.setWet(wp.wet);
       ambient.setNight(ts.night);
-      world.mats.glass instanceof THREE.MeshStandardMaterial && (world.mats.glass.emissiveIntensity = 0.28 + ts.night * 2.4);
+      // Shutters barred during a raid: the windows go dark.
+      shutters += ((raids.villageIndoors ? 0.1 : 1) - shutters) * Math.min(1, dt * 1.5);
+      world.mats.glass instanceof THREE.MeshStandardMaterial && (world.mats.glass.emissiveIntensity = 0.28 + ts.night * 2.4 * shutters);
       world.village.lanternMat.emissiveIntensity = 0.6 + ts.night * 2.6;
       npcs.raining = wp.rain > 0.45;
       if (worldRunning) npcs.update(dt, player.pos, r.camera.position, ts.night);

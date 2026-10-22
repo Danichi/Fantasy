@@ -155,6 +155,7 @@ test('a smaller raid at the Wayfarer\'s Rest: the stablefolk turn out, two waves
     let ended: any = null;
     const off = g.events.on('raidEnded', (e: any) => (ended = e));
     const gold0 = g.player.prog.gold;
+    R.fromJSON({});
     R.start('gloam', 'rest'); // road stops only ever see wolves
     g.stepSim(2);
     const warned = { kind: R.kind, indoors: g.npcs.raidOn, watch: R.watch.map((w: any) => w.name), stock: R.stock.length };
