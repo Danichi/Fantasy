@@ -203,10 +203,13 @@ test('a drawn arrow hits a target 40 m away', async ({ game }) => {
     g.input.press('Mouse2');
     await window.W(30);
     // Point the camera's centre ray at the target.
-    for (let k = 0; k < 4; k++) {
-      const c = g.cam.camera.position, t = s.center;
-      g.cam.pitch = Math.atan2(c.y - t.y, Math.hypot(c.x - t.x, c.z - t.z));
-      g.cam.yaw = Math.atan2(t.x - c.x, t.z - c.z);
+    // (The camera looks at a point ahead of the shoulder, so correct by the error of its real view.)
+    for (let k = 0; k < 6; k++) {
+      const d = new g.THREE.Vector3();
+      g.cam.camera.getWorldDirection(d);
+      const want = s.center.clone().sub(g.cam.camera.position).normalize();
+      g.cam.yaw += Math.atan2(want.x, want.z) - Math.atan2(d.x, d.z);
+      g.cam.pitch += Math.asin(-want.y) - Math.asin(-d.y);
       await window.W(10);
     }
     for (let i = 0; i < 200 && g.arms.ranged.draw < 1; i++) await window.W(1);
