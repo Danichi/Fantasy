@@ -32,7 +32,7 @@ Named beasts that keep a territory somewhere in Cresha. Code: `src/bosses/`.
 |---|---|---|
 | Old Greyjaw | North-west pines above Elder Glen (-370, -210), at night | built |
 | The White Stag | Deep woods west of the Glen (-300, -20), dawn and dusk, about one day in two; a hunt | built |
-| Brine-Maw | Gull Ridge coast, at low tide; a giant shore crab | planned |
+| Brine-Maw | The cove north of Gull Ridge (2182, -156), at low tide (3:00 to 6:30 and 15:00 to 18:30) | built |
 | Mother Ooze | River marsh below the mill; splits, swallows | planned |
 | The Hollow Thane | Barrow downs on the Crown Road, at night; raises skeletons | planned |
 | The Rust Knight | Old battlefield on the Crown fields; the armour of a lost champion | planned |
@@ -73,3 +73,24 @@ a fight but a hunt (`bosses/whiteStag.ts`). It can't be hurt.
 - It leaves its shed antler (White Stag Antler, a tier 5 material), Stag's
   Grace (20 minutes: +10% move speed, +30% stamina regeneration) and 3 Renown,
   then fades into the trees. It comes back a week later, on its own days.
+
+## Brine-Maw
+
+A shore crab as big as a cart (`creatures/crab/`, drawn at 3x), barnacled
+and weed-hung, with a massive crusher claw on the right held up like a shield
+and a long cutter on the left. Fight: `bosses/brineMaw.ts`. Lair: a beached
+wreck in its cove.
+
+- **Guard:** blows to its front glance off the crusher (15% damage, 35% in
+  the last phase). It turns to face you, but slowly: get round its side.
+- **Snap:** the cutter opens wide (the tell), then thrusts and shuts.
+  Parryable: a parry leaves it reeling with its guard down.
+- **Sweep:** the crusher draws back (the tell), then sweeps its whole front.
+  Not parryable: block it or move.
+- **Rear and slam:** it rears up, both claws high, the pale underside showing.
+  Hits there do double, and 60 poise of blows tips it onto its back (2.5x
+  damage while it flails). Then it slams both claws down around its front.
+- **Phase 2 (55%):** it froths a cone of clinging foam (slows you, like web).
+- **Phase 3 (25%):** its shell cracks and something violet shows underneath
+  (the Dark); faster, and its guard weakens.
+- Drops the Brine-Maw Shell (a shield: block 120, stability 0.7, poise 8).

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildSword, buildRoundShield, buildKiteShield, buildOdachi } from './weaponModels';
+import { buildSword, buildRoundShield, buildKiteShield, buildOdachi, buildCrabShield } from './weaponModels';
 import { buildArmorPiece, type ArmorPieceId } from './armorModels';
 import { PRODUCE_ITEMS } from './produce';
 import { HERB_ITEMS, HERB_MODELS } from './herbs';
@@ -203,6 +203,10 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'dawnbreaker', name: 'Dawnbreaker', kind: 'sword', slot: 'main', rarity: 'epic',
     desc: 'A greatsword with the Sunwheel worked into its crossguard, pulled from the Gravewood\'s pedestal. It burns with a clean, gold light.',
     stats: { damage: 35, speed: 0.95, burn: 6, stagger: 1.3, poise: 6 }, build: () => buildSword({ ...longsword, bladeLen: 1.02, bladeWidth: 0.029, guardSpan: 0.15, guardMat: 'brass', tint: 0xf4ead0, glow: 0xffc85a, glowStrength: 2.4 }),
+  },
+  brineMawShell: {
+    id: 'brineMawShell', name: 'Brine-Maw Shell', kind: 'shield', slot: 'off', rarity: 'epic',
+    desc: "A piece of Brine-Maw's own carapace, barnacles and all, backed with leather. It turns a blade like the crab turned yours, and it never quite dries.", stats: { block: 120, stability: 0.7, poise: 8 }, build: () => buildCrabShield(),
   },
   towerShield: {
     id: 'towerShield', name: 'Tower Shield', kind: 'shield', slot: 'off', rarity: 'fine',

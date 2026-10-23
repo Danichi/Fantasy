@@ -229,3 +229,53 @@ test('The White Stag: a hunt, not a fight. It bolts, leaves shining prints, tire
   expect(res.dawnOnly).toEqual([true, false, true, false]);
   expect(errors).toEqual([]);
 });
+
+test('Brine-Maw: up at low tide, its crusher guards its front, it rears and slams, tips onto its back, and leaves its shell', async ({ game }) => {
+  const { page, errors } = game;
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, T = g.THREE, B = g.bosses;
+    (await import('/src/creatures/geometryStore.ts')).prepareCreatureNow('crab');
+    const { heightAt } = await import('/src/world/terrainHeight.ts');
+    g.time.skipTo(16);
+    g.player.invulnerable = true;
+    g.player.teleport(new T.Vector3(2182, heightAt(2182, -150) + 0.5, -150));
+    g.stepSim(5);
+    const def = B.defs.find((d: any) => d.id === 'brineMaw');
+    const tides = [4, 10, 16, 21].map((h) => def.abroad(h));
+    const body = B.spawnNow('brineMaw', new T.Vector3(2182, 0, -162));
+    const hit = (dir: any, dmg: number, poise: number) => {
+      const h0 = body.hp;
+      body.takeHit({ damage: dmg, poise, dir, at: body.center.clone(), crit: false, source: 'melee' });
+      return h0 - body.hp;
+    };
+    g.stepSim(90);
+    const toward = () => body.forward.clone().negate();
+    const front = hit(toward(), 100, 10);
+    const side = hit(new T.Vector3(Math.cos(body.yaw), 0, -Math.sin(body.yaw)), 100, 10);
+    const modes = new Set<string>();
+    let reared = 0, flippedHit = 0;
+    for (let i = 0; i < 60 * 40 && body.alive; i++) {
+      g.stepSim(1);
+      modes.add(body.mode);
+      if (body.mode === 'rear' && i % 12 === 0) reared += hit(toward(), 30, 35);
+      if (body.mode === 'flipped' && i % 15 === 0) flippedHit = Math.max(flippedHit, hit(toward(), 40, 5));
+      if (body.mode === 'scuttle' && i % 120 === 0) hit(new T.Vector3(Math.cos(body.yaw), 0, -Math.sin(body.yaw)), 140, 10);
+    }
+    if (body.alive) hit(toward(), 1e6, 0);
+    for (let i = 0; i < 5; i++) g.stepSim(1);
+    return {
+      tides, front, side, reared, flippedHit, modes: [...modes], stats: body.stats, alive: body.alive,
+      shell: g.player.equip.items.filter((it: any) => it.def.id === 'brineMawShell').length,
+    };
+  });
+  expect(res.tides).toEqual([true, false, true, false]);
+  expect(res.front).toBeLessThan(res.side * 0.3);
+  expect(res.side).toBe(100);
+  expect(res.modes).toEqual(expect.arrayContaining(['scuttle', 'rear', 'flipped']));
+  expect(res.stats.flips).toBeGreaterThan(0);
+  expect(res.reared).toBeGreaterThan(0);
+  expect(res.flippedHit).toBeGreaterThan(90);
+  expect(res.alive).toBe(false);
+  expect(res.shell).toBe(1);
+  expect(errors).toEqual([]);
+});

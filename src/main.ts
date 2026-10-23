@@ -123,6 +123,7 @@ import { Raids } from './raid/raids';
 import { FieldBosses } from './bosses/fieldBosses';
 import { GREYJAW } from './bosses/greyjaw';
 import { WHITE_STAG } from './bosses/whiteStag';
+import { BRINE_MAW } from './bosses/brineMaw';
 import { tickBoarFur } from './creatures/boar/visual';
 import { tickSpiderFur } from './creatures/spider/visual';
 import { updateSnare } from './creatures/spider/spider';
@@ -237,7 +238,7 @@ async function boot() {
   const capital = new RoyalCapital(r.scene, world.mats, fx);
   mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...[GREYJAW].filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...[GREYJAW, BRINE_MAW].filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -1137,6 +1138,7 @@ async function boot() {
   });
   bosses.add(GREYJAW);
   bosses.add(WHITE_STAG);
+  bosses.add(BRINE_MAW);
   // Doing something to a boss (laying a hand on the White Stag).
   realm.overworldInteractables.push({
     get pos() {

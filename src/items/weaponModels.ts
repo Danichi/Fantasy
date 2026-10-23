@@ -249,6 +249,64 @@ export function buildRoundShield(paint: 'quartered' | 'plain', colors: [string, 
   return holder;
 }
 
+/** Brine-Maw's shell: a crab's carapace cut and backed with leather, barnacles and all. */
+export function buildCrabShield() {
+  const m = mats();
+  const g = new THREE.Group();
+  const RX = 0.4, RY = 0.32;
+  const face = new THREE.CircleGeometry(1, 56);
+  const pa = face.attributes.position as THREE.BufferAttribute;
+  const col = new Float32Array(pa.count * 3);
+  const red = new THREE.Color(0x8a2a18), dark = new THREE.Color(0x4a140c), orange = new THREE.Color(0xc4582a), c = new THREE.Color();
+  for (let i = 0; i < pa.count; i++) {
+    const x = pa.getX(i), y = pa.getY(i);
+    const r2 = x * x + y * y;
+    // A toothed front edge (the top), a domed middle.
+    const ang = Math.atan2(y, x);
+    const teeth = y > 0 ? Math.max(0, Math.sin(ang * 11)) * 0.06 * Math.sqrt(r2) : 0;
+    pa.setXYZ(i, x * RX * (1 + teeth), y * RY * (1 + teeth), (1 - r2) * 0.07);
+    c.copy(red).lerp(dark, 0.5 + 0.5 * Math.sin(x * 9 + y * 7) * Math.cos(y * 5)).lerp(orange, Math.max(0, r2 - 0.6) * 1.2);
+    col.set([c.r, c.g, c.b], i * 3);
+  }
+  face.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  face.computeVertexNormals();
+  const shellMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.5, clearcoat: 0.5, clearcoatRoughness: 0.3 });
+  const faceMesh = new THREE.Mesh(face, shellMat);
+  const back = new THREE.Mesh(new THREE.CircleGeometry(1, 40).scale(RX, RY, 1), m.leather);
+  back.rotation.y = Math.PI;
+  back.position.z = -0.006;
+  g.add(faceMesh, back);
+  // Barnacles crusting one side.
+  const barn = new THREE.MeshStandardMaterial({ color: 0xa8a090, roughness: 0.95 });
+  let seed = 7;
+  const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 14; i++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.75;
+    const x = Math.cos(a) * d * 0.6 + 0.3, y = Math.sin(a) * d - 0.1;
+    if (x * x + y * y > 0.8) continue;
+    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, 0.018, 7), barn);
+    b.rotation.x = Math.PI / 2;
+    b.position.set(x * RX, y * RY, (1 - (x * x + y * y)) * 0.07 + 0.006);
+    g.add(b);
+  }
+  // Grooves: the crab's back.
+  const groove = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.005, 6, 24, Math.PI), new THREE.MeshStandardMaterial({ color: 0x3a0e08, roughness: 0.8 }));
+  groove.position.z = 0.062;
+  groove.rotation.z = Math.PI;
+  g.add(groove);
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.14, 10), m.leather);
+  handle.position.z = -0.05;
+  g.add(handle);
+  g.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) o.castShadow = true;
+  });
+  const holder = new THREE.Group();
+  g.position.z = 0.05;
+  holder.add(g);
+  holder.userData.radius = RX;
+  return holder;
+}
+
 /** Heater/kite shield: curved board, painted chevron, steel trim. */
 export function buildKiteShield() {
   const m = mats();

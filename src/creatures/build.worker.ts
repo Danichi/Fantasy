@@ -5,6 +5,7 @@ import { batGeometry } from './bat/model';
 import { wolfGeometry } from './wolf/model';
 import { greyjawGeometry } from './wolf/greyjaw';
 import { stagGeometry } from './stag/model';
+import { crabGeometry } from './crab/model';
 import { pack } from './kit/transfer';
 import type * as THREE from 'three';
 
@@ -15,6 +16,7 @@ const BUILDERS: Record<string, () => Record<string, THREE.BufferGeometry | numbe
   wolf: () => wolfGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
   greyjaw: () => greyjawGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
   stag: () => stagGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
+  crab: () => crabGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
 };
 
 self.onmessage = (e: MessageEvent<{ kind: string }>) => {
