@@ -45,6 +45,10 @@ export interface GameEvents {
   questChanged: { id: string; status: 'active' | 'done' };
   /** a great deed (a named boss, a legendary beast, a first landfall...): Renown for the Legendary Hero */
   deed: { id: string; renown: number; label: string };
+  /** a plant, fungus or reagent was gathered (foraging, harvesting, beast drops) */
+  herbGathered: { id: string; qty: number; at: Vector3; source: 'forage' | 'drop' | 'harvest' };
+  /** a herbal brew was made (herbalism crafting) */
+  brewMade: { id: string; quality: number; qty: number };
 }
 
 type Handler<T> = (payload: T) => void;

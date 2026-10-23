@@ -20,6 +20,8 @@ const LEGACY_KEYS = ['fantasy-rpg-save-v5', 'fantasy-rpg-save-v4', 'fantasy-rpg-
 
 /** World state (v6): exploration, flags and time; later phases add horses, ships, factions. */
 export interface WorldSave {
+  /** herbalism: known recipes, identified reagent properties, practice, running elixirs and oils */
+  herbalism?: import('./herbalism/herbalism').HerbalismSave;
   discovery?: DiscoverySave;
   flags: Record<string, boolean | number | string>;
   time?: { hour: number; day: number } | number;

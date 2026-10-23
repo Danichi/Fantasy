@@ -7,7 +7,7 @@ import { heightAt, roadDist } from '../terrainHeight';
 import { sandWeight } from '../worldMap';
 import { WAYSTONES } from '../kingsRoad';
 import { sfx } from '../../audio/sfx';
-import { SUNSPIRE, SUNSPIRE_HALF, SUNSPIRE_GATE_Z, SCAV_CAMPS, CAMP_INFO, CARAVAN_ROAD, WEST_GATE, sunspirePad, sunspireY, campFloor, panAt } from './desertLayout';
+import { SUNSPIRE, SUNSPIRE_HALF, SUNSPIRE_GATE_Z, SCAV_CAMPS, CAMP_INFO, CARAVAN_ROAD, WEST_GATE, SUNKEN_GATE, sunspirePad, sunspireY, campFloor, panAt } from './desertLayout';
 import { MODEL, cellWorld, streetCells, worldCell, cellTop, cityDoors } from './cityGrid';
 import { registerDoor, type Door } from '../doors';
 import { SandGolem } from '../../enemies/sandGolem';
@@ -124,13 +124,17 @@ export class GoldenExpanse {
   private stormLeft = 0;
   private stormNext = 200 + Math.random() * 300;
   private stormOverlay: HTMLDivElement;
+  /** how far apart storms come (the story can calm the Expanse) */
+  stormScale = 1;
+  /** a hostile camp (by index) that the story has made peaceful: its raiders stand down */
+  campPeace?: (camp: number) => boolean;
 
   constructor(private scene: THREE.Scene, private fx: FX, private hooks: DesertHooks, private hour: () => number) {
     scene.add(this.group);
     this.group.add(this.cityDressing);
     this.bolts = new Bolts(scene);
     const rnd = mulberry32(4120);
-    const sheltered = (x: number, z: number) => sunspirePad(x, z) > 0 || SCAV_CAMPS.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r + 60) || roadDist(x, z) < 24 || SAWTOOTH_BASIN.distanceTo(new THREE.Vector3(x, 0, z)) < 140;
+    const sheltered = (x: number, z: number) => sunspirePad(x, z) > 0 || SCAV_CAMPS.some(([cx, cz, r]) => Math.hypot(x - cx, z - cz) < r + 60) || roadDist(x, z) < 24 || SAWTOOTH_BASIN.distanceTo(new THREE.Vector3(x, 0, z)) < 140 || Math.hypot(x - SUNKEN_GATE.x, z - SUNKEN_GATE.z) < SUNKEN_GATE.r + 120;
     // Shark and ray homes: deep sand round the city and along the caravan way.
     for (let tries = 0; tries < 4000 && (this.sharkHomes.length < 46 || this.rayHomes.length < 60); tries++) {
       const a = rnd() * Math.PI * 2, r = 260 + rnd() * 2600;
@@ -363,7 +367,9 @@ export class GoldenExpanse {
     const frameGeo = new THREE.BoxGeometry(2.1, 0.35, 0.3);
     frameGeo.translate(0, 2.75, 0);
     const list = cityDoors();
-    const slabs = new THREE.InstancedMesh(slabGeo, std(0x5a3a22, 0.85), list.length);
+    // An open doorway, lamp-lit from inside, so a door reads as a way in from down the street.
+    const glow = new THREE.MeshStandardMaterial({ color: 0x3a2412, roughness: 0.9, emissive: 0xff9a40, emissiveIntensity: 0.55 });
+    const slabs = new THREE.InstancedMesh(slabGeo, glow, list.length);
     const frames = new THREE.InstancedMesh(frameGeo, std(0xd4a640, 0.4, 0.6), list.length);
     let n = 0;
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
@@ -574,6 +580,12 @@ export class GoldenExpanse {
     for (const r of this.raiders) {
       const [cx, cz, cr] = SCAV_CAMPS[r.camp];
       const d = Math.hypot(player.pos.x - cx, player.pos.z - cz);
+      // A camp at peace (the story has made friends of it) puts its blades away.
+      if (this.campPeace?.(r.camp)) {
+        for (const b of r.list) b.dispose();
+        r.list = [];
+        continue;
+      }
       if (!r.list.length && d < 160 && d > cr + 25 && this.time - r.clearedAt > 480) {
         const y = campFloor(cx, cz);
         const n = r.camp === 1 ? 6 : 4 + (r.camp % 3);
@@ -785,7 +797,7 @@ export class GoldenExpanse {
   /** Start a storm now (also used by tests and the console). */
   startStorm(seconds = 70 + Math.random() * 60) {
     this.stormLeft = seconds;
-    this.stormNext = 260 + Math.random() * 420;
+    this.stormNext = (260 + Math.random() * 420) * this.stormScale;
     this.hooks.toast('The horizon turns brown. A sandstorm is coming — find shelter or keep your head down.');
     sfx.rumble(3, 0.5);
   }
@@ -837,6 +849,15 @@ export class GoldenExpanse {
       this.storm = 0;
       this.stormOverlay.style.display = 'none';
     }
+  }
+
+  /** The trader caravans on the Caravan Way (quests meet them on the road). */
+  get caravanList(): { name: string; pos: THREE.Vector3 }[] {
+    return this.caravans.map((c) => ({ name: c.name, pos: c.pos }));
+  }
+  /** Seconds left of the current storm (0 when calm). */
+  get stormRemaining() {
+    return Math.max(0, this.stormLeft);
   }
 
   /** Debug and tests: is the city in? */

@@ -33,7 +33,7 @@ export const MAIN_QUESTS: QuestDef[] = [
     summary: 'Lights have been seen at the old crypt on the hill north of the village, and orcs have been seen on the path. Maud wants to know what\'s down there.',
     offer: 'For a week now there have been lights in the old crypt on the hill, and the shepherds have seen orcs on the path. An orc warlord called Grukk has made his den under our dead. Go up the north road and put an end to it.',
     stages: [
-      { note: 'Climb the north road to the crypt on the hill.', objectives: [{ type: 'reach', at: [CRYPT.x, CRYPT.y + 12], radius: 12, text: 'Climb to the crypt on the hill (north)' }] },
+      { note: 'Climb the Road to Riches to the crypt on the hill.', objectives: [{ type: 'reach', at: [CRYPT.x, CRYPT.y + 12], radius: 12, text: 'Climb to the crypt on the hill (north)' }] },
       { note: 'Descend into the crypt and defeat Grukk.', objectives: [{ type: 'signal', id: 'grukk-dead', text: 'Defeat Grukk in the crypt\'s depths', at: [CRYPT.x, CRYPT.y] }] },
       { note: 'Tell Elder Maud the crypt is clear.', objectives: [{ type: 'talk', npc: 'maud', text: 'Tell Elder Maud the crypt is clear', reply: 'Grukk is dead.', say: 'Dead? Truly? I\'ll have the bell rung. Fröst will want to hear it too — he\'s been hoarding his good steel for someone who\'s earned it.' }] },
     ],

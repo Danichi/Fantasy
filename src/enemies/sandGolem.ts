@@ -15,13 +15,35 @@ import type { Player } from '../player/player';
 // of the sand. It has no rig, so it fights with its whole body: an overhead
 // slam that shakes the ground, a spinning sweep, sand boulders thrown at range,
 // and a stagger when it has taken enough punishment.
+//
+// The same body serves old Amaunet's greater guardians (GolemOpts): bigger,
+// gilded, and able to call down pillars of sunfire where you stand, with a
+// second phase once it has lost half its strength.
 
-type State = 'dormant' | 'rising' | 'idle' | 'walk' | 'slam' | 'sweep' | 'throw' | 'stagger' | 'dying' | 'gone';
+type State = 'dormant' | 'rising' | 'idle' | 'walk' | 'slam' | 'sweep' | 'throw' | 'sunfire' | 'stagger' | 'dying' | 'gone';
 
 const SCALE = 0.78; // ~5.4 m tall
 const SAND = 0xd9b77a, SAND_DARK = 0x9a7a4a;
 
 interface Boulder { mesh: THREE.Mesh; vel: THREE.Vector3; life: number }
+interface Strike { at: THREE.Vector3; t: number; ring: THREE.Mesh; pillar: THREE.Mesh; hit: boolean }
+
+/** A greater golem: the Warden's defaults unless given. */
+export interface GolemOpts {
+  name?: string;
+  kind?: string;
+  hp?: number;
+  /** size relative to the Warden */
+  scale?: number;
+  /** damage multiplier */
+  damage?: number;
+  /** gold leaf and a sun-coloured inner fire */
+  gilded?: boolean;
+  /** calls pillars of sunfire down on the player, and rages below half health */
+  sunfire?: boolean;
+}
+
+const SUN = 0xffc24a;
 
 export class SandGolem implements Target {
   id = newTargetId();
@@ -35,8 +57,8 @@ export class SandGolem implements Target {
   position = new THREE.Vector3();
   stunned = false;
   lockable = false;
-  maxHp = 1800;
-  hp = 1800;
+  maxHp: number;
+  hp: number;
   private root = new THREE.Group();
   private body = new THREE.Group();
   private model: THREE.Object3D | null = null;
@@ -53,29 +75,53 @@ export class SandGolem implements Target {
   private col: RAPIER.Collider;
   private boulderGeo = new THREE.DodecahedronGeometry(0.7, 0);
   private boulderMat = new THREE.MeshStandardMaterial({ color: 0xc8a06a, roughness: 1, flatShading: true });
+  private strikes: Strike[] = [];
+  private ringGeo = new THREE.RingGeometry(1.7, 2.2, 32);
+  private pillarGeo = new THREE.CylinderGeometry(1.6, 2.1, 30, 16, 1, true);
+  private ringMat = new THREE.MeshBasicMaterial({ color: SUN, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false });
+  private pillarMat = new THREE.MeshBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false });
+  private size: number;
+  private dmg: number;
+  /** below half health (sunfire golems only): faster, more fire */
+  enraged = false;
   onWake?: () => void;
   onDeath?: () => void;
+  /** the second phase began (half health) */
+  onPhase?: (phase: number) => void;
 
-  constructor(readonly home: THREE.Vector3, private scene: THREE.Scene, private fx: FX) {
+  constructor(readonly home: THREE.Vector3, private scene: THREE.Scene, private fx: FX, private opts: GolemOpts = {}) {
+    this.size = opts.scale ?? 1;
+    this.dmg = opts.damage ?? 1;
+    this.maxHp = this.hp = opts.hp ?? 1800;
+    if (opts.name) this.name = opts.name;
+    if (opts.kind) this.kind = opts.kind;
+    this.radius = 1.5 * this.size;
+    this.halfHeight = 1.6 * this.size;
     this.position.copy(home).setY(heightAt(home.x, home.z));
     this.root.add(this.body);
-    this.eye = new THREE.PointLight(0xffa030, 0, 9, 2);
-    this.eye.position.set(0, 4.6, 0.6);
+    this.eye = new THREE.PointLight(opts.gilded ? SUN : 0xffa030, 0, 9 * this.size, 2);
+    this.eye.position.set(0, 4.6 * this.size, 0.6 * this.size);
     this.body.add(this.eye);
     scene.add(this.root);
     this.root.visible = false;
     this.rb = physics.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(this.position.x, this.position.y - 10, this.position.z));
-    this.col = physics.world.createCollider(RAPIER.ColliderDesc.capsule(1.5, 1.3).setCollisionGroups(groups(G_ENEMY, 0xffff)), this.rb);
+    this.col = physics.world.createCollider(RAPIER.ColliderDesc.capsule(1.5 * this.size, 1.3 * this.size).setCollisionGroups(groups(G_ENEMY, 0xffff)), this.rb);
     void compressedGltf.loadAsync('/assets/desert/sandGolem.glb').then((g) => {
       const m = g.scene;
-      m.scale.setScalar(SCALE);
+      m.scale.setScalar(SCALE * this.size);
       m.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
         mesh.castShadow = true;
         // (The loader gives each load its own material; a clone of it failed to render.)
         const mat = mesh.material as THREE.MeshStandardMaterial;
-        if (mat.emissive) mat.emissive.set(0xff6020);
+        if (mat.emissive) mat.emissive.set(opts.gilded ? SUN : 0xff6020);
+        // Gold leaf over the sandstone, worn through in places.
+        if (opts.gilded && mat.color) {
+          mat.color.lerp(new THREE.Color(0xe8b850), 0.55);
+          mat.metalness = 0.45;
+          mat.roughness = 0.5;
+        }
         mat.emissiveIntensity = 0;
       });
       this.model = m;
@@ -94,8 +140,13 @@ export class SandGolem implements Target {
     this.flash = 1;
     this.fx.add.spawn({ pos: h.at ?? this.center, spread: 2, count: 12, life: [0.4, 0.9], size: [0.18, 0.04], color: SAND, color2: SAND_DARK, gravity: 7, upBias: 0.4 });
     if (this.hp <= 0) return this.die();
+    if (this.opts.sunfire && !this.enraged && this.hp < this.maxHp * 0.5) {
+      this.enraged = true;
+      sfx.roar(1);
+      this.onPhase?.(2);
+    }
     this.poiseDmg += h.poise + (h.source === 'spell' ? 20 : 0);
-    if (this.poiseDmg > 260 && this.state !== 'stagger' && this.state !== 'slam') {
+    if (this.poiseDmg > 260 * this.size && this.state !== 'stagger' && this.state !== 'slam') {
       this.poiseDmg = 0;
       this.set('stagger');
       this.stunned = true;
@@ -121,6 +172,16 @@ export class SandGolem implements Target {
     if (s !== 'stagger') this.stunned = false;
   }
 
+  /** Wake now (a scripted rising), wherever the player stands. */
+  wake() {
+    if (this.state !== 'dormant' || !this.alive) return;
+    this.set('rising');
+    this.root.visible = true;
+    sfx.rumble(6, 1);
+    targets.add(this);
+    this.onWake?.();
+  }
+
   private sandBurst(at: THREE.Vector3, n: number, power = 1) {
     this.fx.add.spawn({ pos: at, vel: new THREE.Vector3(0, 5 * power, 0), spread: 3 * power, count: n, life: [0.7, 1.6], size: [0.5 * power, 0.12], color: SAND, color2: SAND_DARK, gravity: 7, upBias: 0.8, alpha: 0.85 });
   }
@@ -129,7 +190,7 @@ export class SandGolem implements Target {
     if (player.dead || this.hitDone) return;
     if (Math.hypot(player.pos.x - at.x, player.pos.z - at.z) < radius && Math.abs(player.pos.y - at.y) < 3) {
       this.hitDone = true;
-      player.receiveAttack({ damage, from: this.position.clone(), at: player.center.clone(), parryable: false, poise });
+      player.receiveAttack({ damage: damage * this.dmg, from: this.position.clone(), at: player.center.clone(), parryable: false, poise });
     }
   }
 
@@ -141,6 +202,7 @@ export class SandGolem implements Target {
     const to = new THREE.Vector3(player.pos.x - this.position.x, 0, player.pos.z - this.position.z);
     const dist = to.length();
     const want = Math.atan2(to.x, to.z);
+    const Z = this.size;
     let sink = 0, lean = 0, spin = 0, lift = 0;
     switch (this.state) {
       case 'dormant':
@@ -157,7 +219,7 @@ export class SandGolem implements Target {
         return;
       case 'rising': {
         const t = Math.min(1, this.st / 6);
-        sink = (1 - t * t * (3 - 2 * t)) * 6.5;
+        sink = (1 - t * t * (3 - 2 * t)) * 6.5 * Z;
         lean = Math.sin(this.st * 3) * 0.08 * (1 - t);
         if (Math.random() < dt * 20) this.sandBurst(this.position.clone().setY(g + 0.3), 6, 1.4);
         if (Math.random() < dt * 4) events.emit('bossSlam', { at: player.pos.clone() });
@@ -177,15 +239,16 @@ export class SandGolem implements Target {
         }
         this.yaw = dampAngle(this.yaw, want, 1.6, dt);
         if (this.cooldown <= 0) {
-          if (dist < 5.5) this.set(Math.random() < 0.55 ? 'slam' : 'sweep');
-          else if (dist > 11 && dist < 34) this.set('throw');
-          else if (dist < 8) this.set('slam');
+          if (this.opts.sunfire && dist < 40 && Math.random() < (this.enraged ? 0.4 : 0.22)) this.set('sunfire');
+          else if (dist < 5.5 * Z) this.set(Math.random() < 0.55 ? 'slam' : 'sweep');
+          else if (dist > 11 * Z && dist < 34 + 6 * Z) this.set('throw');
+          else if (dist < 8 * Z) this.set('slam');
         }
         if (this.state === 'idle' || this.state === 'walk') {
-          const moving = dist > 4.2;
+          const moving = dist > 4.2 * Z;
           this.state = moving ? 'walk' : 'idle';
           if (moving) {
-            const sp = 2.3;
+            const sp = 2.3 * Math.sqrt(Z) * (this.enraged ? 1.25 : 1);
             this.position.x += Math.sin(this.yaw) * sp * dt;
             this.position.z += Math.cos(this.yaw) * sp * dt;
             lift = Math.abs(Math.sin(this.st * 3.2)) * 0.25;
@@ -209,16 +272,16 @@ export class SandGolem implements Target {
           const t = Math.min(1, (this.st - wind) / (hit - wind));
           lean = -0.32 + t * 0.85;
           if (t >= 1 && !this.hitDone) {
-            const at = this.position.clone().add(new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(3.4)).setY(g);
-            this.sandBurst(at.clone().setY(g + 0.2), 40, 2);
+            const at = this.position.clone().add(new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(3.4 * Z)).setY(g);
+            this.sandBurst(at.clone().setY(g + 0.2), 40, 2 * Z);
             events.emit('bossSlam', { at: at.clone() });
             sfx.rumble(1.4, 0.9);
-            this.hurtIfNear(player, at, 4.6, 46, 90);
+            this.hurtIfNear(player, at, 4.6 * Z, 46, 90);
             this.hitDone = true;
           }
         }
         if (this.st > 2.6) {
-          this.cooldown = 1.2 + Math.random();
+          this.cooldown = (1.2 + Math.random()) * (this.enraged ? 0.7 : 1);
           this.set('idle');
         }
         break;
@@ -230,7 +293,7 @@ export class SandGolem implements Target {
         else if (t < 1.8) {
           spin = -0.5 + ((t - 0.8) / 1.0) * (Math.PI * 2 + 0.5);
           if (Math.random() < dt * 30) this.sandBurst(this.position.clone().setY(g + 0.3), 3, 0.8);
-          if (t > 1.1 && t < 1.6) this.hurtIfNear(player, this.position.clone().setY(g), 5.2, 32, 60);
+          if (t > 1.1 && t < 1.6) this.hurtIfNear(player, this.position.clone().setY(g), 5.2 * Z, 32, 60);
         } else spin = 0;
         if (t > 2.4) {
           this.cooldown = 1 + Math.random();
@@ -244,7 +307,7 @@ export class SandGolem implements Target {
         lean = this.st < 1 ? 0.35 * this.st : this.st < 1.4 ? 0.35 - (this.st - 1) * 1.6 : -0.3 + (this.st - 1.4) * 0.3;
         if (this.st > 1.2 && !this.hitDone) {
           this.hitDone = true;
-          const from = this.position.clone().setY(g + 5.2);
+          const from = this.position.clone().setY(g + 5.2 * Z);
           const target = player.center.clone();
           const T = Math.max(0.7, from.distanceTo(target) / 22);
           const vel = target.sub(from).divideScalar(T).add(new THREE.Vector3(0, 0.5 * 14 * T, 0));
@@ -255,7 +318,37 @@ export class SandGolem implements Target {
           this.boulders.push({ mesh, vel, life: 5 });
         }
         if (this.st > 2.2) {
-          this.cooldown = 1.5 + Math.random();
+          this.cooldown = (1.5 + Math.random()) * (this.enraged ? 0.7 : 1);
+          this.set('idle');
+        }
+        break;
+      }
+      case 'sunfire': {
+        // Arms raised to the sky: rings of light open on the sand, then the sun comes down through them.
+        lean = -0.4 * Math.min(1, this.st / 0.6);
+        lift = 0.3 * Math.min(1, this.st / 0.6);
+        if (!this.hitDone && this.st > 0.5) {
+          this.hitDone = true;
+          const n = this.enraged ? 5 : 3;
+          for (let k = 0; k < n; k++) {
+            const a = Math.random() * Math.PI * 2, r = k === 0 ? 0 : 4 + Math.random() * 7;
+            // The first ring opens where you are going, not where you were.
+            const at = player.pos.clone().addScaledVector(player.vel ?? new THREE.Vector3(), k === 0 ? 0.6 : 0).add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
+            at.y = heightAt(at.x, at.z) + 0.08;
+            const ring = new THREE.Mesh(this.ringGeo, this.ringMat.clone());
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.copy(at);
+            const pillar = new THREE.Mesh(this.pillarGeo, this.pillarMat.clone());
+            pillar.position.copy(at).setY(at.y + 15);
+            pillar.visible = false;
+            this.scene.add(ring, pillar);
+            this.strikes.push({ at, t: -k * 0.25, ring, pillar, hit: false });
+          }
+          sfx.beam(0.5);
+        }
+        if (Math.random() < dt * 20) this.fx.add.spawn({ pos: this.center.clone().setY(this.center.y + 2 * Z), vel: new THREE.Vector3(0, 6, 0), spread: 1.5, count: 2, life: [0.4, 0.9], size: [0.3, 0.05], color: 0xfff0b0, color2: SUN, upBias: 2 });
+        if (this.st > 2.2) {
+          this.cooldown = (1.4 + Math.random()) * (this.enraged ? 0.7 : 1);
           this.set('idle');
         }
         break;
@@ -272,9 +365,9 @@ export class SandGolem implements Target {
         break;
       case 'dying': {
         // Crumbles back into the sand it came from.
-        sink = Math.min(6.5, this.st * this.st * 0.5);
+        sink = Math.min(6.5 * Z, this.st * this.st * 0.5 * Z);
         lean = Math.min(0.4, this.st * 0.1);
-        if (Math.random() < dt * 30) this.sandBurst(this.position.clone().setY(g + 1 + Math.random() * 3), 6, 1.2);
+        if (Math.random() < dt * 30) this.sandBurst(this.position.clone().setY(g + 1 + Math.random() * 3 * Z), 6, 1.2 * Z);
         if (this.st > 4.5) {
           this.state = 'gone';
           this.root.visible = false;
@@ -290,11 +383,11 @@ export class SandGolem implements Target {
     this.root.position.set(this.position.x, this.position.y - sink + lift, this.position.z);
     this.root.rotation.set(0, this.yaw + spin, 0);
     this.body.rotation.set(lean, 0, 0);
-    this.center.set(this.position.x, this.position.y - sink + 2.6, this.position.z);
-    this.rb.setNextKinematicTranslation({ x: this.position.x, y: this.position.y - sink + 2.8, z: this.position.z });
+    this.center.set(this.position.x, this.position.y - sink + 2.6 * Z, this.position.z);
+    this.rb.setNextKinematicTranslation({ x: this.position.x, y: this.position.y - sink + 2.8 * Z, z: this.position.z });
     this.eye.intensity = this.state === 'dying' ? Math.max(0, 6 - this.st * 2) : 6 + Math.sin(this.st * 5) * 1.5;
     if (this.model) {
-      const glow = this.flash * 1.2 + (this.state === 'slam' || this.state === 'throw' ? 0.25 : 0) + (this.state === 'stagger' ? 0.5 : 0);
+      const glow = this.flash * 1.2 + (this.state === 'slam' || this.state === 'throw' ? 0.25 : 0) + (this.state === 'stagger' ? 0.5 : 0) + (this.state === 'sunfire' ? 0.8 : 0) + (this.enraged ? 0.2 + Math.sin(this.st * 6) * 0.1 : 0);
       this.model.traverse((o) => {
         const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
         if (m && 'emissiveIntensity' in m) m.emissiveIntensity = glow;
@@ -303,7 +396,37 @@ export class SandGolem implements Target {
     this.updateBoulders(dt, player);
   }
 
+  private updateStrikes(dt: number, player: Player) {
+    for (const s of this.strikes) {
+      s.t += dt;
+      const ringMat = s.ring.material as THREE.MeshBasicMaterial;
+      if (s.t < 1.5) {
+        // The ring tightens and brightens: get out.
+        const k = Math.max(0, s.t) / 1.5;
+        s.ring.scale.setScalar(1.6 - k * 0.6);
+        ringMat.opacity = 0.25 + k * 0.6;
+      } else {
+        s.pillar.visible = true;
+        const k = Math.min(1, (s.t - 1.5) / 0.6);
+        s.pillar.scale.set(1 - k * 0.7, 1, 1 - k * 0.7);
+        (s.pillar.material as THREE.MeshBasicMaterial).opacity = 0.85 * (1 - k);
+        ringMat.opacity = 0.8 * (1 - k);
+        if (!s.hit) {
+          s.hit = true;
+          this.fx.add.spawn({ pos: s.at.clone().setY(s.at.y + 0.3), vel: new THREE.Vector3(0, 7, 0), spread: 4, count: 30, life: [0.4, 1], size: [0.35, 0.05], color: 0xfff4c8, color2: SUN, gravity: 6, upBias: 1 });
+          events.emit('bossSlam', { at: s.at.clone() });
+          if (!player.dead && Math.hypot(player.pos.x - s.at.x, player.pos.z - s.at.z) < 2.3 && player.pos.y < s.at.y + 4) {
+            player.receiveAttack({ damage: 38 * this.dmg, from: s.at.clone().setY(s.at.y + 10), at: player.center.clone(), parryable: false, poise: 70, burn: 6 });
+          }
+        }
+      }
+    }
+    for (const s of this.strikes) if (s.t > 2.1) this.scene.remove(s.ring, s.pillar);
+    this.strikes = this.strikes.filter((s) => s.t <= 2.1);
+  }
+
   private updateBoulders(dt: number, player: Player) {
+    this.updateStrikes(dt, player);
     for (const b of this.boulders) {
       b.life -= dt;
       b.vel.y -= 14 * dt;
@@ -326,6 +449,9 @@ export class SandGolem implements Target {
     if (!this.alive) return;
     this.hp = this.maxHp;
     this.poiseDmg = 0;
+    this.enraged = false;
+    for (const s of this.strikes) this.scene.remove(s.ring, s.pillar);
+    this.strikes = [];
     this.lockable = false;
     targets.delete(this);
     this.position.copy(this.home).setY(heightAt(this.home.x, this.home.z));
@@ -340,6 +466,8 @@ export class SandGolem implements Target {
     this.scene.remove(this.root);
     for (const b of this.boulders) this.scene.remove(b.mesh);
     this.boulders = [];
+    for (const s of this.strikes) this.scene.remove(s.ring, s.pillar);
+    this.strikes = [];
     physics.world.removeRigidBody(this.rb);
     void this.col;
   }

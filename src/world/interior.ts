@@ -173,14 +173,17 @@ export class Interior {
     this.rnd = mulberry32(door.spec.seed * 7 + 11);
     if (door.style === 'desert') this.m = desertMats(m);
     const big = kind === 'guild' || kind === 'hall' || kind === 'tavern' || kind === 'throne' || kind === 'temple' || kind === 'library';
-    this.W = kind === 'palace' ? 34 : kind === 'undercity' ? 22 : Math.max(big ? 9 : 6, door.spec.w - 0.6);
-    this.D = kind === 'palace' ? 46 : kind === 'undercity' ? 44 : Math.max(big ? 8 : 5.5, door.spec.d - 0.6);
+    this.W = kind === 'sanctum' ? 22 : kind === 'palace' ? 34 : kind === 'undercity' ? 22 : Math.max(big ? 9 : 6, door.spec.w - 0.6);
+    this.D = kind === 'sanctum' ? 72 : kind === 'palace' ? 46 : kind === 'undercity' ? 44 : Math.max(big ? 8 : 5.5, door.spec.d - 0.6);
     this.group.position.copy(INTERIOR_ORIGIN);
     scene.add(this.group);
     const sm = sharedMats();
     this.cloth = sm.cloth;
     this.windowMat = sm.window;
-    if (kind === 'palace') {
+    if (kind === 'sanctum') {
+      this.sanctum();
+      this.spawn = this.at(0, this.D / 2 - 2.5);
+    } else if (kind === 'palace') {
       this.palace();
       this.spawn = this.at(0, this.D / 2 - 1.6);
     } else if (kind === 'undercity') {
@@ -479,6 +482,60 @@ export class Interior {
     this.wants.push({ pos: this.at(QX, 1, GH - 1.5), color: 0xffd8a0, intensity: 3.5, distance: 14, decay: 1.4, fire: false });
     this.wants.push({ pos: this.at(PX, 1, GH - 1.5), color: 0xffd8a0, intensity: 3.5, distance: 14, decay: 1.4, fire: false });
     this.wants.push({ pos: this.at(0, GZ, GH - 1), color: 0xfff6e0, intensity: 4, distance: 18, decay: 1.3, fire: false });
+  }
+
+  /**
+   * The sanctum under the Gravewood pedestal: a long, black-stone hall of
+   * pillars lit by cursed fire, a dais at the far end, and a chest behind it.
+   */
+  private sanctum() {
+    const { W, D } = this;
+    const tint = (src: THREE.Material, r: number, g: number, b: number) => {
+      const c = (src as THREE.MeshStandardMaterial).clone();
+      c.color.setRGB(r, g, b);
+      return c;
+    };
+    const floor = tint(this.m.stone, 0.32, 0.3, 0.36), wall = tint(this.m.stone, 0.38, 0.35, 0.42), dark = tint(this.m.stone, 0.18, 0.16, 0.22);
+    const curse = new THREE.MeshBasicMaterial({ color: 0xa050ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+    const GH = 10, T = 0.8, back = -D / 2;
+    this.box(floor, W, 0.2, D, 0, -0.1, 0, 0, true);
+    this.box(dark, W + 2, 0.4, D + 2, 0, GH + 0.2, 0);
+    this.box(wall, W + T * 2, GH, T, 0, GH / 2, back - T / 2, 0, true);
+    this.box(wall, W + T * 2, GH, T, 0, GH / 2, D / 2 + T / 2, 0, true);
+    for (const sx of [-1, 1]) this.box(wall, T, GH, D, sx * (W / 2 + T / 2), GH / 2, 0, 0, true);
+    // The stair you came down, set into the front wall.
+    for (let k = 0; k < 6; k++) this.box(dark, 3, 0.3, 0.6, 0, 0.15 + k * 0.3, D / 2 - 0.3 - k * 0.0, 0);
+    // A black runner down the hall, edged in faint violet.
+    this.box(dark, 3.6, 0.03, D - 8, 0, 0.015, 0);
+    for (const sx of [-1, 1]) {
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, D - 8), curse);
+      edge.position.set(sx * 1.85, 0.04, 0);
+      this.group.add(edge);
+    }
+    // Two rows of great pillars.
+    for (let z = back + 10; z < D / 2 - 4; z += 7) for (const sx of [-1, 1]) {
+      this.cyl(wall, 0.85, GH, sx * (W / 2 - 4), GH / 2, z, true, 12);
+      this.box(dark, 2.2, 0.6, 2.2, sx * (W / 2 - 4), 0.3, z);
+      this.box(dark, 2.2, 0.6, 2.2, sx * (W / 2 - 4), GH - 0.3, z);
+      if ((z - back) % 14 < 7) {
+        this.brazier(sx * (W / 2 - 1.6), z);
+        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.1, 8), curse);
+        flame.position.set(sx * (W / 2 - 1.6), 1.7, z);
+        this.group.add(flame);
+        this.flames.push(flame);
+      }
+    }
+    // The dais, and the chest behind it.
+    for (let k = 0; k < 3; k++) this.box(k === 2 ? dark : floor, 12 - k * 2.5, 0.3, 8 - k * 1.6, 0, 0.15 + k * 0.3, back + 7 - k * 0.6, 0, true);
+    const sigil = new THREE.Mesh(new THREE.RingGeometry(2.2, 2.6, 40), curse);
+    sigil.rotation.x = -Math.PI / 2;
+    sigil.position.set(0, 0.06, back + 18);
+    this.group.add(sigil);
+    this.spots.boss = { pos: this.at(0, back + 18), yaw: 0, seated: false };
+    this.spots.chest = { pos: this.at(0, back + 4, 0.9), yaw: 0, seated: false };
+    this.wants.push({ pos: this.at(0, back + 10, GH - 2), color: 0xa060ff, intensity: 6, distance: 34, decay: 1.2, fire: false });
+    this.wants.push({ pos: this.at(0, 0, GH - 2), color: 0x8070c0, intensity: 3.5, distance: 30, decay: 1.3, fire: false });
+    this.wants.push({ pos: this.at(0, D / 2 - 8, GH - 2), color: 0x9080d0, intensity: 3, distance: 24, decay: 1.4, fire: false });
   }
 
   private statue(x: number, z: number, ry: number, p: ReturnType<typeof palaceMats>) {

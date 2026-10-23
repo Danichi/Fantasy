@@ -96,7 +96,7 @@ export const CITY_SHOPS: [string, string, string][] = [
 ];
 
 let doors: CityDoor[] | null = null;
-/** Doors on the city's buildings: a street cell with a house-high block behind it, spaced apart. */
+/** Doors on the city's buildings: every street face with a building behind it gets one, a few metres apart, so every house opens. */
 export function cityDoors(): CityDoor[] {
   if (doors) return doors;
   const out: CityDoor[] = [];
@@ -108,7 +108,7 @@ export function cityDoors(): CityDoor[] {
       if (i >= 184 && i <= 249 && j >= 97 && j <= 126) continue; // the court and the east gate
       for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const a = cellTop(i + di, j + dj), b = cellTop(i + 2 * di, j + 2 * dj);
-        if (a < 3 || a > 16 || b < 3) continue;
+        if (a < 3 || a > 40 || b < 3) continue;
         // Not in a narrow alley: the street continues either side of the door.
         const si = dj, sj = di;
         if (!isStreet(i + si, j + sj) || !isStreet(i - si, j - sj)) continue;
@@ -119,11 +119,11 @@ export function cityDoors(): CityDoor[] {
   cands.sort((a, b) => a.h - b.h);
   const taken: [number, number][] = [];
   for (const c of cands) {
-    if (taken.some(([ti, tj]) => Math.hypot(ti - c.i, tj - c.j) < 6)) continue;
+    if (taken.some(([ti, tj]) => Math.hypot(ti - c.i, tj - c.j) < 3.5)) continue;
     taken.push([c.i, c.j]);
     const [x, z] = cellWorld(c.i, c.j);
     out.push({ i: c.i, j: c.j, di: c.di, dj: c.dj, x, z, yaw: Math.atan2(-c.di, -c.dj), kind: 'home', name: 'a house', seed: c.h % 100000 });
-    if (out.length >= 120) break;
+    if (out.length >= 420) break;
   }
   // Shops nearest the bazaar square; three taverns spread about.
   const streets = streetCells().filter((c) => c.i < 184 || c.i > 213 || c.j < 97 || c.j > 123);

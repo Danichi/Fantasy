@@ -105,7 +105,7 @@ export const BOUNDARY_PASSIVES: Record<string, NodeEffect> = {
   'boundary:Steady': { text: 'Take 5% less damage', m: { dmgTaken: -0.05 } },
   'boundary:Unmoved': { text: 'Blows your Boundary can\'t turn no longer break it; they land at half strength instead', x: { unmoved: 1 } },
   'boundary:Second Breath': { text: 'When your Focus runs dry, it refills twice as fast', x: { secondBreath: 1 } },
-  'boundary:Gate of the Stillmind': gate('A hermit on the north road, they say, has not moved from one spot in eleven years.'),
+  'boundary:Gate of the Stillmind': gate('A hermit on the Road to Riches, they say, has not moved from one spot in eleven years.'),
   // Recoil
   'boundary:Hard Edge': { text: '+5% damage', m: { melee: 0.05 } },
   'boundary:Ready Hands': { text: '+8% poise damage', m: { poise: 0.08 } },

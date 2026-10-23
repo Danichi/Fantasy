@@ -72,7 +72,7 @@ export const DISCIPLINES: DisciplineDef[] = [
     ],
   },
   {
-    id: 'boundary', fam: 'combat', name: 'Boundary Style', color: '--c-ward', mentor: 'Ser Corvin, the north road', mentorNpc: 'corvin', res: 'Focus', trial: 'trial-boundary', core: 'Boundary',
+    id: 'boundary', fam: 'combat', name: 'Boundary Style', color: '--c-ward', mentor: 'Ser Corvin, the Road to Riches', mentorNpc: 'corvin', res: 'Focus', trial: 'trial-boundary', core: 'Boundary',
     flavour: 'Draw a line around yourself, and let nothing cross it.', how: 'Hold F while standing still to raise your Boundary: attacks that reach into it are turned aside.',
     branches: [
       { name: 'Stillpoint', sub: 'The ring itself', tiers: [['Wide Stance', 'Deep Breath'], ['*Hold Fast', 'Anchor', 'Clear Mind'], ['*Ward Stone', '?Thorns|Still Water', 'Patience'], ['*Sanctum', '!Rooted', 'Steady'], ['Unmoved', 'Second Breath']], cap: 'Gate of the Stillmind', gate: 'stillmind' },
@@ -141,16 +141,18 @@ export const DISCIPLINES: DisciplineDef[] = [
 
   // ---- callings -----------------------------------------------------------------
   {
-    id: 'herbalism', fam: 'calling', name: 'Herbalism', color: '--c-herb', mentor: 'Ilyra Moss, the apothecary', mentorNpc: 'apothecary', res: 'Herbs',
-    flavour: 'Every root in these hills is a sword, if you know how to boil it.', how: 'Gather herbs and brew potions, tonics and oils.',
+    // The recipe nodes (Hearthroot Draught, Nightshade Oil...) are passives that
+    // teach recipes, not bar skills: the herbalism system (src/herbalism) reads them.
+    id: 'herbalism', fam: 'calling', name: 'Herbalism', color: '--c-herb', mentor: 'Wenna Thistledown, the Crown Road', mentorNpc: 'wenna', res: 'Herbs',
+    flavour: 'Every root in these hills is a sword, if you know how to boil it.', how: 'Gather herbs and brew tonics, elixirs, oils and flasks. Gathering and brewing raise Herbalism by themselves.',
     branches: [
-      { name: 'Tonics', sub: 'Healing brews', tiers: [['Clean Cuts', 'Steady Hands'], ['*Hearthroot Draught', 'Double Batch', 'Potent'], ['*Renewal Tea', '?Quick Sip|Slow Brew', 'Bitter Gold'], ['*Lifebloom Tonic', '!Apothecary', 'Distiller'], ['Panacea', 'Rare Roots']], cap: 'Elixir of Life' },
-      { name: 'Venoms', sub: 'Blade oils', tiers: [['Careful Gloves', 'Toxin Lore'], ['*Nightshade Oil', 'Lasting Coat', 'Numbroot'], ['*Wither Oil', '?Paralytic|Corrosive', 'Virulence'], ['*Plague Flask', '!Venomblood', 'Contagion'], ['Black Lotus', 'Deathcap']], cap: "Widow's Kiss" },
-      { name: 'Elixirs', sub: 'Combat power', tiers: [["Brewer's Eye", 'Steady Heat'], ['*Ironbark Tonic', 'Tempered', 'Longer Brews'], ['*Swiftroot Elixir', '?Berserker Brew|Sage Brew', 'Mixologist'], ['*Stormleaf Elixir', '!Master Brewer', 'Twin Elixir'], ['Moonpetal', 'Dragonbloom']], cap: "Philosopher's Draught" },
+      { name: 'Tonics', sub: 'Healing brews', tiers: [['Clean Cuts', 'Steady Hands'], ['Hearthroot Draught', 'Double Batch', 'Potent'], ['Renewal Tea', '?Quick Sip|Slow Brew', 'Bitter Gold'], ['Lifebloom Tonic', '!Apothecary', 'Distiller'], ['Panacea', 'Rare Roots']], cap: 'Elixir of Life' },
+      { name: 'Venoms', sub: 'Oils and flasks', tiers: [['Careful Gloves', 'Toxin Lore'], ['Nightshade Oil', 'Lasting Coat', 'Numbroot'], ['Wither Oil', '?Paralytic|Corrosive', 'Virulence'], ['Plague Flask', '!Venomblood', 'Contagion'], ['Black Lotus', 'Deathcap']], cap: "Widow's Kiss" },
+      { name: 'Elixirs', sub: 'Combat power', tiers: [["Brewer's Eye", 'Steady Heat'], ['Ironbark Tonic', 'Tempered', 'Longer Brews'], ['Swiftroot Elixir', '?Berserker Brew|Sage Brew', 'Mixologist'], ['Stormleaf Elixir', '!Master Brewer', 'Twin Elixir'], ['Moonpetal', 'Dragonbloom']], cap: "Philosopher's Draught" },
     ],
   },
   {
-    id: 'dungeoneering', fam: 'calling', name: 'Dungeoneering', color: '--c-gold', mentor: 'Ser Corvin, the north road', mentorNpc: 'corvin', res: 'Nerve',
+    id: 'dungeoneering', fam: 'calling', name: 'Dungeoneering', color: '--c-gold', mentor: 'Ser Corvin, the Road to Riches', mentorNpc: 'corvin', res: 'Nerve',
     flavour: 'The dark is a map nobody has finished drawing.', how: 'Explore new rooms, draw maps, find secrets and disarm traps.',
     branches: [
       { name: 'Delver', sub: 'Exploring', tiers: [['Torchbearer', 'Sure Step'], ['*Torchlight', "Cartographer's Eye", 'Deep Lungs'], ['*Seek Passage', "Delver's Sense", 'Crawlspace'], ["*Delver's Instinct", '!Lone Delver', 'Night Sight'], ['Deep Breath', 'Sense the Boss']], cap: 'Master Delver' },

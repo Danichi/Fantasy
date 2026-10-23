@@ -18,6 +18,18 @@ export const XP_FOR_KIND: Record<string, [xp: number, gold: number]> = {
   green: [12, 3], blue: [26, 6], magma: [30, 8], cave: [22, 5], armour: [48, 14], orc: [420, 0], dummy: [0, 0],
   rat: [4, 1], dire: [140, 30], bandit: [34, 12], banditChief: [260, 120],
   zombie: [28, 5], skeleton: [32, 7], abomination: [650, 240],
+  // the wilds (roaming; "Elite" = elite affixes) — a danger bonus is paid on top via the reward hook
+  wildWolf: [14, 3], wildWolfElite: [60, 18], wildDireWolf: [120, 26], wildDireWolfElite: [300, 70],
+  wildFox: [6, 2], wildFoxElite: [30, 10], wildBoar: [18, 5], wildBoarElite: [70, 20],
+  wildAurochs: [55, 14], wildAurochsElite: [180, 50], wildStag: [26, 6], wildStagElite: [100, 28],
+  wildGoblin: [20, 6], wildGoblinElite: [80, 24], wildOrc: [60, 18], wildOrcElite: [200, 60],
+  wildWisp: [45, 10], wildWispElite: [160, 45], hollowKnight: [90, 30], briarling: [16, 3], briarlingElite: [60, 15], exileOrc: [50, 12],
+  // the woods bosses
+  bristleback: [700, 200], gnarlbark: [1100, 320], greymane: [1200, 360], thornhorn: [1600, 480], ulgra: [1800, 560],
+  // the Road to Riches and the Sanctum Below
+  flowerGirl: [0, 0], edric: [0, 0], edricHollowed: [2600, 0],
+  // Ghagrabba: the Sun Guard, Ishara, and the sand-folk of the deep Expanse
+  sunGuard: [80, 20], sunCaptain: [700, 220], ishara: [600, 0], scrapshell: [40, 10], duneAngler: [65, 14], sandUrchin: [22, 5],
   // Dungeons Reborn (feat/dungeons): the three dungeon bosses
   grukk: [420, 0], captainVess: [520, 160], tideWarden: [900, 300],
   // the Golden Expanse
