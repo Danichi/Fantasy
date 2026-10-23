@@ -226,3 +226,144 @@ export function mire(at: THREE.Vector3, seed: number) {
   sh.add(boss);
   return g;
 }
+
+const steelMat = new THREE.MeshStandardMaterial({ color: 0x6a5446, roughness: 0.8, metalness: 0.45 });
+const shaftMat = new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 0.9 });
+const clothMats = [0x7a2a24, 0x2a3a5a, 0x8a7a4a].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.95, side: THREE.DoubleSide }));
+const cairnMat = new THREE.MeshStandardMaterial({ color: 0x8a867c, roughness: 0.95 });
+
+/** A rusted blade stuck in the earth at an angle. */
+function stuckBlade(r: () => number) {
+  const g = new THREE.Group();
+  const len = 0.6 + r() * 0.5;
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05, len, 0.008).translate(0, len / 2, 0), steelMat);
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.03), steelMat);
+  guard.position.y = len;
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.18, 6), shaftMat);
+  grip.position.y = len + 0.1;
+  g.add(blade, guard, grip);
+  g.rotation.set((r() - 0.5) * 0.6, r() * Math.PI, (r() - 0.5) * 0.6);
+  g.position.y = -0.2;
+  g.traverse((o) => ((o as THREE.Mesh).castShadow = true));
+  return g;
+}
+
+/** A tattered banner on a leaning pole. */
+function banner(r: () => number) {
+  const g = new THREE.Group();
+  const h = 3 + r() * 1.2;
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, h, 6).translate(0, h / 2, 0), shaftMat);
+  const cross = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 5), shaftMat);
+  cross.rotation.z = Math.PI / 2;
+  cross.position.set(0.42, h - 0.12, 0);
+  // Ragged cloth: a strip with its bottom edge torn and the whole thing sagging.
+  const cloth = new THREE.PlaneGeometry(0.8, 1.3, 6, 8).translate(0.42, h - 0.12 - 0.65, 0);
+  const p = cloth.getAttribute('position');
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i);
+    const down = h - 0.12 - y;
+    let yy = y;
+    if (down > 0.9) yy += (r() * 0.4) * (down - 0.9) * 3;
+    p.setXYZ(i, x, yy, Math.sin(x * 7 + y * 3) * 0.05 + down * 0.04);
+  }
+  cloth.computeVertexNormals();
+  const flag = new THREE.Mesh(cloth, clothMats[Math.floor(r() * clothMats.length)]);
+  flag.castShadow = true;
+  pole.castShadow = true;
+  g.add(pole, cross, flag);
+  g.rotation.set((r() - 0.5) * 0.3, r() * Math.PI * 2, (r() - 0.5) * 0.3);
+  return g;
+}
+
+/** A burial cairn: a heap of grey stones. */
+function cairn(r: () => number) {
+  const g = new THREE.Group();
+  const rock = new THREE.IcosahedronGeometry(0.25, 0);
+  for (let i = 0; i < 16; i++) {
+    const lvl = i < 8 ? 0 : i < 13 ? 1 : 2;
+    const a = r() * Math.PI * 2, d = (2 - lvl) * 0.35 * (0.5 + r() * 0.5);
+    const m = new THREE.Mesh(rock, cairnMat);
+    m.scale.set(1 + r() * 0.6, 0.6 + r() * 0.4, 1 + r() * 0.5);
+    m.position.set(Math.cos(a) * d, 0.1 + lvl * 0.3, Math.sin(a) * d);
+    m.rotation.set(r() * 3, r() * 3, r() * 3);
+    m.castShadow = m.receiveShadow = true;
+    g.add(m);
+  }
+  return g;
+}
+
+/** A helm lying in the grass. */
+function helm(r: () => number) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), steelMat);
+  m.scale.set(1, 1.15, 1.1);
+  m.rotation.set(1.3 + r(), r() * 6, r() - 0.5);
+  m.position.y = 0.08;
+  m.castShadow = true;
+  return m;
+}
+
+/** The Rust Knight's battlefield: trodden grass, cairns for the dead, blades still in the earth, banners nobody took home. */
+export function battlefield(at: THREE.Vector3, seed: number) {
+  const r = rng(seed);
+  const g = new THREE.Group();
+  g.position.copy(at);
+  const grass = new THREE.Color(0x5a6a34), dry = new THREE.Color(0x7a7044), earth = new THREE.Color(0x4a3e2a);
+  g.add(groundPatch(at, 18, (x, z, rr) => grass.clone().lerp(dry, Math.sin(x * 0.5 + z * 0.3) * 0.5 + 0.5).lerp(earth, THREE.MathUtils.smoothstep(rr, 0.35, 0) * 0.6)));
+  const y = (x: number, z: number) => heightAt(at.x + x, at.z + z) - at.y;
+  const place = (o: THREE.Object3D, x: number, z: number, lift = 0) => {
+    o.position.x = x;
+    o.position.z = z;
+    o.position.y += y(x, z) + lift;
+    g.add(o);
+    return o;
+  };
+  // Blades and spears where they fell, all round the middle.
+  for (let i = 0; i < 26; i++) {
+    const a = r() * Math.PI * 2, d = 3.5 + r() * 15;
+    place(stuckBlade(r), Math.cos(a) * d, Math.sin(a) * d);
+  }
+  for (let i = 0; i < 10; i++) {
+    const a = r() * Math.PI * 2, d = 5 + r() * 14, len = 2 + r() * 1.2;
+    const spear = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, len, 5).translate(0, len / 2, 0), shaftMat);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.22, 4).translate(0, len + 0.1, 0), steelMat);
+    const s = new THREE.Group().add(spear, head);
+    s.rotation.set(0.5 + r() * 0.6, r() * Math.PI * 2, 0, 'YXZ');
+    s.position.y = -0.3;
+    spear.castShadow = true;
+    place(s, Math.cos(a) * d, Math.sin(a) * d);
+  }
+  // Banners, faded, at the edges.
+  for (let i = 0; i < 5; i++) {
+    const a = i * 1.26 + r() * 0.5, d = 13 + r() * 6;
+    place(banner(r), Math.cos(a) * d, Math.sin(a) * d, -0.2);
+  }
+  // Cairns for the dead, in a loose ring, with physics so you can't walk through them.
+  for (let i = 0; i < 7; i++) {
+    const a = i * 0.9 + 0.4 + r() * 0.4, d = 15 + r() * 5;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    place(cairn(r), x, z);
+    physics.addCylinder(new THREE.Vector3(at.x + x, at.y + y(x, z) + 0.4, at.z + z), 0.4, 0.75);
+  }
+  // Helms and bones in the grass.
+  for (let i = 0; i < 9; i++) {
+    const a = r() * Math.PI * 2, d = 3 + r() * 14;
+    place(helm(r), Math.cos(a) * d, Math.sin(a) * d);
+  }
+  for (let i = 0; i < 3; i++) {
+    const a = r() * Math.PI * 2, d = 6 + r() * 10;
+    const rc = ribcage(r);
+    rc.scale.setScalar(0.8);
+    place(rc, Math.cos(a) * d, Math.sin(a) * d, 0.05);
+  }
+  // A broken cart wheel.
+  const wheel = new THREE.Group();
+  wheel.add(new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 6, 20, Math.PI * 1.5), shaftMat));
+  for (let k = 0; k < 5; k++) {
+    const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.55, 4).translate(0, 0.27, 0), shaftMat);
+    sp.rotation.z = k * 0.95;
+    wheel.add(sp);
+  }
+  wheel.rotation.set(-Math.PI / 2 + 0.1, 0, r() * 6);
+  place(wheel, 7, -5, 0.06);
+  return g;
+}

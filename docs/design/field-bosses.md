@@ -35,7 +35,7 @@ Named beasts that keep a territory somewhere in Cresha. Code: `src/bosses/`.
 | Brine-Maw | The cove north of Gull Ridge (2182, -156), at low tide (3:00 to 6:30 and 15:00 to 18:30) | built |
 | Mother Ooze | The mire below the mill (215, 140), always | built |
 | The Hollow Thane | The Barrow of the Old Kings on the Crown Road, at night | built |
-| The Rust Knight | Old battlefield on the Crown fields; the armour of a lost champion | planned |
+| The Rust Knight | Old battlefield off the Crown Road past Kingsmile (about -2383, -854), always; the armour of a lost champion | built |
 | Snaggletooth | Goblin warren in the hills, on a war-boar | planned |
 | Varga One-Eye | Orc marches, with her warband | planned |
 
@@ -132,3 +132,33 @@ at night (21:00 to 5:00).
   They always send another." (A lore hint: the player is the fifth summon.)
 - Drops the Hollow Thane's Crown (trinket: +30 mana, +25% mana regen, +5%
   damage, +6 poise).
+
+## The Rust Knight
+
+The rusty gothic suit the Living Armour uses (`enemies/armourKit.ts`), half
+again as big (about 2.75 m), rusted red-brown, moss on the shoulders and
+shield, a greatsword and a kite shield whose painted star has nearly gone.
+Fight: `bosses/rustKnight.ts`. It stands bowed over its sword, point planted
+in the earth, in the middle of a battlefield (lair `battlefield`: cairns,
+blades and spears still in the ground, faded banners, helms, bones, a broken
+cart wheel). Come within 20 m and it lifts its head and draws the sword.
+
+- **The shield:** blows into its front do 10%. Three blows into the shield (a
+  heavy blow counts as two) break its guard: it staggers for about 2 s and
+  takes 150%.
+- **Sweeps:** drawn far back to the side (the tell), then two wide sweeps
+  (three later). They can't be parried: block or get clear.
+- **Overhead:** raised high (the tell), a cut straight down. Parry it and its
+  guard is broken.
+- **Slam:** both hands high, down into the earth: a ring of force 4.5 m round
+  the blade that knocks you flat.
+- **Charge:** at range, behind the shield.
+- **Phase 2** (55%): tears off the shield and throws it away; faster, no guard.
+- **Phase 3** (25%): the light in it goes violet, and a few seconds later the
+  man inside speaks: "Run. While you still can. It was in me before I knew."
+- **Lore:** it was one of the champions summoned before the player. It drops
+  the Dented Signet (trinket: +14 poise, +30 health, +5% damage), with a
+  five-pointed star that matches its shield, and A Torn Journal Page (the
+  second summon's notes: who called them, the armour that fits too well,
+  something breathing in the iron, "Do not trust the voice that brought you").
+

@@ -72,6 +72,8 @@ export interface BossDef {
   phaseLines?: [string, string];
   /** first kill: the unique drop, renown, and a line */
   unique: string;
+  /** more things found on it the first time (a letter, a key) */
+  uniqueAlso?: string[];
   renown: number;
   /** the deed's words (default: Slew <name>) */
   deed?: string;
@@ -250,6 +252,7 @@ export class FieldBosses {
     }
     if (first) {
       this.h.give(def.unique, 1);
+      for (const id of def.uniqueAlso ?? []) this.h.give(id, 1);
       this.h.toast(def.slain);
       events.emit('deed', { id: 'boss:' + def.id, renown: def.renown, label: def.deed ?? `Slew ${def.name}` });
     } else {

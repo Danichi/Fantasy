@@ -285,6 +285,15 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'thaneCrown', name: "The Hollow Thane's Crown", kind: 'accessory', slot: 'trinket', rarity: 'epic',
     desc: "A circlet of green bronze from the Barrow of the Old Kings, far older than the Crown of Cresha. A wheel is worked into its front. Worn, it is cold on the brow, and the dead seem slower to notice you.", stats: { maxMana: 30, manaRegen: 0.25, damagePct: 0.05, poise: 6 },
   },
+  dentedSignet: {
+    id: 'dentedSignet', name: 'Dented Signet', kind: 'accessory', slot: 'trinket', rarity: 'epic',
+    desc: "A heavy gold ring from inside the Rust Knight's gauntlet, dented by some old blow. The seal is a five-pointed star nobody in Cresha uses. Whoever wore it was summoned here, as you were, and fought a long time before the end. It still remembers how.", stats: { poise: 14, maxHp: 30, damagePct: 0.05 },
+  },
+  journalPage: {
+    id: 'journalPage', name: 'A Torn Journal Page', kind: 'key', rarity: 'rare',
+    desc: '"...the second of us they have called, they tell me, and the first is dead. I asked who called us and why. The answer is always \'when you are ready\'. The armour fits as if it were made for me. It was. Something sleeps in the iron at night; I hear it breathe. If you find this, you are another of us. Do not trust the voice that brought you. Do not put on the armour."',
+    stats: {},
+  },
   greyjawFang: {
     id: 'greyjawFang', name: "Greyjaw's Fang", kind: 'accessory', slot: 'trinket', rarity: 'epic',
     desc: "One of Old Greyjaw's fangs, yellow and as long as your finger, on a leather thong. He hunted the north woods for longer than anyone can remember. Wear it and you hunt as he did: hard, and without tiring.", stats: { damagePct: 0.08, staminaRegen: 0.2, maxHp: 15 },

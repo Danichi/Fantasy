@@ -168,6 +168,63 @@ function paintAccessory(def: ItemDef) {
     g.beginPath();
     g.arc(m, 78, 7, 0, Math.PI * 2);
     g.stroke();
+  } else if (def.id === 'dentedSignet') {
+    // A heavy gold ring, dented, a five-pointed star on its seal.
+    g.strokeStyle = '#c89a3a';
+    g.lineWidth = 12;
+    g.beginPath();
+    g.ellipse(m, 74, 30, 26, 0, 0.25, Math.PI * 2 - 0.1);
+    g.stroke();
+    g.strokeStyle = '#7a5a1a';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.ellipse(m, 74, 36, 32, 0, 0.3, 1.0);
+    g.stroke();
+    const gr = g.createRadialGradient(m - 6, 36, 2, m, 42, 22);
+    gr.addColorStop(0, '#f2d88a');
+    gr.addColorStop(1, '#9a6a1a');
+    g.fillStyle = gr;
+    g.beginPath();
+    g.ellipse(m, 42, 22, 17, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#6a4a12';
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 === 0 ? 12 : 5;
+      g.lineTo(m + Math.cos(a) * rr, 43 + Math.sin(a) * rr * 0.8);
+    }
+    g.closePath();
+    g.fill();
+  } else if (def.id === 'journalPage') {
+    // A torn, folded page of close writing.
+    g.fillStyle = '#e2d4aa';
+    g.beginPath();
+    g.moveTo(26, 18);
+    g.lineTo(100, 22);
+    g.lineTo(104, 108);
+    for (let x = 104; x > 24; x -= 8) g.lineTo(x - 4, 110 - (x % 16 === 0 ? 7 : 0));
+    g.closePath();
+    g.fill();
+    g.strokeStyle = 'rgba(120,90,50,0.6)';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(64, 20);
+    g.lineTo(65, 108);
+    g.stroke();
+    g.strokeStyle = '#4a3a2a';
+    g.lineWidth = 1.5;
+    for (let row = 0; row < 9; row++) {
+      for (const [x0, x1] of [[32, 60], [70, 98]]) {
+        g.beginPath();
+        g.moveTo(x0, 32 + row * 8.5);
+        g.lineTo(x1 - ((row * 7 + x0) % 11), 32 + row * 8.5);
+        g.stroke();
+      }
+    }
+    g.fillStyle = 'rgba(110,50,30,0.45)';
+    g.beginPath();
+    g.arc(88, 88, 9, 0, Math.PI * 2);
+    g.fill();
   } else if (def.id === 'greyjawFang') {
     // A long yellowed fang on a leather thong, a tuft of grey fur at the root.
     g.strokeStyle = '#5a3b22';

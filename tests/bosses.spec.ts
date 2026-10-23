@@ -387,3 +387,74 @@ test('The Hollow Thane: warded but for when it raises the dead or is spent, brea
   expect(res.crown).toBe(1);
   expect(errors).toEqual([]);
 });
+
+test('The Rust Knight: waits bowed over its sword, blocks with its shield until the guard breaks or an overhead is parried, throws the shield, speaks as a man, and leaves a signet and a journal page', async ({ game }) => {
+  const { page, errors } = game;
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, T = g.THREE, B = g.bosses;
+    const { heightAt } = await import('/src/world/terrainHeight.ts');
+    const def = B.defs.find((d: any) => d.id === 'rustKnight');
+    const tp = (x: number, z: number) => g.player.teleport(new T.Vector3(x, heightAt(x, z) + 0.5, z));
+    g.time.skipTo(13);
+    g.player.invulnerable = true;
+    tp(def.home.x + 30, def.home.z + 4);
+    g.stepSim(5);
+    const toasts: string[] = [];
+    const t0 = g.hud.toast.bind(g.hud);
+    g.hud.toast = (m: string) => (toasts.push(m), t0(m));
+    const body = B.spawnNow('rustKnight');
+    const fwd = () => new T.Vector3(Math.sin(body.yaw), 0, Math.cos(body.yaw));
+    const hit = (dir: any, dmg: number, poise = 20) => {
+      const h0 = body.hp;
+      body.takeHit({ damage: dmg, poise, dir, at: body.center.clone(), crit: false, source: 'melee' });
+      return h0 - body.hp;
+    };
+    g.stepSim(60);
+    const waiting = body.mode;
+    tp(def.home.x + 10, def.home.z + 3);
+    for (let i = 0; i < 60 * 6 && body.mode !== 'advance'; i++) g.stepSim(1);
+    const rose = body.mode;
+    // Into the shield, then behind it.
+    const front = hit(fwd().negate(), 100);
+    const back = hit(fwd(), 100);
+    // Three blows into the shield break its guard.
+    for (let i = 0; i < 60 * 10 && body.stats.guardBreaks === 0; i++) {
+      g.stepSim(1);
+      if (body.mode === 'advance' && i % 10 === 0) hit(fwd().negate(), 20);
+    }
+    const broke = body.mode;
+    const staggered = hit(fwd().negate(), 100);
+    // Parry its overhead (the player's guard is stood in for here).
+    const recv = g.player.receiveAttack.bind(g.player);
+    g.player.receiveAttack = (att: any) => (att.parryable && att.onParried ? (att.onParried(), recv({ ...att, damage: 0 })) : recv(att));
+    for (let i = 0; i < 60 * 30 && body.stats.parried === 0; i++) g.stepSim(1);
+    g.player.receiveAttack = recv;
+    const parried = body.stats.parried;
+    // Wear it down: it throws its shield, then turns violet and speaks.
+    for (let i = 0; i < 60 * 60 && body.alive && !toasts.some((t) => /Run\. While you still can/.test(t)); i++) {
+      g.stepSim(1);
+      if (i % 20 === 0 && body.phase < 3) hit(fwd(), body.maxHp * 0.03);
+    }
+    const stats = { ...body.stats };
+    const shield = body.hasShield;
+    hit(fwd(), 1e7);
+    for (let i = 0; i < 5; i++) g.stepSim(1);
+    g.hud.toast = t0;
+    const has = (id: string) => g.player.equip.items.filter((it: any) => it.def.id === id).length;
+    return { waiting, rose, front, back, broke, staggered, parried, stats, shield, alive: body.alive, phase: body.phase, signet: has('dentedSignet'), page: has('journalPage'), toasts };
+  });
+  expect(res.waiting).toBe('kneel');
+  expect(res.rose).toBe('advance');
+  expect(res.front).toBeLessThan(res.back * 0.2);
+  expect(res.broke).toBe('stagger');
+  expect(res.staggered).toBeGreaterThan(res.back);
+  expect(res.parried).toBeGreaterThan(0);
+  expect(res.stats.sweeps + res.stats.overheads + res.stats.slams).toBeGreaterThan(2);
+  expect(res.shield).toBe(false);
+  expect(res.toasts.some((t) => /tears its shield/.test(t))).toBe(true);
+  expect(res.toasts.some((t) => /Run\. While you still can/.test(t))).toBe(true);
+  expect(res.alive).toBe(false);
+  expect(res.signet).toBe(1);
+  expect(res.page).toBe(1);
+  expect(errors).toEqual([]);
+});
