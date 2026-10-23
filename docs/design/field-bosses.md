@@ -33,7 +33,7 @@ Named beasts that keep a territory somewhere in Cresha. Code: `src/bosses/`.
 | Old Greyjaw | North-west pines above Elder Glen (-370, -210), at night | built |
 | The White Stag | Deep woods west of the Glen (-300, -20), dawn and dusk, about one day in two; a hunt | built |
 | Brine-Maw | The cove north of Gull Ridge (2182, -156), at low tide (3:00 to 6:30 and 15:00 to 18:30) | built |
-| Mother Ooze | River marsh below the mill; splits, swallows | planned |
+| Mother Ooze | The mire below the mill (215, 140), always | built |
 | The Hollow Thane | Barrow downs on the Crown Road, at night; raises skeletons | planned |
 | The Rust Knight | Old battlefield on the Crown fields; the armour of a lost champion | planned |
 | Snaggletooth | Goblin warren in the hills, on a war-boar | planned |
@@ -94,3 +94,20 @@ wreck in its cove.
 - **Phase 3 (25%):** its shell cracks and something violet shows underneath
   (the Dark); faster, and its guard weakens.
 - Drops the Brine-Maw Shell (a shield: block 120, stability 0.7, poise 8).
+
+## Mother Ooze
+
+A heap of translucent green jelly as big as a haycart (`creatures/ooze/`: a
+wobbling shader blob, not a sculpt), with what she has eaten turning slowly
+inside her: a ribcage, a skull, a knight's helm and his sword. Fight:
+`bosses/motherOoze.ts`. Lair: a mire of black pools, reeds and drowned stumps.
+
+- **Leap:** she squashes down, quivering (the tell), then jumps at you and
+  splats. Not parryable. She lies flattened for a moment after.
+- **Surge:** her front bulges (the tell), then she lurches forward over you.
+  Caught, you're stuck (web) and burning (poison): roll to tear free.
+- **Split:** a heavy blow knocks a lump loose (up to six). The lumps hop at
+  you, but if she's hurt they crawl back into her and she heals 3% each.
+- **Spit (phase 2+):** lobbed globs of acid that leave burning puddles.
+- She shrinks as she's worn down. **Phase 3:** a violet heart shows in her.
+- Drops The Drowned Knight's Sword (damage 30, bleed 6, pierce 15%).

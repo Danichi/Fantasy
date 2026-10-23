@@ -332,6 +332,7 @@ export const ARMS_ITEMS: Record<string, ItemDef> = {
   copperIngot: mat('copperIngot', 'Copper Wire', 'Copper drawn thin for inlay. Runes are cut into steel and filled with it.', 1, ingot(0xc87a4a)),
   ashWood: mat('ashWood', 'Ash Timber', 'Pale, springy ash (tier 2): shafts, hafts and longbows.', 2, logs(0x9a9488, 0xe0cfa8)),
   yewWood: mat('yewWood', 'Yew Timber', 'Red-hearted yew (tier 3): the best bow wood there is.', 3, logs(0x6a4a3a, 0xb0502a), 'fine'),
+  slimeJelly: mat('slimeJelly', 'Ooze Jelly', 'A wobbling lump of green jelly from an ooze. Alchemists boil it down for acid and glue (tier 2).', 2, lumps(0x8ab83a), 'fine'),
   whiteAntler: mat('whiteAntler', 'White Stag Antler', 'A tine-crown shed by the White Stag of the deep woods, pale as frost and faintly cold to the touch. Bowyers and runesmiths would give a great deal to work it (tier 5).', 5, antlerPiece(), 'epic'),
   rawHide: mat('rawHide', 'Raw Hide', 'A skinned hide from a hunt. A tanning rack makes leather of it.', 1, sheet(0x9a7a5a, 0.95)),
   rawMeat: mat('rawMeat', 'Raw Meat', 'Fresh game from a hunt. A cooking fire makes a meal of it; it will not keep forever.', 1, lumps(0x9a3a32)),

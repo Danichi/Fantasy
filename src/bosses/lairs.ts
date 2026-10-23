@@ -172,3 +172,57 @@ export function crabCove(at: THREE.Vector3, seed: number) {
   g.traverse((o) => ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
   return g;
 }
+
+const reedMat = new THREE.MeshStandardMaterial({ color: 0x6a7a3a, roughness: 0.9, side: THREE.DoubleSide });
+const poolMat = new THREE.MeshStandardMaterial({ color: 0x2a3a16, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+const stumpMat = new THREE.MeshStandardMaterial({ color: 0x3a3226, roughness: 0.95 });
+
+/** Mother Ooze's mire: black pools filmed with green, reeds, drowned stumps, the knight's shield. */
+export function mire(at: THREE.Vector3, seed: number) {
+  const r = rng(seed);
+  const g = new THREE.Group();
+  g.position.copy(at);
+  const mud = new THREE.Color(0x3e3a24), slick = new THREE.Color(0x4a5a22), dark = new THREE.Color(0x24261a);
+  g.add(groundPatch(at, 16, (x, z, rr) => mud.clone().lerp(slick, Math.max(0, Math.sin(x * 0.7 + 1) * Math.cos(z * 0.6)) * 0.8).lerp(dark, THREE.MathUtils.smoothstep(rr, 0.7, 0.2) * 0.4)));
+  const y = (x: number, z: number) => heightAt(at.x + x, at.z + z) - at.y;
+  // Pools of black water with a green film.
+  for (let i = 0; i < 6; i++) {
+    const a = r() * Math.PI * 2, d = 4 + r() * 10, R = 1.5 + r() * 2.5;
+    const p = new THREE.Mesh(new THREE.CircleGeometry(R, 20).rotateX(-Math.PI / 2), poolMat);
+    p.scale.set(1, 1, 0.6 + r() * 0.5);
+    p.position.set(Math.cos(a) * d, y(Math.cos(a) * d, Math.sin(a) * d) + 0.06, Math.sin(a) * d);
+    p.rotation.y = r() * Math.PI;
+    g.add(p);
+  }
+  // Reeds in clumps.
+  const blade = new THREE.PlaneGeometry(0.06, 1.3).translate(0, 0.65, 0);
+  const reeds = new THREE.InstancedMesh(blade, reedMat, 320);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion();
+  for (let i = 0; i < 320; i++) {
+    const c = Math.floor(i / 20);
+    const ca = c * 2.4 + seed, cd = 6 + (c % 4) * 3.5;
+    const x = Math.cos(ca) * cd + (r() - 0.5) * 2, z = Math.sin(ca) * cd + (r() - 0.5) * 2;
+    q.setFromEuler(new THREE.Euler((r() - 0.5) * 0.4, r() * Math.PI, (r() - 0.5) * 0.4));
+    m.compose(new THREE.Vector3(x, y(x, z), z), q, new THREE.Vector3(1, 0.6 + r() * 0.8, 1));
+    reeds.setMatrixAt(i, m);
+  }
+  g.add(reeds);
+  // Drowned stumps.
+  for (let i = 0; i < 5; i++) {
+    const a = r() * Math.PI * 2, d = 5 + r() * 9;
+    const s = new THREE.Mesh(new THREE.CylinderGeometry(0.25 + r() * 0.2, 0.4, 0.8 + r() * 1.4, 8), stumpMat);
+    s.position.set(Math.cos(a) * d, y(Math.cos(a) * d, Math.sin(a) * d) + 0.3, Math.sin(a) * d);
+    s.rotation.set((r() - 0.5) * 0.3, r() * 3, (r() - 0.5) * 0.3);
+    s.castShadow = true;
+    g.add(s);
+  }
+  // The knight's shield, half sunk, his colours still showing.
+  const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.04, 20), new THREE.MeshStandardMaterial({ color: 0x3a4a6a, roughness: 0.7 }));
+  sh.position.set(2.5, y(2.5, 3) + 0.12, 3);
+  sh.rotation.set(1.2, 0.4, 0.2);
+  g.add(sh);
+  const boss = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x6a4a2a, roughness: 0.8, metalness: 0.3 }));
+  boss.position.set(0, 0.03, 0);
+  sh.add(boss);
+  return g;
+}

@@ -6,7 +6,7 @@ import type { AdventurerGuild, GuildQuest } from '../guild/adventurerGuild';
 // keeps counting progress and paying out. Mirrored objectives are signals
 // nothing fires, so the log never advances them on its own.
 
-const KIND_NAME: Record<string, string> = { greyjaw: 'Old Greyjaw', brineMaw: 'Brine-Maw', whiteStag: 'the White Stag (bring its antler)', green: 'wolves', blue: 'stags', cave: 'goblins', orc: 'orcs', armour: 'animated armour', rat: 'rats', any: 'hostile creatures' };
+const KIND_NAME: Record<string, string> = { greyjaw: 'Old Greyjaw', motherOoze: 'Mother Ooze', brineMaw: 'Brine-Maw', whiteStag: 'the White Stag (bring its antler)', green: 'wolves', blue: 'stags', cave: 'goblins', orc: 'orcs', armour: 'animated armour', rat: 'rats', any: 'hostile creatures' };
 
 function objective(g: GuildQuest): Objective {
   const id = 'guild:' + g.id;

@@ -14,6 +14,7 @@ import { greyjawGeometry } from '../creatures/wolf/greyjaw';
 import { stagGeometry } from '../creatures/stag/model';
 import { crabGeometry } from '../creatures/crab/model';
 import { CrabVisual, crabDark } from '../creatures/crab/visual';
+import { OozeVisual } from '../creatures/ooze/visual';
 import { StagVisual, tickStagFur } from '../creatures/stag/visual';
 import { greyjawDark } from '../creatures/wolf/visual';
 
@@ -68,14 +69,22 @@ scene.add(ground);
 
 const t0 = performance.now();
 const kind = P.get('c') ?? 'boar';
-const geo = kind === 'crab' ? { ...crabGeometry(), coat: null } : kind === 'stag' ? stagGeometry() : kind === 'greyjaw' ? greyjawGeometry() : kind === 'wolf' ? wolfGeometry() : kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
+const geo = kind === 'ooze' ? { ms: 0, body: new THREE.IcosahedronGeometry(1, 5), far: new THREE.IcosahedronGeometry(1, 2) } : kind === 'crab' ? { ...crabGeometry(), coat: null } : kind === 'stag' ? stagGeometry() : kind === 'greyjaw' ? greyjawGeometry() : kind === 'wolf' ? wolfGeometry() : kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
 type Look = { root: THREE.Group; gait: { reset: (r: THREE.Object3D, g: (x: number, z: number) => number) => void }; setPose: (p: never) => void; update: (dt: number, v: THREE.Vector3, g: (x: number, z: number) => number) => void; lod: (d: number, fur: boolean) => void };
 const batLook = (): Look => {
   const v = new BatVisual({ scale: Number(P.get('scale') ?? 2.5) });
   v.root.position.y = 0.6;
   return { root: v.root, gait: { reset: () => {} }, setPose: (p: never) => v.setPose(p), update: (dt) => v.update(dt, 0, 0), lod: (d, f) => v.lod(d, f) };
 };
-const boar: Look = kind === 'crab' ? new CrabVisual() : kind === 'stag' ? new StagVisual() : kind === 'greyjaw' ? new WolfVisual({ look: 'greyjaw', geometry: greyjawGeometry() }) : kind === 'wolf' ? new WolfVisual({ look: (P.get('look') ?? 'grey') as WolfLook }) : kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
+const oozeLook = (): Look => {
+  const v = new OozeVisual({ size: Number(P.get('size') ?? 1.2) });
+  if (P.get('dark')) v.dark = Number(P.get('dark'));
+  if (P.get('melt')) v.melt = Number(P.get('melt'));
+  if (P.get('squash')) v.setSquash(Number(P.get('squash')));
+  if (P.get('bulge')) v.setBulge(Number(P.get('bulge')));
+  return { root: v.root, gait: { reset: () => {} }, setPose: () => {}, update: (dt) => v.update(dt), lod: () => {} };
+};
+const boar: Look = kind === 'ooze' ? oozeLook() : kind === 'crab' ? new CrabVisual() : kind === 'stag' ? new StagVisual() : kind === 'greyjaw' ? new WolfVisual({ look: 'greyjaw', geometry: greyjawGeometry() }) : kind === 'wolf' ? new WolfVisual({ look: (P.get('look') ?? 'grey') as WolfLook }) : kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
 scene.add(boar.root);
 if (P.get('dark')) (kind === 'crab' ? crabDark : greyjawDark)(Number(P.get('dark')));
 if (P.get('air')) (boar as unknown as { airborne: boolean }).airborne = true;

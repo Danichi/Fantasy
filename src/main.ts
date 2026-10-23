@@ -121,9 +121,14 @@ import { creatureView } from './creatures/view';
 import { GuardArc } from './ui/guardArc';
 import { Raids } from './raid/raids';
 import { FieldBosses } from './bosses/fieldBosses';
+import { GRASS_MASKS } from './world/groundWindow';
 import { GREYJAW } from './bosses/greyjaw';
 import { WHITE_STAG } from './bosses/whiteStag';
 import { BRINE_MAW } from './bosses/brineMaw';
+import { MOTHER_OOZE } from './bosses/motherOoze';
+
+/** Field bosses, in the order they were added (bosses/). */
+const BOSS_DEFS = [GREYJAW, WHITE_STAG, BRINE_MAW, MOTHER_OOZE];
 import { tickBoarFur } from './creatures/boar/visual';
 import { tickSpiderFur } from './creatures/spider/visual';
 import { updateSnare } from './creatures/spider/spider';
@@ -238,7 +243,7 @@ async function boot() {
   const capital = new RoyalCapital(r.scene, world.mats, fx);
   mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...[GREYJAW, BRINE_MAW].filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
+  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -1136,9 +1141,11 @@ async function boot() {
       hud.toast(`${b.label} for ${Math.round(b.sec / 60)} min`);
     },
   });
-  bosses.add(GREYJAW);
-  bosses.add(WHITE_STAG);
-  bosses.add(BRINE_MAW);
+  for (const d of BOSS_DEFS) {
+    bosses.add(d);
+    // Their lairs are trampled and bare.
+    if (d.clearing) GRASS_MASKS.push({ x: d.home.x, z: d.home.z, r: d.clearing * 0.7, amount: 0.8, tint: 1 });
+  }
   // Doing something to a boss (laying a hand on the White Stag).
   realm.overworldInteractables.push({
     get pos() {

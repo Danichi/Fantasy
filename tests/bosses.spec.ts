@@ -279,3 +279,52 @@ test('Brine-Maw: up at low tide, its crusher guards its front, it rears and slam
   expect(res.shell).toBe(1);
   expect(errors).toEqual([]);
 });
+
+test('Mother Ooze: leaps and splats, swallows you in a surge, sheds lumps that crawl back to heal her, spits acid, and gives up the knight\'s sword', async ({ game }) => {
+  const { page, errors } = game;
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, T = g.THREE, B = g.bosses;
+    const { heightAt } = await import('/src/world/terrainHeight.ts');
+    const tp = (x: number, z: number) => g.player.teleport(new T.Vector3(x, heightAt(x, z) + 0.5, z));
+    g.time.skipTo(12);
+    g.player.invulnerable = true;
+    tp(215, 128);
+    g.stepSim(5);
+    const body = B.spawnNow('motherOoze', new T.Vector3(215, 0, 145));
+    const hit = (dmg: number, poise: number) => body.takeHit({ damage: dmg, poise, dir: new T.Vector3(0, 0, 1), at: body.center.clone(), crit: false, source: 'melee' });
+    const size0 = body.size;
+    for (let i = 0; i < 60 * 12; i++) g.stepSim(1);
+    const early = { ...body.stats };
+    // A heavy blow knocks a lump loose; left alone, it crawls back and she heals.
+    const before = body.hp;
+    hit(body.maxHp * 0.06, 60);
+    const afterHit = body.hp;
+    for (let i = 0; i < 60 * 8; i++) g.stepSim(1);
+    const healed = body.hp > afterHit;
+    // Worn past half and kept at a distance, she spits.
+    hit(body.maxHp * 0.45, 0);
+    for (let i = 0; i < 60 * 16 && body.stats.globs === 0; i++) {
+      if (i % 30 === 0) {
+        const away = g.player.pos.clone().sub(body.position).setY(0).normalize().multiplyScalar(11).add(body.position);
+        tp(away.x, away.z);
+      }
+      g.stepSim(1);
+    }
+    const sizeNow = body.size;
+    hit(1e6, 0);
+    for (let i = 0; i < 5; i++) g.stepSim(1);
+    return {
+      early, before, afterHit, healed, stats: body.stats, phase: body.phase, size0, sizeNow, alive: body.alive,
+      sword: g.player.equip.items.filter((it: any) => it.def.id === 'drownedKnightSword').length,
+    };
+  });
+  expect(res.early.leaps + res.early.surges).toBeGreaterThan(0);
+  expect(res.stats.splits).toBeGreaterThan(0);
+  expect(res.healed).toBe(true);
+  expect(res.stats.absorbed).toBeGreaterThan(0);
+  expect(res.stats.globs).toBeGreaterThan(0);
+  expect(res.sizeNow).toBeLessThan(res.size0);
+  expect(res.alive).toBe(false);
+  expect(res.sword).toBe(1);
+  expect(errors).toEqual([]);
+});

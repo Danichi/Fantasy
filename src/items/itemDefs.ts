@@ -204,6 +204,10 @@ export const ITEMS: Record<string, ItemDef> = {
     desc: 'A greatsword with the Sunwheel worked into its crossguard, pulled from the Gravewood\'s pedestal. It burns with a clean, gold light.',
     stats: { damage: 35, speed: 0.95, burn: 6, stagger: 1.3, poise: 6 }, build: () => buildSword({ ...longsword, bladeLen: 1.02, bladeWidth: 0.029, guardSpan: 0.15, guardMat: 'brass', tint: 0xf4ead0, glow: 0xffc85a, glowStrength: 2.4 }),
   },
+  drownedKnightSword: {
+    id: 'drownedKnightSword', name: "The Drowned Knight's Sword", kind: 'sword', slot: 'main', rarity: 'epic',
+    desc: "A knight's longsword, taken out of Mother Ooze. Months in her have etched the blade green and left it sharper than any smith could, and her acid still weeps from it: wounds keep burning after it cuts. A crest on the pommel has been eaten away.", stats: { damage: 30, speed: 1.02, bleed: 6, pierce: 0.15 }, build: () => buildSword({ ...longsword, bladeLen: 0.9, tint: 0xa8c088, glow: 0x8acb3a, glowStrength: 0.5 }),
+  },
   brineMawShell: {
     id: 'brineMawShell', name: 'Brine-Maw Shell', kind: 'shield', slot: 'off', rarity: 'epic',
     desc: "A piece of Brine-Maw's own carapace, barnacles and all, backed with leather. It turns a blade like the crab turned yours, and it never quite dries.", stats: { block: 120, stability: 0.7, poise: 8 }, build: () => buildCrabShield(),
