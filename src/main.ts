@@ -66,6 +66,28 @@ import { linkGuildContracts } from './quests/guildContracts';
 import { setupGlenMoreQuests } from './quests/glenMoreQuests';
 import { buildGlenLife } from './world/glenLife';
 import { GoldenExpanse } from './world/desert/goldenExpanse';
+import { Wilds, WILDS_CLEARINGS } from './world/wilds/wilds';
+import { inCity } from './world/desert/cityGrid';
+import { GhagrabbaLife, ghagrabbaHerds } from './world/desert/ghagrabbaLife';
+import { OutcastSands } from './world/desert/outcastSands';
+import { GhagrabbaSideHooks } from './world/desert/ghagrabbaSideHooks';
+import { ScrapTowns, scrapTownFolk } from './world/desert/scrapTowns';
+import type { GhagrabbaDeps } from './world/desert/ghagrabbaTypes';
+import { GHAGRABBA_SIDE_QUESTS } from './quests/ghagrabbaSide';
+import { chainOutcast } from './quests/ghagrabbaMain';
+import { SUNSPIRE } from './world/desert/desertLayout';
+import { WILDS_QUESTS } from './quests/wildsQuests';
+import { buildRoadLife, stubHooks as roadLifeStubHooks, type RoadLifeHooks } from './world/roadLife';
+import { setupRoadLifeQuests } from './quests/roadLifeQuests';
+import { Herbalism } from './herbalism/herbalism';
+import { setupHerbalismQuests } from './quests/herbalismQuests';
+import type { NpcSpec } from './npc/npc';
+import { ReagentDrops } from './world/herbs/reagentDrops';
+import { buildHerbFolk } from './world/herbs/herbFolk';
+import { RoadToRiches, MEADOW_CLEARING } from './world/roadToRiches';
+import { GravewoodKey } from './world/gravewoodKey';
+import { CorruptedBrother } from './enemies/corruptedBrother';
+import { Undead } from './enemies/undead';
 import { sunspireResidents } from './world/desert/sunspireFolk';
 import { setupDesertQuests } from './quests/desertQuests';
 import { PALACE_SEATS } from './world/desert/sunspireFolk';
@@ -237,6 +259,10 @@ async function boot() {
   const crownHooks: CrownRoadHooks = { toast: () => {}, bossBar: () => {}, flags: {}, give: () => {}, gold: () => {}, heal: () => {}, hour: () => 12, save: () => {} };
   const crownRoad = buildCrownRoad(r.scene, world.mats, fx, slimes, crownHooks);
   mark('crownRoad');
+  // Road life on the roads into the capital: travellers, wayside stops, road events (hooks filled in below).
+  const roadLifeHooks: RoadLifeHooks = roadLifeStubHooks();
+  const roadLife = buildRoadLife(r.scene, world.mats, fx, roadLifeHooks);
+  mark('roadLife');
   const port = buildPortAurelle(r.scene, world.mats, fx);
   // The island harbours across the Grand Ocean.
   const islands = buildIslandPorts(r.scene, world.mats);
@@ -245,7 +271,7 @@ async function boot() {
   const capital = new RoyalCapital(r.scene, world.mats, fx);
   mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
+  stylizedNature.clearings = [...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -274,6 +300,9 @@ async function boot() {
   const npcs = new NpcManager(r.scene, time, r.renderer);
   // The Golden Expanse (desert, far west-south-west); built once the save and quests exist.
   let desert: GoldenExpanse | null = null;
+  let wilds: Wilds | null = null;
+  /** Systems built after the realm that hide with the overworld. */
+  const hideHooks: ((hidden: boolean) => void)[] = [];
   {
     const folk = elderGlenFolk(world.village.houses);
     // Work spots from the farmstead and market square.
@@ -298,7 +327,7 @@ async function boot() {
     const capFolk = capitalResidents();
     npcs.addSettlement(capFolk.settlement);
     for (const rec of capFolk.records) npcs.add(rec);
-    for (const k of [...kingsRoad.settlements, ...crownRoad.settlements]) {
+    for (const k of [...kingsRoad.settlements, ...crownRoad.settlements, ...roadLife.settlements]) {
       npcs.addSettlement(k.settlement);
       for (const rec of k.records) npcs.add(rec);
     }
@@ -308,6 +337,10 @@ async function boot() {
     const desertFolk = sunspireResidents();
     for (const s of desertFolk.settlements) npcs.addSettlement(s);
     for (const rec of desertFolk.records) npcs.add(rec);
+    // The scrap towns' people, out in the deep Expanse.
+    const scrapFolk = scrapTownFolk();
+    for (const s of scrapFolk.settlements) npcs.addSettlement(s);
+    for (const rec of scrapFolk.records) npcs.add(rec);
   }
   // Livestock in their pens and pastures; wild deer and foxes stream per tile.
   const fauna = new Fauna(r.scene);
@@ -316,6 +349,8 @@ async function boot() {
   fauna.addHerd('sheep', 12, farm.ranges.sheep);
   fauna.addHerd('alpaca', 2, farm.ranges.sheep);
   for (const h of crownRoad.herds) fauna.addHerd(h.species, h.count, h.range);
+  for (const h of roadLife.herds) fauna.addHerd(h.species, h.count, h.range);
+  for (const h of ghagrabbaHerds()) fauna.addHerd(h.species, h.count, h.range);
   fauna.addHerd('horse', 3, farm.ranges.horses);
   fauna.addHerd('horse_white', 1, farm.ranges.horses);
   fauna.addHerd('donkey', 1, farm.ranges.horses);
@@ -419,6 +454,9 @@ async function boot() {
       riverLife?.setVisible(!h);
       caravans?.setVisible(!h);
       desert?.setVisible(!h);
+      wilds?.setVisible(!h);
+      roadLife.setVisible(!h);
+      for (const f of hideHooks) f(h);
       encounters?.setVisible(!h);
       flowers.mesh.visible = !h;
       river.mesh.visible = !h;
@@ -428,7 +466,7 @@ async function boot() {
       microDiscoveries?.setVisible(!h);
       town.setVisible(!h);
     },
-    clearEnemies: () => { slimes.clear(); frontier?.dispose(); encounters?.clear(); },
+    clearEnemies: () => { slimes.clear(); frontier?.dispose(); encounters?.clear(); roadLife.clear(); wilds?.clear(); },
     enemiesEnabled: (on) => (slimes.enabled = on && !TEST_MODE),
   }, rewards, world.crypt.door, world.mineDoor);
   // ---- Dungeons Reborn (feat/dungeons): Hollow Ridge Caves and the Drowned Shrine open onto the world ----
@@ -602,6 +640,26 @@ async function boot() {
   const roads = buildRoadFurniture(r.scene, world.mats, (who, title, text) => dialogue.show(who, title, text, [{ label: 'Turn back.', run: () => dialogue.close() }]));
   const foraging = new Foraging(r.scene, giveItem, gameHours, () => time.hour);
   foraging.fromJSON(saveData?.world?.forage);
+  // Herbalism content: gather bursts and night motes, herbalist's tools, thorns that sting (never fatal), rare-find toasts.
+  foraging.fx = fx;
+  foraging.has = (id) => countItem(id) > 0;
+  foraging.hurt = (n) => { if (player.hp > n + 1) player.takeDamage(n); };
+  foraging.toast = (m) => hud.toast(m);
+  // Beast reagents: wolf fangs, slime gel, venom sacs, bone dust, ember ash (picked up by walking over them).
+  const reagentDrops = new ReagentDrops({
+    scene: r.scene, fx, give: giveItem, groundAt: heightAt, toast: (m) => hud.toast(m),
+    isBeast: (id) => slimes.slimes.some((b) => b.id === id),
+  });
+  // Wenna Thistledown, the wandering herbalist camped by the Crown Road (Herbalism's mentor).
+  const herbFolk = buildHerbFolk(r.scene, {
+    shop: (who, title, intro, stock, wants) => town.showShop(who, title, intro, stock, { wants }),
+    day: () => time.day,
+    has: (id) => countItem(id) > 0,
+    gathered: (id) => foraging.gatheredCount(id),
+  });
+  npcs.addSettlement(herbFolk.settlement);
+  for (const rec of herbFolk.records) npcs.add(rec);
+  hideHooks.push((h) => herbFolk.setVisible(!h));
   population.fromJSON(saveData?.world?.wilds);
   const serviceNpc = (id: string) => town.npcs.find((n) => n.spec.id === id) ?? null;
   const quests = new QuestLog({
@@ -612,7 +670,7 @@ async function boot() {
     xp: (n) => player.prog.addXp(n),
     guildRep: (n) => town.guild.addRep(n),
     toast: (m) => hud.toast(m),
-    npcPos: (id) => serviceNpc(id)?.pos ?? npcs.find(id)?.pos ?? null,
+    npcPos: (id) => serviceNpc(id)?.pos ?? npcs.find(id)?.pos ?? roadLife.npcPos(id) ?? null,
     npcAway: (id) => (serviceNpc(id) ? null : npcs.whereabouts(id)),
     hour: () => time.hour,
   });
@@ -621,6 +679,26 @@ async function boot() {
     count: countItem, take: takeItem, give: giveItem, toast: (m) => hud.toast(m),
   });
   town.questOptions = (id, show, back) => quests.options(id, show, back);
+  // ---- Herbalism: alchemy tables, recipes, elixir buffs, blade oils and thrown flasks ----
+  const herbalism = new Herbalism(r.scene, player, fx, {
+    toast: (m) => hud.toast(m),
+    signal: (id, n) => { quests.signal(id, n); },
+    wants: (id) => quests.wants(id),
+    shop: (who, title, intro, stock, wants) => town.showShop(who, title, intro, stock, { wants, buyRate: { default: 0.35 } }),
+    mentor: (say) => mentorOptions(player.paths, { id: 'wenna' } as NpcSpec, say, (m) => hud.toast(m)),
+    lightning: (a, b) => skillRt.vfx.lightning(a, b, 'wind'),
+    save: () => save(),
+  });
+  herbalism.fromJSON(saveData?.world?.herbalism);
+  herbalism.onToggle = (open) => {
+    if (open) dialogue.close();
+    input.uiMode = open || inv.open || skills.open || mapUI.open || dialogue.open || shopUI.open;
+    if (open) input.exitLock();
+    else if (!dialogue.open && !shopUI.open && !inv.open && !skills.open) input.requestLock();
+  };
+  setupHerbalismQuests(quests, herbalism);
+  realm.overworldInteractables.push(...herbalism.interactables);
+  hideHooks.push((h) => herbalism.setVisible(!h));
   // What townsfolk know: the hour, the weather, the story so far, your classes.
   const talkCtx = () => ({
     hour: time.hour, rain: weather.p.rain > 0.4, done: (id: string) => quests.isDone(id), active: (id: string) => quests.isActive(id),
@@ -698,6 +776,7 @@ async function boot() {
   quests.add(...PORT_QUESTS);
   quests.add(...SEA_QUESTS);
   quests.add(...CAPITAL_QUESTS, ...CROWN_ROAD_QUESTS);
+  quests.add(...WILDS_QUESTS);
   // The Crown checkpoint lifts its barrier for anyone registered at the Academy (on load too).
   quests.hooks.set('academy-trial:done', () => roads.open('capital'));
   // The Crown's tourney: a bout with Ser Gawen in the Silver Lance's ring.
@@ -935,7 +1014,10 @@ async function boot() {
   };
   const stableFor = (id: string, yard: THREE.Vector3, stop: string) => (show: (t: string, o: { label: string; run: () => void }[]) => void, back: () => void) =>
     [...horses.stableOptions(yard, show, back, () => player.prog.gold, (n) => player.prog.addGold(-n)), ...coachOptions(stop, show, back)];
-  town.serviceOptions = (id, show, back) => (id === 'stablemaster' ? stableFor(id, glenYard, 'elderGlen')(show, back) : []);
+  town.serviceOptions = (id, show, back) => [
+    ...(id === 'stablemaster' ? stableFor(id, glenYard, 'elderGlen')(show, back) : []),
+    ...herbalism.serviceOptions(id, show, back),
+  ];
   folkServices.set('dunmore', stableFor('dunmore', kingsRoad.stableYard, 'waystation'));
   folkServices.set('hobbs', stableFor('hobbs', PORT_SPOTS.stable, 'portAurelle'));
   folkServices.set('capOstler', stableFor('capOstler', CAPITAL_SPOTS.stable, 'royalCapital'));
@@ -951,6 +1033,37 @@ async function boot() {
   });
   Object.defineProperty(crownHooks, 'flags', { get: () => worldFlags }); // (declared further down)
   realm.overworldInteractables.push(...crownRoad.interactables);
+  const roadLifeImpl: Partial<RoadLifeHooks> = {
+    toast: (m) => hud.toast(m),
+    talk: (who, title, text, opts) => dialogue.show(who, title, text, opts),
+    close: () => dialogue.close(),
+    dialogueOpen: () => dialogue.open,
+    shop: (name, title, intro, stock) => town.showShop(name, title, intro, stock),
+    give: (id, n) => giveItem(id, n),
+    take: (id, n) => takeItem(id, n),
+    count: (id) => countItem(id),
+    gold: (n) => player.prog.addGold(n),
+    goldNow: () => player.prog.gold,
+    xp: (n) => player.prog.addXp(n),
+    hour: () => time.hour,
+    day: () => time.day,
+    save: () => save(),
+    quests,
+    camera: () => r.camera,
+    spar: (spec, onWin) => {
+      if (player.mounted) horses.dismount();
+      duelWin = onWin;
+      duel.start(spec);
+      hud.toast(`${spec.name}: "Blades up. Begin!"`);
+    },
+    card: (title, sub) => hud.regionCard(title, sub, true),
+    gateOpen: () => !!roads.gates.find((g) => g.road === 'capital')?.open,
+  };
+  Object.assign(roadLifeHooks, roadLifeImpl);
+  Object.defineProperty(roadLifeHooks, 'flags', { get: () => worldFlags }); // (declared further down, like crownHooks)
+  for (const [id, svc] of roadLife.services) folkServices.set(id, svc);
+  setupRoadLifeQuests(quests, roadLife);
+  realm.overworldInteractables.push(...roadLife.interactables);
   for (const [id, line] of [['tamsin', 'A bed under the eaves \u2014 10g'], ['oswin', 'A room at the Kingsmile \u2014 15g']] as [string, string][]) {
     const fee = Number(line.match(/(\d+)g/)![1]);
     folkServices.set(id, (show, back) => [{
@@ -984,7 +1097,7 @@ async function boot() {
       const info = resolveDoor(d);
       const where = REGIONS[regionAt(d.pos.x, d.pos.z)]?.name ?? 'Elder Glen';
       realm.overworldInteractables.push({
-        pos: d.pos, radius: 1.5,
+        pos: d.pos, radius: 2.1,
         label: () => `Enter ${info.name}`,
         enabled: () => realm.mode === 'overworld' && !player.mounted,
         action: () => void realm.enterInterior({ ...d, kind: info.kind, name: info.name, keeper: info.keeper }, info.kind, world.mats, spells, (label: string, text: string) => dialogue.show(where, label, text, [{ label: 'Back.', run: () => dialogue.close() }])),
@@ -1054,6 +1167,73 @@ async function boot() {
       });
     }
   };
+  // ---- The Sanctum Below: Edric, the Hollowed, waits under the Gravewood pedestal ----
+  const sanctum = { boss: null as CorruptedBrother | null, adds: [] as Undead[], spoke: false, met: false, chest: null as THREE.Vector3 | null };
+  const EDRIC_WORDS = 'I knew you\u2019d come. Sooner or later I knew you\u2019d come down here, with that key in your hand.\n\n'
+    + 'She was singing. Did you hear her? She was always singing.\n\n'
+    + 'You beat me once, up there in the flowers. So I came down here, where the dark things live, and I gave myself to them. All of me. For the cursed strength to beat you.\n\n'
+    + 'Get up, then. For Posy.';
+  const fillSanctum = (it: Interior, extras: Interactable[]) => {
+    const b = it.spots.boss, c = it.spots.chest;
+    sanctum.chest = c ? c.pos.clone() : null;
+    if (b && !worldFlags.edricHollowedDead) {
+      const lo = it.at(-it.W / 2 + 1.2, -it.D / 2 + 1.2), hi = it.at(it.W / 2 - 1.2, it.D / 2 - 1.2);
+      const boss = new CorruptedBrother(b.pos.clone(), b.yaw, r.scene, fx, { x0: lo.x, x1: hi.x, z0: lo.z, z1: hi.z });
+      sanctum.boss = boss;
+      sanctum.spoke = false;
+      boss.onSummon = (at) => {
+        // The dead of the Gravewood claw up through the floor to help him.
+        for (let k = 0; k < 3; k++) {
+          const a = (k / 3) * Math.PI * 2 + Math.random();
+          const p = new THREE.Vector3(at.x + Math.cos(a) * 5, it.at(0, 0).y, at.z + Math.sin(a) * 5);
+          sanctum.adds.push(new Undead('skeleton', p, a, r.scene, fx));
+        }
+      };
+      boss.onPhase2 = () => hud.toast('Edric: "MORE. Give me MORE!"');
+      boss.onDeath = () => {
+        worldFlags.edricHollowedDead = true;
+        hud.bossBar(null);
+        dialogue.show('Edric, the Hollowed', 'Brother of Posy', 'The dark goes out of him like breath. For a moment he is only a boy on the stone floor.\n\n\u201cTell her\u2026 tell her I tried.\u201d', [{ label: '(Say nothing.)', run: () => dialogue.close() }]);
+        save();
+      };
+    }
+    if (c) extras.push({
+      pos: c.pos, radius: 2.2,
+      label: () => 'Open the chest',
+      enabled: () => !!worldFlags.edricHollowedDead && !worldFlags.gwChestOpened,
+      action: () => {
+        worldFlags.gwChestOpened = true;
+        giveItem('hollowedBlade', 1);
+        giveItem('posysRibbon', 1);
+        player.prog.addGold(1500);
+        hud.toast('+1500 gold');
+        save();
+      },
+    });
+  };
+  const clearSanctum = () => {
+    sanctum.boss?.dispose();
+    sanctum.boss = null;
+    for (const u of sanctum.adds) u.dispose();
+    sanctum.adds = [];
+    sanctum.chest = null;
+    hud.bossBar(null);
+  };
+  const updateSanctum = (dt: number) => {
+    const boss = sanctum.boss;
+    if (boss) {
+      // His words when you come near, then the fight.
+      if (!sanctum.spoke && !dialogue.open && boss.position.distanceTo(player.pos) < 16) {
+        sanctum.spoke = true;
+        const again = sanctum.met;
+        sanctum.met = true;
+        dialogue.show('Edric, the Hollowed', 'Brother of Posy', again ? 'Back again? Good. I can do this forever. Can you?' : EDRIC_WORDS, [{ label: again ? 'Draw your sword.' : '\u2026', run: () => { dialogue.close(); boss.wake(); } }]);
+      }
+      boss.update(dt, player);
+      if (sanctum.spoke && boss.alive) hud.bossBar(boss, boss.name, boss.phases);
+    }
+    for (const u of sanctum.adds) u.update(dt, player, sanctum.adds);
+  };
   realm.onInterior = (it) => {
     const extras: Interactable[] = [];
     it.setDaylight(1 - time.state.night);
@@ -1089,9 +1269,14 @@ async function boot() {
       const seats = it.seats.filter((s) => s.seated);
       for (let i = 0; i < Math.min(want, near.length, seats.length); i++) folkInside(near[i], seats[(i * 3 + it.door.spec.seed) % seats.length], it, extras, 'sit');
     }
+    const herbTable = herbalism.interiorStation(it);
+    if (herbTable) extras.push(herbTable);
+    if (it.kind === 'sanctum') fillSanctum(it, extras);
     return extras;
   };
   realm.onInteriorLeave = () => {
+    herbalism.leaveInterior();
+    clearSanctum();
     const b = inside.borrowed;
     if (b) {
       b.n.pos.copy(b.pos);
@@ -1109,12 +1294,13 @@ async function boot() {
     inside.rats = [];
     folkTalk.npc = null;
   };
-  const questNpcIds = [...town.npcs.map((n) => n.spec.id), ...npcs.npcs.filter((n) => n.rec.named).map((n) => n.rec.id)];
+  const questNpcIds = [...town.npcs.map((n) => n.spec.id), ...npcs.npcs.filter((n) => n.rec.named).map((n) => n.rec.id), ...roadLife.travellerIds];
   const questUI = new QuestUI(quests, hud, r.camera, (id) => {
     const svc = serviceNpc(id);
     if (svc) return svc.root.visible ? svc.head : null;
     const f = npcs.find(id);
-    return f && !f.hidden ? f.pos.clone().setY(f.pos.y + (f.rec.look.height ?? 1.75)) : null;
+    if (f) return !f.hidden ? f.pos.clone().setY(f.pos.y + (f.rec.look.height ?? 1.75)) : null;
+    return roadLife.npcHead(id);
   }, () => questNpcIds);
   questUI.attachScene(r.scene);
   // ---- Night raids (raid/raids.ts): the horn, the watch, the waves --------------------
@@ -1176,6 +1362,7 @@ async function boot() {
     { id: 'inventory', label: 'Inventory', key: 'I', isOpen: () => inv.open, open: () => inv.toggle(true), close: () => inv.toggle(false) },
     { id: 'skills', label: 'Skills', key: 'K', isOpen: () => skills.open, open: () => skills.toggle(true), close: () => skills.toggle(false) },
     { id: 'journal', label: 'Journal', key: 'J', isOpen: () => questUI.open, open: () => questUI.toggle(true), close: () => questUI.toggle(false) },
+    { id: 'herbal', label: 'Herbal', key: 'O', isOpen: () => herbalism.isOpen, open: () => herbalism.openCodex(), close: () => herbalism.ui.close() },
     { id: 'seamanship', label: 'Seamanship', key: 'N', isOpen: () => seaPanel.open, open: () => seaPanel.toggle(true), close: () => seaPanel.toggle(false) },
     {
       id: 'map', label: 'Map', key: 'M',
@@ -1209,14 +1396,14 @@ async function boot() {
   if (resume && !TEST_MODE) player.teleport(new THREE.Vector3(resume[0], Math.max(resume[1], heightAt(resume[0], resume[2])) + 0.2, resume[2]));
   dialogue.onToggle = (open) => {
     if (!open) npcs.engaged = null;
-    input.uiMode = open || inv.open || skills.open || mapUI.open || shopUI.open;
+    input.uiMode = open || inv.open || skills.open || mapUI.open || shopUI.open || herbalism.isOpen;
     if (open) input.exitLock();
-    else if (!shopUI.open) input.requestLock();
+    else if (!shopUI.open && !herbalism.isOpen) input.requestLock();
   };
   shopUI.onToggle = (open) => {
-    input.uiMode = open || inv.open || skills.open || mapUI.open || dialogue.open;
+    input.uiMode = open || inv.open || skills.open || mapUI.open || dialogue.open || herbalism.isOpen;
     if (open) input.exitLock();
-    else if (!dialogue.open) input.requestLock();
+    else if (!dialogue.open && !herbalism.isOpen) input.requestLock();
   };
   // Arms and Crafting: the craft page at a station.
   arms.craft.onToggle = (open) => {
@@ -1320,6 +1507,33 @@ async function boot() {
     flags: worldFlags,
   });
   void gravewood.warm(r.renderer, r.camera);
+  // The Road to Riches: Posy's meadow and her brother Edric, who keep the key to the pedestal.
+  const riches = new RoadToRiches(r.scene, world.mats, fx, r.camera, player, {
+    flags: worldFlags,
+    toast: (m) => hud.toast(m),
+    card: (title, sub) => hud.regionCard(title, sub, true),
+    bossBar: (t, name) => hud.bossBar(t, name),
+    talk: (who, title, text, onClose) => dialogue.show(who, title, text, [{ label: 'Farewell.', run: () => { dialogue.close(); onClose?.(); } }]),
+    give: (id, n) => giveItem(id, n),
+    take: (id, n) => takeItem(id, n),
+    count: (id) => countItem(id),
+    save: () => save(),
+  });
+  realm.overworldInteractables.push(...riches.interactables);
+  hideHooks.push((h) => riches.setVisible(!h));
+  // The pedestal's keyhole, its little door and the riddle scroll; the stair down to the Sanctum Below.
+  const gwKey = new GravewoodKey(gravewood, r.scene, fx, {
+    flags: worldFlags,
+    count: (id) => countItem(id),
+    give: (id, n) => giveItem(id, n),
+    take: (id, n) => takeItem(id, n),
+    toast: (m) => hud.toast(m),
+    read: (title, text) => dialogue.show(title, 'A brittle scroll', text, [{ label: 'Roll it up.', run: () => dialogue.close() }]),
+    enterSanctum: (door) => void realm.enterInterior(door, 'sanctum', world.mats, spells, (label: string, text: string) => dialogue.show('The Sanctum Below', label, text, [{ label: 'Back.', run: () => dialogue.close() }])),
+    save: () => save(),
+  });
+  realm.overworldInteractables.push(...gwKey.interactables);
+  hideHooks.push((h) => gwKey.setVisible(!h));
   desert = new GoldenExpanse(r.scene, fx, {
     toast: (m) => hud.toast(m),
     card: (title, sub) => hud.regionCard(title, sub, true),
@@ -1334,6 +1548,53 @@ async function boot() {
   desert.onDoors = (doors) => addDoors(doors);
   const desertQuests = setupDesertQuests(quests, r.scene, fx, (id, n) => giveItem(id, n), (m) => hud.toast(m));
   realm.overworldInteractables.push(...desertQuests.interactables);
+  // ---- Ghagrabba: its street life, The Outcast Sands, the side quests and the scrap towns ----
+  const ghDeps: GhagrabbaDeps = {
+    scene: r.scene, camera: r.camera, fx, player, quests, npcs, time, desert, flags: worldFlags,
+    mode: () => realm.mode,
+    toast: (m) => hud.toast(m),
+    card: (title, sub) => hud.regionCard(title, sub, true),
+    bossBar: (t, name) => hud.bossBar(t, name),
+    talk: (who, title, text, opts) => dialogue.show(who, title, text, opts),
+    close: () => dialogue.close(),
+    give: (id, n) => giveItem(id, n),
+    take: (id, n) => takeItem(id, n),
+    count: (id) => countItem(id),
+    save: () => save(),
+    shop: (who, title, intro, stock) => town.showShop(who, title, intro, stock),
+  };
+  const ghLife = new GhagrabbaLife(ghDeps);
+  const outcast = new OutcastSands(ghDeps, ghLife);
+  const ghSide = new GhagrabbaSideHooks(ghDeps, ghLife);
+  const scrapTowns = new ScrapTowns(ghDeps);
+  quests.add(...GHAGRABBA_SIDE_QUESTS);
+  chainOutcast(quests, worldFlags, (ending) => hud.regionCard(ending === 'sand' ? 'The Wells Are Open' : 'Sword of the Sun Throne', ending === 'sand' ? 'Ghagrabba belongs to everyone now' : 'The sand is quiet', true));
+  realm.overworldInteractables.push(...ghLife.interactables, ...outcast.interactables, ...ghSide.interactables, ...scrapTowns.interactables);
+  for (const [id, svc] of [...ghLife.services, ...scrapTowns.services]) {
+    const prev = folkServices.get(id);
+    folkServices.set(id, (show, back) => [...(prev?.(show, back) ?? []), ...svc(show, back)]);
+  }
+  hideHooks.push((h) => { ghLife.setVisible(!h); outcast.setVisible(!h); ghSide.setVisible(!h); scrapTowns.setVisible(!h); });
+  // The wilds: roaming packs along the Crown Road and King's Road, and the woods bosses' lairs.
+  wilds = new Wilds(r.scene, fx, world.mats, {
+    toast: (m) => hud.toast(m),
+    card: (title, sub) => hud.regionCard(title, sub, true),
+    bossBar: (t, name, phases) => hud.bossBar(t, name, phases),
+    flags: worldFlags,
+    give: (id, n) => giveItem(id, n),
+    gold: (n) => player.prog.addGold(n),
+    save: () => save(),
+    hour: () => time.hour,
+    reward: (at, xp, gold) => rewards.spawn(at, xp, gold),
+  });
+  wilds.enabled = !TEST_MODE;
+  realm.overworldInteractables.push(...wilds.interactables);
+  // Wenna's own services, and every apothecary's alchemy table, herbal supplies and quest hand-ins.
+  for (const [id, opts] of herbFolk.services) folkServices.set(id, (show, back) => [...opts(show, back), ...herbalism.serviceOptions(id, show, back)]);
+  for (const id of ['quill', 'capAlchemist', 'gh-apoth']) {
+    const prev = folkServices.get(id);
+    folkServices.set(id, (show, back) => [...(prev?.(show, back) ?? []), ...herbalism.serviceOptions(id, show, back)]);
+  }
   // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
   quests.fromJSON(saveData?.world?.quests);
@@ -1371,7 +1632,7 @@ async function boot() {
     if (TEST_MODE && !location.search.includes('save')) return;
     const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   // Guild contracts show in the quest log (tracker, journal, map, waypoint).
@@ -1490,7 +1751,7 @@ async function boot() {
       input.consume(e.code);
       return;
     }
-    if (e.code === 'Escape' && (dialogue.open || mapUI.open || inv.open || skills.open)) return;
+    if (e.code === 'Escape' && (dialogue.open || mapUI.open || inv.open || skills.open || herbalism.isOpen)) return;
     if (e.code === 'Escape' && !input.locked && !inv.open && !skills.open && !mapUI.open && !dialogue.open && !pausedByUser) pause();
   });
 
@@ -1521,7 +1782,9 @@ async function boot() {
   };
 
   events.on('playerDied', () => {
-    setTimeout(() => {
+    setTimeout(async () => {
+      // Dying in the Sanctum Below puts you back up the stair.
+      if (realm.interior?.kind === 'sanctum') await realm.leaveInterior();
       // Dying in the Gravewood's trap wakes you at its gate.
       const at = gravewood.respawnPoint ?? realm.respawnPoint;
       player.respawn(at);
@@ -1576,6 +1839,10 @@ async function boot() {
     player.update(STEP, input, cam);
     skillRt.update(STEP);
     arms.update(STEP, input); // Arms and Crafting (feat/arms)
+    herbalism.update(STEP);
+    if (input.pressedKey('KeyO')) (herbalism.isOpen ? herbalism.ui.close() : herbalism.openCodex());
+    // B on land: brew from the Herbalist's Satchel (B is the spyglass only when aboard).
+    if (input.pressedKey('KeyB') && !sailing.aboard && herbalism.count('herbalistSatchel') > 0) herbalism.openField();
     origins.update(STEP); // ---- Origins (feat/origins) ----
     if (realm.mode === 'overworld') {
       slimes.update(STEP, player);
@@ -1587,9 +1854,11 @@ async function boot() {
       frontier.update(STEP);
       encounters.update(STEP, time.hour, weather.p.rain);
       crownRoad.update(STEP, player, time.state.night);
+      roadLife.step(STEP, player);
       duel.update(STEP);
       gravewood.update(STEP, player);
       desert?.update(STEP, player);
+      wilds?.update(STEP, player);
     }
     realm.update(STEP);
     afflictions.update(STEP);
@@ -1618,6 +1887,7 @@ async function boot() {
     input.endStep();
   };
   const perf = { sim: 0, render: 0, frame: 0 };
+  let wasInGhagrabba = false;
   const frame = (now: number) => {
     // Ask for the next frame first: an exception in one system is reported but
     // does not stop the game loop.
@@ -1658,6 +1928,8 @@ async function boot() {
     if (!paused) realm.present(alpha, overlayUp || mapUI.open ? 0 : simDt);
     if (!paused && realm.mode === 'overworld') gravewood.present(alpha, overlayUp || worldMap.open ? 0 : simDt, player, r.camera);
     arms.frame(dt); // Arms and Crafting (feat/arms): aim camera, reticle
+    if (!paused && realm.mode === 'overworld') wilds?.present(alpha, overlayUp || worldMap.open ? 0 : simDt, player);
+    if (!paused) reagentDrops.update(dt, player.pos);
     cam.update(dt, renderPos, player.sprinting);
     creatureView.camera = r.camera.position;
     creatureView.player = player;
@@ -1706,6 +1978,24 @@ async function boot() {
       kingsRoad.update(dt, ts.night);
       horses.update(dt);
       caravans.update(dt, player.pos);
+      if (worldRunning) roadLife.update(dt, player, ts.night);
+      herbFolk.update(player.pos);
+      riches.update(dt);
+      if (worldRunning) {
+        ghLife.update(dt);
+        outcast.update(dt);
+        ghSide.update(dt);
+        scrapTowns.update(dt);
+      }
+      // Through the walls of Ghagrabba: the city has its own card.
+      const inGhagrabba = inCity(player.pos.x, player.pos.z);
+      if (inGhagrabba && !wasInGhagrabba) {
+        hud.regionCard('Ghagrabba', 'Gold City of the Sunborn', !worldFlags.seenGhagrabba);
+        worldFlags.seenGhagrabba = true;
+      }
+      if (inGhagrabba) wasInGhagrabba = true;
+      else if (Math.hypot(player.pos.x - SUNSPIRE.x, player.pos.z - SUNSPIRE.z) > 520) wasInGhagrabba = false;
+      gwKey.update(dt);
       port.update(dt, ts.night);
       capital.update(dt, player.pos, ts.night);
       boats.update(dt);
@@ -1740,6 +2030,7 @@ async function boot() {
       inside.borrowed?.n.update(dt, player.pos);
       for (const c of inside.built) c.mixer.update(dt);
       for (const rat of inside.rats) rat.update(dt, player);
+      if (!paused) updateSanctum(dt);
     }
     worldMap.setRegionLabel(`${regionName} · ${time.label.split(', ')[1]}`);
     flowers.update(dt, r.camera.position);
@@ -1748,6 +2039,7 @@ async function boot() {
     if (realm.mode === 'overworld') stylizedNature.update(dt, r.camera.position, player.pos);
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
+    herbalism.frame(dt);
     book.update();
     mapUI.update();
     // From a deck you see further; with charts, three times as far.
@@ -1831,6 +2123,8 @@ async function boot() {
       slimes.clear();
       encounters.clear();
       crownRoad.threats.clear();
+      wilds?.clear();
+      roadLife.clear();
       sailing.reset();
       arms.reset(); // Arms and Crafting (feat/arms)
       quests.state = {};
@@ -1842,6 +2136,9 @@ async function boot() {
       town.guild.fromJSON(fresh.guild);
       guildContracts.restore();
       applySave(player, structuredClone(fresh));
+      herbalism.ui.close();
+      herbalism.flasks.clear();
+      herbalism.fromJSON(undefined);
       player.respawn(spawn.clone());
       player.invulnerable = false;
       skillRt.reset();
@@ -1857,6 +2154,8 @@ async function boot() {
       THREE, r, input, player, cam, physics, fx, slimes, population, raids, bosses, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
+      ghLife, outcast, ghSide, scrapTowns,
+      wilds, roadLife, herbalism, riches, gwKey, sanctum,
       origins, creator, // ---- Origins (feat/origins) ----
       dungeons, // Dungeons Reborn (feat/dungeons)
       perf,

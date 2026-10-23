@@ -180,8 +180,8 @@ export function buildRoadLife(scene: THREE.Scene, m: WorldMats, fx: FX, hooks: R
       if (dog) dog.root.visible = v;
     },
     clear() {
+      // (Fort Rennick's garrison holds its ground, like the Crown Road's camps; only the road event goes.)
       events.clear();
-      wayside.clear();
     },
   };
 }

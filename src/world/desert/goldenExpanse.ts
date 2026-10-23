@@ -124,8 +124,10 @@ export class GoldenExpanse {
   private stormLeft = 0;
   private stormNext = 200 + Math.random() * 300;
   private stormOverlay: HTMLDivElement;
-  /** how far apart storms come (the Sunken Crown's fate can calm the Expanse) */
+  /** how far apart storms come (the story can calm the Expanse) */
   stormScale = 1;
+  /** a hostile camp (by index) that the story has made peaceful: its raiders stand down */
+  campPeace?: (camp: number) => boolean;
 
   constructor(private scene: THREE.Scene, private fx: FX, private hooks: DesertHooks, private hour: () => number) {
     scene.add(this.group);
@@ -365,7 +367,9 @@ export class GoldenExpanse {
     const frameGeo = new THREE.BoxGeometry(2.1, 0.35, 0.3);
     frameGeo.translate(0, 2.75, 0);
     const list = cityDoors();
-    const slabs = new THREE.InstancedMesh(slabGeo, std(0x5a3a22, 0.85), list.length);
+    // An open doorway, lamp-lit from inside, so a door reads as a way in from down the street.
+    const glow = new THREE.MeshStandardMaterial({ color: 0x3a2412, roughness: 0.9, emissive: 0xff9a40, emissiveIntensity: 0.55 });
+    const slabs = new THREE.InstancedMesh(slabGeo, glow, list.length);
     const frames = new THREE.InstancedMesh(frameGeo, std(0xd4a640, 0.4, 0.6), list.length);
     let n = 0;
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
@@ -576,6 +580,12 @@ export class GoldenExpanse {
     for (const r of this.raiders) {
       const [cx, cz, cr] = SCAV_CAMPS[r.camp];
       const d = Math.hypot(player.pos.x - cx, player.pos.z - cz);
+      // A camp at peace (the story has made friends of it) puts its blades away.
+      if (this.campPeace?.(r.camp)) {
+        for (const b of r.list) b.dispose();
+        r.list = [];
+        continue;
+      }
       if (!r.list.length && d < 160 && d > cr + 25 && this.time - r.clearedAt > 480) {
         const y = campFloor(cx, cz);
         const n = r.camp === 1 ? 6 : 4 + (r.camp % 3);

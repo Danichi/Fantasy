@@ -658,9 +658,10 @@ export function buildTravellers(scene: THREE.Scene, m: WorldMats, hooks: RoadLif
           if (dd < best) (best = dd), (near = { b, i });
         });
       }
-      if (near) {
-        const f = near.b.figures[near.i];
-        pos.copy(f && f.visible ? f.pos : near.b.carriage?.pos ?? f!.pos);
+      const n = near as { b: Built; i: number } | null;
+      if (n) {
+        const f = n.b.figures[n.i];
+        pos.copy(f && f.visible ? f.pos : n.b.carriage?.pos ?? f!.pos);
       } else pos.set(0, -999, 0);
     },
   };

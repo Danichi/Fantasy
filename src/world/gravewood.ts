@@ -229,6 +229,16 @@ export class Gravewood {
     this.ready = this.buildGraveyard();
   }
 
+  /** The risen pedestal (for the keyhole and the scroll), its rise 0..1, and its foot in the world. */
+  get pedestalNode() {
+    return this.pedestal;
+  }
+  get pedestalUp() {
+    return this.pedestalRise;
+  }
+  get pedestalBase() {
+    return world(BOSS_AT.x, BOSS_AT.y);
+  }
   get cleared() {
     return !!this.hooks.flags.gravewoodCleared;
   }

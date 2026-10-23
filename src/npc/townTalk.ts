@@ -127,7 +127,7 @@ const VOICES: Record<string, Voice> = {
   },
   corvin: {
     greet: [
-      { when: grukkDead, text: 'Grukk fell, and the road north is a little safer. That\'s a debt I couldn\'t pay myself. Thank you.' },
+      { when: grukkDead, text: 'Grukk fell, and the Road to Riches is a little safer. That\'s a debt I couldn\'t pay myself. Thank you.' },
       { when: (c) => c.activeClass === 'boundary', text: 'Shield up, oath kept. Good. Tell me what hit you hardest out there.' },
       { when: night, text: 'I keep this gate at night. Old habit. Old promise.' },
       { when: wet, text: 'Rain off the hills. The road turns to soup north of here. Watch your footing in a fight.' },

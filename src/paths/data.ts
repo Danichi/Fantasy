@@ -72,7 +72,7 @@ export const DISCIPLINES: DisciplineDef[] = [
     ],
   },
   {
-    id: 'boundary', fam: 'combat', name: 'Boundary Style', color: '--c-ward', mentor: 'Ser Corvin, the north road', mentorNpc: 'corvin', res: 'Focus', trial: 'trial-boundary', core: 'Boundary',
+    id: 'boundary', fam: 'combat', name: 'Boundary Style', color: '--c-ward', mentor: 'Ser Corvin, the Road to Riches', mentorNpc: 'corvin', res: 'Focus', trial: 'trial-boundary', core: 'Boundary',
     flavour: 'Draw a line around yourself, and let nothing cross it.', how: 'Hold F while standing still to raise your Boundary: attacks that reach into it are turned aside.',
     branches: [
       { name: 'Stillpoint', sub: 'The ring itself', tiers: [['Wide Stance', 'Deep Breath'], ['*Hold Fast', 'Anchor', 'Clear Mind'], ['*Ward Stone', '?Thorns|Still Water', 'Patience'], ['*Sanctum', '!Rooted', 'Steady'], ['Unmoved', 'Second Breath']], cap: 'Gate of the Stillmind', gate: 'stillmind' },
@@ -152,7 +152,7 @@ export const DISCIPLINES: DisciplineDef[] = [
     ],
   },
   {
-    id: 'dungeoneering', fam: 'calling', name: 'Dungeoneering', color: '--c-gold', mentor: 'Ser Corvin, the north road', mentorNpc: 'corvin', res: 'Nerve',
+    id: 'dungeoneering', fam: 'calling', name: 'Dungeoneering', color: '--c-gold', mentor: 'Ser Corvin, the Road to Riches', mentorNpc: 'corvin', res: 'Nerve',
     flavour: 'The dark is a map nobody has finished drawing.', how: 'Explore new rooms, draw maps, find secrets and disarm traps.',
     branches: [
       { name: 'Delver', sub: 'Exploring', tiers: [['Torchbearer', 'Sure Step'], ['*Torchlight', "Cartographer's Eye", 'Deep Lungs'], ['*Seek Passage', "Delver's Sense", 'Crawlspace'], ["*Delver's Instinct", '!Lone Delver', 'Night Sight'], ['Deep Breath', 'Sense the Boss']], cap: 'Master Delver' },

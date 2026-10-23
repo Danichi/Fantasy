@@ -30,7 +30,7 @@ export const ROAD_SPECS: RoadSpec[] = [
     gate: { at: [48, 760], reason: 'The ford at Willowbrook is flooded. The Southern Marches will have to wait.' },
   },
   {
-    id: 'crypt', name: 'The Crypt Road', kind: 'lane',
+    id: 'crypt', name: 'The Road to Riches', kind: 'lane',
     pts: [[0, -TOWN_R + 6], [6, -150], [-8, -225], [0, -300]],
   },
   {

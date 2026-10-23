@@ -334,7 +334,7 @@ export class GhagrabbaLife {
     this.interactables.push(
       {
         pos: well.clone().add(new THREE.Vector3(0, 0, 2.6)), radius: 2.6,
-        label: () => (d.quests.wants('sb-well') ? 'Examine the Great Well' : 'The Great Well of the Sun'),
+        label: () => (d.quests.wants('os-cistern') ? 'Look beneath the Great Well' : 'The Great Well of the Sun'),
         enabled: () => this.built,
         action: () => this.useWell(),
       },
@@ -416,11 +416,10 @@ export class GhagrabbaLife {
 
   private useWell() {
     const d = this.d;
-    if (d.quests.wants('sb-well')) {
-      d.give('diggersTag', 1);
-      d.quests.signal('sb-well');
+    if (d.quests.wants('os-cistern')) {
+      d.quests.signal('os-cistern');
       desertAudio.splash(0.8);
-      d.talk('The Great Well', 'The Court of the Sun', 'You haul the bucket up. It comes up dry. You lean over the rim and listen: far below, under where the water ought to be, there is a sound like picks in stone — and then nothing. The rope has been cut and spliced, again and again. Snagged on the splice is a brass tag on a cord, stamped with a purple eye.', [{ label: 'Take the tag.', run: () => d.close() }]);
+      d.talk('The Great Well', 'The Court of the Sun', 'You climb down the bucket rope, past the dry stone, to where Ishara said the shaft forks. Behind a bronze grille stamped with the Sunwheel the passage opens into a vault, and the vault is full: cistern after cistern, black water to the brim, lamps burning over them, a palace servant asleep on a stool beside a ledger of who may drink. The Great Well is not dying. It has been drained, on purpose, into the palace\'s keeping, while the children at the Bone Wells drink sand.', [{ label: 'Climb back up into the light.', run: () => d.close() }]);
       return;
     }
     const opts = [
@@ -429,7 +428,7 @@ export class GhagrabbaLife {
           d.player.stamina = d.player.maxStamina;
           d.player.hp = Math.min(d.player.maxHp, d.player.hp + d.player.maxHp * 0.08);
           d.close();
-          d.toast(this.ending === 'broken' || d.quests.isDone('sb-6') ? 'Cold and sweet. The Well has begun to sing again.' : 'Cool, but it tastes of the bottom of the bucket.');
+          d.toast(this.ending === 'sand' ? 'Cold and sweet. With the cisterns opened, the Well has begun to sing again.' : 'Cool, but it tastes of the bottom of the bucket.');
         },
       },
       {
@@ -445,7 +444,7 @@ export class GhagrabbaLife {
       },
       { label: 'Leave.', run: () => d.close() },
     ];
-    d.talk('The Great Well', 'The Court of the Sun', d.quests.isDone('sb-6') ? 'The water stands higher than it has in years. Someone has hung fresh garlands on the windlass.' : 'The Well of the Sunborn: wide enough to drown a camel, and deep enough that the bucket takes a long breath to come up. The rope is wet for less of its length every year.', opts);
+    d.talk('The Great Well', 'The Court of the Sun', this.ending === 'sand' ? 'The water stands higher than it has in years. Someone has hung fresh garlands on the windlass.' : 'The Well of the Sunborn: wide enough to drown a camel, and deep enough that the bucket takes a long breath to come up. The rope is wet for less of its length every year.', opts);
   }
 
   private readNotices() {
@@ -466,14 +465,13 @@ export class GhagrabbaLife {
   rumours() {
     const q = this.d.quests, f = this.d.flags;
     const out: string[] = [];
-    if (!q.isDone('sb-1')) out.push('The Great Well dropped another cubit. The Vizier blames the scavengers. The scavengers blame the Vizier.');
-    if (q.isActive('sb-2') || q.isActive('sb-1')) out.push('Diggers go down at the Bone Wells at night and some don\'t come up. They\'re paid in water.');
-    if (q.isDone('sb-2') && !q.isDone('sb-4')) out.push('They say the Queen Mother cried in the garden yesterday. She has not cried since the old King died.');
-    if (q.isActive('sb-4')) out.push('Men in purple sashes were seen on the Waystop road. The Sun Guard want a word with them.');
-    if (q.isDone('sb-4') && !q.isDone('sb-6')) out.push('The Vizier fled the city with a third of the treasury! The palace pretends nothing happened.', 'The Queen sent WATER to the scavenger villages. Water! From the Great Well!');
-    if (f.sbEnding === 'queen') out.push('The Queen of the Two Sands! The bunting is up in the Court and nobody can afford to take it down.');
-    if (f.sbEnding === 'sand') out.push('Scavengers trading inside the walls, bold as you like. Rust Row, they call it. The prices are better, mind.');
-    if (f.sbEnding === 'broken') out.push('The storms have gone quiet since the outlander came back from the dunes. The priests say the sun is sleeping easier.');
+    if (!q.isDone('os-1')) out.push('The Great Well dropped another cubit. The Vizier blames the scavengers. The scavengers blame the Vizier.');
+    if (q.isActive('os-2')) out.push('The palace is paying an outlander to hunt scavengers. Gold for every raider, they say.');
+    if (q.isActive('os-3') || q.isActive('os-4')) out.push('The Vizier wants the healer of the Bone Wells dead. Ishara, they call her. She mended my cousin\'s leg for nothing.', 'They say there is more water under the palace than in the whole Expanse. They say a lot of things.');
+    if (q.isActive('os-rebel')) out.push('The villages are arming! Dunewatch, Tarp Row, even the Rust Market. Bar your doors.');
+    if (q.isActive('os-crown')) out.push('The Sun Guard rode out to burn the camps. The smoke went up all night.');
+    if (f.sbEnding === 'queen') out.push('The sand is quiet now. The palace held a feast for its new lord, the outlander. Nobody mentions the Bone Wells.');
+    if (f.sbEnding === 'sand') out.push('Scavengers trading inside the walls, bold as you like. Rust Row, they call it. And the cisterns open to all.');
     if (f.wardenDead) out.push('The southern caravans are running again now the Warden is sand.');
     else out.push('A dune stood up south-west of the Bone Wells and walked. Captain Mereth\'s scouts swear to it.');
     if (f.sawtoothDead) out.push('Old Sawtooth is dead. The caravan masters celebrated by raising their prices.');
@@ -658,12 +656,12 @@ export class GhagrabbaLife {
   /** A fortune: a little flavour, and a nudge toward whatever the Sunborn's story wants next. */
   private fortune() {
     const q = this.d.quests;
-    const open = [...q.defs.values()].find((x) => x.id.startsWith('sb-') && q.isActive(x.id));
+    const open = [...q.defs.values()].find((x) => x.id.startsWith('os-') && q.isActive(x.id));
     const line = open ? q.lines(open.id).find(([, p, t]) => p < t)?.[0] : null;
     const opener = pick(['(She rattles the bones and spills them across the cloth, then frowns at them as though they owe her money.)', '(She takes your hand, turns it over, and looks at it for an uncomfortably long time.)', '(She stares into a cup of cold tea, then drinks it.)']);
     const hint = line
       ? `The bones say: "${line.charAt(0).toLowerCase() + line.slice(1)}." They are very insistent about it.`
-      : pick(['The bones say you will cross a great deal of sand. That is not hard to see; you are in a desert.', 'The bones see a crown under the sand, and a man who wants it too much.', 'The bones see you dancing at a coronation. Or a funeral. The bones are bad with hats.']);
+      : pick(['The bones say you will cross a great deal of sand. That is not hard to see; you are in a desert.', 'The bones see a dry well, and a full one, and you standing between them.', 'The bones see you dancing at a coronation. Or a funeral. The bones are bad with hats.']);
     return `${opener} ${hint} ${pick(['And luck sits on your shoulder for a little while — throw dice while it lasts.', 'Go to the knucklebone table before the luck wears off. Do not tell Ubaid I sent you.'])}`;
   }
 
@@ -705,12 +703,11 @@ export class GhagrabbaLife {
     // The bazaar murmurs by day.
     const baz = Math.hypot(p.x - BAZAAR[0], p.z - BAZAAR[1]);
     this.murmur.set(near && inHours(h, 7, 21) ? THREE.MathUtils.clamp(1 - baz / 90, 0, 1) : near && inHours(h, 21, 24) ? THREE.MathUtils.clamp(0.4 - baz / 150, 0, 1) : 0, dt);
-    // The shrine disc blazes during the rites (and burns white for ever, if the crown was broken).
+    // The shrine disc blazes during the rites.
     if (this.shrineDisc) {
       const m = this.shrineDisc.material as THREE.MeshStandardMaterial;
-      const want = this.ending === 'broken' ? 1.4 : this.rite.on ? 1.6 + Math.sin(this.t * 2) * 0.3 : 0.15;
+      const want = this.rite.on ? 1.6 + Math.sin(this.t * 2) * 0.3 : 0.15;
       m.emissiveIntensity += (want - m.emissiveIntensity) * Math.min(1, dt);
-      if (this.ending === 'broken') m.emissive.setHex(0xcfe8ff);
     }
     for (const a of this.acts) a.update(dt, p);
     this.flourish = Math.max(0, this.flourish - dt);
@@ -851,7 +848,7 @@ class Crier extends Act {
 class Procession extends Act {
   private route: XZ[] | null = null;
   private L = 0;
-  private palanquin: THREE.Group | null = null;
+  private palanquin: THREE.Object3D | null = null;
   private say = 6;
   private beat = 0;
   private beatT = 0;
@@ -949,8 +946,8 @@ class Procession extends Act {
     this.say -= dt;
     if (this.say <= 0) {
       this.say = 14 + Math.random() * 6;
-      const title = life.ending === 'queen' ? 'Queen of the Two Sands' : 'Queen of Ghagrabba';
-      life.say(herald.pos, 'Herald of the Court', pick([`Make way! Make way for Her Radiance, Neferah Sunborn, ${title}!`, 'Bow your heads! The Sun walks among you!', 'Clear the street! The Queen\'s procession passes!', life.ending === 'sand' ? 'Make way for the Queen — and for the elders of the sand, her guests!' : 'Kneel, people of Ghagrabba, and be seen by the Sun!']), 'royal', 5);
+      const title = life.ending === 'sand' ? 'Queen of the Open Gates' : 'Queen of Ghagrabba';
+      life.say(herald.pos, 'Herald of the Court', pick([`Make way! Make way for Her Radiance, Neferah Sunborn, ${title}!`, 'Bow your heads! The Sun walks among you!', 'Clear the street! The Queen\'s procession passes!', life.ending === 'sand' ? 'Make way for the Queen — and for Ishara of the Bone Wells, her guest!' : 'Kneel, people of Ghagrabba, and be seen by the Sun!']), 'royal', 5);
       desertAudio.bell(life.loud(herald.pos, 45));
     }
     const drum = this.puppets[12];
@@ -1253,19 +1250,15 @@ export function endingLines(ending: string) {
     const pool = (L[job] ??= {});
     pool.any = [...(pool.any ?? []), ...lines.filter((x) => !(pool.any ?? []).includes(x))];
   };
-  add('citizen', ['They say the outlander went down under the sand and came back with the Vizier in chains. Or without him. Depends who tells it.', 'The Great Well sings again. I dropped a stone in this morning just to hear it.']);
   if (ending === 'queen') {
-    add('citizen', ['Queen of the Two Sands! My grandmother would have spat. I think it\'s grand.']);
-    add('scavenger', ['A Sun Guard bought me a drink. A Sun Guard! The world\'s ending, and I like it.', 'The gates are open. I walked through one yesterday just to see if I could.']);
-    add('guard', ['Orders are: sand-folk through the gates like anyone else. Took some getting used to.']);
+    add('citizen', ['The sand-folk are gone from the gates. It is very quiet. I do not like how quiet.', 'They made the outlander a lord. Sword of the Sun Throne. I would not want that title.']);
+    add('noble', ['At last the roads are safe and the rabble is gone. The Queen chose her blade well.']);
+    add('guard', ['Orders are: no sand-folk within a mile of the walls. Not that there are many left.']);
   } else if (ending === 'sand') {
-    add('citizen', ['Rust Row is cheaper than the bazaar. Don\'t tell Hassun I said so.']);
-    add('scavenger', ['Our crown, our kings\' crown, on a stone by Ta-Nedjem\'s fire. I\'ve seen it. I touched it.', 'Inside the walls! A stall with a roof! My mother would weep.']);
+    add('citizen', ['The Great Well sings again. I dropped a stone in this morning just to hear it.', 'Rust Row is cheaper than the bazaar. Don\'t tell Hassun I said so.', 'The Vizier in chains, sweeping the Court of the Sun with a guard watching him!']);
+    add('scavenger', ['Inside the walls! A stall with a roof! My mother would weep.', 'Ishara walks in the palace now. She still mends legs for nothing.']);
     add('noble', ['Scavengers in the bazaar. Next they will want seats at the royal table.']);
-  } else {
-    add('citizen', ['The storms come half as often since the crown was broken. The priests are insufferable about it.']);
-    add('scavenger', ['No crown, no king, no Vizier. Just sand and the sky. Suits me.']);
-    add('priest', ['The Sun Disc burns white now, at all hours. We did not do that. We are taking credit anyway.']);
+    add('guard', ['Orders are: sand-folk through the gates like anyone else. Took some getting used to.']);
   }
 }
 

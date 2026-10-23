@@ -30,6 +30,8 @@ export interface GhagrabbaDeps {
   take(item: string, n: number): void;
   count(item: string): number;
   save(): void;
+  /** open a shop window (town.showShop) */
+  shop?(who: string, title: string, intro: string, stock: [string, number][]): void;
 }
 
 /** A dialogue page shower and a way back (as the townsfolk talk menu passes to services). */

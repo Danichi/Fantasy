@@ -65,6 +65,18 @@ export function sunkenFloor() {
   return y;
 }
 
+/**
+ * Scrap towns: walled settlements of corrugated sheet and hull plate out in
+ * the deep sand, away from the camps and the roads. [x, z, radius, friendly].
+ */
+export const SCRAP_TOWNS: { name: string; x: number; z: number; r: number; friendly: boolean }[] = [
+  { name: 'Rivet Hollow', x: -7000, z: 1100, r: 34, friendly: true },
+  { name: 'Hullbreak', x: -4300, z: 2150, r: 36, friendly: false },
+  { name: 'Tinroof', x: -3700, z: 1250, r: 30, friendly: true },
+  { name: 'Sheetwall', x: -7700, z: 300, r: 34, friendly: false },
+  { name: 'Gearwater', x: -5600, z: 2450, r: 32, friendly: true },
+];
+
 /** The caravan road from the Crown Road (before its gate) to Ghagrabba's east gate. */
 export const CARAVAN_ROAD: [number, number][] = [
   [-700, 60], [-1050, 150], [-1500, 260], [-2000, 380], [-2600, 480], [-3200, 560], [-3800, 620], [-4400, 660], [-4900, 690], [-5250, 684], [-5390, 679],
@@ -134,6 +146,13 @@ export function shapeDesert(x: number, z: number, h: number, sand: number) {
       const t = smooth(r + 30, r * 0.6, d);
       const floor = campFloor(cx, cz);
       h = h * (1 - t) + floor * t;
+    }
+  }
+  for (const t of SCRAP_TOWNS) {
+    const d = Math.hypot(x - t.x, z - t.z);
+    if (d < t.r + 40) {
+      const k = smooth(t.r + 40, t.r, d);
+      h = h * (1 - k) + campFloor(t.x, t.z) * k;
     }
   }
   // The Sunken Gate: a flat floor, a slope up to a rim of piled sand, then the dunes again.

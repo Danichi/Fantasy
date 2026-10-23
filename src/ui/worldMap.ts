@@ -359,8 +359,10 @@ export class WorldMapUI {
       g.strokeText(icon.glyph, p.x, p.y + 6);
       g.fillText(icon.glyph, p.x, p.y + 6);
       // Towns that name a region already carry the region label.
-      if (this.zoom > 2.6 && k !== 'known' && !REGIONS[l.id]) {
-        g.font = '600 12px Inter, sans-serif';
+      // Capitals (Ghagrabba, the Royal Capital) are named at every zoom once known.
+      const capital = l.kind === 'capital';
+      if ((capital || (this.zoom > 2.6 && k !== 'known')) && !REGIONS[l.id]) {
+        g.font = capital ? '700 14px Cinzel, serif' : '600 12px Inter, sans-serif';
         g.strokeText(l.name, p.x, p.y + 22);
         g.fillStyle = '#fff4d8';
         g.fillText(l.name, p.x, p.y + 22);

@@ -6,6 +6,9 @@ import { WILD_SPECS, ELITES, type WildSpec, type EliteAffix, type WildSpecId } f
 import { Undead } from '../../enemies/undead';
 import { LivingArmour } from '../../enemies/livingArmour';
 import { Slime, type SlimeKind } from '../../enemies/slime';
+import { Boar } from '../../creatures/boar/boar';
+import { Spider } from '../../creatures/spider/spider';
+import { creatureReady, prepareCreature } from '../../creatures/geometryStore';
 import { dangerAt, dangerTier, DANGER_BANDS, terrainAt, nightness, noRoamAt, inWilds, type Terrain } from './danger';
 import type { Target } from '../../combat/targets';
 import type { Player } from '../../player/player';
@@ -69,14 +72,20 @@ interface Spawner {
   undead(n: number): void;
   knights(n: number): void;
   slimes(n: number): void;
+  /** the hand-built wild creatures (boars, giant spiders), at a level from the danger */
+  creature(kind: 'boar' | 'spider', n: number): void;
 }
+
+/** Level for the hand-built creatures (their own level scaling): 2 at the Glen's edge, ~26 under the capital. */
+export const wildLevel = (danger: number) => Math.round(2 + danger * 24);
 
 const ALL: Terrain[] = ['fields', 'forest', 'hills', 'marsh'];
 const TABLE: Entry[] = [
   // ---- the Glen's edge and the borderland ----
   { label: 'wolves', w: 4, min: 0, terrain: ['fields', 'forest', 'hills'], build: (s) => s.pack('wolf') },
   { label: 'foxes', w: 2, min: 0, max: 0.35, terrain: ['fields', 'forest'], build: (s) => s.pack('fox') },
-  { label: 'boar', w: 3, min: 0, max: 0.75, terrain: ['forest', 'fields', 'marsh'], time: 'day', build: (s) => s.pack('boar') },
+  { label: 'boar', w: 3, min: 0, max: 0.75, terrain: ['forest', 'fields', 'marsh'], build: (s) => s.creature('boar', 1 + Math.round(Math.random() * (1 + s.danger * 2))) },
+  { label: 'giant spiders', w: 2.2, min: 0.25, terrain: ['forest', 'marsh'], build: (s) => s.creature('spider', 1 + Math.round(s.danger * 2 * Math.random()) + (s.night ? 1 : 0)) },
   { label: 'stag', w: 1.5, min: 0.05, terrain: ['forest', 'fields'], time: 'day', build: (s) => s.pack('stag') },
   { label: 'goblins', w: 2.5, min: 0.15, terrain: ['hills', 'forest', 'fields'], build: (s) => { s.pack('goblin'); if (s.danger > 0.3) s.pack('goblinSlinger'); } },
   { label: 'slimes', w: 4, min: 0, terrain: ['marsh'], build: (s) => s.slimes(2 + Math.round(s.danger * 3)) },
@@ -207,6 +216,20 @@ export class Roamers {
           g.members.push({ t: a, update: (dt, pl) => a.update(dt, pl), done: () => a.dead, dispose: () => a.dispose(), engaged: () => a.alive && a.position.distanceTo(self.playerPos) < 30 });
         }
       },
+      creature(kind, n) {
+        if (!creatureReady(kind)) {
+          void prepareCreature(kind);
+          return;
+        }
+        const level = wildLevel(danger);
+        for (let k = 0; k < n; k++) {
+          const { p, off } = place(g.members.length);
+          const c = kind === 'boar' ? new Boar(p, level, scene, fx, k === 0 && danger > 0.5 ? { size: 1.25 } : {}) : new Spider(p, level, scene, fx, k === 0 && danger > 0.6 ? { size: 1.3 } : {});
+          self.registry.set(c.id, { danger, elite: false });
+          g.offsets.push(off);
+          g.members.push({ t: c, update: (dt, pl) => c.update(dt, pl), done: () => c.dead, dispose: () => c.dispose(), engaged: () => c.alive && c.position.distanceTo(self.playerPos) < 30 });
+        }
+      },
       slimes(n) {
         const crowd: Slime[] = [];
         const kinds: SlimeKind[] = danger > 0.65 ? ['magma', 'blue', 'cave'] : danger > 0.35 ? ['blue', 'cave', 'green'] : ['green', 'green', 'cave'];
@@ -221,6 +244,7 @@ export class Roamers {
         }
       },
     };
+    // The hand-built creatures need their looks built first (in a worker): skip until ready.
     entry.build(spawner);
     if (g.members.length) this.groups.push(g);
   }

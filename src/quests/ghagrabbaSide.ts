@@ -188,7 +188,7 @@ export const GHAGRABBA_SIDE_QUESTS: QuestDef[] = [
     rewards: { gold: 140, xp: 340, items: [['oasisRing', 1]] },
   },
   {
-    id: 'missing-gold', title: 'The Missing Gold', giver: 'senmut', region: R, requires: ['sb-2'],
+    id: 'missing-gold', title: 'The Missing Gold', giver: 'senmut', region: R, requires: ['os-2'],
     summary: 'Treasurer Senmut\'s counts do not add up. Someone in the palace is skimming the Queen\'s gold.',
     offer: '(He leans close.) Every coin in this room is counted twice a day, and for a year now the second count has been short. Not by much. By exactly enough that a careful man would notice, and a careless man would not. I am a careful man. I cannot be seen searching the palace. You can. Look at the treasury ledger, the Vizier\'s writing-desk by the throne, and — this is embarrassing — the garden. Something keeps glinting in the pool.',
     stages: [

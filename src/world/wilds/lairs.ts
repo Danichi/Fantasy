@@ -12,6 +12,8 @@ import { WILD_SPECS, ELITES, type WildSpec } from '../../enemies/wilds/wildSpecs
 import { wildsSfx } from '../../enemies/wilds/wildsSfx';
 import { OrcWarlord, type BossSpec } from '../../enemies/orc';
 import { OrcMob } from '../../enemies/orcMob';
+import { Boar } from '../../creatures/boar/boar';
+import { creatureReady, prepareCreature } from '../../creatures/geometryStore';
 import type { Target } from '../../combat/targets';
 import type { WorldMats } from '../buildings';
 import type { FX } from '../../fx/particles';
@@ -172,7 +174,10 @@ export const LAIRS: LairDef[] = [
       k.treeRing(26, 50, 34, 'tree', open, 0.5);
       k.ferns(x, z, 30, 26);
     },
-    make: (c) => beastLair(c, BRISTLEBACK, (cc) => cc.summonBeasts(WILD_SPECS.boar, 2, 0.35, [])),
+    make: (c) => {
+      void prepareCreature('boar');
+      return beastLair(c, BRISTLEBACK, (cc, b) => cc.summonSounder(1 + b.phase));
+    },
   },
   {
     id: 'gnarlbark', place: 'The Elder Glade', boss: 'Old Gnarlbark, the Rootwarden', title: 'The wood remembers, and the wood is angry',
@@ -441,6 +446,19 @@ export class LairController {
       this.fx.add.spawn({ pos: new THREE.Vector3(px, heightAt(px, pz) + 1, pz), spread: 2, count: 14, life: [0.4, 0.9], size: [0.3, 0.05], color: 0x5a4a3a, color2: 0x1a140c, gravity: 4 });
     }
     if (msg) this.hooks.toast(msg);
+  }
+
+  /** Bristleback's sounder: wild boars burst out of the undergrowth. */
+  summonSounder(n: number) {
+    if (!creatureReady('boar')) return this.summonBeasts(WILD_SPECS.boar, n, 0.35, [], 'Bristleback squeals — its sounder comes crashing through the brush!');
+    const [x, z] = this.def.at;
+    for (let k = 0; k < n; k++) {
+      const a = this.openYaw + Math.PI + (k - (n - 1) / 2) * 0.8;
+      const px = x + Math.sin(a) * (this.def.arena - 3), pz = z + Math.cos(a) * (this.def.arena - 3);
+      const c = new Boar(new THREE.Vector3(px, heightAt(px, pz), pz), 12, this.scene, this.fx);
+      this.adds.push({ t: c, update: (dt, p) => c.update(dt, p), done: () => c.dead, dispose: () => c.dispose() });
+    }
+    this.hooks.toast('Bristleback squeals — its sounder comes crashing through the brush!');
   }
 
   /** Ulgra's blood-sworn: orc warriors from the treeline. */

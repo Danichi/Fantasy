@@ -13,8 +13,8 @@ import type { Player } from '../player/player';
 // jellyfish drifting over the pans, raiders riding harnessed sand rays, and
 // the trader caravans' great harnessed sand turtles.
 
-const std = (color: number, roughness = 0.8, metalness = 0, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) => new THREE.MeshStandardMaterial({ color, roughness, metalness, ...extra });
-const hitFx = (fx: FX, at: THREE.Vector3, color: number) => fx.add.spawn({ pos: at, spread: 1.6, count: 8, life: [0.3, 0.6], size: [0.07, 0.01], color, color2: 0x1a0a04, gravity: 8 });
+export const std = (color: number, roughness = 0.8, metalness = 0, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) => new THREE.MeshStandardMaterial({ color, roughness, metalness, ...extra });
+export const hitFx = (fx: FX, at: THREE.Vector3, color: number) => fx.add.spawn({ pos: at, spread: 1.6, count: 8, life: [0.3, 0.6], size: [0.07, 0.01], color, color2: 0x1a0a04, gravity: 8 });
 
 export interface SandCreature {
   dead: boolean;
@@ -23,7 +23,7 @@ export interface SandCreature {
 }
 
 /** Shared bits of a hittable sand creature. */
-abstract class Beastie implements Target, SandCreature {
+export abstract class Beastie implements Target, SandCreature {
   id = newTargetId();
   abstract kind: string;
   abstract name: string;

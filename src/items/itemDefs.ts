@@ -7,6 +7,12 @@ import { FISH_ITEMS } from '../world/fishing';
 import { DESERT_ITEMS } from './desertItems';
 import { ARMS_ITEMS } from './armsItems';
 import { isWeaponKind } from './weapons/kinds';
+import { WILDS_ITEMS } from './wildsLoot';
+import { ROAD_LIFE_ITEMS } from '../world/roadLife/roadItems';
+import { BREW_ITEMS } from './brews';
+import { REAGENT_ITEMS, HERBALIST_TOOLS } from './reagents';
+import { GRAVEWOOD_KEY_ITEMS } from '../world/gravewoodKey';
+import { GHAGRABBA_ITEMS } from '../world/desert/ghagrabbaItems';
 import { DUNGEON_ITEMS } from './dungeonItems';
 
 export type Slot =
@@ -460,9 +466,16 @@ export const ITEMS: Record<string, ItemDef> = {
   },
   ...PRODUCE_ITEMS,
   ...HERB_ITEMS,
+  ...REAGENT_ITEMS,
+  ...HERBALIST_TOOLS,
+  ...BREW_ITEMS,
   ...FISH_ITEMS,
   ...DESERT_ITEMS,
   ...ARMS_ITEMS,
+  ...WILDS_ITEMS,
+  ...ROAD_LIFE_ITEMS,
+  ...GRAVEWOOD_KEY_ITEMS,
+  ...GHAGRABBA_ITEMS,
   ...DUNGEON_ITEMS,
 };
 
