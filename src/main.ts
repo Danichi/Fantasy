@@ -128,14 +128,18 @@ import { BRINE_MAW } from './bosses/brineMaw';
 import { MOTHER_OOZE } from './bosses/motherOoze';
 import { HOLLOW_THANE } from './bosses/hollowThane';
 import { RUST_KNIGHT } from './bosses/rustKnight';
+import { SNAGGLETOOTH } from './bosses/snaggletooth';
 
 /** Field bosses, in the order they were added (bosses/). */
-const BOSS_DEFS = [GREYJAW, WHITE_STAG, BRINE_MAW, MOTHER_OOZE, HOLLOW_THANE, RUST_KNIGHT];
+const BOSS_DEFS = [GREYJAW, WHITE_STAG, BRINE_MAW, MOTHER_OOZE, HOLLOW_THANE, RUST_KNIGHT, SNAGGLETOOTH];
 import { tickBoarFur } from './creatures/boar/visual';
 import { tickSpiderFur } from './creatures/spider/visual';
 import { updateSnare } from './creatures/spider/spider';
 import { tickBatFur } from './creatures/bat/visual';
 import { tickWolfFur } from './creatures/wolf/visual';
+import { tickStagFur } from './creatures/stag/visual';
+import { tickWightHair } from './creatures/wight/visual';
+import { tickGoblinFur } from './creatures/goblin/visual';
 import { DungeonMapUI } from './ui/dungeonMap';
 import { Realm } from './dungeon/realm';
 import { setupDungeonEntrances } from './dungeon/dungeons/entrances'; // Dungeons Reborn (feat/dungeons)
@@ -1666,6 +1670,9 @@ async function boot() {
     tickSpiderFur(dt);
     tickBatFur(dt);
     tickWolfFur(dt);
+    tickStagFur(dt);
+    tickWightHair(dt);
+    tickGoblinFur(dt);
     guardArc.update(dt);
     updateSnare(player);
     r.camera.getWorldDirection(player.aimDir);

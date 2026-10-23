@@ -168,6 +168,33 @@ function paintAccessory(def: ItemDef) {
     g.beginPath();
     g.arc(m, 78, 7, 0, Math.PI * 2);
     g.stroke();
+  } else if (def.id === 'snaggleHorn') {
+    // A curved horn of yellowed tusk, bound with copper wire.
+    const gr = g.createLinearGradient(20, 100, 108, 30);
+    gr.addColorStop(0, '#6a5a3a');
+    gr.addColorStop(0.5, '#d8c890');
+    gr.addColorStop(1, '#f2e8c8');
+    g.fillStyle = gr;
+    g.beginPath();
+    g.moveTo(22, 96);
+    g.quadraticCurveTo(40, 40, 100, 28);
+    g.lineTo(110, 52);
+    g.quadraticCurveTo(58, 58, 36, 104);
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#2a1a10';
+    g.beginPath();
+    g.ellipse(105, 40, 6, 13, -0.3, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = '#c87a3a';
+    g.lineWidth = 3;
+    for (const t of [0.3, 0.45, 0.6]) {
+      const x = 22 + t * 82, y = 96 - t * 62;
+      g.beginPath();
+      g.moveTo(x - 8, y - 8);
+      g.lineTo(x + 6, y + 10);
+      g.stroke();
+    }
   } else if (def.id === 'dentedSignet') {
     // A heavy gold ring, dented, a five-pointed star on its seal.
     g.strokeStyle = '#c89a3a';

@@ -367,3 +367,118 @@ export function battlefield(at: THREE.Vector3, seed: number) {
   place(wheel, 7, -5, 0.06);
   return g;
 }
+
+const stakeMat = new THREE.MeshStandardMaterial({ color: 0x6a5238, roughness: 0.95 });
+const hideMat = new THREE.MeshStandardMaterial({ color: 0x8a7656, roughness: 1, side: THREE.DoubleSide });
+const earthMat = new THREE.MeshStandardMaterial({ color: 0x5a4a34, roughness: 1 });
+const holeMat = new THREE.MeshBasicMaterial({ color: 0x080604 });
+const emberMat = new THREE.MeshStandardMaterial({ color: 0x2a1a10, emissive: 0xff5a14, emissiveIntensity: 1.4, roughness: 1 });
+
+/** Snaggletooth's warren: a burrow in the hillside behind sharpened stakes, a totem, a cookfire, sheep bones. */
+export function warren(at: THREE.Vector3, seed: number) {
+  const r = rng(seed);
+  const g = new THREE.Group();
+  g.position.copy(at);
+  const dirt = new THREE.Color(0x5a4a32), trod = new THREE.Color(0x6a5a3e), grassy = new THREE.Color(0x5a6a34);
+  g.add(groundPatch(at, 14, (x, z, rr) => dirt.clone().lerp(trod, Math.sin(x * 1.1) * Math.cos(z * 0.8) * 0.5 + 0.5).lerp(grassy, THREE.MathUtils.smoothstep(rr, 0.55, 1) * 0.8)));
+  const y = (x: number, z: number) => heightAt(at.x + x, at.z + z) - at.y;
+  // The burrow: an earth mound with a dark mouth framed by timbers.
+  const mx = 0, mz = -9;
+  const mound = new THREE.Mesh(new THREE.SphereGeometry(4.5, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), earthMat);
+  mound.scale.set(1.3, 0.7, 1);
+  mound.position.set(mx, y(mx, mz) - 0.3, mz);
+  mound.receiveShadow = mound.castShadow = true;
+  g.add(mound);
+  const mouth = new THREE.Mesh(new THREE.CircleGeometry(1.1, 16, 0, Math.PI), holeMat);
+  mouth.position.set(mx, y(mx, mz + 4.2) - 0.05, mz + 4.15);
+  mouth.scale.set(1, 1.2, 1);
+  g.add(mouth);
+  for (const s of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 2, 6), stakeMat);
+    post.position.set(mx + s * 1.15, y(mx, mz + 4.3) + 0.8, mz + 4.3);
+    post.rotation.z = -s * 0.08;
+    post.castShadow = true;
+    g.add(post);
+  }
+  const lintel = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2.8, 6), stakeMat);
+  lintel.rotation.z = Math.PI / 2;
+  lintel.position.set(mx, y(mx, mz + 4.3) + 1.75, mz + 4.3);
+  g.add(lintel);
+  physics.addCylinder(new THREE.Vector3(at.x + mx, at.y + y(mx, mz) + 1, at.z + mz), 1.2, 4.2);
+  // A boar skull nailed over the door.
+  const skull = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.6, 6), boneMat);
+  skull.rotation.x = Math.PI / 2;
+  skull.position.set(mx, y(mx, mz + 4.3) + 2.05, mz + 4.45);
+  g.add(skull);
+  // Sharpened stakes in a ragged arc round the front.
+  for (let i = 0; i < 22; i++) {
+    const a = -0.4 + (i / 21) * (Math.PI + 0.8) + (r() - 0.5) * 0.08, d = 11.5 + r() * 1.5;
+    if (Math.abs(a - Math.PI / 2) < 0.18) continue; // the way in
+    const x = Math.cos(a) * d, z = Math.sin(a) * d - 2;
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.0, 0.09, 1.6 + r() * 0.6, 6).translate(0, 0.8, 0), stakeMat);
+    st.position.set(x, y(x, z) - 0.15, z);
+    st.rotation.set(Math.sin(a) * 0.35, 0, -Math.cos(a) * 0.35);
+    st.castShadow = true;
+    g.add(st);
+  }
+  // A totem: a pole of skulls and a rag.
+  const totem = new THREE.Group();
+  totem.add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 3.2, 6).translate(0, 1.6, 0), stakeMat));
+  for (let i = 0; i < 3; i++) {
+    const sk = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), boneMat);
+    sk.scale.set(1, 1.1, 1.25);
+    sk.position.set(0, 2.9 - i * 0.45, 0.1);
+    totem.add(sk);
+  }
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.8).translate(0.25, 2.6, 0), new THREE.MeshStandardMaterial({ color: 0x8a2a1e, roughness: 1, side: THREE.DoubleSide }));
+  totem.add(flag);
+  totem.position.set(4, y(4, -2), -2);
+  totem.traverse((o) => ((o as THREE.Mesh).castShadow = true));
+  g.add(totem);
+  // The cookfire: a ring of stones, embers, a spit with something on it.
+  const fx = -3.5, fz = 1;
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2;
+    const s = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 0), rockMat);
+    s.position.set(fx + Math.cos(a) * 0.6, y(fx, fz) + 0.06, fz + Math.sin(a) * 0.6);
+    g.add(s);
+  }
+  const embers = new THREE.Mesh(new THREE.CircleGeometry(0.45, 10).rotateX(-Math.PI / 2), emberMat);
+  embers.position.set(fx, y(fx, fz) + 0.04, fz);
+  g.add(embers);
+  for (const s of [-1, 1]) {
+    const fork = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 1.1, 5), stakeMat);
+    fork.position.set(fx + s * 0.85, y(fx, fz) + 0.5, fz);
+    g.add(fork);
+  }
+  const spit = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 2, 5), stakeMat);
+  spit.rotation.z = Math.PI / 2;
+  spit.position.set(fx, y(fx, fz) + 1.0, fz);
+  g.add(spit);
+  const haunch = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshStandardMaterial({ color: 0x6a3a22, roughness: 0.7 }));
+  haunch.scale.set(1.6, 0.9, 0.9);
+  haunch.position.set(fx, y(fx, fz) + 0.95, fz);
+  g.add(haunch);
+  // Hide lean-tos.
+  for (const [hx, hz, ry] of [[6.5, 3, -0.8], [-7, -3, 0.9]] as [number, number, number][]) {
+    const t = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.8), hideMat);
+    t.rotation.set(-0.9, ry, 0);
+    t.position.set(hx, y(hx, hz) + 0.7, hz);
+    t.castShadow = true;
+    g.add(t);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.4, 5), stakeMat);
+    pole.rotation.z = Math.PI / 2;
+    pole.rotation.y = ry;
+    pole.position.set(hx, y(hx, hz) + 1.3, hz);
+    g.add(pole);
+  }
+  // Sheep bones and a ribcage or two.
+  for (let i = 0; i < 2; i++) {
+    const rc = ribcage(r);
+    rc.scale.setScalar(0.7);
+    const x = (r() - 0.5) * 12, z = r() * 6 - 1;
+    rc.position.set(x, y(x, z) + 0.05, z);
+    g.add(rc);
+  }
+  return g;
+}

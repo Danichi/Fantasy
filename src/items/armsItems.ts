@@ -93,6 +93,30 @@ function antlerPiece() {
   };
 }
 
+/** A great curved tusk, with a band of iron where a cap was hammered on. */
+function tuskPiece() {
+  return () => {
+    const g = new THREE.Group();
+    const m = std(0xe8dcbc, 0.5);
+    let prev = new THREE.Vector3(0, 0, 0);
+    for (let i = 1; i <= 6; i++) {
+      const a = i * 0.32;
+      const p = new THREE.Vector3(Math.sin(a) * 0.16, (1 - Math.cos(a)) * 0.16 + i * 0.02, 0);
+      const len = prev.distanceTo(p);
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.03 - i * 0.004, 0.034 - (i - 1) * 0.004, len, 8), m);
+      c.position.copy(prev).add(p).multiplyScalar(0.5);
+      c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p.clone().sub(prev).normalize());
+      g.add(c);
+      prev = p;
+    }
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 5, 12), std(0x5a5650, 0.6, 0.5));
+    band.rotation.x = Math.PI / 2;
+    band.position.set(0.02, 0.02, 0);
+    g.add(band);
+    return g;
+  };
+}
+
 function sheet(color: number, rough = 0.85) {
   return () => {
     const g = new THREE.Group();
@@ -332,6 +356,7 @@ export const ARMS_ITEMS: Record<string, ItemDef> = {
   copperIngot: mat('copperIngot', 'Copper Wire', 'Copper drawn thin for inlay. Runes are cut into steel and filled with it.', 1, ingot(0xc87a4a)),
   ashWood: mat('ashWood', 'Ash Timber', 'Pale, springy ash (tier 2): shafts, hafts and longbows.', 2, logs(0x9a9488, 0xe0cfa8)),
   yewWood: mat('yewWood', 'Yew Timber', 'Red-hearted yew (tier 3): the best bow wood there is.', 3, logs(0x6a4a3a, 0xb0502a), 'fine'),
+  warBoarTusk: mat('warBoarTusk', 'War-Boar Tusk', 'A tusk as long as your forearm from one of the goblins\' war-boars, still banded where its iron cap was hammered on. Good for hafts, hilts and charms (tier 2).', 2, tuskPiece(), 'fine'),
   slimeJelly: mat('slimeJelly', 'Ooze Jelly', 'A wobbling lump of green jelly from an ooze. Alchemists boil it down for acid and glue (tier 2).', 2, lumps(0x8ab83a), 'fine'),
   whiteAntler: mat('whiteAntler', 'White Stag Antler', 'A tine-crown shed by the White Stag of the deep woods, pale as frost and faintly cold to the touch. Bowyers and runesmiths would give a great deal to work it (tier 5).', 5, antlerPiece(), 'epic'),
   rawHide: mat('rawHide', 'Raw Hide', 'A skinned hide from a hunt. A tanning rack makes leather of it.', 1, sheet(0x9a7a5a, 0.95)),

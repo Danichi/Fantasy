@@ -285,6 +285,10 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'thaneCrown', name: "The Hollow Thane's Crown", kind: 'accessory', slot: 'trinket', rarity: 'epic',
     desc: "A circlet of green bronze from the Barrow of the Old Kings, far older than the Crown of Cresha. A wheel is worked into its front. Worn, it is cold on the brow, and the dead seem slower to notice you.", stats: { maxMana: 30, manaRegen: 0.25, damagePct: 0.05, poise: 6 },
   },
+  snaggleHorn: {
+    id: 'snaggleHorn', name: "Snaggletooth's Horn", kind: 'accessory', slot: 'trinket', rarity: 'epic',
+    desc: "A goblin war-horn of yellowed boar tusk, bound with copper wire and chewed at the mouthpiece. Snaggletooth called his band with it. Worn at the belt it sets your blood going: you run harder and longer.", stats: { maxStamina: 30, staminaRegen: 0.25, damagePct: 0.04 },
+  },
   dentedSignet: {
     id: 'dentedSignet', name: 'Dented Signet', kind: 'accessory', slot: 'trinket', rarity: 'epic',
     desc: "A heavy gold ring from inside the Rust Knight's gauntlet, dented by some old blow. The seal is a five-pointed star nobody in Cresha uses. Whoever wore it was summoned here, as you were, and fought a long time before the end. It still remembers how.", stats: { poise: 14, maxHp: 30, damagePct: 0.05 },

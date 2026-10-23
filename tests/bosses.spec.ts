@@ -458,3 +458,77 @@ test('The Rust Knight: waits bowed over its sword, blocks with its shield until 
   expect(res.page).toBe(1);
   expect(errors).toEqual([]);
 });
+
+test('Snaggletooth: rides out at sundown on an armoured war-boar, is thrown when it falls, horns up his band, drinks the violet vial, and leaves his horn', async ({ game }) => {
+  const { page, errors } = game;
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, T = g.THREE, B = g.bosses;
+    const GS = await import('/src/creatures/geometryStore.ts');
+    GS.prepareCreatureNow('boar');
+    GS.prepareCreatureNow('goblin');
+    const { heightAt } = await import('/src/world/terrainHeight.ts');
+    const def = B.defs.find((d: any) => d.id === 'snaggletooth');
+    const tp = (x: number, z: number) => g.player.teleport(new T.Vector3(x, heightAt(x, z) + 0.5, z));
+    g.time.skipTo(18);
+    g.player.invulnerable = true;
+    tp(def.home.x + 14, def.home.z + 5);
+    g.stepSim(5);
+    const toasts: string[] = [];
+    const t0 = g.hud.toast.bind(g.hud);
+    g.hud.toast = (m: string) => (toasts.push(m), t0(m));
+    const body = B.spawnNow('snaggletooth');
+    const hit = (tgt: any, dir: any, dmg: number) => {
+      const h0 = body.hp;
+      tgt.takeHit({ damage: dmg, poise: 20, dir, at: tgt.center.clone(), crit: false, source: 'melee' });
+      return h0 - body.hp;
+    };
+    const boar = body.boar;
+    const fwd = () => boar.forward.clone();
+    g.stepSim(30);
+    const front = hit(boar, fwd().negate(), 100);
+    const flank = hit(boar, new T.Vector3(fwd().z, 0, -fwd().x), 100);
+    // Parry the charge: the boar tumbles.
+    const recv = g.player.receiveAttack.bind(g.player);
+    g.player.receiveAttack = (att: any) => (att.parryable && att.onParried ? (att.onParried(), recv({ ...att, damage: 0 })) : recv(att));
+    for (let i = 0; i < 60 * 20 && boar.stats.tumbles === 0; i++) g.stepSim(1);
+    g.player.receiveAttack = recv;
+    const tumbled = boar.mode;
+    // Bring the boar down: Snaggletooth is thrown and blows his horn.
+    hit(boar, fwd(), 1e6);
+    g.stepSim(2);
+    const thrown = body.chief?.mode;
+    for (let i = 0; i < 60 * 10 && body.band.length === 0; i++) g.stepSim(1);
+    const band1 = body.band.length;
+    // Wear him down to the vial.
+    const chief = body.chief;
+    for (let i = 0; i < 60 * 40 && chief.alive && !chief.frenzy; i++) {
+      g.stepSim(1);
+      if (i % 30 === 0 && chief.mode !== 'thrown') hit(chief, new T.Vector3(1, 0, 0), chief.maxHp * 0.06);
+    }
+    for (let i = 0; i < 60 * 3; i++) g.stepSim(1);
+    const band2 = body.stats.called;
+    const stats = { ...chief.stats, riderCuts: body.stats.riderCuts, charges: boar.stats.charges };
+    const phase = body.phase;
+    hit(chief, new T.Vector3(1, 0, 0), 1e6);
+    for (let i = 0; i < 5; i++) g.stepSim(1);
+    g.hud.toast = t0;
+    for (const m of body.band) m.b.dispose();
+    return {
+      hours: [18, 1, 10, 14].map((h) => def.abroad(h)), front, flank, tumbled, thrown, band1, band2, stats, phase, alive: body.alive,
+      horn: g.player.equip.items.filter((it: any) => it.def.id === 'snaggleHorn').length, toasts,
+    };
+  });
+  expect(res.hours).toEqual([true, true, false, false]);
+  expect(res.front).toBeLessThan(res.flank * 0.6);
+  expect(res.tumbled).toBe('daze');
+  expect(res.thrown).toBe('thrown');
+  expect(res.band1).toBeGreaterThanOrEqual(3);
+  expect(res.band2).toBeGreaterThan(res.band1);
+  expect(res.stats.horns).toBe(2);
+  expect(res.phase).toBe(3);
+  expect(res.toasts.some((t) => /flies over its head/.test(t))).toBe(true);
+  expect(res.toasts.some((t) => /something violet/.test(t))).toBe(true);
+  expect(res.alive).toBe(false);
+  expect(res.horn).toBe(1);
+  expect(errors).toEqual([]);
+});

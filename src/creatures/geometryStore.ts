@@ -7,6 +7,7 @@ import { provideGreyjawGeometry, greyjawGeometry, type GreyjawGeometry } from '.
 import { provideStagGeometry, stagGeometry, type StagGeometry } from './stag/model';
 import { provideCrabGeometry, crabGeometry, type CrabGeometry } from './crab/model';
 import { provideWightGeometry, wightGeometry, type WightGeometry } from './wight/model';
+import { provideGoblinGeometry, goblinGeometry, type GoblinGeometry } from './goblin/model';
 
 // Creature meshes are sculpted in a worker so the game never stalls while a
 // new kind is built. Until a kind is ready, the population doesn't spawn it.
@@ -25,6 +26,7 @@ const PROVIDE: Record<string, (parts: Record<string, unknown>) => void> = {
   stag: (p) => provideStagGeometry(p as unknown as StagGeometry),
   crab: (p) => provideCrabGeometry(p as unknown as CrabGeometry),
   wight: (p) => provideWightGeometry(p as unknown as WightGeometry),
+  goblin: (p) => provideGoblinGeometry(p as unknown as GoblinGeometry),
 };
 const LOCAL: Record<string, () => void> = {
   boar: () => void boarGeometry(),
@@ -35,6 +37,7 @@ const LOCAL: Record<string, () => void> = {
   stag: () => void stagGeometry(),
   crab: () => void crabGeometry(),
   wight: () => void wightGeometry(),
+  goblin: () => void goblinGeometry(),
 };
 
 function getWorker() {

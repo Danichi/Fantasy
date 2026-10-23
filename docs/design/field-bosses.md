@@ -36,7 +36,7 @@ Named beasts that keep a territory somewhere in Cresha. Code: `src/bosses/`.
 | Mother Ooze | The mire below the mill (215, 140), always | built |
 | The Hollow Thane | The Barrow of the Old Kings on the Crown Road, at night | built |
 | The Rust Knight | Old battlefield off the Crown Road past Kingsmile (about -2383, -854), always; the armour of a lost champion | built |
-| Snaggletooth | Goblin warren in the hills, on a war-boar | planned |
+| Snaggletooth | The goblin warren in the south hills (70, -410), from sundown (17:00 to 3:00), on a war-boar | built |
 | Varga One-Eye | Orc marches, with her warband | planned |
 
 ## Old Greyjaw
@@ -161,4 +161,34 @@ cart wheel). Come within 20 m and it lifts its head and draws the sword.
   five-pointed star that matches its shield, and A Torn Journal Page (the
   second summon's notes: who called them, the armour that fits too well,
   something breathing in the iron, "Do not trust the voice that brought you").
+
+## Snaggletooth
+
+A hand-built goblin chief (`creatures/goblin/`): about 1.5 m, a big head on a
+scrawny neck, long ears out sideways (the left one torn), a heavy brow over
+yellow eyes, a long hooked nose, an underbite with one great yellow fang up
+past his lip, a pot belly, long arms, short bowed legs on long flat feet,
+olive mottled skin. A fur mantle, a belt and loincloth, leather bracers and
+shin wraps, a crown of teeth, a notched cleaver, and a tusk horn at his belt.
+He rides the hand-built boar (`creatures/boar/`) at 1.65x, in barding: an
+iron face plate with a spike, iron tusk caps, a chest plate, studded leather
+skirts curved over its flanks with a row of iron scales, a hide saddle and a
+trophy pole with a rag banner and a skull. Fight: `bosses/snaggletooth.ts`.
+His warren (lair `warren`): a burrow mound with a timbered mouth and a boar
+skull over the door, sharpened stakes, a skull totem, a cookfire with a spit,
+hide lean-tos, bones.
+
+- **Mounted:** the boar paws (the tell) and charges. Parry the tusks and it
+  tumbles, dazed (hits do 150%); sidestep and it overruns; into a tree and it
+  stuns itself. Close in it hooks, and Snaggletooth cuts down from the saddle.
+- **Barding:** half damage from the front; the flanks and rump are leather.
+- **Thrown:** when the boar dies he flies over its head, gets up groggy, and
+  blows his horn: four goblins come running from the warren.
+- **On foot:** weaves in; three quick cuts (each can be parried: he reels,
+  open); a crouch (the tell) then a leaping chop; skips back out of reach.
+- **Phase 3** (half his own strength): cracks a vial of something violet on
+  his tooth and drinks it (the Dark, sold to a goblin). Violet eyes, violet
+  motes, faster cuts, four in a combo, and he horns up three more goblins.
+- Drops Snaggletooth's Horn (trinket: +30 stamina, +25% stamina regen, +4%
+  damage). Later kills: War-Boar Tusks (a tier 2 crafting material).
 

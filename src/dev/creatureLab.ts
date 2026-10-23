@@ -17,6 +17,8 @@ import { CrabVisual, crabDark } from '../creatures/crab/visual';
 import { OozeVisual } from '../creatures/ooze/visual';
 import { wightGeometry } from '../creatures/wight/model';
 import { WightVisual, tickWightHair, wightDark } from '../creatures/wight/visual';
+import { goblinGeometry } from '../creatures/goblin/model';
+import { GoblinVisual, tickGoblinFur } from '../creatures/goblin/visual';
 import { StagVisual, tickStagFur } from '../creatures/stag/visual';
 import { greyjawDark } from '../creatures/wolf/visual';
 
@@ -71,7 +73,7 @@ scene.add(ground);
 
 const t0 = performance.now();
 const kind = P.get('c') ?? 'boar';
-const geo = kind === 'wight' ? wightGeometry() : kind === 'ooze' ? { ms: 0, body: new THREE.IcosahedronGeometry(1, 5), far: new THREE.IcosahedronGeometry(1, 2) } : kind === 'crab' ? { ...crabGeometry(), coat: null } : kind === 'stag' ? stagGeometry() : kind === 'greyjaw' ? greyjawGeometry() : kind === 'wolf' ? wolfGeometry() : kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
+const geo = kind === 'goblin' ? goblinGeometry() : kind === 'wight' ? wightGeometry() : kind === 'ooze' ? { ms: 0, body: new THREE.IcosahedronGeometry(1, 5), far: new THREE.IcosahedronGeometry(1, 2) } : kind === 'crab' ? { ...crabGeometry(), coat: null } : kind === 'stag' ? stagGeometry() : kind === 'greyjaw' ? greyjawGeometry() : kind === 'wolf' ? wolfGeometry() : kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
 type Look = { root: THREE.Group; gait: { reset: (r: THREE.Object3D, g: (x: number, z: number) => number) => void }; setPose: (p: never) => void; update: (dt: number, v: THREE.Vector3, g: (x: number, z: number) => number) => void; lod: (d: number, fur: boolean) => void };
 const batLook = (): Look => {
   const v = new BatVisual({ scale: Number(P.get('scale') ?? 2.5) });
@@ -92,7 +94,12 @@ const wightLook = (): Look => {
   if (P.get('noward')) v.warded = false;
   return { root: v.root, gait: { reset: () => {} }, setPose: (p: never) => v.setPose(p), update: (dt, vel) => v.update(dt, vel), lod: (d) => v.lod(d) };
 };
-const boar: Look = kind === 'wight' ? wightLook() : kind === 'ooze' ? oozeLook() : kind === 'crab' ? new CrabVisual() : kind === 'stag' ? new StagVisual() : kind === 'greyjaw' ? new WolfVisual({ look: 'greyjaw', geometry: greyjawGeometry() }) : kind === 'wolf' ? new WolfVisual({ look: (P.get('look') ?? 'grey') as WolfLook }) : kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
+const goblinLook = (): Look => {
+  const v = new GoblinVisual();
+  if (P.get('dark')) v.dark(Number(P.get('dark')));
+  return { root: v.root, gait: { reset: () => {} }, setPose: (p: never) => v.setPose(p), update: (dt, vel) => v.update(dt, vel.length()), lod: (d) => v.lod(d) };
+};
+const boar: Look = kind === 'goblin' ? goblinLook() : kind === 'wight' ? wightLook() : kind === 'ooze' ? oozeLook() : kind === 'crab' ? new CrabVisual() : kind === 'stag' ? new StagVisual() : kind === 'greyjaw' ? new WolfVisual({ look: 'greyjaw', geometry: greyjawGeometry() }) : kind === 'wolf' ? new WolfVisual({ look: (P.get('look') ?? 'grey') as WolfLook }) : kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
 scene.add(boar.root);
 if (P.get('dark')) (kind === 'crab' ? crabDark : greyjawDark)(Number(P.get('dark')));
 if (P.get('air')) (boar as unknown as { airborne: boolean }).airborne = true;
@@ -114,6 +121,7 @@ const step = (sec: number) => {
     tickWolfFur(dt);
     tickStagFur(dt);
     tickWightHair(dt);
+    tickGoblinFur(dt);
     boar.update(dt, vel, () => 0);
   }
 };
@@ -149,6 +157,11 @@ const VIEWS: Record<string, View> = {
   wside: { name: 'wight side', from: [4.5, 1.5, 0.2], at: [0, 1.25, 0], fov: 34 },
   whead2: { name: 'wight head', from: [0.35, 2.3, 0.95], at: [0, 2.14, 0.1], fov: 32 },
   wback: { name: 'wight back', from: [-1.8, 2.0, -3.8], at: [0, 1.3, 0], fov: 34 },
+  gfront: { name: 'goblin front', from: [0.9, 0.95, 2.3], at: [0, 0.6, 0], fov: 34 },
+  gside: { name: 'goblin side', from: [2.4, 0.75, 0.1], at: [0, 0.6, 0], fov: 34 },
+  ghead: { name: 'goblin head', from: [0.3, 1.02, 0.62], at: [0, 0.97, 0.08], fov: 34 },
+  ghead2: { name: 'goblin head left', from: [0.55, 1.0, 0.35], at: [0, 0.97, 0.06], fov: 36 },
+  gback: { name: 'goblin back', from: [-1.0, 1.1, -2.2], at: [0, 0.6, 0], fov: 34 },
   hl: { name: 'head left', from: [0.42, 0.93, 1.02], at: [0, 0.88, 0.74], fov: 30 },
   hr: { name: 'head right', from: [-0.42, 0.93, 1.02], at: [0, 0.88, 0.74], fov: 30 },
   hf: { name: 'head front', from: [0.0, 0.95, 1.25], at: [0, 0.87, 0.74], fov: 26 },
