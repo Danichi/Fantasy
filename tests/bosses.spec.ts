@@ -512,7 +512,8 @@ test('Snaggletooth: rides out at sundown on an armoured war-boar, is thrown when
     hit(chief, new T.Vector3(1, 0, 0), 1e6);
     for (let i = 0; i < 5; i++) g.stepSim(1);
     g.hud.toast = t0;
-    for (const m of body.band) m.b.dispose();
+    // Clear the band (and Snaggletooth with them) so nothing lingers into the next test.
+    B.clear();
     return {
       hours: [18, 1, 10, 14].map((h) => def.abroad(h)), front, flank, tumbled, thrown, band1, band2, stats, phase, alive: body.alive,
       horn: g.player.equip.items.filter((it: any) => it.def.id === 'snaggleHorn').length, toasts,
