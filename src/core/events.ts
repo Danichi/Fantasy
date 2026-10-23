@@ -19,6 +19,8 @@ export interface GameEvents {
   /** field bosses: first seen, and killed */
   bossFound: { id: string };
   bossSlain: { id: string; first: boolean };
+  /** a boss says something (shown as a toast) */
+  bossSpeaks: { id: string; line: string };
   /** a creature den (boar wallow, spider hollow, bat roost) was emptied */
   denCleared: { id: string; species: string };
   swing: { heavy: boolean };

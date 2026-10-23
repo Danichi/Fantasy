@@ -123,7 +123,9 @@ export class FieldBosses {
   enabled = true;
   private day = 0;
 
-  constructor(private h: Hooks) {}
+  constructor(private h: Hooks) {
+    events.on('bossSpeaks', ({ line }) => this.h.toast(line));
+  }
 
   add(def: BossDef) {
     this.defs.push(def);

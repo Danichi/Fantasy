@@ -126,9 +126,10 @@ import { GREYJAW } from './bosses/greyjaw';
 import { WHITE_STAG } from './bosses/whiteStag';
 import { BRINE_MAW } from './bosses/brineMaw';
 import { MOTHER_OOZE } from './bosses/motherOoze';
+import { HOLLOW_THANE } from './bosses/hollowThane';
 
 /** Field bosses, in the order they were added (bosses/). */
-const BOSS_DEFS = [GREYJAW, WHITE_STAG, BRINE_MAW, MOTHER_OOZE];
+const BOSS_DEFS = [GREYJAW, WHITE_STAG, BRINE_MAW, MOTHER_OOZE, HOLLOW_THANE];
 import { tickBoarFur } from './creatures/boar/visual';
 import { tickSpiderFur } from './creatures/spider/visual';
 import { updateSnare } from './creatures/spider/spider';

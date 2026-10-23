@@ -94,6 +94,18 @@ export abstract class Creature implements Target {
     targets.add(this);
   }
 
+  /** Move the body at once (a blink, a step out of the mist); `at` is where its feet go. */
+  teleport(at: THREE.Vector3) {
+    const cy = this.halfHeight + this.radius;
+    const p = { x: at.x, y: at.y + cy, z: at.z };
+    this.rb.setTranslation(p, true);
+    this.rb.setNextKinematicTranslation(p);
+    this.col.setTranslation(p);
+    this.position.copy(at);
+    this.center.set(at.x, at.y + cy, at.z);
+    this.vel.set(0, 0, 0);
+  }
+
   /** Fliers don't stick to the ground. */
   protected setGroundSnap(on: boolean) {
     if (on) this.kcc.enableSnapToGround(0.4);

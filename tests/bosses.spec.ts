@@ -328,3 +328,62 @@ test('Mother Ooze: leaps and splats, swallows you in a surge, sheds lumps that c
   expect(res.sword).toBe(1);
   expect(errors).toEqual([]);
 });
+
+test('The Hollow Thane: warded but for when it raises the dead or is spent, breathes grave-cold, fades behind you, speaks of the fifth, and drops its crown', async ({ game }) => {
+  const { page, errors } = game;
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, T = g.THREE, B = g.bosses;
+    (await import('/src/creatures/geometryStore.ts')).prepareCreatureNow('wight');
+    const { heightAt } = await import('/src/world/terrainHeight.ts');
+    const def = B.defs.find((d: any) => d.id === 'hollowThane');
+    const tp = (x: number, z: number) => g.player.teleport(new T.Vector3(x, heightAt(x, z) + 0.5, z));
+    g.time.skipTo(23);
+    g.player.invulnerable = true;
+    tp(def.home.x + 10, def.home.z + 4);
+    g.stepSim(5);
+    const toasts: string[] = [];
+    const t0 = g.hud.toast.bind(g.hud);
+    g.hud.toast = (m: string) => (toasts.push(m), t0(m));
+    const body = B.spawnNow('hollowThane');
+    const hit = (dmg: number) => {
+      const h0 = body.hp;
+      body.takeHit({ damage: dmg, poise: 10, dir: new T.Vector3(0, 0, 1), at: body.center.clone(), crit: false, source: 'melee' });
+      return h0 - body.hp;
+    };
+    g.stepSim(30);
+    const warded = hit(100);
+    // Let it raise the dead undisturbed.
+    let openDmg = 0;
+    for (let i = 0; i < 60 * 30 && body.stats.raised === 0; i++) g.stepSim(1);
+    const raised = body.stats.raised;
+    // Wear it down through its open moments until it speaks.
+    for (let i = 0; i < 60 * 60 && body.alive && body.phase < 3; i++) {
+      g.stepSim(1);
+      if (body.open && i % 10 === 0) openDmg = Math.max(openDmg, hit(body.maxHp * 0.04));
+    }
+    for (let i = 0; i < 60 * 3; i++) g.stepSim(1);
+    const stats = { ...body.stats };
+    hit(1e7);
+    body.takeHit({ damage: 1e7, poise: 0, dir: new T.Vector3(0, 0, 1), at: body.center.clone(), crit: false, source: 'melee' });
+    // Kill it in the open if the ward is up.
+    for (let i = 0; i < 60 * 20 && body.alive; i++) {
+      g.stepSim(1);
+      if (body.open) hit(1e7);
+    }
+    for (let i = 0; i < 5; i++) g.stepSim(1);
+    g.hud.toast = t0;
+    return {
+      nightOnly: [22, 3, 9, 15].map((h) => def.abroad(h)), warded, raised, openDmg, stats, alive: body.alive, phase: body.phase,
+      crown: g.player.equip.items.filter((it: any) => it.def.id === 'thaneCrown').length, toasts,
+    };
+  });
+  expect(res.nightOnly).toEqual([true, true, false, false]);
+  expect(res.warded).toBeLessThan(15);
+  expect(res.raised).toBeGreaterThan(0);
+  expect(res.openDmg).toBeGreaterThan(res.warded * 3);
+  expect(res.stats.breaths + res.stats.cuts + res.stats.fades).toBeGreaterThan(0);
+  expect(res.toasts.some((t) => /The fifth\. They always send another/.test(t))).toBe(true);
+  expect(res.alive).toBe(false);
+  expect(res.crown).toBe(1);
+  expect(errors).toEqual([]);
+});

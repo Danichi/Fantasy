@@ -15,6 +15,8 @@ import { stagGeometry } from '../creatures/stag/model';
 import { crabGeometry } from '../creatures/crab/model';
 import { CrabVisual, crabDark } from '../creatures/crab/visual';
 import { OozeVisual } from '../creatures/ooze/visual';
+import { wightGeometry } from '../creatures/wight/model';
+import { WightVisual, tickWightHair, wightDark } from '../creatures/wight/visual';
 import { StagVisual, tickStagFur } from '../creatures/stag/visual';
 import { greyjawDark } from '../creatures/wolf/visual';
 
@@ -69,7 +71,7 @@ scene.add(ground);
 
 const t0 = performance.now();
 const kind = P.get('c') ?? 'boar';
-const geo = kind === 'ooze' ? { ms: 0, body: new THREE.IcosahedronGeometry(1, 5), far: new THREE.IcosahedronGeometry(1, 2) } : kind === 'crab' ? { ...crabGeometry(), coat: null } : kind === 'stag' ? stagGeometry() : kind === 'greyjaw' ? greyjawGeometry() : kind === 'wolf' ? wolfGeometry() : kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
+const geo = kind === 'wight' ? wightGeometry() : kind === 'ooze' ? { ms: 0, body: new THREE.IcosahedronGeometry(1, 5), far: new THREE.IcosahedronGeometry(1, 2) } : kind === 'crab' ? { ...crabGeometry(), coat: null } : kind === 'stag' ? stagGeometry() : kind === 'greyjaw' ? greyjawGeometry() : kind === 'wolf' ? wolfGeometry() : kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
 type Look = { root: THREE.Group; gait: { reset: (r: THREE.Object3D, g: (x: number, z: number) => number) => void }; setPose: (p: never) => void; update: (dt: number, v: THREE.Vector3, g: (x: number, z: number) => number) => void; lod: (d: number, fur: boolean) => void };
 const batLook = (): Look => {
   const v = new BatVisual({ scale: Number(P.get('scale') ?? 2.5) });
@@ -84,7 +86,13 @@ const oozeLook = (): Look => {
   if (P.get('bulge')) v.setBulge(Number(P.get('bulge')));
   return { root: v.root, gait: { reset: () => {} }, setPose: () => {}, update: (dt) => v.update(dt), lod: () => {} };
 };
-const boar: Look = kind === 'ooze' ? oozeLook() : kind === 'crab' ? new CrabVisual() : kind === 'stag' ? new StagVisual() : kind === 'greyjaw' ? new WolfVisual({ look: 'greyjaw', geometry: greyjawGeometry() }) : kind === 'wolf' ? new WolfVisual({ look: (P.get('look') ?? 'grey') as WolfLook }) : kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
+const wightLook = (): Look => {
+  const v = new WightVisual();
+  if (P.get('dark')) wightDark(Number(P.get('dark')));
+  if (P.get('noward')) v.warded = false;
+  return { root: v.root, gait: { reset: () => {} }, setPose: (p: never) => v.setPose(p), update: (dt, vel) => v.update(dt, vel), lod: (d) => v.lod(d) };
+};
+const boar: Look = kind === 'wight' ? wightLook() : kind === 'ooze' ? oozeLook() : kind === 'crab' ? new CrabVisual() : kind === 'stag' ? new StagVisual() : kind === 'greyjaw' ? new WolfVisual({ look: 'greyjaw', geometry: greyjawGeometry() }) : kind === 'wolf' ? new WolfVisual({ look: (P.get('look') ?? 'grey') as WolfLook }) : kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
 scene.add(boar.root);
 if (P.get('dark')) (kind === 'crab' ? crabDark : greyjawDark)(Number(P.get('dark')));
 if (P.get('air')) (boar as unknown as { airborne: boolean }).airborne = true;
@@ -105,6 +113,7 @@ const step = (sec: number) => {
     tickBatFur(dt);
     tickWolfFur(dt);
     tickStagFur(dt);
+    tickWightHair(dt);
     boar.update(dt, vel, () => 0);
   }
 };
@@ -136,6 +145,10 @@ const VIEWS: Record<string, View> = {
   shead: { name: 'stag head', from: [1.1, 1.95, 2.1], at: [0, 1.85, 0.9], fov: 34 },
   srear: { name: 'stag rear', from: [-3.0, 1.9, -3.6], at: [0, 1.2, -0.2], fov: 34 },
   slow: { name: 'stag low', from: [2.2, 0.6, 3.0], at: [0, 1.3, 0.3], fov: 40 },
+  wfront: { name: 'wight front', from: [1.6, 1.9, 4.2], at: [0, 1.3, 0], fov: 34 },
+  wside: { name: 'wight side', from: [4.5, 1.5, 0.2], at: [0, 1.25, 0], fov: 34 },
+  whead2: { name: 'wight head', from: [0.35, 2.3, 0.95], at: [0, 2.14, 0.1], fov: 32 },
+  wback: { name: 'wight back', from: [-1.8, 2.0, -3.8], at: [0, 1.3, 0], fov: 34 },
   hl: { name: 'head left', from: [0.42, 0.93, 1.02], at: [0, 0.88, 0.74], fov: 30 },
   hr: { name: 'head right', from: [-0.42, 0.93, 1.02], at: [0, 0.88, 0.74], fov: 30 },
   hf: { name: 'head front', from: [0.0, 0.95, 1.25], at: [0, 0.87, 0.74], fov: 26 },

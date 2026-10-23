@@ -281,6 +281,10 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'watchBanner', name: "Watch's Banner", kind: 'accessory', slot: 'trinket', rarity: 'rare',
     desc: "A strip of Elder Glen's watch colours, blue and frayed, given to those who stood with the watch on the night of a raid. The watch fights harder beside whoever wears it.", stats: { maxHp: 25, poise: 10 },
   },
+  thaneCrown: {
+    id: 'thaneCrown', name: "The Hollow Thane's Crown", kind: 'accessory', slot: 'trinket', rarity: 'epic',
+    desc: "A circlet of green bronze from the Barrow of the Old Kings, far older than the Crown of Cresha. A wheel is worked into its front. Worn, it is cold on the brow, and the dead seem slower to notice you.", stats: { maxMana: 30, manaRegen: 0.25, damagePct: 0.05, poise: 6 },
+  },
   greyjawFang: {
     id: 'greyjawFang', name: "Greyjaw's Fang", kind: 'accessory', slot: 'trinket', rarity: 'epic',
     desc: "One of Old Greyjaw's fangs, yellow and as long as your finger, on a leather thong. He hunted the north woods for longer than anyone can remember. Wear it and you hunt as he did: hard, and without tiring.", stats: { damagePct: 0.08, staminaRegen: 0.2, maxHp: 15 },

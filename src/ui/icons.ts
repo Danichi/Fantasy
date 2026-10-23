@@ -144,6 +144,30 @@ function paintAccessory(def: ItemDef) {
     g.beginPath();
     g.arc(62, 48, 9, 0, Math.PI * 2);
     g.fill();
+  } else if (def.id === 'thaneCrown') {
+    // A green-bronze circlet with tall and short points.
+    const gr = g.createLinearGradient(20, 40, 108, 100);
+    gr.addColorStop(0, '#a88a4a');
+    gr.addColorStop(0.5, '#6a8a6a');
+    gr.addColorStop(1, '#3e6a52');
+    g.fillStyle = gr;
+    g.beginPath();
+    g.moveTo(18, 96);
+    for (let i = 0; i <= 8; i++) {
+      const x = 18 + i * 11.5, tall = i % 2 === 0 ? 30 : 50;
+      g.lineTo(x, tall);
+      g.lineTo(x + 5.75, 70);
+    }
+    g.lineTo(110, 96);
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#2e4a3a';
+    g.fillRect(18, 82, 92, 6);
+    g.strokeStyle = '#d8c48e';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(m, 78, 7, 0, Math.PI * 2);
+    g.stroke();
   } else if (def.id === 'greyjawFang') {
     // A long yellowed fang on a leather thong, a tuft of grey fur at the root.
     g.strokeStyle = '#5a3b22';

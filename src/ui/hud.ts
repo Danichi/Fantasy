@@ -197,7 +197,8 @@ export class HUD {
   toast(msg: string) {
     this.toastEl.textContent = msg;
     this.toastEl.classList.add('show');
-    this.toastT = 1.4;
+    // Long enough to read: a beat for short notes, a few seconds for a sentence.
+    this.toastT = Math.min(9, 1.4 + msg.length * 0.045);
   }
 
   private regionCardEl: HTMLDivElement | null = null;
