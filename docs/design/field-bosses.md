@@ -34,7 +34,7 @@ Named beasts that keep a territory somewhere in Cresha. Code: `src/bosses/`.
 | The White Stag | Deep woods west of the Glen (-300, -20), dawn and dusk, about one day in two; a hunt | built |
 | Brine-Maw | The cove north of Gull Ridge (2182, -156), at low tide (3:00 to 6:30 and 15:00 to 18:30) | built |
 | Mother Ooze | The mire below the mill (215, 140), always | built |
-| The Hollow Thane | Barrow downs on the Crown Road, at night; raises skeletons | planned |
+| The Hollow Thane | The Barrow of the Old Kings on the Crown Road, at night | built |
 | The Rust Knight | Old battlefield on the Crown fields; the armour of a lost champion | planned |
 | Snaggletooth | Goblin warren in the hills, on a war-boar | planned |
 | Varga One-Eye | Orc marches, with her warband | planned |
@@ -111,3 +111,24 @@ inside her: a ribcage, a skull, a knight's helm and his sword. Fight:
 - **Spit (phase 2+):** lobbed globs of acid that leave burning puddles.
 - She shrinks as she's worn down. **Phase 3:** a violet heart shows in her.
 - Drops The Drowned Knight's Sword (damage 30, bleed 6, pierce 15%).
+
+## The Hollow Thane
+
+A barrow wight (`creatures/wight/`): tall, starved and floating, in a rotted
+robe and a faded red mantle, ribs showing, a skull of a face with cold light
+in the sockets, long white hair, a crown of green bronze and a bronze
+leaf-blade. Fight: `bosses/hollowThane.ts`. It comes out of the barrow door
+at night (21:00 to 5:00).
+
+- **The ward:** a pale shimmer round it; blows do 10% while it's up.
+- **Raising:** arms high, a long channel, then skeletons claw out of the earth
+  round you. The ward is down while it calls (hits do 150%), and enough damage
+  breaks the calling off.
+- **Cold breath:** leans in, jaw wide (the tell), then a cone of grave-cold
+  that chills and slows. After it, it's spent and open.
+- **The sword:** drawn back high (the tell), a long cut. Parry it: it reels, open.
+- **Fade:** into mist, and out of it behind you.
+- **Phase 3:** its eyes go violet, and it speaks: "Another one. The fifth.
+  They always send another." (A lore hint: the player is the fifth summon.)
+- Drops the Hollow Thane's Crown (trinket: +30 mana, +25% mana regen, +5%
+  damage, +6 poise).
