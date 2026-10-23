@@ -37,7 +37,7 @@ Named beasts that keep a territory somewhere in Cresha. Code: `src/bosses/`.
 | The Hollow Thane | The Barrow of the Old Kings on the Crown Road, at night | built |
 | The Rust Knight | Old battlefield off the Crown Road past Kingsmile (about -2383, -854), always; the armour of a lost champion | built |
 | Snaggletooth | The goblin warren in the south hills (70, -410), from sundown (17:00 to 3:00), on a war-boar | built |
-| Varga One-Eye | Orc marches, with her warband | planned |
+| Varga One-Eye | A raid camp off the Crown Road between the cottage and Gorrak's warcamp, at night (19:00 to 5:00), with her warband | built |
 
 ## Old Greyjaw
 
@@ -191,4 +191,30 @@ hide lean-tos, bones.
   motes, faster cuts, four in a combo, and he horns up three more goblins.
 - Drops Snaggletooth's Horn (trinket: +30 stamina, +25% stamina regen, +4%
   damage). Later kills: War-Boar Tusks (a tier 2 crafting material).
+
+## Varga One-Eye
+
+The orc warlord fighter (`enemies/orc.ts`, the mocap orc boss) on the Orc
+Warrior model at 1.4x, dressed as a warband captain: a leather patch over her
+left eye, a long black braid, and a red war-banner with one painted eye on
+her back. Fight: `bosses/varga.ts`. Her raid camp (lair `raidCamp`) is off the
+Crown Road: a looted wagon on its side, roped wool bales and grain sacks, a
+fire with bedrolls and an ox's ribs, a weapon rack, her big one-eyed banner,
+a trampled caravan pennant, and guards' helms on stakes.
+
+- **The warband:** five orcs fight with her from the start.
+- **Her moves:** cleaves, sweeps, combos, a kick, and a leaping slam when you
+  keep your distance (no bow).
+- **Blind side:** blows from her left, or from behind on that side, do 150%
+  and stagger her sooner. The first one tells you so.
+- **Phase 2** (60%): her war-horn; three more orcs come up the road.
+- **Phase 3** (30%): she tears off the patch. Violet light burns where the
+  eye was ("I gave the dark an eye for this. It gives back."). No blind side
+  any more, and she's faster. Violet motes and a violet light on her.
+- Drops Varga's Eye (trinket: +6% crit, +8% damage, +20 health), a violet
+  glass eye. Later kills: steel ingots and gold.
+- Run far enough and she lets you go; she is back in camp with a fresh band.
+
+Also: Old Greyjaw now turns on whoever hurts him from up to 90 m (he used to
+ignore a hit from beyond 45 m, so an arrow from range did nothing).
 

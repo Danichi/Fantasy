@@ -151,9 +151,10 @@ import { MOTHER_OOZE } from './bosses/motherOoze';
 import { HOLLOW_THANE } from './bosses/hollowThane';
 import { RUST_KNIGHT } from './bosses/rustKnight';
 import { SNAGGLETOOTH } from './bosses/snaggletooth';
+import { VARGA_ONE_EYE } from './bosses/varga';
 
 /** Field bosses, in the order they were added (bosses/). */
-const BOSS_DEFS = [GREYJAW, WHITE_STAG, BRINE_MAW, MOTHER_OOZE, HOLLOW_THANE, RUST_KNIGHT, SNAGGLETOOTH];
+const BOSS_DEFS = [GREYJAW, WHITE_STAG, BRINE_MAW, MOTHER_OOZE, HOLLOW_THANE, RUST_KNIGHT, SNAGGLETOOTH, VARGA_ONE_EYE];
 import { tickBoarFur } from './creatures/boar/visual';
 import { tickSpiderFur } from './creatures/spider/visual';
 import { updateSnare } from './creatures/spider/spider';

@@ -349,7 +349,7 @@ export class Greyjaw extends Creature implements BossBody {
 
   protected onHurt(_h: HitInfo) {
     const player = creatureView.player;
-    if (player && (this.mode === 'roam' || this.mode === 'home') && player.pos.distanceTo(this.position) < 45) this.engage(playerFoe(player));
+    if (player && (this.mode === 'roam' || this.mode === 'home') && player.pos.distanceTo(this.position) < 90) this.engage(playerFoe(player));
   }
 
   protected onDeath() {

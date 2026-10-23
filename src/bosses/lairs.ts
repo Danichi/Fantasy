@@ -482,3 +482,148 @@ export function warren(at: THREE.Vector3, seed: number) {
   }
   return g;
 }
+
+const canvasMat = new THREE.MeshStandardMaterial({ color: 0xb8a882, roughness: 1, side: THREE.DoubleSide });
+const plankMat = new THREE.MeshStandardMaterial({ color: 0x7a5e40, roughness: 0.9 });
+const sackMat = new THREE.MeshStandardMaterial({ color: 0x9a8a62, roughness: 1 });
+const woolMat = new THREE.MeshStandardMaterial({ color: 0xbcb096, roughness: 1 });
+
+/** Varga One-Eye's raid camp off the Crown Road: a looted caravan, wool bales and sacks, a banner, a fire. */
+export function raidCamp(at: THREE.Vector3, seed: number) {
+  const r = rng(seed);
+  const g = new THREE.Group();
+  g.position.copy(at);
+  const trod = new THREE.Color(0x5a4c34), grass = new THREE.Color(0x5e6a36), ash = new THREE.Color(0x3a342a);
+  g.add(groundPatch(at, 16, (x, z, rr) => trod.clone().lerp(grass, THREE.MathUtils.smoothstep(rr, 0.45, 1) * 0.8).lerp(ash, THREE.MathUtils.smoothstep(Math.hypot(x - 3, z - 2), 3, 0) * 0.7)));
+  const y = (x: number, z: number) => heightAt(at.x + x, at.z + z) - at.y;
+  const put = (o: THREE.Object3D, x: number, z: number, lift = 0, ry = 0) => {
+    o.position.set(x, y(x, z) + lift, z);
+    o.rotation.y = ry;
+    o.traverse((m) => ((m as THREE.Mesh).isMesh && ((m as THREE.Mesh).castShadow = (m as THREE.Mesh).receiveShadow = true)));
+    g.add(o);
+    return o;
+  };
+  // The looted wagon, on its side, its canvas torn.
+  const wagon = new THREE.Group();
+  const bed = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 3.4), plankMat);
+  wagon.add(bed);
+  for (const s of [-1, 1]) {
+    const side = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 3.4), plankMat);
+    side.position.set(s * 0.86, 0.3, 0);
+    wagon.add(side);
+  }
+  const hoopGeo = new THREE.TorusGeometry(0.9, 0.03, 4, 12, Math.PI);
+  for (let i = 0; i < 4; i++) {
+    const hoop = new THREE.Mesh(hoopGeo, plankMat);
+    hoop.position.set(0, 0.5, -1.3 + i * 0.85);
+    wagon.add(hoop);
+  }
+  const cover = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.92, 2.2, 10, 1, true, -Math.PI / 2, Math.PI * 0.75).rotateX(Math.PI / 2), canvasMat);
+  cover.position.set(0, 0.5, -0.4);
+  wagon.add(cover);
+  for (const [wx, wz] of [[-0.95, 1.2], [0.95, 1.2], [-0.95, -1.2]] as [number, number][]) {
+    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.05, 5, 16), plankMat);
+    wheel.rotation.y = Math.PI / 2;
+    wheel.position.set(wx, -0.1, wz);
+    wagon.add(wheel);
+  }
+  wagon.rotation.z = Math.PI / 2 - 0.15;
+  put(wagon, -7, -4, 0.9, 0.5);
+  physics.addCylinder(new THREE.Vector3(at.x - 7, at.y + y(-7, -4) + 0.9, at.z - 4), 0.9, 1.7);
+  // A loose wheel, wool bales and grain sacks spilled about.
+  const loose = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.05, 5, 16), plankMat);
+  loose.rotation.x = Math.PI / 2;
+  put(loose, -4, -7, 0.06);
+  for (let i = 0; i < 6; i++) {
+    // Wool bales: lumpy bundles, roped.
+    const bale = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), woolMat);
+    bale.scale.set(1.25, 0.8, 0.95);
+    const rope = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.015, 4, 16), plankMat);
+    rope.rotation.y = Math.PI / 2;
+    rope.scale.set(1, 0.85, 1);
+    bale.add(rope);
+    bale.rotation.set(0, r() * 3, (r() - 0.5) * 0.3);
+    put(bale, -10 + r() * 5, 1 + r() * 4, 0.22);
+  }
+  for (let i = 0; i < 8; i++) {
+    const sack = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), sackMat);
+    sack.scale.set(1, 0.7, 1.3);
+    put(sack, -3 + r() * 5, -9 + r() * 4, 0.15, r() * 3);
+  }
+  // The fire, a spit and the bones of somebody's ox.
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    const s = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2, 0), rockMat);
+    put(s, 3 + Math.cos(a) * 0.9, 2 + Math.sin(a) * 0.9, 0.08);
+  }
+  const embers = new THREE.Mesh(new THREE.CircleGeometry(0.7, 12).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x2a1a10, emissive: 0xff5a14, emissiveIntensity: 1.3, roughness: 1 }));
+  put(embers, 3, 2, 0.04);
+  const rc = ribcage(r);
+  rc.scale.setScalar(1.3);
+  put(rc, 5, 4.5, 0.1);
+  // Hide bedrolls round the fire.
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.3;
+    const roll = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 2), new THREE.MeshStandardMaterial({ color: 0x6a5a40, roughness: 1 }));
+    put(roll, 3 + Math.cos(a) * 4, 2 + Math.sin(a) * 4, 0.03, -a);
+  }
+  // Her banner: a tall pole, a red rag with one eye painted on it.
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 5, 6).translate(0, 2.5, 0), plankMat);
+  const cv = document.createElement('canvas');
+  cv.width = 64;
+  cv.height = 96;
+  const cx = cv.getContext('2d')!;
+  cx.fillStyle = '#7a1a14';
+  cx.fillRect(0, 0, 64, 96);
+  cx.fillStyle = '#e8d8b0';
+  cx.beginPath();
+  cx.ellipse(32, 40, 20, 11, 0, 0, Math.PI * 2);
+  cx.fill();
+  cx.fillStyle = '#1a0a08';
+  cx.beginPath();
+  cx.arc(32, 40, 8, 0, Math.PI * 2);
+  cx.fill();
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.1, 4, 6).translate(0.72, 3.8, 0), new THREE.MeshStandardMaterial({ map: tex, side: THREE.DoubleSide, roughness: 0.95 }));
+  const fp = flag.geometry.getAttribute('position');
+  for (let i = 0; i < fp.count; i++) fp.setZ(i, Math.sin(fp.getX(i) * 4 + fp.getY(i) * 2) * 0.08);
+  flag.geometry.computeVertexNormals();
+  const banner = new THREE.Group().add(pole, flag);
+  put(banner, -4, 7, -0.2, 0.4);
+  physics.addCylinder(new THREE.Vector3(at.x - 4, at.y + y(-4, 7) + 2, at.z + 7), 2, 0.12);
+  // Weapon rack: crude spears and axes.
+  const rack = new THREE.Group();
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.4, 5), plankMat);
+  bar.rotation.z = Math.PI / 2;
+  bar.position.y = 1.1;
+  rack.add(bar);
+  for (const s of [-1, 1]) {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.3, 5), plankMat);
+    leg.position.set(s * 1.1, 0.6, 0);
+    rack.add(leg);
+  }
+  for (let i = 0; i < 5; i++) {
+    const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 2.2, 5), plankMat);
+    sp.position.set(-0.9 + i * 0.45, 1.0, 0.12);
+    sp.rotation.x = -0.25;
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.25, 4), rockMat);
+    head.position.y = 1.2;
+    sp.add(head);
+    rack.add(sp);
+  }
+  put(rack, 7, -5, 0, -0.6);
+  // A captured caravan pennant trampled in the mud.
+  const pennant = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.4).rotateX(-Math.PI / 2 + 0.05), new THREE.MeshStandardMaterial({ color: 0x2a4a7a, roughness: 1, side: THREE.DoubleSide }));
+  put(pennant, -2, 3, 0.03, 1.2);
+  // Trophy stakes: helms of caravan guards.
+  for (let i = 0; i < 4; i++) {
+    const a = 2.4 + i * 0.5, d = 12 + r() * 2;
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 2, 5).translate(0, 1, 0), plankMat);
+    const h = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.6), new THREE.MeshStandardMaterial({ color: 0x6a6460, roughness: 0.5, metalness: 0.5 }));
+    h.position.y = 2.05;
+    st.add(h);
+    put(st, Math.cos(a) * d, Math.sin(a) * d, -0.2, r() * 3);
+  }
+  return g;
+}

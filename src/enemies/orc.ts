@@ -455,6 +455,11 @@ export class OrcWarlord implements Target {
     this.releaseBody();
   }
 
+  /** A socket on one of his bones, for extra dressing (Varga One-Eye's patch and banner). */
+  socket(bone: string, name: string) {
+    return this.char.socket(bone, name);
+  }
+
   /** Which way he faces (radians). */
   get facing() {
     return this.yaw;

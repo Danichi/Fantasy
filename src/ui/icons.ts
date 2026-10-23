@@ -168,6 +168,32 @@ function paintAccessory(def: ItemDef) {
     g.beginPath();
     g.arc(m, 78, 7, 0, Math.PI * 2);
     g.stroke();
+  } else if (def.id === 'vargasEye') {
+    // A violet glass eye on a dark pouch.
+    g.fillStyle = '#3a2618';
+    g.beginPath();
+    g.ellipse(m, 78, 40, 30, 0, 0, Math.PI * 2);
+    g.fill();
+    const gr = g.createRadialGradient(m - 8, 54, 3, m, 62, 30);
+    gr.addColorStop(0, '#f2e8ff');
+    gr.addColorStop(0.35, '#b88aff');
+    gr.addColorStop(1, '#3a1a6a');
+    g.fillStyle = gr;
+    g.beginPath();
+    g.arc(m, 62, 28, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#7a3aff';
+    g.beginPath();
+    g.arc(m + 4, 62, 12, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#0a0414';
+    g.beginPath();
+    g.arc(m + 5, 62, 6, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.8)';
+    g.beginPath();
+    g.arc(m - 6, 52, 4, 0, Math.PI * 2);
+    g.fill();
   } else if (def.id === 'snaggleHorn') {
     // A curved horn of yellowed tusk, bound with copper wire.
     const gr = g.createLinearGradient(20, 100, 108, 30);

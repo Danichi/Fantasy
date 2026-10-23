@@ -98,7 +98,7 @@ test('Old Greyjaw keeps his hours and his ground: night only, gives up the chase
     g.player.teleport(new T.Vector3(-372, heightAt(-372, -200) + 0.5, -200));
     g.stepSim(30);
     body.position && hit(body, 0.4);
-    g.stepSim(60);
+    for (let i = 0; i < 60 * 5 && !body.engaged; i++) g.stepSim(1);
     const engaged = body.engaged;
     g.player.teleport(new T.Vector3(-230, heightAt(-230, -120) + 0.5, -120));
     let wentHome = false;
@@ -530,5 +530,67 @@ test('Snaggletooth: rides out at sundown on an armoured war-boar, is thrown when
   expect(res.toasts.some((t) => /something violet/.test(t))).toBe(true);
   expect(res.alive).toBe(false);
   expect(res.horn).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test('Varga One-Eye: raids the Crown Road by night with her warband, has a blind side, horns up more orcs, tears off her patch for the Dark, and leaves a violet eye', async ({ game }) => {
+  const { page, errors } = game;
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, T = g.THREE, B = g.bosses;
+    const { heightAt } = await import('/src/world/terrainHeight.ts');
+    const def = B.defs.find((d: any) => d.id === 'varga');
+    const tp = (x: number, z: number) => g.player.teleport(new T.Vector3(x, heightAt(x, z) + 0.5, z));
+    g.time.skipTo(22);
+    g.player.invulnerable = true;
+    tp(def.home.x + 30, def.home.z + 4);
+    g.stepSim(5);
+    const toasts: string[] = [];
+    const t0 = g.hud.toast.bind(g.hud);
+    g.hud.toast = (m: string) => (toasts.push(m), t0(m));
+    const body = B.spawnNow('varga');
+    for (let i = 0; i < 120 && !body.o; i++) await new Promise((r) => setTimeout(r, 250));
+    const o = body.o;
+    const band0 = body.band.length;
+    tp(def.home.x + 10, def.home.z + 2);
+    for (let i = 0; i < 60 * 8 && !o.awake; i++) g.stepSim(1);
+    const awake = o.awake;
+    g.stepSim(60 * 3);
+    const hit = (from: any, dmg: number) => {
+      const h0 = o.hp;
+      o.takeHit({ damage: dmg, poise: 10, dir: from.clone().negate(), at: o.center.clone(), crit: false, source: 'melee' });
+      return h0 - o.hp;
+    };
+    const fwd = () => new T.Vector3(Math.sin(o.facing), 0, Math.cos(o.facing));
+    const left = () => new T.Vector3(Math.cos(o.facing), 0, -Math.sin(o.facing));
+    const front = hit(fwd(), 40);
+    const blind = hit(left(), 40);
+    // Wear her down past the horn and the patch.
+    for (let i = 0; i < 60 * 40 && o.alive && !toasts.some((t) => /eyepatch/.test(t)); i++) {
+      g.stepSim(1);
+      if (i % 20 === 0) hit(fwd(), o.maxHp * 0.03);
+    }
+    g.stepSim(60);
+    const darkHit = hit(left(), 40);
+    const called = body.stats.called;
+    const phase = body.phase;
+    hit(fwd(), 1e7);
+    for (let i = 0; i < 10; i++) g.stepSim(1);
+    g.hud.toast = t0;
+    return {
+      night: [22, 3, 12, 17].map((h) => def.abroad(h)), band0, awake, front, blind, darkHit, called, phase, alive: body.alive,
+      eye: g.player.equip.items.filter((it: any) => it.def.id === 'vargasEye').length, toasts,
+    };
+  });
+  expect(res.night).toEqual([true, true, false, false]);
+  expect(res.band0).toBe(5);
+  expect(res.awake).toBe(true);
+  expect(res.blind).toBeGreaterThan(res.front * 1.3);
+  expect(res.darkHit).toBeLessThan(res.blind);
+  expect(res.called).toBeGreaterThanOrEqual(8);
+  expect(res.phase).toBe(3);
+  expect(res.toasts.some((t) => /blind side/.test(t))).toBe(true);
+  expect(res.toasts.some((t) => /It gives back/.test(t))).toBe(true);
+  expect(res.alive).toBe(false);
+  expect(res.eye).toBe(1);
   expect(errors).toEqual([]);
 });
