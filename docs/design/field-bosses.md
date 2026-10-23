@@ -31,7 +31,7 @@ Named beasts that keep a territory somewhere in Cresha. Code: `src/bosses/`.
 | Boss | Where | Status |
 |---|---|---|
 | Old Greyjaw | North-west pines above Elder Glen (-370, -210), at night | built |
-| The White Stag | Deep woods, rare, dawn and dusk; a tracking hunt, not a fight | planned |
+| The White Stag | Deep woods west of the Glen (-300, -20), dawn and dusk, about one day in two; a hunt | built |
 | Brine-Maw | Gull Ridge coast, at low tide; a giant shore crab | planned |
 | Mother Ooze | River marsh below the mill; splits, swallows | planned |
 | The Hollow Thane | Barrow downs on the Crown Road, at night; raises skeletons | planned |
@@ -56,3 +56,20 @@ night with three grey wolves (they bite one at a time). Model:
 - **Phase 3 (25%):** howls again; his coat smoulders (the Dark); faster.
 - Dies: the pack scatters. Drops Greyjaw's Fang (trinket: +8% damage, +20%
   stamina regen, +15 health).
+
+## The White Stag
+
+A great white red-deer stag with a crown of antlers (`creatures/stag/`), not
+a fight but a hunt (`bosses/whiteStag.ts`). It can't be hurt.
+
+- It grazes and wanders; it hears a horse or a sprinting step from far off
+  (45 to 55 m), a walker from 26 m, and someone creeping behind a raised guard
+  only at 12 m. Heard, it lifts its head, then bolts.
+- It leaves shining hoofprints that fade over a couple of minutes: follow them.
+- Each chase spends its strength (the bar shows it); left alone it slowly
+  recovers. Run it out and it turns at bay, crown lowered.
+- At bay it paws the ground (the tell) and charges. Block it, parry it or step
+  aside, twice, and it yields: head bowed. Lay your hand on it.
+- It leaves its shed antler (White Stag Antler, a tier 5 material), Stag's
+  Grace (20 minutes: +10% move speed, +30% stamina regeneration) and 3 Renown,
+  then fades into the trees. It comes back a week later, on its own days.

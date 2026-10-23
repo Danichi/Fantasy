@@ -68,6 +68,31 @@ function logs(bark: number, heart: number) {
     return g;
   };
 }
+/** A pale antler tine-crown: a curved beam with tines. */
+function antlerPiece() {
+  return () => {
+    const g = new THREE.Group();
+    const m = std(0xeee8da, 0.5, 0, 0x182030);
+    const seg = (a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number) => {
+      const len = a.distanceTo(b);
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 7), m);
+      c.position.copy(a).add(b).multiplyScalar(0.5);
+      c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+      g.add(c);
+    };
+    const P = (x: number, y: number, z = 0) => new THREE.Vector3(x, y, z);
+    seg(P(0, 0), P(0.08, 0.16), 0.035, 0.03);
+    seg(P(0.08, 0.16), P(0.12, 0.34), 0.03, 0.024);
+    seg(P(0.12, 0.34), P(0.1, 0.5), 0.024, 0.016);
+    seg(P(0.03, 0.06), P(-0.08, 0.14, 0.04), 0.018, 0.008);
+    seg(P(0.1, 0.26), P(0.0, 0.36, 0.05), 0.016, 0.007);
+    seg(P(0.11, 0.44), P(0.2, 0.56), 0.013, 0.006);
+    seg(P(0.11, 0.44), P(0.03, 0.6), 0.013, 0.006);
+    g.rotation.z = -0.5;
+    return g;
+  };
+}
+
 function sheet(color: number, rough = 0.85) {
   return () => {
     const g = new THREE.Group();
@@ -307,6 +332,7 @@ export const ARMS_ITEMS: Record<string, ItemDef> = {
   copperIngot: mat('copperIngot', 'Copper Wire', 'Copper drawn thin for inlay. Runes are cut into steel and filled with it.', 1, ingot(0xc87a4a)),
   ashWood: mat('ashWood', 'Ash Timber', 'Pale, springy ash (tier 2): shafts, hafts and longbows.', 2, logs(0x9a9488, 0xe0cfa8)),
   yewWood: mat('yewWood', 'Yew Timber', 'Red-hearted yew (tier 3): the best bow wood there is.', 3, logs(0x6a4a3a, 0xb0502a), 'fine'),
+  whiteAntler: mat('whiteAntler', 'White Stag Antler', 'A tine-crown shed by the White Stag of the deep woods, pale as frost and faintly cold to the touch. Bowyers and runesmiths would give a great deal to work it (tier 5).', 5, antlerPiece(), 'epic'),
   rawHide: mat('rawHide', 'Raw Hide', 'A skinned hide from a hunt. A tanning rack makes leather of it.', 1, sheet(0x9a7a5a, 0.95)),
   rawMeat: mat('rawMeat', 'Raw Meat', 'Fresh game from a hunt. A cooking fire makes a meal of it; it will not keep forever.', 1, lumps(0x9a3a32)),
   drakeHide: mat('drakeHide', 'Drake Hide', 'Scaled hide from a wild drake, tough as boot-soles.', 3, sheet(0x5a6a3a, 0.7), 'fine'),

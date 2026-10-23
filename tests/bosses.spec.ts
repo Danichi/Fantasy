@@ -53,7 +53,7 @@ test('Old Greyjaw: found at night in the north woods, howls in his pack, pounces
     const fangs = g.player.equip.items.filter((it: any) => it.def.id === 'greyjawFang').length;
     // Dead this week: not offered as a bounty, marked slain; a second kill pays differently.
     const marks = B.markers();
-    const bounties = B.bounties().length;
+    const bounties = B.bounties().filter((b: any) => b.bossId === 'greyjaw').length;
     const st = { ...B.st('greyjaw') };
     off();
     g.hud.toast = t0;
@@ -166,5 +166,66 @@ test('Guild bounty on Old Greyjaw: posted on the board, marks him on the map, pa
   expect(res.still).toBe(false);
   expect(res.news1[0]).toMatch(/you killed Old Greyjaw/);
   expect(res.save.greyjaw).toEqual(expect.objectContaining({ kills: 1, found: true }));
+  expect(errors).toEqual([]);
+});
+
+test('The White Stag: a hunt, not a fight. It bolts, leaves shining prints, tires, turns at bay, and yields to a steady hand', async ({ game }) => {
+  const { page, errors } = game;
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, T = g.THREE, B = g.bosses;
+    (await import('/src/creatures/geometryStore.ts')).prepareCreatureNow('stag');
+    const { heightAt } = await import('/src/world/terrainHeight.ts');
+    const tp = (x: number, z: number) => g.player.teleport(new T.Vector3(x, heightAt(x, z) + 0.5, z));
+    g.time.skipTo(18.5);
+    g.player.invulnerable = true;
+    tp(-300, 10);
+    g.stepSim(5);
+    const toasts: string[] = [];
+    const t0 = g.hud.toast.bind(g.hud);
+    g.hud.toast = (m: string) => (toasts.push(m), t0(m));
+    const body = B.spawnNow('whiteStag', new T.Vector3(-300, 0, -20));
+    // A blow does it no harm: it only runs.
+    body.takeHit({ damage: 500, poise: 0, dir: new T.Vector3(0, 0, 1), at: body.center.clone(), crit: false, source: 'melee' });
+    const unhurt = body.hp === body.maxHp && body.alive;
+    const ranFromBlow = body.mode === 'bolt';
+    const modes = new Set<string>();
+    // Run it down: stay on its heels.
+    for (let i = 0; i < 60 * 90 && body.mode !== 'yield'; i++) {
+      if (i % 30 === 0) {
+        const dir = g.player.pos.clone().sub(body.position).setY(0).normalize();
+        const at = body.position.clone().addScaledVector(dir, body.mode === 'atBay' ? 6 : 14);
+        tp(at.x, at.z);
+      }
+      g.stepSim(1);
+      modes.add(body.mode);
+    }
+    const prints = body.tracks.laid;
+    const withstood = body.withstood;
+    tp(body.position.x + 1.5, body.position.z);
+    g.stepSim(1);
+    const offer = B.interaction(g.player.pos);
+    const label = offer?.label ?? '';
+    offer?.act();
+    for (let i = 0; i < 300; i++) g.stepSim(1);
+    g.hud.toast = t0;
+    return {
+      unhurt, ranFromBlow, modes: [...modes], prints, withstood, label, gone: !body.alive,
+      antler: g.player.equip.items.filter((it: any) => it.def.id === 'whiteAntler').length,
+      blessed: g.arms.runtime.buffs.has('stagGrace'), st: { ...B.st('whiteStag') }, toasts,
+      dawnOnly: [6, 12, 19, 23].map((h) => B.defs.find((d: any) => d.id === 'whiteStag').abroad(h)),
+    };
+  });
+  expect(res.unhurt).toBe(true);
+  expect(res.ranFromBlow).toBe(true);
+  expect(res.modes).toEqual(expect.arrayContaining(['bolt', 'atBay', 'paw', 'charge', 'yield']));
+  expect(res.prints).toBeGreaterThan(20);
+  expect(res.withstood).toBe(2);
+  expect(res.label).toBe('Lay your hand on the White Stag');
+  expect(res.gone).toBe(true);
+  expect(res.antler).toBe(1);
+  expect(res.blessed).toBe(true);
+  expect(res.st.kills).toBe(1);
+  expect(res.toasts.some((t) => /turns at bay/.test(t))).toBe(true);
+  expect(res.dawnOnly).toEqual([true, false, true, false]);
   expect(errors).toEqual([]);
 });

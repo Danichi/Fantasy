@@ -122,6 +122,7 @@ import { GuardArc } from './ui/guardArc';
 import { Raids } from './raid/raids';
 import { FieldBosses } from './bosses/fieldBosses';
 import { GREYJAW } from './bosses/greyjaw';
+import { WHITE_STAG } from './bosses/whiteStag';
 import { tickBoarFur } from './creatures/boar/visual';
 import { tickSpiderFur } from './creatures/spider/visual';
 import { updateSnare } from './creatures/spider/spider';
@@ -1129,8 +1130,23 @@ async function boot() {
     addGold: (n) => player.prog.addGold(n),
     bossBar: (t, name) => hud.bossBar(t, name),
     outdoors: () => realm.mode === 'overworld' && !realm.interior,
+    bless: (b) => {
+      arms.runtime.buffs.set(b.id, { id: b.id, label: b.label, left: b.sec, m: b.m });
+      hud.toast(`${b.label} for ${Math.round(b.sec / 60)} min`);
+    },
   });
   bosses.add(GREYJAW);
+  bosses.add(WHITE_STAG);
+  // Doing something to a boss (laying a hand on the White Stag).
+  realm.overworldInteractables.push({
+    get pos() {
+      return bosses.interaction(player.pos)?.at ?? new THREE.Vector3(0, -999, 0);
+    },
+    radius: 3.5,
+    label: () => bosses.interaction(player.pos)?.label ?? '',
+    enabled: () => !!bosses.interaction(player.pos),
+    action: () => bosses.interaction(player.pos)?.act(),
+  });
   bosses.fromJSON(saveData?.world?.bosses);
   if (TEST_MODE) bosses.enabled = false;
   town.guild.bounties = () => bosses.bounties();

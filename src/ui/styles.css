@@ -77,7 +77,7 @@ html, body {
 }
 .prompt.show { opacity: 1; }
 .prompt kbd { font: 700 12px/1 var(--sans); color: #1a140c; background: var(--gold-bright); padding: 4px 7px; }
-.bossbar { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); width: min(620px, 60vw); display: none; text-align: center; }
+.bossbar { position: absolute; left: 50%; top: 62px; transform: translateX(-50%); width: min(620px, 60vw); display: none; text-align: center; }
 .bossbar.show { display: block; }
 .bossbar .nm { display: block; font: 700 16px/1 var(--serif); letter-spacing: 0.2em; color: var(--ink); text-shadow: 0 2px 4px #000; margin-bottom: 6px; }
 .bossbar .bb { position: relative; height: 10px; background: rgba(8, 7, 6, 0.8); border: 1px solid rgba(201, 165, 90, 0.55); }

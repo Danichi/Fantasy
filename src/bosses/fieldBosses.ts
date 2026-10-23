@@ -34,6 +34,8 @@ export interface BossBody {
   update(dt: number, player: Player): void;
   /** Give up the chase: go home and heal. */
   leash(): void;
+  /** Something you can do to it right now (lay a hand on the White Stag). */
+  interact?(): { at: THREE.Vector3; label: string; act: () => void } | null;
   dispose(): void;
 }
 
@@ -55,6 +57,12 @@ export interface BossDef {
   looks: string[];
   /** out and about at this hour? */
   abroad(hour: number): boolean;
+  /** only some days (a rare beast) */
+  days?: (day: number) => boolean;
+  /** a timed blessing it leaves you (each time) */
+  blessing?: { id: string; label: string; sec: number; m: Record<string, number> };
+  /** what later encounters say (default: dead again) */
+  againText?: string;
   spawn(at: THREE.Vector3, level: number, scene: THREE.Scene, fx: FX): BossBody;
   /** what townsfolk say while it lives */
   rumour: string;
@@ -65,6 +73,8 @@ export interface BossDef {
   /** first kill: the unique drop, renown, and a line */
   unique: string;
   renown: number;
+  /** the deed's words (default: Slew <name>) */
+  deed?: string;
   slain: string;
   /** later kills */
   again: { items: [string, number][]; gold: [number, number] };
@@ -89,6 +99,7 @@ interface Hooks {
   addGold: (n: number) => void;
   bossBar: (t: { hp: number; maxHp: number; alive: boolean } | null, name?: string) => void;
   outdoors: () => boolean;
+  bless?: (b: { id: string; label: string; sec: number; m: Record<string, number> }) => void;
 }
 
 /** Days before a slain boss is replaced. */
@@ -173,7 +184,7 @@ export class FieldBosses {
       }
       const near = toHome < def.home.r + 160;
       if (!l) {
-        if (!this.enabled || !near || !this.h.outdoors() || !def.abroad(hour) || !this.available(def.id, day)) continue;
+        if (!this.enabled || !near || !this.h.outdoors() || !def.abroad(hour) || !this.available(def.id, day) || (def.days && !def.days(day))) continue;
         if (!def.looks.every((k) => creatureReady(k))) {
           for (const k of def.looks) void prepareCreature(k);
           continue;
@@ -238,15 +249,25 @@ export class FieldBosses {
     if (first) {
       this.h.give(def.unique, 1);
       this.h.toast(def.slain);
-      events.emit('deed', { id: 'boss:' + def.id, renown: def.renown, label: `Slew ${def.name}` });
+      events.emit('deed', { id: 'boss:' + def.id, renown: def.renown, label: def.deed ?? `Slew ${def.name}` });
     } else {
       for (const [id, n] of def.again.items) this.h.give(id, n);
       const [lo, hi] = def.again.gold;
       const g = Math.round(lo + Math.random() * (hi - lo));
       this.h.addGold(g);
-      this.h.toast(`${def.name} is dead again. ${g} gold and a trophy.`);
+      this.h.toast(def.againText ?? `${def.name} is dead again. ${g} gold and a trophy.`);
     }
+    if (def.blessing) this.h.bless?.(def.blessing);
     events.emit('bossSlain', { id: def.id, first });
+  }
+
+  /** Something to do to a boss you're standing by (main.ts makes it an interactable). */
+  interaction(at: THREE.Vector3) {
+    for (const l of this.live.values()) {
+      const i = l.body.interact?.();
+      if (i && i.at.distanceTo(at) < 3.5) return i;
+    }
+    return null;
   }
 
   /** Rumours for the townsfolk: live bosses not yet killed this week. */
