@@ -61,16 +61,17 @@ const FRAG = /* glsl */ `
       float moonUp = smoothstep(-0.05, 0.05, uMoonDir.y) * (1.0 - uOvercast * 0.8);
       float lit = (1.0 + cos(uMoonPhase * 6.2832)) * 0.5;
       col += vec3(0.55, 0.65, 0.9) * pow(md, 40.0) * 0.35 * moonUp * uNight * (0.25 + 0.75 * lit);
-      // The disc, lit by phase: a terminator sweeps across it through the cycle.
-      vec3 mr = normalize(cross(uMoonDir, vec3(0.0, 1.0, 0.0)));
-      vec3 mu = cross(mr, uMoonDir);
-      vec2 mp = vec2(dot(d, mr), dot(d, mu)) / 0.024;
-      float disc = smoothstep(0.99955, 0.99975, md);
-      float ph = uMoonPhase * 6.2832;
-      float side = uMoonPhase < 0.5 ? -1.0 : 1.0;
-      float term = cos(ph) * sqrt(max(0.0, 1.0 - mp.y * mp.y));
-      float face = smoothstep(-0.06, 0.06, side * mp.x + term);
-      col = mix(col, mix(vec3(0.1, 0.12, 0.18), vec3(0.93, 0.95, 1.0), face), disc * moonUp * uNight);
+      // The disc, lit by phase: a terminator sweeps across it through the cycle (only near the moon).
+      if (md > 0.9994) {
+        vec3 mr = normalize(cross(uMoonDir, vec3(0.0, 1.0, 0.0)));
+        vec3 mu = cross(mr, uMoonDir);
+        vec2 mp = vec2(dot(d, mr), dot(d, mu)) / 0.024;
+        float disc = smoothstep(0.99955, 0.99975, md);
+        float side = uMoonPhase < 0.5 ? -1.0 : 1.0;
+        float term = cos(uMoonPhase * 6.2832) * sqrt(max(0.0, 1.0 - mp.y * mp.y));
+        float face = smoothstep(-0.06, 0.06, side * mp.x + term);
+        col = mix(col, mix(vec3(0.1, 0.12, 0.18), vec3(0.93, 0.95, 1.0), face), disc * moonUp * uNight);
+      }
     }
     // Overcast: the sky flattens toward grey.
     // Overcast: the sky flattens to grey, then to dark slate as a storm builds.
