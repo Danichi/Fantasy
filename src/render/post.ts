@@ -114,7 +114,7 @@ const FINAL_FRAG = /* glsl */ `
     vec3 m[4]; vec3 s2[4];
     for (int k = 0; k < 4; k++) { m[k] = vec3(0.0); s2[k] = vec3(0.0); }
     for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++) {
-      vec3 c = texture2D(tColor, uv + vec2(float(i), float(j)) * uTexel * 1.4).rgb;
+      vec3 c = texture2D(tColor, uv + vec2(float(i), float(j)) * uTexel * 2.6).rgb;
       if (any(isnan(c)) || any(isinf(c))) c = vec3(0.0);
       c = min(c, vec3(8.0));
       if (i <= 0 && j <= 0) { m[0] += c; s2[0] += c * c; }
@@ -136,6 +136,24 @@ const FINAL_FRAG = /* glsl */ `
     if (d >= 0.99999) return 3000.0;
     return -viewPos(uv, d).z;
   }
+  // Ink from depth: silhouettes (jumps with open space behind) and folds (creases).
+  // Inverse view depth is linear across a flat surface, so only real edges and folds show.
+  float edgeLine(float px) {
+    vec2 ox = vec2(uTexel.x * px, 0.0), oy = vec2(0.0, uTexel.y * px);
+    float zc = linDist(vUv);
+    float wc = 1.0 / zc;
+    float wl = 1.0 / linDist(vUv - ox), wr = 1.0 / linDist(vUv + ox);
+    float wd = 1.0 / linDist(vUv - oy), wu = 1.0 / linDist(vUv + oy);
+    float jump = max(max(abs(wl - wc), abs(wr - wc)), max(abs(wd - wc), abs(wu - wc))) / wc;
+    float crease = (abs(wl + wr - 2.0 * wc) + abs(wd + wu - 2.0 * wc)) / wc;
+    // A real silhouette has open space behind it (grass in front of grass has not).
+    float back = max(max(1.0 / wl, 1.0 / wr), max(1.0 / wd, 1.0 / wu)) - zc;
+    float line = max(smoothstep(0.18, 0.35, jump) * smoothstep(1.0, 2.5, back), smoothstep(0.35, 0.7, crease) * 0.5 * (1.0 - smoothstep(0.1, 0.25, jump)));
+    line *= 1.0 - smoothstep(60.0, 260.0, zc);
+    // Thin things (grass blades) with open ground on both sides get no ink: only shapes do.
+    float thin = max(step(wl, wc * 0.85) * step(wr, wc * 0.85), step(wd, wc * 0.85) * step(wu, wc * 0.85));
+    return line * (1.0 - thin * 0.9);
+  }
 
 
   void main() {
@@ -144,11 +162,11 @@ const FINAL_FRAG = /* glsl */ `
     if (uLook > 0.5 && uLook < 1.5) col = kuwahara(vUv);
     if (uLook > 2.5) {
       // Tilt-shift: the top and bottom of the frame go soft, like a model under a lens.
-      float band = smoothstep(0.12, 0.42, abs(vUv.y - 0.52));
+      float band = smoothstep(0.08, 0.36, abs(vUv.y - 0.52));
       if (band > 0.0) {
         vec3 acc = col; float w = 1.0;
         for (int k = 0; k < 12; k++) {
-          float a = float(k) * 2.39996, r = (0.35 + 0.65 * fract(float(k) * 0.618)) * band * 7.0;
+          float a = float(k) * 2.39996, r = (0.35 + 0.65 * fract(float(k) * 0.618)) * band * 11.0;
           vec3 c = texture2D(tColor, vUv + vec2(cos(a), sin(a)) * r * uTexel).rgb;
           if (!(any(isnan(c)) || any(isinf(c)))) { acc += min(c, vec3(8.0)); w += 1.0; }
         }
@@ -213,31 +231,32 @@ const FINAL_FRAG = /* glsl */ `
     col = mix(col, col * vec3(1.025, 1.01, 0.975), smoothstep(0.35, 1.0, luma));
     col = mix(col, col * vec3(0.93, 0.99, 1.07), 1.0 - smoothstep(0.0, 0.4, luma));
     col = col * col * (3.0 - 2.0 * col) * 0.3 + col * 0.7;
+    if (uLook > 0.5 && uLook < 1.5) {
+      // Storybook: pastel wash on warm paper, soft sepia pencil contours, paper grain.
+      float l1 = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      col = mix(vec3(l1), col, 0.92);
+      vec3 paper = vec3(0.98, 0.94, 0.85);
+      col = col * 0.84 + paper * 0.13 * (1.0 - 0.5 * l1);
+      if (!sky) col = mix(col, col * vec3(0.55, 0.44, 0.36), edgeLine(2.0) * 0.5);
+      vec2 px = vUv / uTexel;
+      col *= 0.95 + 0.05 * noise2(px / 260.0) + 0.035 * (noise2(px / 6.0) - 0.5);
+    }
     if (uLook > 1.5 && uLook < 2.5 && !sky) {
-      // Cel: coloured ink outlines from depth jumps and creases, thinning with distance.
-      // Inverse view depth is linear across a flat surface, so only real edges and folds show.
-      float zc = linDist(vUv);
-      float wc = 1.0 / zc;
-      float wl = 1.0 / linDist(vUv - vec2(uTexel.x, 0.0)), wr = 1.0 / linDist(vUv + vec2(uTexel.x, 0.0));
-      float wd = 1.0 / linDist(vUv - vec2(0.0, uTexel.y)), wu = 1.0 / linDist(vUv + vec2(0.0, uTexel.y));
-      float jump = max(max(abs(wl - wc), abs(wr - wc)), max(abs(wd - wc), abs(wu - wc))) / wc;
-      float crease = (abs(wl + wr - 2.0 * wc) + abs(wd + wu - 2.0 * wc)) / wc;
-      // A real silhouette has open space behind it: at least a metre or two (grass in front of grass has not).
-      float back = max(max(1.0 / wl, 1.0 / wr), max(1.0 / wd, 1.0 / wu)) - zc;
-      float line = max(smoothstep(0.18, 0.35, jump) * smoothstep(1.0, 2.5, back), smoothstep(0.35, 0.7, crease) * 0.5 * (1.0 - smoothstep(0.1, 0.25, jump)));
-      line *= 1.0 - smoothstep(60.0, 260.0, zc);
-      // Thin things (grass blades) with open ground on both sides get no ink: only shapes do.
-      float thin = max(step(wl, wc * 0.85) * step(wr, wc * 0.85), step(wd, wc * 0.85) * step(wu, wc * 0.85));
-      line *= 1.0 - thin * 0.9;
-      vec3 ink = col * vec3(0.32, 0.28, 0.36);
-      col = mix(col, ink, line * 0.85);
+      // Cel: flat colour bands (light in four steps, hue kept), more colour, dark coloured ink.
+      float lc = max(dot(col, vec3(0.2126, 0.7152, 0.0722)), 1e-3);
+      float x = lc * 4.0;
+      float bl = (floor(x) + smoothstep(0.82, 1.0, fract(x)) + 0.45) / 4.0;
+      col = mix(col, col * (bl / lc), 0.8);
+      float l3 = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      col = mix(vec3(l3), col, 1.2);
+      col = mix(col, col * vec3(0.2, 0.17, 0.26), edgeLine(1.6) * 0.95);
     }
     if (uLook > 2.5) {
       // Facet: a brighter, simpler palette (gentle posterise, a little more colour).
       float l2 = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(vec3(l2), col, 1.18);
-      col = mix(col, floor(col * 7.0 + 0.5) / 7.0, 0.35);
-      col = mix(col, col * vec3(1.03, 1.02, 0.98) + 0.03, 0.6);
+      col = mix(vec3(l2), col, 1.32);
+      col = mix(col, floor(col * 5.0 + 0.5) / 5.0, 0.6);
+      col = col * vec3(1.04, 1.02, 0.97) + 0.035;
     }
     // Vignette.
     vec2 q = vUv - 0.5;
