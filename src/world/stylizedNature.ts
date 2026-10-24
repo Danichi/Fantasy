@@ -313,6 +313,10 @@ export class StylizedNature {
   readonly ready: Promise<void>;
   /** extra (x, z, radius) spots kept free of trees: pastures, mills, barns */
   clearings: [number, number, number][] = [];
+  /** the clearings bucketed by 64 m cell, rebuilt when the list changes (hundreds of them: the sites) */
+  private clearGrid = new Map<number, [number, number, number][]>();
+  private clearGridOf: unknown = null;
+  private clearGridLen = -1;
 
   /** `town`: extra tree and flower spots chosen by the village layout. */
   constructor(
@@ -503,9 +507,28 @@ export class StylizedNature {
 
   // ---- placement -----------------------------------------------------------------
 
+  private indexClearings() {
+    this.clearGrid.clear();
+    for (const c of this.clearings) {
+      const [cx, cz, cr] = c;
+      for (let i = Math.floor((cx - cr) / 64); i <= Math.floor((cx + cr) / 64); i++) {
+        for (let j = Math.floor((cz - cr) / 64); j <= Math.floor((cz + cr) / 64); j++) {
+          const k = i * 100003 + j;
+          let list = this.clearGrid.get(k);
+          if (!list) this.clearGrid.set(k, (list = []));
+          list.push(c);
+        }
+      }
+    }
+    this.clearGridOf = this.clearings;
+    this.clearGridLen = this.clearings.length;
+  }
+
   /** Keep clear of towns, roads, the river and the crypt apron. */
   private clearSpot(x: number, z: number) {
-    for (const [cx, cz, cr] of this.clearings) if ((x - cx) ** 2 + (z - cz) ** 2 < cr * cr) return false;
+    if (this.clearGridOf !== this.clearings || this.clearGridLen !== this.clearings.length) this.indexClearings();
+    const near = this.clearGrid.get(Math.floor(x / 64) * 100003 + Math.floor(z / 64));
+    if (near) for (const [cx, cz, cr] of near) if ((x - cx) ** 2 + (z - cz) ** 2 < cr * cr) return false;
     const r = Math.hypot(x, z);
     if (r < TOWN_R + 8) return false;
     if (roadDist(x, z) < 6.5) return false;
