@@ -58,7 +58,16 @@ export interface SkyState {
   /** direction toward the sun (may be below the horizon) */
   sunDir: THREE.Vector3;
   moonDir: THREE.Vector3;
+  /** how much of the moon is lit tonight, 0 (new) .. 1 (full) */
+  moonLight: number;
+  /** where it is in its cycle, 0..1 (0 full, 0.5 new); waning after full, waxing before */
+  moonPhase: number;
 }
+
+/** The moon's cycle: full every eighth night (day 8, 16, 24...). */
+export const MOON_DAYS = 8;
+const MOON_GLYPHS = ['●', '◐', '◐', '☾', '○', '☽', '◑', '◑'];
+const MOON_NAMES = ['full moon', 'waning gibbous', 'last quarter', 'waning crescent', 'new moon', 'waxing crescent', 'first quarter', 'waxing gibbous'];
 
 export class WorldTime {
   /** Hours since midnight, 0..24. */
@@ -72,6 +81,7 @@ export class WorldTime {
     hemiSky: new THREE.Color(), hemiGround: new THREE.Color(), hemiIntensity: 1, envIntensity: 0.4,
     haze: new THREE.Color(), exposure: 1, night: 0,
     lightDir: new THREE.Vector3(0, 1, 0), sunDir: new THREE.Vector3(0, 1, 0), moonDir: new THREE.Vector3(0, 1, 0),
+    moonLight: 1, moonPhase: 0,
   };
 
   constructor() {
@@ -89,6 +99,29 @@ export class WorldTime {
     if (h < 19.5) return 'evening';
     if (h < 21) return 'dusk';
     return 'night';
+  }
+
+  /** The day tonight's night belongs to (after midnight it's still the evening's). */
+  get nightOf() {
+    return this.hour < 12 ? this.day - 1 : this.day;
+  }
+  /** Nights since the last full moon (0 = full tonight). */
+  get moonAge() {
+    return ((this.nightOf % MOON_DAYS) + MOON_DAYS) % MOON_DAYS;
+  }
+  /** The moon is full tonight. */
+  get fullMoon() {
+    return this.moonAge === 0;
+  }
+  /** Nights until the next full moon (0 = tonight). */
+  get nightsToFull() {
+    return (MOON_DAYS - this.moonAge) % MOON_DAYS;
+  }
+  get moonGlyph() {
+    return MOON_GLYPHS[this.moonAge];
+  }
+  get moonName() {
+    return MOON_NAMES[this.moonAge];
   }
 
   /** "Day 3, 14:05" */
@@ -142,6 +175,10 @@ export class WorldTime {
     const mday = day + Math.PI;
     const melev = Math.sin(mday) * THREE.MathUtils.degToRad(48);
     s.moonDir.set(Math.cos(mday) * Math.cos(melev), Math.sin(melev), Math.sin(mday) * Math.cos(melev) * 0.8 + 0.3).normalize();
+    // The moon's face: the darker the moon, the darker the night (a little).
+    s.moonPhase = this.moonAge / MOON_DAYS;
+    s.moonLight = (1 + Math.cos(s.moonPhase * Math.PI * 2)) / 2;
+    s.sunIntensity *= 1 - s.night * (1 - s.moonLight) * 0.3;
     // Shadows come from whichever is up; never quite from the horizon.
     const src = s.sunDir.y > -0.02 ? s.sunDir : s.moonDir;
     s.lightDir.copy(src);

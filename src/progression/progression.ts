@@ -36,7 +36,7 @@ export const XP_FOR_KIND: Record<string, [xp: number, gold: number]> = {
   sandGolem: [1500, 500], sandEel: [30, 6], sandCrab: [42, 9], duneJelly: [18, 4], rayRider: [95, 30],
   sandShark: [70, 12], sandRay: [32, 6], sawtooth: [1100, 400], scavenger: [44, 16], scavengerChief: [320, 160],
   // hand-built creatures (src/creatures): base values at level 1, scaled by level
-  boar: [24, 4], spider: [30, 6], bat: [9, 2], wolf: [20, 3], gloamWolf: [28, 5], greyjaw: [420, 60], whiteStag: [360, 0], brineMaw: [520, 80], motherOoze: [380, 50], oozeSpawn: [8, 1], hollowThane: [600, 90], rustKnight: [640, 100], warBoar: [180, 20], snaggletooth: [380, 60], varga: [700, 110],
+  boar: [24, 4], spider: [30, 6], bat: [9, 2], wolf: [20, 3], gloamWolf: [28, 5], greyjaw: [420, 60], whiteStag: [360, 0], brineMaw: [520, 80], motherOoze: [380, 50], oozeSpawn: [8, 1], hollowThane: [600, 90], rustKnight: [640, 100], warBoar: [180, 20], snaggletooth: [380, 60], varga: [700, 110], ratQueen: [520, 80], broodRat: [10, 1], drownedCaptain: [560, 90], hangedLord: [600, 95], circleWraith: [720, 120], delver: [760, 130],
 };
 
 /** XP a level cost under the old auto-levelling system (used to refund old saves). */

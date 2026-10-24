@@ -56,7 +56,7 @@ import { Boats } from './world/boats';
 import { RiverLife } from './world/riverLife';
 import { PORT_QUESTS } from './quests/portQuests';
 import { SEA_QUESTS } from './quests/seaQuests';
-import { RIVER_LEVEL } from './world/terrainHeight';
+import { RIVER_LEVEL, DROWNED_MERE, SINKHOLE } from './world/terrainHeight';
 import { road, distanceAlong, roadLength } from './world/roadNetwork';
 import { buildGlenLandmarks, LANDMARK_CLEARINGS } from './world/glenLandmarks';
 import { QuestLog } from './quests/questLog';
@@ -137,7 +137,18 @@ import { StylizedNature } from './world/stylizedNature';
 import { Flowers } from './world/flowers';
 import { Rewards, XP_FOR_KIND } from './progression/progression';
 import { levelScale } from './creatures/creature';
-import { Population } from './creatures/population';
+import { Population, zoneLevel } from './creatures/population';
+import { creatureReady } from './creatures/geometryStore';
+import { Sites } from './world/sites/sites';
+import { BATCH1 } from './world/sites/batch1';
+import { BATCH2 } from './world/sites/batch2';
+import { BATCH3 } from './world/sites/batch3';
+import { BATCH4 } from './world/sites/batch4';
+import { BATCH5 } from './world/sites/batch5';
+import { DISCOVERY_BOSSES } from './bosses/discoveryBosses';
+import { tickRatFur } from './creatures/rat/visual';
+import { tickDelverFur } from './creatures/delver/visual';
+import { tickUndeadHair } from './creatures/undeadHumanoid/visual';
 import { registerSpecies } from './creatures/species';
 import { creatureView } from './creatures/view';
 import { GuardArc } from './ui/guardArc';
@@ -154,7 +165,7 @@ import { SNAGGLETOOTH } from './bosses/snaggletooth';
 import { VARGA_ONE_EYE } from './bosses/varga';
 
 /** Field bosses, in the order they were added (bosses/). */
-const BOSS_DEFS = [GREYJAW, WHITE_STAG, BRINE_MAW, MOTHER_OOZE, HOLLOW_THANE, RUST_KNIGHT, SNAGGLETOOTH, VARGA_ONE_EYE];
+const BOSS_DEFS = [GREYJAW, WHITE_STAG, BRINE_MAW, MOTHER_OOZE, HOLLOW_THANE, RUST_KNIGHT, SNAGGLETOOTH, VARGA_ONE_EYE, ...DISCOVERY_BOSSES];
 import { tickBoarFur } from './creatures/boar/visual';
 import { tickSpiderFur } from './creatures/spider/visual';
 import { updateSnare } from './creatures/spider/spider';
@@ -276,7 +287,50 @@ async function boot() {
   const capital = new RoyalCapital(r.scene, world.mats, fx);
   mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
-  stylizedNature.clearings = [...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
+  // Sites (world/sites/): the points of interest across Cresha, placed clear of everything above.
+  const sites = new Sites({
+    scene: r.scene, fx, mats: world.mats, player,
+    toast: (m) => hud.toast(m),
+    give: (id, n) => giveItem(id, n),
+    gold: (n) => player.prog.addGold(n),
+    xp: (n) => player.prog.addXp(n),
+    rest: () => { player.hp = player.maxHp; player.stamina = player.maxStamina; player.mana = player.maxMana; save(); hud.toast('You rest by the fire a while. Your wounds feel better, and your progress is saved.'); },
+    sleep: () => { time.skipTo(7); player.hp = player.maxHp; player.stamina = player.maxStamina; player.mana = player.maxMana; save(); hud.toast('You sleep by the fire until morning.'); },
+    save: () => save(),
+    reveal: (x, z, rr) => discovery.revealAround(x, z, rr),
+    bless: (b) => { arms.runtime.buffs.set(b.id, { id: b.id, label: b.label, left: b.sec, m: b.m }); hud.toast(`${b.label} for ${Math.round(b.sec / 60)} min`); },
+    hour: () => time.hour,
+    day: () => time.day,
+    talk: (name, title, text, options) => dialogue.show(name, title, text, options.map((o) => ({ label: o.label, run: () => { dialogue.close(); o.run(); } }))),
+    level: (x, z) => zoneLevel(x, z, () => 0.5),
+    ready: (k) => creatureReady(k),
+    teleport: (at) => player.teleport(at),
+    count: (id) => countItem(id),
+    take: (id, n) => {
+      if (countItem(id) < n) return false;
+      takeItem(id, n);
+      return true;
+    },
+    spend: (g) => {
+      if (player.prog.gold < g) return false;
+      player.prog.addGold(-g);
+      return true;
+    },
+    calmRaids: (days) => raids.calm(time.day, days),
+    boss: (id) => ({
+      body: bosses.body(id),
+      slain: bosses.slainFor(id) && !!bosses.st(id).kills,
+      summon: (at) => bosses.summon(id, at),
+    }),
+    fullMoon: () => time.fullMoon,
+    moonIn: () => time.nightsToFull,
+  });
+  {
+    const avoid: [number, number, number][] = [...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.map((d) => [d.home.x, d.home.z, d.home.r + 30] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 12] as [number, number, number])];
+    const ms = sites.place([...BATCH5, ...BATCH1, ...BATCH2, ...BATCH3, ...BATCH4], avoid.filter(([x, z]) => !DISCOVERY_BOSSES.some((d) => d.home.x === x && d.home.z === z)));
+    console.info(`[sites] placed ${sites.sites.length} in ${ms.toFixed(0)} ms`);
+  }
+  stylizedNature.clearings = [...sites.clearings, [DROWNED_MERE.x, DROWNED_MERE.z, DROWNED_MERE.r + 14], [SINKHOLE.x, SINKHOLE.z, SINKHOLE.r + 8], ...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -1339,6 +1393,9 @@ async function boot() {
     // Their lairs are trampled and bare.
     if (d.clearing) GRASS_MASKS.push({ x: d.home.x, z: d.home.z, r: d.clearing * 0.7, amount: 0.8, tint: 1 });
   }
+  // No grass under the mere's water; little at the bottom of the sinkhole.
+  GRASS_MASKS.push({ x: DROWNED_MERE.x, z: DROWNED_MERE.z, r: DROWNED_MERE.r + 1, amount: 1, tint: 1 });
+  GRASS_MASKS.push({ x: SINKHOLE.x, z: SINKHOLE.z, r: SINKHOLE.r - 2, amount: 0.7, tint: 1 });
   // Doing something to a boss (laying a hand on the White Stag).
   realm.overworldInteractables.push({
     get pos() {
@@ -1429,6 +1486,19 @@ async function boot() {
   if (saveData) discovery.fromJSON(saveData.world?.discovery);
   const worldMap = new WorldMapUI(discovery);
   worldMap.bossMarkers = () => bosses.markers();
+  worldMap.siteMarkers = () => sites.markers();
+  sites.fromJSON(saveData?.world?.sites);
+  if (TEST_MODE) sites.enabled = false;
+  // Whatever you can do at the nearest site.
+  realm.overworldInteractables.push({
+    get pos() {
+      return sites.action(player.pos)?.at ?? new THREE.Vector3(0, -999, 0);
+    },
+    radius: 4,
+    label: () => sites.action(player.pos)?.label() ?? '',
+    enabled: () => !!sites.action(player.pos),
+    action: () => sites.action(player.pos)?.act(),
+  });
   // The sea's marks: your ships, wrecks, lit lighthouses, storms, sea routes and currents.
   worldMap.seaMarkers = () => sailing.seaMarkers();
   worldMap.seaLines = () => sailing.seaLines();
@@ -1637,7 +1707,7 @@ async function boot() {
     if (TEST_MODE && !location.search.includes('save')) return;
     const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), sites: sites.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   // Guild contracts show in the quest log (tracker, journal, map, waypoint).
@@ -1855,6 +1925,7 @@ async function boot() {
       raids.update(STEP, player, time.hour, time.day);
       raids.tail(STEP, player);
       bosses.update(STEP, player, time.hour, time.day);
+      sites.update(STEP, player);
       npcs.raidOn = raids.hidingSettlement;
       frontier.update(STEP);
       encounters.update(STEP, time.hour, weather.p.rain);
@@ -1946,6 +2017,9 @@ async function boot() {
     tickStagFur(dt);
     tickWightHair(dt);
     tickGoblinFur(dt);
+    tickRatFur(dt);
+    tickDelverFur(dt);
+    tickUndeadHair(dt);
     guardArc.update(dt);
     updateSnare(player);
     r.camera.getWorldDirection(player.aimDir);
@@ -2040,7 +2114,7 @@ async function boot() {
       for (const rat of inside.rats) rat.update(dt, player);
       if (!paused) updateSanctum(dt);
     }
-    worldMap.setRegionLabel(`${regionName} · ${time.label.split(', ')[1]}`);
+    worldMap.setRegionLabel(`${regionName} · ${time.label.split(', ')[1]} ${time.moonGlyph}`);
     flowers.update(dt, r.camera.position);
     if (realm.mode === 'overworld') terrain.update(r.camera.position, player.pos);
     foliage?.update(dt, r.camera.position);
@@ -2126,6 +2200,8 @@ async function boot() {
       raids.fromJSON({});
       bosses.clear();
       bosses.fromJSON({});
+      sites.fromJSON({});
+      sites.enabled = false;
       if (realm.mode === 'dungeon') await realm.leave();
       if (realm.mode === 'interior') await realm.leaveInterior();
       slimes.clear();
@@ -2159,7 +2235,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, population, raids, bosses, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       ghLife, outcast, ghSide, scrapTowns,

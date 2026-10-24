@@ -8,6 +8,9 @@ import { stagGeometry } from './stag/model';
 import { crabGeometry } from './crab/model';
 import { wightGeometry } from './wight/model';
 import { goblinGeometry } from './goblin/model';
+import { ratGeometry } from './rat/model';
+import { delverGeometry } from './delver/model';
+import { undeadGeometry } from './undeadHumanoid/model';
 import { pack } from './kit/transfer';
 import type * as THREE from 'three';
 
@@ -21,6 +24,11 @@ const BUILDERS: Record<string, () => Record<string, THREE.BufferGeometry | numbe
   crab: () => crabGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
   wight: () => wightGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
   goblin: () => goblinGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
+  rat: () => ratGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
+  delver: () => delverGeometry() as unknown as Record<string, THREE.BufferGeometry | number>,
+  undeadDrowned: () => undeadGeometry('drowned') as unknown as Record<string, THREE.BufferGeometry | number>,
+  undeadRevenant: () => undeadGeometry('revenant') as unknown as Record<string, THREE.BufferGeometry | number>,
+  undeadWraith: () => undeadGeometry('wraith') as unknown as Record<string, THREE.BufferGeometry | number>,
 };
 
 self.onmessage = (e: MessageEvent<{ kind: string }>) => {

@@ -14,7 +14,10 @@ export interface MapMarker {
   x: number;
   z: number;
   /** quest: an objective; offer: someone with a quest for you; pin: your own */
-  kind: 'quest' | 'offer' | 'pin' | 'boss' | 'bossRumour' | 'bossSlain';
+  kind: 'quest' | 'offer' | 'pin' | 'boss' | 'bossRumour' | 'bossSlain' | 'site' | 'siteDone';
+  /** its own glyph and colour (sites) */
+  glyph?: string;
+  color?: string;
   label?: string;
   /** the tracked quest's objective (drawn larger, with a ring) */
   tracked?: boolean;
@@ -28,6 +31,9 @@ const MARK_STYLE: Record<MapMarker['kind'], { glyph: string; color: string }> = 
   boss: { glyph: '✪', color: '#ff5a44' },
   bossRumour: { glyph: '?', color: '#ff8a6a' },
   bossSlain: { glyph: '✕', color: '#b8aa98' },
+  // Sites (sites/): each kind has its own glyph; done ones are greyed.
+  site: { glyph: '•', color: '#e8dcc0' },
+  siteDone: { glyph: '•', color: '#9a9284' },
 };
 
 const KIND_ICON: Record<string, { color: string; glyph: string }> = {
@@ -61,6 +67,8 @@ export class WorldMapUI {
   pins: MapMarker[] = [];
   /** Field bosses (fieldBosses.ts). */
   bossMarkers: () => MapMarker[] = () => [];
+  /** Sites you've seen (sites/). */
+  siteMarkers: () => MapMarker[] = () => [];
   private el: HTMLDivElement;
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -101,6 +109,7 @@ export class WorldMapUI {
           <div><i style="color:#ff8a7a">☠</i> Dungeon</div>
           <div><i style="color:#b9f0c8">◆</i> Point of Interest</div>
           <div><i style="color:#ff5a44">✪</i> Field Boss</div>
+          <div><i style="color:#e8d8a8">♜</i> Site (grey when done)</div>
           <div><i style="color:#8fd3ff">⚓</i> Port</div>
           <div><i class="lg-road"></i> Road</div>
           <div><i class="lg-sea"></i> Sea Route</div>
@@ -369,7 +378,7 @@ export class WorldMapUI {
       }
     }
     // Quest objectives, quest givers and pins (the tracked objective on top, ringed).
-    const marks = [...this.bossMarkers(), ...this.questMarkers(), ...this.pins].sort((a, b) => Number(!!a.tracked) - Number(!!b.tracked));
+    const marks = [...this.siteMarkers(), ...this.bossMarkers(), ...this.questMarkers(), ...this.pins].sort((a, b) => Number(!!a.tracked) - Number(!!b.tracked));
     const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 280);
     for (const m of marks) {
       const p = this.mapToScreen(m.x / 14.8 + 620, m.z / 14.8 + 445);
@@ -386,12 +395,21 @@ export class WorldMapUI {
         g.fillStyle = 'rgba(40, 28, 6, 0.85)';
         g.fill();
       }
-      g.font = m.tracked ? 'bold 22px serif' : m.kind === 'offer' ? 'bold 13px serif' : '17px serif';
-      g.fillStyle = st.color;
+      const sitey = m.kind === 'site' || m.kind === 'siteDone';
+      g.font = m.tracked ? 'bold 22px serif' : m.kind === 'offer' ? 'bold 13px serif' : sitey ? '14px serif' : '17px serif';
+      g.fillStyle = m.kind === 'siteDone' ? st.color : m.color ?? st.color;
       g.strokeStyle = 'rgba(0,0,0,0.75)';
       g.lineWidth = 3;
-      g.strokeText(st.glyph, p.x, p.y + (m.kind === 'offer' ? 5 : 6));
-      g.fillText(st.glyph, p.x, p.y + (m.kind === 'offer' ? 5 : 6));
+      const glyph = m.glyph ?? st.glyph;
+      g.strokeText(glyph, p.x, p.y + (m.kind === 'offer' ? 5 : 6));
+      g.fillText(glyph, p.x, p.y + (m.kind === 'offer' ? 5 : 6));
+      if (sitey && m.label && this.zoom > 3 && !m.tracked) {
+        g.font = '600 10px Inter, sans-serif';
+        g.lineWidth = 3;
+        g.strokeText(m.label, p.x, p.y + 19);
+        g.fillStyle = m.kind === 'siteDone' ? '#b8b0a0' : '#f0e6cc';
+        g.fillText(m.label, p.x, p.y + 19);
+      }
       const bossy = m.kind === 'boss' || m.kind === 'bossRumour' || m.kind === 'bossSlain';
       if (bossy && m.label && this.zoom > 1.6 && !m.tracked) {
         g.font = 'italic 600 11px Inter, sans-serif';

@@ -21,6 +21,12 @@ import { goblinGeometry } from '../creatures/goblin/model';
 import { GoblinVisual, tickGoblinFur } from '../creatures/goblin/visual';
 import { StagVisual, tickStagFur } from '../creatures/stag/visual';
 import { greyjawDark } from '../creatures/wolf/visual';
+import { ratGeometry } from '../creatures/rat/model';
+import { RatVisual, tickRatFur } from '../creatures/rat/visual';
+import { delverGeometry } from '../creatures/delver/model';
+import { DelverVisual, tickDelverFur } from '../creatures/delver/visual';
+import { undeadGeometry, type UndeadVariant } from '../creatures/undeadHumanoid/model';
+import { UndeadVisual, tickUndeadHair } from '../creatures/undeadHumanoid/visual';
 
 // Dev page: a creature under the game's lighting, seen from several angles in
 // one frame, for quick visual iteration.
@@ -73,7 +79,8 @@ scene.add(ground);
 
 const t0 = performance.now();
 const kind = P.get('c') ?? 'boar';
-const geo = kind === 'goblin' ? goblinGeometry() : kind === 'wight' ? wightGeometry() : kind === 'ooze' ? { ms: 0, body: new THREE.IcosahedronGeometry(1, 5), far: new THREE.IcosahedronGeometry(1, 2) } : kind === 'crab' ? { ...crabGeometry(), coat: null } : kind === 'stag' ? stagGeometry() : kind === 'greyjaw' ? greyjawGeometry() : kind === 'wolf' ? wolfGeometry() : kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
+const UNDEAD: Record<string, UndeadVariant> = { drowned: 'drowned', revenant: 'revenant', wraith: 'wraith' };
+const geo = UNDEAD[kind] ? undeadGeometry(UNDEAD[kind]) : kind === 'rat' || kind === 'ratqueen' ? ratGeometry() : kind === 'delver' ? delverGeometry() : kind === 'goblin' ? goblinGeometry() : kind === 'wight' ? wightGeometry() : kind === 'ooze' ? { ms: 0, body: new THREE.IcosahedronGeometry(1, 5), far: new THREE.IcosahedronGeometry(1, 2) } : kind === 'crab' ? { ...crabGeometry(), coat: null } : kind === 'stag' ? stagGeometry() : kind === 'greyjaw' ? greyjawGeometry() : kind === 'wolf' ? wolfGeometry() : kind === 'spider' ? spiderGeometry() : kind === 'bat' ? { ...batGeometry(), far: batGeometry().body } : boarGeometry();
 type Look = { root: THREE.Group; gait: { reset: (r: THREE.Object3D, g: (x: number, z: number) => number) => void }; setPose: (p: never) => void; update: (dt: number, v: THREE.Vector3, g: (x: number, z: number) => number) => void; lod: (d: number, fur: boolean) => void };
 const batLook = (): Look => {
   const v = new BatVisual({ scale: Number(P.get('scale') ?? 2.5) });
@@ -99,7 +106,22 @@ const goblinLook = (): Look => {
   if (P.get('dark')) v.dark(Number(P.get('dark')));
   return { root: v.root, gait: { reset: () => {} }, setPose: (p: never) => v.setPose(p), update: (dt, vel) => v.update(dt, vel.length()), lod: (d) => v.lod(d) };
 };
-const boar: Look = kind === 'goblin' ? goblinLook() : kind === 'wight' ? wightLook() : kind === 'ooze' ? oozeLook() : kind === 'crab' ? new CrabVisual() : kind === 'stag' ? new StagVisual() : kind === 'greyjaw' ? new WolfVisual({ look: 'greyjaw', geometry: greyjawGeometry() }) : kind === 'wolf' ? new WolfVisual({ look: (P.get('look') ?? 'grey') as WolfLook }) : kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
+const ratLook = (): Look => {
+  const v = new RatVisual({ scale: Number(P.get('scale') ?? (kind === 'ratqueen' ? 2.4 : 1)), queen: kind === 'ratqueen' });
+  if (P.get('dark')) v.dark(Number(P.get('dark')));
+  return v as unknown as Look;
+};
+const delverLook = (): Look => {
+  const v = new DelverVisual();
+  if (P.get('dark')) v.dark(Number(P.get('dark')));
+  return { root: v.root, gait: v.gait, setPose: (p: never) => v.setPose(p), update: (dt, vel, g) => v.update(dt, vel, g), lod: (d) => v.lod(d) };
+};
+const undeadLook = (): Look => {
+  const v = new UndeadVisual(UNDEAD[kind]);
+  if (P.get('dark')) v.dark(Number(P.get('dark')));
+  return { root: v.root, gait: { reset: () => {} }, setPose: (p: never) => v.setPose(p), update: (dt, vel) => v.update(dt, vel.length()), lod: (d) => v.lod(d) };
+};
+const boar: Look = UNDEAD[kind] ? undeadLook() : kind === 'rat' || kind === 'ratqueen' ? ratLook() : kind === 'delver' ? delverLook() : kind === 'goblin' ? goblinLook() : kind === 'wight' ? wightLook() : kind === 'ooze' ? oozeLook() : kind === 'crab' ? new CrabVisual() : kind === 'stag' ? new StagVisual() : kind === 'greyjaw' ? new WolfVisual({ look: 'greyjaw', geometry: greyjawGeometry() }) : kind === 'wolf' ? new WolfVisual({ look: (P.get('look') ?? 'grey') as WolfLook }) : kind === 'spider' ? new SpiderVisual() : kind === 'bat' ? batLook() : new BoarVisual({ furLayers: Number(P.get('layers') ?? 0) });
 scene.add(boar.root);
 if (P.get('dark')) (kind === 'crab' ? crabDark : greyjawDark)(Number(P.get('dark')));
 if (P.get('air')) (boar as unknown as { airborne: boolean }).airborne = true;
@@ -122,6 +144,9 @@ const step = (sec: number) => {
     tickStagFur(dt);
     tickWightHair(dt);
     tickGoblinFur(dt);
+    tickRatFur(dt);
+    tickDelverFur(dt);
+    tickUndeadHair(dt);
     boar.update(dt, vel, () => 0);
   }
 };
@@ -162,6 +187,21 @@ const VIEWS: Record<string, View> = {
   ghead: { name: 'goblin head', from: [0.3, 1.02, 0.62], at: [0, 0.97, 0.08], fov: 34 },
   ghead2: { name: 'goblin head left', from: [0.55, 1.0, 0.35], at: [0, 0.97, 0.06], fov: 36 },
   gback: { name: 'goblin back', from: [-1.0, 1.1, -2.2], at: [0, 0.6, 0], fov: 34 },
+  rside: { name: 'rat side', from: [2.6, 0.5, -0.3], at: [0, 0.3, -0.3], fov: 34 },
+  rfront: { name: 'rat 3/4', from: [1.4, 0.8, 1.8], at: [0, 0.3, 0.1], fov: 34 },
+  rhead: { name: 'rat head', from: [0.45, 0.45, 1.0], at: [0, 0.3, 0.45], fov: 32 },
+  qside: { name: 'queen side', from: [6.5, 1.4, -0.7], at: [0, 0.75, -0.7], fov: 34 },
+  qfront: { name: 'queen 3/4', from: [3.4, 2.0, 4.2], at: [0, 0.75, 0.3], fov: 34 },
+  qtop: { name: 'queen top', from: [0.3, 4.5, 0.6], at: [0, 0.7, 0.6], fov: 34 },
+  qhead: { name: 'queen head', from: [1.1, 1.2, 2.4], at: [0, 0.75, 1.1], fov: 32 },
+  dside: { name: 'delver side', from: [8.5, 2.2, 0], at: [0, 1.1, 0], fov: 34 },
+  dfront: { name: 'delver 3/4', from: [4.5, 2.8, 6.5], at: [0, 1.0, 0.6], fov: 36 },
+  dhead: { name: 'delver head', from: [1.4, 1.4, 3.6], at: [0, 0.95, 1.8], fov: 34 },
+  dtop: { name: 'delver back', from: [-4, 5.5, -4.5], at: [0, 1.2, 0], fov: 36 },
+  ufront: { name: 'undead front', from: [1.3, 1.6, 3.4], at: [0, 1.1, 0], fov: 34 },
+  uside: { name: 'undead side', from: [3.8, 1.3, 0.2], at: [0, 1.05, 0], fov: 34 },
+  uhead: { name: 'undead head', from: [0.35, 1.8, 0.85], at: [0, 1.72, 0.05], fov: 32 },
+  uback: { name: 'undead back', from: [-1.5, 1.7, -3.2], at: [0, 1.1, 0], fov: 34 },
   hl: { name: 'head left', from: [0.42, 0.93, 1.02], at: [0, 0.88, 0.74], fov: 30 },
   hr: { name: 'head right', from: [-0.42, 0.93, 1.02], at: [0, 0.88, 0.74], fov: 30 },
   hf: { name: 'head front', from: [0.0, 0.95, 1.25], at: [0, 0.87, 0.74], fov: 26 },

@@ -36,6 +36,14 @@ export const RIVER_LEVEL = -0.6;
 export const CRYPT = new THREE.Vector2(0, -318); // entrance in the hillside
 /** The old quarry: a pit cut into the northern hills (floor level in metres). */
 export const QUARRY_PIT = { x: -180, z: -262, floor: 11.5 };
+/** The Sinkhole (a discovery site): a collapsed pit in the north hills, with a slope of fallen earth on its east side. */
+export const SINKHOLE = { x: -480, z: -980, r: 15, floor: 7 };
+/**
+ * The mere that rose over the Drowned Watchtower (a discovery site): a bowl
+ * cut into a flat meadow, holding its own water (not the sea's), and the
+ * tower standing in the shallows on its south side, door to the shore.
+ */
+export const DROWNED_MERE = { x: -1100, z: -1460, r: 40, water: 3.2, tower: { x: -1100, z: -1428, yaw: Math.PI } };
 /**
  * The Gravewood: a dead, fog-bound wood south-west of Elder Glen with a walled
  * graveyard at its heart (world/gravewood.ts). GRAVEYARD holds the interior
@@ -188,6 +196,8 @@ export function worldHeightFn(x: number, z: number) {
   if (h < SEA_LEVEL + 0.6 && macroElevAt(x, z) > SEA_LEVEL + 0.3 && Math.abs(x - riverX(z)) > 16) {
     h = SEA_LEVEL + 0.6 - (SEA_LEVEL + 0.6 - h) * 0.12;
   }
+  // The discovery sites' sinkhole and mere.
+  h = discoveryCuts(x, z, h);
   // The Golden Expanse: real dune shapes on the sand, Ghagrabba's pad, the scavenger camps.
   if (x < -1800) h = shapeDesert(x, z, h, sandWeight(x, z));
   // Port Aurelle stands on a levelled pad of terraces, quays and a causeway.
@@ -212,6 +222,33 @@ export function worldHeightFn(x: number, z: number) {
   if (x > 1500 && x < 1700 && z > -450 && z < 450) {
     const d = polyDist(x, z, CREEK_LINES);
     if (d < 13) h -= 1.5 * smoothstep(6.5, 2.5, d) + 0.8 * smoothstep(13, 6.5, d);
+  }
+  return h;
+}
+/** The Sinkhole's pit and the Drowned Watchtower's mere. */
+function discoveryCuts(x: number, z: number, h: number) {
+  {
+    const S = SINKHOLE, dx = x - S.x, dz = z - S.z;
+    const d = Math.hypot(dx, dz);
+    if (d < S.r + 30) {
+      const floor = S.floor + (fbm(x / 5, z / 5, 2) - 0.5) * 0.6;
+      // Steep, crumbling walls all round...
+      const wall = smoothstep(S.r + 1.5, S.r - 2.5, d + (fbm(x / 4, z / 4, 2) - 0.5) * 2);
+      const pit = h + (Math.min(h, floor) - h) * wall;
+      // ...but a slope of fallen earth on the east side is the way out.
+      const ramp = smoothstep(0.55, 0.28, Math.abs(Math.atan2(dz, dx)));
+      if (ramp <= 0) return pit;
+      const slope = Math.min(h, floor + Math.max(0, d - (S.r - 7)) * 0.5);
+      return pit * (1 - ramp) + slope * ramp;
+    }
+  }
+  {
+    const M = DROWNED_MERE, d = Math.hypot(x - M.x, z - M.z);
+    if (d < M.r + 16) {
+      const bed = M.water - 3 + smoothstep(0, M.r, d) * 1.2 + (fbm(x / 9, z / 9, 2) - 0.5) * 0.8;
+      const w = smoothstep(M.r + 12, M.r - 10, d);
+      return h + (Math.min(h, bed) - h) * w;
+    }
   }
   return h;
 }

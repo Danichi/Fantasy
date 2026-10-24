@@ -8,6 +8,9 @@ import { provideStagGeometry, stagGeometry, type StagGeometry } from './stag/mod
 import { provideCrabGeometry, crabGeometry, type CrabGeometry } from './crab/model';
 import { provideWightGeometry, wightGeometry, type WightGeometry } from './wight/model';
 import { provideGoblinGeometry, goblinGeometry, type GoblinGeometry } from './goblin/model';
+import { provideRatGeometry, ratGeometry, type RatGeometry } from './rat/model';
+import { provideDelverGeometry, delverGeometry, type DelverGeometry } from './delver/model';
+import { provideUndeadGeometry, undeadGeometry, type UndeadGeometry } from './undeadHumanoid/model';
 
 // Creature meshes are sculpted in a worker so the game never stalls while a
 // new kind is built. Until a kind is ready, the population doesn't spawn it.
@@ -27,6 +30,11 @@ const PROVIDE: Record<string, (parts: Record<string, unknown>) => void> = {
   crab: (p) => provideCrabGeometry(p as unknown as CrabGeometry),
   wight: (p) => provideWightGeometry(p as unknown as WightGeometry),
   goblin: (p) => provideGoblinGeometry(p as unknown as GoblinGeometry),
+  rat: (p) => provideRatGeometry(p as unknown as RatGeometry),
+  delver: (p) => provideDelverGeometry(p as unknown as DelverGeometry),
+  undeadDrowned: (p) => provideUndeadGeometry('drowned', p as unknown as UndeadGeometry),
+  undeadRevenant: (p) => provideUndeadGeometry('revenant', p as unknown as UndeadGeometry),
+  undeadWraith: (p) => provideUndeadGeometry('wraith', p as unknown as UndeadGeometry),
 };
 const LOCAL: Record<string, () => void> = {
   boar: () => void boarGeometry(),
@@ -38,6 +46,11 @@ const LOCAL: Record<string, () => void> = {
   crab: () => void crabGeometry(),
   wight: () => void wightGeometry(),
   goblin: () => void goblinGeometry(),
+  rat: () => void ratGeometry(),
+  delver: () => void delverGeometry(),
+  undeadDrowned: () => void undeadGeometry('drowned'),
+  undeadRevenant: () => void undeadGeometry('revenant'),
+  undeadWraith: () => void undeadGeometry('wraith'),
 };
 
 function getWorker() {

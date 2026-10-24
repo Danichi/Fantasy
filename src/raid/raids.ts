@@ -97,6 +97,8 @@ export interface RaidSave {
   lastWon?: boolean;
   lastLost?: number;
   lastKind?: RaidKind;
+  /** no raids before this day (a signal beacon was lit) */
+  calmUntil?: number;
   /** where the last raid fell (older saves: Elder Glen) */
   lastSite?: RaidSite;
   /** raids beaten back at the road stops */
@@ -219,7 +221,8 @@ export class Raids {
         this.plannedDay = day;
         const rested = day - (this.save.last ?? -10) >= 2;
         // Not every night: about one in three, never two nights running.
-        this.planned = this.auto && this.h.unlocked() && rested && seeded(day) < 0.34 ? 21.5 + seeded(day * 7 + 3) * 1.5 : -1;
+        const calm = (this.save.calmUntil ?? -1) >= day;
+        this.planned = this.auto && !calm && this.h.unlocked() && rested && seeded(day) < 0.34 ? 21.5 + seeded(day * 7 + 3) * 1.5 : -1;
       }
       if (this.planned > 0 && this.plannedDay === day && hour >= this.planned && hour < 24) {
         this.planned = -1;
@@ -431,6 +434,12 @@ export class Raids {
   toJSON(): RaidSave {
     return { ...this.save };
   }
+  /** Keep the raids off for `days` (a beacon is burning). */
+  calm(day: number, days: number) {
+    this.save.calmUntil = Math.max(this.save.calmUntil ?? -1, day + days);
+    if (this.plannedDay === day) this.planned = -1;
+  }
+
   fromJSON(s?: RaidSave) {
     this.save = { ...(s ?? {}) };
   }

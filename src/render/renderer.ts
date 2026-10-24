@@ -103,7 +103,7 @@ export class Renderer {
     this.scene.environmentIntensity = s.envIntensity * (1 - w.cloud * 0.3);
     // Overcast skies soften shadows.
     this.sun.shadow.radius = 3.2 + w.cloud * 6;
-    this.sky?.setState(s.zenith, s.horizon, s.sunColor, s.sunDir, s.moonDir, s.night, w.cloud, flash);
+    this.sky?.setState(s.zenith, s.horizon, s.sunColor, s.sunDir, s.moonDir, s.night, w.cloud, flash, s.moonPhase);
     if (this.post) {
       const u = this.post.finalMat.uniforms;
       const haze = (u.uHazeColor.value as THREE.Color).copy(s.haze);

@@ -21,6 +21,9 @@ export interface GameEvents {
   bossSlain: { id: string; first: boolean };
   /** a boss says something (shown as a toast) */
   bossSpeaks: { id: string; line: string };
+  /** a site (sites/): first seen within sight, and finished (looted, read, cleared, lit) */
+  siteSeen: { id: string; kind: string };
+  siteDone: { id: string; kind: string };
   /** a creature den (boar wallow, spider hollow, bat roost) was emptied */
   denCleared: { id: string; species: string };
   swing: { heavy: boolean };

@@ -1,4 +1,4 @@
-import { heightAt, riverX, RIVER_LEVEL } from './terrainHeight';
+import { heightAt, riverX, RIVER_LEVEL, DROWNED_MERE } from './terrainHeight';
 import { macroElevAt, SEA_LEVEL } from './worldMap';
 import { CANAL, QUAY_X } from './portCity';
 
@@ -12,6 +12,8 @@ export function waterSurfaceAt(x: number, z: number): number | null {
   if (Math.abs(x - riverX(z)) < 16 && Math.abs(z) < 440 && ground < RIVER_LEVEL) return RIVER_LEVEL;
   // The canal in Port Aurelle.
   if (x > CANAL.x0 && x < QUAY_X + 2 && Math.abs(z - CANAL.z) < CANAL.half) return SEA_LEVEL + 0.25;
+  // The mere over the Drowned Watchtower keeps its own level.
+  if (Math.abs(x - DROWNED_MERE.x) < DROWNED_MERE.r + 14 && Math.abs(z - DROWNED_MERE.z) < DROWNED_MERE.r + 14 && ground < DROWNED_MERE.water && Math.hypot(x - DROWNED_MERE.x, z - DROWNED_MERE.z) < DROWNED_MERE.r + 14) return DROWNED_MERE.water;
   // The sea: wherever the map says ocean and the ground is below the waterline.
   if (ground < SEA_LEVEL && macroElevAt(x, z) < SEA_LEVEL + 1.4) return SEA_LEVEL;
   return null;

@@ -25,6 +25,7 @@ const VERT = /* glsl */ `
 
 const FRAG = /* glsl */ `
   uniform vec3 uZenith, uHorizon, uSunGlow, uCloudLit, uCloudShade, uSunDir, uMoonDir;
+  uniform float uMoonPhase;
   uniform sampler2D tNoise;
   uniform float uTime, uClouds, uNight, uOvercast, uFlash;
   float starHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -58,8 +59,18 @@ const FRAG = /* glsl */ `
       col += vec3(0.85, 0.9, 1.0) * star * uNight * 1.4;
       float md = max(dot(d, uMoonDir), 0.0);
       float moonUp = smoothstep(-0.05, 0.05, uMoonDir.y) * (1.0 - uOvercast * 0.8);
-      col += vec3(0.55, 0.65, 0.9) * pow(md, 40.0) * 0.35 * moonUp * uNight;
-      col = mix(col, vec3(0.93, 0.95, 1.0), smoothstep(0.99955, 0.99975, md) * moonUp * uNight);
+      float lit = (1.0 + cos(uMoonPhase * 6.2832)) * 0.5;
+      col += vec3(0.55, 0.65, 0.9) * pow(md, 40.0) * 0.35 * moonUp * uNight * (0.25 + 0.75 * lit);
+      // The disc, lit by phase: a terminator sweeps across it through the cycle.
+      vec3 mr = normalize(cross(uMoonDir, vec3(0.0, 1.0, 0.0)));
+      vec3 mu = cross(mr, uMoonDir);
+      vec2 mp = vec2(dot(d, mr), dot(d, mu)) / 0.024;
+      float disc = smoothstep(0.99955, 0.99975, md);
+      float ph = uMoonPhase * 6.2832;
+      float side = uMoonPhase < 0.5 ? -1.0 : 1.0;
+      float term = cos(ph) * sqrt(max(0.0, 1.0 - mp.y * mp.y));
+      float face = smoothstep(-0.06, 0.06, side * mp.x + term);
+      col = mix(col, mix(vec3(0.1, 0.12, 0.18), vec3(0.93, 0.95, 1.0), face), disc * moonUp * uNight);
     }
     // Overcast: the sky flattens toward grey.
     // Overcast: the sky flattens to grey, then to dark slate as a storm builds.
@@ -153,7 +164,7 @@ export class Sky {
         uZenith: { value: SKY.zenith }, uHorizon: { value: SKY.horizon }, uSunGlow: { value: SKY.sunGlow },
         uCloudLit: { value: SKY.cloudLit }, uCloudShade: { value: SKY.cloudShade },
         uSunDir: { value: sunDir.clone() }, tNoise: { value: worldNoise() }, uTime: { value: 0 }, uClouds: { value: 1 },
-        uMoonDir: { value: new THREE.Vector3(0, -1, 0) }, uNight: { value: 0 }, uOvercast: { value: 0 }, uFlash: { value: 0 },
+        uMoonDir: { value: new THREE.Vector3(0, -1, 0) }, uMoonPhase: { value: 0 }, uNight: { value: 0 }, uOvercast: { value: 0 }, uFlash: { value: 0 },
       },
       side: THREE.BackSide,
       depthWrite: false,
@@ -208,7 +219,8 @@ export class Sky {
   }
 
   /** Time of day and weather (colours are copied; directions are unit vectors). */
-  setState(zenith: THREE.Color, horizon: THREE.Color, sunGlow: THREE.Color, sunDir: THREE.Vector3, moonDir: THREE.Vector3, night: number, overcast: number, flash: number) {
+  setState(zenith: THREE.Color, horizon: THREE.Color, sunGlow: THREE.Color, sunDir: THREE.Vector3, moonDir: THREE.Vector3, night: number, overcast: number, flash: number, moonPhase = 0) {
+    this.mat.uniforms.uMoonPhase.value = moonPhase;
     const u = this.mat.uniforms;
     (u.uZenith.value as THREE.Color).copy(zenith);
     (u.uHorizon.value as THREE.Color).copy(horizon);

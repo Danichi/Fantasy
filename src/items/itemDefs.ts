@@ -291,6 +291,21 @@ export const ITEMS: Record<string, ItemDef> = {
     id: 'thaneCrown', name: "The Hollow Thane's Crown", kind: 'accessory', slot: 'trinket', rarity: 'epic',
     desc: "A circlet of green bronze from the Barrow of the Old Kings, far older than the Crown of Cresha. A wheel is worked into its front. Worn, it is cold on the brow, and the dead seem slower to notice you.", stats: { maxMana: 30, manaRegen: 0.25, damagePct: 0.05, poise: 6 },
   },
+  championPage1: { id: 'championPage1', name: "The First Champion's Journal (1)", kind: 'key', rarity: 'rare', stats: {}, desc: 'A water-stained page in a firm hand: "The voice said I was chosen. It said it like a gift..." The first of three, from the camps of the first champion summoned to Cresha.' },
+  championPage2: { id: 'championPage2', name: "The First Champion's Journal (2)", kind: 'key', rarity: 'rare', stats: {}, desc: 'The second page: "There are others. Not from my voice..." She carved the Sunwheel the right way round, because somewhere out here someone carved it backwards.' },
+  championPage3: { id: 'championPage3', name: "The First Champion's Journal (3)", kind: 'key', rarity: 'rare', stats: {}, desc: 'The last page, from her grave: "I was the first. I will not be the last... the one who calls you is not your friend, and not your enemy. It wants the chair."' },
+  firstlight: {
+    id: 'firstlight', name: 'Firstlight', kind: 'sword', slot: 'main', rarity: 'epic',
+    desc: 'The sword of the first champion summoned to Cresha, drawn from her grave. Light in the hand, quick, and faintly warm, with a gleam down the fuller like the first light of morning. She gave it freely, which is more than either of you was given.',
+    stats: { damage: 34, speed: 1.08, crit: 0.08, poise: 4 }, build: () => buildSword({ bladeLen: 0.92, bladeWidth: 0.03, thickness: 0.005, fullerLen: 0.75, gripLen: 0.17, guardSpan: 0.13, guardStyle: 'curved', pommel: 'wheel', guardMat: 'brass', tint: 0xe8ecf4, glow: 0xffe0a0, glowStrength: 0.7 }),
+  },
+  vaultKeyA: { id: 'vaultKeyA', name: 'Bronze Key of the Sun', kind: 'key', rarity: 'rare', stats: {}, desc: 'A heavy bronze key with a sun on its bow, from a smugglers\' cache. One of three for the Sealed Vault.' },
+  vaultKeyB: { id: 'vaultKeyB', name: 'Bronze Key of the Sword', kind: 'key', rarity: 'rare', stats: {}, desc: 'A bronze key with a sword on its bow, given by the pale duellist. One of three for the Sealed Vault.' },
+  vaultKeyC: { id: 'vaultKeyC', name: 'Bronze Key of the Noose', kind: 'key', rarity: 'rare', stats: {}, desc: 'A bronze key with a noose on its bow, from the hanged man at the crossroads. One of three for the Sealed Vault.' },
+  sunwheelCharm: {
+    id: 'sunwheelCharm', name: 'Sunwheel Charm', kind: 'accessory', slot: 'trinket', rarity: 'epic',
+    desc: 'A small disc of old gold with the Sunwheel on it, found at the foot of the last of the twelve stones. It is always warm. Whoever carved the stones meant someone to find it: someone summoned, the fifth of their kind.', stats: { maxHp: 20, maxMana: 20, damagePct: 0.05, crit: 0.03 },
+  },
   vargasEye: {
     id: 'vargasEye', name: "Varga's Eye", kind: 'accessory', slot: 'trinket', rarity: 'epic',
     desc: "A glass eye, violet and cold, from a pouch at Varga One-Eye's belt. She gave her own eye to the Dark for strength, and this is what it gave her back. It seems to look at whatever you look at, and your blows find the weak places.", stats: { crit: 0.06, damagePct: 0.08, maxHp: 20 },
@@ -298,6 +313,30 @@ export const ITEMS: Record<string, ItemDef> = {
   snaggleHorn: {
     id: 'snaggleHorn', name: "Snaggletooth's Horn", kind: 'accessory', slot: 'trinket', rarity: 'epic',
     desc: "A goblin war-horn of yellowed boar tusk, bound with copper wire and chewed at the mouthpiece. Snaggletooth called his band with it. Worn at the belt it sets your blood going: you run harder and longer.", stats: { maxStamina: 30, staminaRegen: 0.25, damagePct: 0.04 },
+  },
+  boneCrown: {
+    id: 'boneCrown', name: 'Crown of the Rat Queen', kind: 'accessory', slot: 'trinket', rarity: 'epic',
+    desc: 'A ring of bone shards that grew out of the Rat Queen\'s skull, yellow and sharp. It smells of the sinkhole however long you scrub it. Worn at the belt, poison runs off you, and your wounds close faster.', stats: { maxHp: 35, staminaRegen: 0.1, poise: 6 },
+  },
+  drownedCompass: {
+    id: 'drownedCompass', name: 'The Drowned Compass', kind: 'accessory', slot: 'trinket', rarity: 'epic',
+    desc: 'Captain Hale\'s brass compass, green with the mere. The needle never points north: it swings to whatever you are looking for, if you are honest with yourself about what that is. You can hold your breath a long time with it in your hand.', stats: { waterBreathing: 60, maxStamina: 25, maxMana: 15 },
+  },
+  captainsLog: {
+    id: 'captainsLog', name: "Captain Hale's Log", kind: 'key', rarity: 'rare', stats: {},
+    desc: '"Day 41. The water is at the second stair. The men want to leave. I will not leave my tower. The king said hold it, and I will hold it until the king says otherwise, and the king is dead, so I will hold it forever." The rest is water-stained past reading, except one line near the back: "The fifth will come by the east road. Hold until then."',
+  },
+  hangmansKnot: {
+    id: 'hangmansKnot', name: "The Hangman's Knot", kind: 'accessory', slot: 'trinket', rarity: 'epic',
+    desc: 'Red Corwen\'s noose, thirteen turns, cut from the Hanging Tree. It held him to the world for forty years out of sheer greed. Carry it and your blows bite like his: you take what you can.', stats: { lifesteal: 0.05, damagePct: 0.06, crit: 0.03 },
+  },
+  backwardsWheel: {
+    id: 'backwardsWheel', name: 'The Backwards Wheel', kind: 'accessory', slot: 'trinket', rarity: 'epic',
+    desc: 'An amulet of black iron: the Sunwheel, its spokes bent the wrong way. Someone made these to open doors that should stay shut. It is cold as the full moon, and the Dark in the world leans toward it. Your magic runs deep and fast while you wear it.', stats: { maxMana: 40, manaRegen: 0.3, damagePct: 0.06 },
+  },
+  delverCrystal: {
+    id: 'delverCrystal', name: "Delver's Crystal", kind: 'accessory', slot: 'trinket', rarity: 'epic',
+    desc: 'An ore-crystal that grew in the Delver\'s back, still faintly glowing amber. Hold it to your ear and you hear the earth moving, miles down. It steadies your feet: nothing knocks you down.', stats: { poise: 20, armor: 3, maxHp: 25 },
   },
   dentedSignet: {
     id: 'dentedSignet', name: 'Dented Signet', kind: 'accessory', slot: 'trinket', rarity: 'epic',

@@ -168,6 +168,127 @@ function paintAccessory(def: ItemDef) {
     g.beginPath();
     g.arc(m, 78, 7, 0, Math.PI * 2);
     g.stroke();
+  } else if (def.id === 'boneCrown') {
+    // A ring of yellowed bone shards.
+    g.strokeStyle = '#6a5a3a';
+    g.lineWidth = 8;
+    g.beginPath();
+    g.ellipse(m, 84, 40, 14, 0, 0, Math.PI * 2);
+    g.stroke();
+    for (let i = 0; i < 9; i++) {
+      const x = m - 36 + i * 9, tall = 30 + (i % 3 === 1 ? 26 : 10) + Math.sin(i * 1.7) * 6;
+      const gr = g.createLinearGradient(x, 84, x, 84 - tall);
+      gr.addColorStop(0, '#8a7a5a');
+      gr.addColorStop(1, '#f0e6cc');
+      g.fillStyle = gr;
+      g.beginPath();
+      g.moveTo(x - 4, 86);
+      g.lineTo(x + 1, 84 - tall);
+      g.lineTo(x + 5, 86);
+      g.closePath();
+      g.fill();
+    }
+  } else if (def.id === 'drownedCompass') {
+    // A green-crusted brass compass, its needle askew.
+    g.fillStyle = '#5a7a5a';
+    g.beginPath();
+    g.arc(m, 66, 40, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#b8964a';
+    g.beginPath();
+    g.arc(m, 66, 34, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#e8e0c8';
+    g.beginPath();
+    g.arc(m, 66, 27, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = '#6a8a7a';
+    g.lineWidth = 6;
+    g.beginPath();
+    g.arc(m, 66, 38, 2.2, 3.4);
+    g.stroke();
+    g.fillStyle = '#8a2a22';
+    g.beginPath();
+    g.moveTo(m + 16, 50);
+    g.lineTo(m - 3, 63);
+    g.lineTo(m + 3, 69);
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#2a2a32';
+    g.beginPath();
+    g.moveTo(m - 16, 82);
+    g.lineTo(m - 3, 63);
+    g.lineTo(m + 3, 69);
+    g.closePath();
+    g.fill();
+  } else if (def.id === 'hangmansKnot') {
+    // A hangman's noose, coiled.
+    g.strokeStyle = '#a8905a';
+    g.lineWidth = 9;
+    g.beginPath();
+    g.ellipse(m, 82, 26, 22, 0, 0, Math.PI * 2);
+    g.stroke();
+    g.fillStyle = '#8a7444';
+    for (let i = 0; i < 6; i++) g.fillRect(m - 9, 28 + i * 7, 18, 6);
+    g.strokeStyle = '#a8905a';
+    g.lineWidth = 7;
+    g.beginPath();
+    g.moveTo(m, 28);
+    g.lineTo(m + 6, 10);
+    g.stroke();
+  } else if (def.id === 'backwardsWheel') {
+    // A black iron Sunwheel, its spokes bent the wrong way.
+    g.strokeStyle = '#2a2632';
+    g.lineWidth = 9;
+    g.beginPath();
+    g.arc(m, 66, 34, 0, Math.PI * 2);
+    g.stroke();
+    g.strokeStyle = '#9a70e0';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(m, 66, 34, 0, Math.PI * 2);
+    g.stroke();
+    g.strokeStyle = '#3a3442';
+    g.lineWidth = 6;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      g.beginPath();
+      g.moveTo(m, 66);
+      g.quadraticCurveTo(m + Math.cos(a - 0.6) * 22, 66 + Math.sin(a - 0.6) * 22, m + Math.cos(a) * 32, 66 + Math.sin(a) * 32);
+      g.stroke();
+    }
+    g.fillStyle = '#b080ff';
+    g.beginPath();
+    g.arc(m, 66, 7, 0, Math.PI * 2);
+    g.fill();
+  } else if (def.id === 'delverCrystal') {
+    // A cluster of amber ore-crystal, glowing.
+    const gr = g.createRadialGradient(m, 70, 4, m, 70, 50);
+    gr.addColorStop(0, 'rgba(255,190,90,0.7)');
+    gr.addColorStop(1, 'rgba(255,190,90,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 128, 128);
+    const shard = (x: number, w: number, h: number, lean: number) => {
+      g.fillStyle = '#ffb860';
+      g.beginPath();
+      g.moveTo(x - w, 100);
+      g.lineTo(x + lean, 100 - h);
+      g.lineTo(x + w, 100);
+      g.closePath();
+      g.fill();
+      g.fillStyle = 'rgba(255,240,200,0.7)';
+      g.beginPath();
+      g.moveTo(x - w * 0.2, 100);
+      g.lineTo(x + lean, 100 - h);
+      g.lineTo(x + w * 0.4, 100);
+      g.closePath();
+      g.fill();
+    };
+    shard(m - 22, 10, 46, -8);
+    shard(m + 20, 9, 50, 9);
+    shard(m, 13, 74, 0);
+    g.fillStyle = '#5a4a3a';
+    g.fillRect(m - 40, 98, 80, 10);
   } else if (def.id === 'vargasEye') {
     // A violet glass eye on a dark pouch.
     g.fillStyle = '#3a2618';
@@ -248,7 +369,7 @@ function paintAccessory(def: ItemDef) {
     }
     g.closePath();
     g.fill();
-  } else if (def.id === 'journalPage') {
+  } else if (def.id === 'journalPage' || def.id === 'captainsLog') {
     // A torn, folded page of close writing.
     g.fillStyle = '#e2d4aa';
     g.beginPath();

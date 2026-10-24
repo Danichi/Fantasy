@@ -59,6 +59,10 @@ export interface BossDef {
   abroad(hour: number): boolean;
   /** only some days (a rare beast) */
   days?: (day: number) => boolean;
+  /** only comes out when something calls it up (a discovery site): summon() */
+  summoned?: boolean;
+  /** happens once: never replaced after it dies */
+  once?: boolean;
   /** a timed blessing it leaves you (each time) */
   blessing?: { id: string; label: string; sec: number; m: Record<string, number> };
   /** what later encounters say (default: dead again) */
@@ -145,7 +149,26 @@ export class FieldBosses {
   /** Abroad and not slain this week. */
   available(id: string, day = this.day) {
     const s = this.st(id);
+    if (s.kills && this.defs.find((d) => d.id === id)?.once) return false;
     return s.slain === undefined || day - s.slain >= RESPAWN_DAYS;
+  }
+
+  /** Dead for good (a once-only boss), or dead this week. */
+  slainFor(id: string) {
+    return !this.available(id);
+  }
+
+  /** Call up a summoned boss now (its site woke it); null until its creature is built. */
+  summon(id: string, at?: THREE.Vector3) {
+    const def = this.defs.find((d) => d.id === id);
+    if (!def || !this.available(id)) return null;
+    const live = this.live.get(id);
+    if (live) return live.body;
+    if (!def.looks.every((k) => creatureReady(k))) {
+      for (const k of def.looks) void prepareCreature(k);
+      return null;
+    }
+    return this.spawnNow(id, at);
   }
 
   /** Put a boss in the world now (tests, debug). */
@@ -188,6 +211,11 @@ export class FieldBosses {
       }
       const near = toHome < def.home.r + 160;
       if (!l) {
+        if (def.summoned) {
+          // Get its creature built before anyone comes to wake it.
+          if (near && !def.looks.every((k) => creatureReady(k))) for (const k of def.looks) void prepareCreature(k);
+          continue;
+        }
         if (!this.enabled || !near || !this.h.outdoors() || !def.abroad(hour) || !this.available(def.id, day) || (def.days && !def.days(day))) continue;
         if (!def.looks.every((k) => creatureReady(k))) {
           for (const k of def.looks) void prepareCreature(k);
@@ -228,6 +256,8 @@ export class FieldBosses {
         }
         // Wandered out of range, or its hours are over and it isn't fighting.
         if ((!near && !b.engaged) || (!def.abroad(hour) && !b.engaged && dist > 70)) this.despawn(def.id);
+        // A summoned one goes back where it came from when you leave it be.
+        else if (def.summoned && !b.engaged && dist > def.home.r + 90) this.despawn(def.id);
       } else {
         if (!l.counted) {
           l.counted = true;
@@ -235,7 +265,7 @@ export class FieldBosses {
         }
         // Gone, or a week has passed (sleeping it away): clear the body so another can come.
         if (b.dead) this.live.delete(def.id);
-        else if (this.available(def.id, day)) this.despawn(def.id);
+        else if (this.available(def.id, day) || (def.once && toHome > def.home.r + 200)) this.despawn(def.id);
       }
     }
   }
@@ -311,7 +341,7 @@ export class FieldBosses {
   /** Bounty notices for the guild board (bosses alive this week). */
   bounties() {
     return this.defs
-      .filter((d) => this.available(d.id))
+      .filter((d) => this.available(d.id) && !d.summoned)
       .map((d) => ({
         id: 'bounty:' + d.id, bossId: d.id, title: d.bounty.title, description: d.bounty.description, objective: 'kill' as const,
         targetKind: d.kind, targetCount: 1, targetName: d.name, target: [d.home.x, d.home.z] as [number, number], radius: d.home.r,
