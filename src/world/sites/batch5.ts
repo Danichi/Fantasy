@@ -112,8 +112,8 @@ export const DROWNED_TOWER: SiteType = {
           if (!st.k?.read) {
             (st.k ??= {}).read = true;
           }
-          // Behind you, the mere heaves.
-          const rise = k.at(0, 6);
+          // Beside the stepping stones, the mere heaves.
+          const rise = k.at(3.2, -7);
           rise.y = water;
           rouse(c, 'drownedCaptain', rise, (b) => {
             (b as { rouse(): void }).rouse();
@@ -185,7 +185,10 @@ export const SINKHOLE_SITE: SiteType = {
       for (let i = 0; i < 16; i++) {
         const a = 0.6 + (i / 16) * (Math.PI * 2 - 1.2);
         const rk = new THREE.Mesh(rockGeo(r, 0.9 + r() * 0.6, 0.6 + r() * 0.5, 0.8, 1), k.m.stone);
-        rk.position.set(SINKHOLE.x + Math.cos(a) * (R - 2.4), floor + 0.3 + r() * depth * 0.6, SINKHOLE.z + Math.sin(a) * (R - 2.4));
+        // Fallen from the walls: heaped at their foot.
+        const y = r() * 1.2;
+        const rad = R - 2.9 + (y / depth) * 3.2;
+        rk.position.set(SINKHOLE.x + Math.cos(a) * rad, floor + 0.2 + y, SINKHOLE.z + Math.sin(a) * rad);
         k.live(rk);
       }
     }

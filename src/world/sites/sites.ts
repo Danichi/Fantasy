@@ -132,9 +132,17 @@ export class Sites {
     this.scan -= dt;
     if (this.scan <= 0) {
       this.scan = 0.25;
+      let builtThisFrame = false;
       for (const s of this.sites) {
         const d = Math.hypot(s.x - p.x, s.z - p.z);
-        if (this.enabled && d < BUILD && !this.built.has(s.id)) this.build(s);
+        // One new site a frame at most, so a fast traveller doesn't pay for several at once.
+        if (this.enabled && d < BUILD && !this.built.has(s.id)) {
+          if (builtThisFrame) this.scan = 0; // the rest next frame
+          else {
+            this.build(s);
+            builtThisFrame = true;
+          }
+        }
         else if (this.built.has(s.id) && (d > BUILD + HYST || !this.enabled)) this.unbuild(s.id);
         if (d < SEE) {
           const st = this.st(s.id);
