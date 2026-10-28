@@ -156,7 +156,10 @@ export class HUD {
     });
     events.on('needTarget', () => this.toast('Lock on to a target to cast this (middle mouse)'));
     events.on('enemyHit', ({ at, amount, crit, enemyId }) => this.damageNumber(at, amount, crit, enemyId));
-    events.on('strike', ({ target, typeMult, reason }) => this.lastStrike.set(target.id, { at: performance.now(), typeMult, reason, shown: false }));
+    events.on('strike', ({ target, typeMult, reason }) => {
+      if (this.lastStrike.size > 64) this.lastStrike.clear();
+      this.lastStrike.set(target.id, { at: performance.now(), typeMult, reason, shown: false });
+    });
     events.on('parrySuccess', ({ perfect }) => this.showBanner(perfect === false ? 'DEFLECTED' : 'PERFECT PARRY'));
     events.on('telegraph', ({ target, kind, sec }) => {
       // A tell over the enemy's head: white parry, gold heavy, red unblockable, yellow grab.

@@ -46,7 +46,7 @@ test('poise: light blows stagger only once the pool runs dry, then a moment of i
     const fake = eval(fakeSrc);
     const g = (window as any).__game, T = g.THREE;
     const { strike, combatOf } = await import('/src/combat/core.ts');
-    const t = fake({ hp: 9999, maxHp: 110 });
+    const t = fake({ hp: 9999, maxHp: 110, postureMax: 99999 }); // posture would break it: keep to poise
     const from = new T.Vector3(0, 0, 2); // in front (it faces +Z)
     const reacts = [1, 2, 3, 4].map(() => strike(t, { base: 5, type: 'slash', poise: 22, from, source: 'melee', noCrit: true }).react);
     const st = combatOf(t);
@@ -183,9 +183,11 @@ test('strings: hold into the next cut for a branch, press late for the delayed c
   const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game, P = g.player;
+    if (!P.equip.mainWeapon) P.equip.equip(P.equip.add('longsword').uid, 'main');
     const now = () => performance.now() / 1000;
     const branchFrom = (id: string, held: number, late = false) => {
       P.act = null;
+      P.stamina = P.maxStamina;
       P['startAction'](id);
       const a = P.act;
       a.t = a.def.combo.from + (late ? 0.3 : 0.02);
@@ -201,6 +203,7 @@ test('strings: hold into the next cut for a branch, press late for the delayed c
     const hold3 = branchFrom('slash3', 0.3);
     const late = branchFrom('slash1', 0, true);
     P.act = null;
+    P.stamina = P.maxStamina;
     P['buffer'] = { a: 'kick', t: now(), actT: -1, actId: null };
     P['consumeBuffer']();
     const shove = P.act?.def.id;
@@ -279,7 +282,7 @@ test('balance: every weapon family kills every armour within reason (light strin
     const { FAMILIES } = await import('/src/items/weapons/index.ts');
     const { ITEMS } = await import('/src/items/itemDefs.ts');
     const { RESIST, FAMILY_DMG } = await import('/src/combat/core.ts');
-    const { resolveAction } = await import('/src/combat/actions.ts');
+    const { resolveAction, ACTIONS } = await import('/src/combat/actions.ts');
     const table: Record<string, Record<string, number>> = {};
     const armours = ['flesh', 'leather', 'hide', 'bone', 'plate', 'chitin', 'slime', 'stone'];
     for (const [id, fam] of Object.entries(FAMILIES) as [string, any][]) {
@@ -291,7 +294,7 @@ test('balance: every weapon family kills every armour within reason (light strin
       if (!w) continue;
       let dmg = 0, time = 0;
       for (const mv of ['slash1', 'slash2', 'slash3']) {
-        const raw = fam.moves[mv] ?? null;
+        const raw = fam.moves[mv] ?? (id === 'sword' ? ACTIONS[mv] : null); // the sword is the original moveset
         if (!raw?.hit) continue;
         const d = resolveAction(raw, !!raw.clip && P.char.has(raw.clip));
         const speed = (w.stats.speed ?? 1) * (raw.clip && P.char.has(raw.clip) ? d.clipTiming?.speed ?? raw.clipTiming?.speed ?? 1 : 1);

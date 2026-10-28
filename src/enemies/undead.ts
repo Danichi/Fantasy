@@ -27,30 +27,15 @@ export type UndeadKind = 'zombie' | 'skeleton';
 
 interface Stats {
   hp: number;
+  /** damage of a blow (each move scales it: combat/ai.ts MOVESETS) */
   damage: number;
-  poise: number;
   speed: number;
-  /** stagger threshold per hit */
-  staggerPoise: number;
   rise: number; // seconds to climb out
-  swings: { clip: string; speed: number; hitFrom: number; hitTo: number; lunge: number }[];
 }
 
 const STATS: Record<UndeadKind, Stats> = {
-  zombie: {
-    hp: 78, damage: 14, poise: 24, speed: 1.45, staggerPoise: 18, rise: 2.6,
-    swings: [
-      { clip: 'attack_light_2', speed: 0.85, hitFrom: 0.34, hitTo: 0.56, lunge: 1.4 },
-      { clip: 'attack_light_1', speed: 0.9, hitFrom: 0.5, hitTo: 0.74, lunge: 1.6 },
-    ],
-  },
-  skeleton: {
-    hp: 66, damage: 16, poise: 30, speed: 2.35, staggerPoise: 24, rise: 1.9,
-    swings: [
-      { clip: 'attack_light_1', speed: 1.1, hitFrom: 0.5, hitTo: 0.72, lunge: 2.2 },
-      { clip: 'attack_heavy', speed: 1.0, hitFrom: 0.55, hitTo: 0.95, lunge: 2.6 },
-    ],
-  },
+  zombie: { hp: 78, damage: 14, speed: 1.45, rise: 2.6 },
+  skeleton: { hp: 66, damage: 16, speed: 2.35, rise: 1.9 },
 };
 
 const ZOMBIE_URL = '/assets/gravewood/gwZombie.glb';

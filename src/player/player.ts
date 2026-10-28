@@ -594,7 +594,8 @@ export class Player {
       this.finTarget = fin;
       return 'finisher';
     }
-    if (this.blocking) return this.blockHitT < 0.7 ? 'guardCounter' : this.equip.hasShield ? 'shieldBash' : 'slash1';
+    // From behind a raised guard: a counter right after it took a blow, else the first cut (the bash is on G).
+    if (this.blocking && this.blockHitT < 0.7) return 'guardCounter';
     const lk = this.lock;
     if (lk?.alive && this.moveIntent.lengthSq() > 0.25) {
       const to = lk.position.clone().sub(this.pos).setY(0).normalize();
