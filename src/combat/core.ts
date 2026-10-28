@@ -362,6 +362,14 @@ export function strike(t: Target, s: StrikeSpec): StrikeResult {
   return { damage, crit: !!reason, reason, react, broke, killed, armour, typeMult };
 }
 
+/**
+ * How a blow moved its target. Blows through strike() say so; a blow that skips
+ * the core (afflictions, older code, tests) is read from its poise the old way.
+ */
+export function reactOf(h: { react?: Reaction; poise: number }, threshold = 30): Reaction {
+  return h.react ?? (h.poise >= threshold * 2.5 ? 'knockdown' : h.poise >= threshold ? 'stagger' : 'none');
+}
+
 /** A broken (or downed, riposte-open) enemy in front of the player: a finisher is on. */
 export function finisherOpen(t: Target) {
   return t.alive && (combat.broken(t) || t.stunned);

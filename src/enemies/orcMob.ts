@@ -1,3 +1,4 @@
+import { reactOf } from '../combat/core';
 import * as THREE from 'three';
 import { ignoresPlayer } from '../origins/stealth';
 import RAPIER from '@dimforge/rapier3d-compat';
@@ -144,10 +145,11 @@ export class OrcMob implements Target {
     }
     this.brain.onHurt(h);
     // Staggered only when the blow got through its poise (combat/core.ts).
-    if (h.react && h.react !== 'none') {
+    const react = reactOf(h, 18);
+    if (react !== 'none') {
       this.setState('hurt');
       const back = h.dir.clone().setY(0).normalize();
-      const k = h.react === 'knockdown' ? 4.5 : 3.5;
+      const k = react === 'knockdown' ? 4.5 : 3.5;
       this.vel.set(back.x * k, 3.4, back.z * k);
       this.fx.sparks(this.center, back);
     }

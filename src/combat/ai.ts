@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { dampAngle, segmentPointDistance } from '../core/math';
-import { combat, combatOf, type AttackKind } from './core';
+import { combat, combatOf, reactOf, type AttackKind } from './core';
 import { targets, type HitInfo, type IncomingAttack, type Target } from './targets';
 import type { Player } from '../player/player';
 
@@ -223,7 +223,7 @@ export class HumanoidBrain {
 
   /** A blow got through (the class calls this from takeHit). */
   onHurt(h: HitInfo) {
-    if (h.react && h.react !== 'none') {
+    if (reactOf(h) !== 'none') {
       this.interrupt();
       return;
     }

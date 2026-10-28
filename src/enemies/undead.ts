@@ -1,3 +1,4 @@
+import { reactOf } from '../combat/core';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -404,11 +405,12 @@ export class Undead implements Target {
     if (this.hp <= 0) return this.die();
     this.brain.onHurt(h);
     // Staggered only when the blow got through its poise (combat/core.ts).
-    if (!blocked && h.react && h.react !== 'none') {
+    const react = reactOf(h, 20);
+    if (!blocked && react !== 'none') {
       this.setState('hurt');
       const back = h.dir.clone().setY(0).normalize();
-      const k = h.react === 'knockdown' ? 4.5 : 3;
-      this.vel.set(back.x * k, h.react === 'knockdown' ? 3.2 : 2.2, back.z * k);
+      const k = react === 'knockdown' ? 4.5 : 3;
+      this.vel.set(back.x * k, react === 'knockdown' ? 3.2 : 2.2, back.z * k);
     }
   }
 

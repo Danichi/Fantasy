@@ -1,3 +1,4 @@
+import { reactOf } from '../combat/core';
 import * as THREE from 'three';
 import { ignoresPlayer } from '../origins/stealth';
 import RAPIER from '@dimforge/rapier3d-compat';
@@ -223,10 +224,11 @@ export class Bandit implements Target {
     }
     this.brain.onHurt(h);
     // Staggered only when the blow got through its poise (combat/core.ts).
-    if (h.react && h.react !== 'none') {
+    const react = reactOf(h, 30);
+    if (react !== 'none') {
       this.state = 'hurt';
       this.st = 0;
-      const k = h.react === 'knockdown' ? 4.5 : 3;
+      const k = react === 'knockdown' ? 4.5 : 3;
       this.vel.set(h.dir.x * k, 1.5, h.dir.z * k);
       this.play('hit', true);
     }
