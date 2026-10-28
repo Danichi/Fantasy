@@ -5,6 +5,7 @@ import { physics } from '../physics/physics';
 import { targets, hurtSegment, type Target } from '../combat/targets';
 import { segmentPointDistance } from '../core/math';
 import { events } from '../core/events';
+import { strike } from '../combat/core';
 import { Q } from '../core/settings';
 import type { Player } from '../player/player';
 import { ITEMS } from '../items/itemDefs';
@@ -170,16 +171,16 @@ export class Spells {
       if (t !== direct && d > splash + t.radius) continue;
       if (t !== direct && !physics.lineOfSight(at, t.center, t.radius * 0.5)) continue; // splash doesn't pass through walls
       const k = t === direct ? 1 : Math.max(0.25, 1 - d / (splash + t.radius));
-      const dmg = Math.round(fb.damage * k * (0.9 + Math.random() * 0.2) * (t.stunned ? 2 : 1));
       const dir = t.position.clone().sub(at).setY(0);
       if (dir.lengthSq() < 1e-4) dir.copy(fb.vel).setY(0);
       dir.normalize();
       if (fb.hooks?.strike) {
-        fb.hooks.strike(t, dmg, dir);
+        fb.hooks.strike(t, Math.round(fb.damage * k * (0.9 + Math.random() * 0.2) * (t.stunned ? 2 : 1)), dir);
         continue;
       }
-      t.takeHit({ damage: dmg, poise: 60, dir, at: t.center.clone(), crit: false, source: 'spell' });
-      events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: false, enemyId: t.id });
+      // Fire, through the combat core: wood and slime burn, stone shrugs it off; splash never crits.
+      const r = strike(t, { base: fb.damage * k, type: 'fire', poise: t === direct ? 60 : 30, from: t.position.clone().sub(dir), at: t.center.clone(), source: 'spell', noCrit: t !== direct });
+      events.emit('enemyHit', { at: t.center.clone(), amount: r.damage, crit: r.crit, enemyId: t.id });
     }
     const fx = this.fx;
     // Hot core flash, then a wide fire burst.

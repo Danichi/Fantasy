@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Character } from '../player/character';
@@ -144,7 +145,7 @@ export class OrcWarlord implements Target {
   private mt = 0; // time inside the current move (clip seconds)
   private hitDone = new Set<number>();
   private bladePrev: [THREE.Vector3, THREE.Vector3] | null = null;
-  private yaw = 0;
+  yaw = 0;
   private yawVel = 0;
   private vel = new THREE.Vector3();
   private leapFrom = new THREE.Vector3();
@@ -394,6 +395,13 @@ export class OrcWarlord implements Target {
     }
   }
 
+  /** own stagger meter, a boss's posture (combat/core.ts) */
+  readonly ownPoise = true;
+  readonly boss = true;
+  onBreak(sec: number) {
+    this.stagger(sec);
+  }
+
   private stagger(dur: number) {
     this.move = null;
     this.arrowNocked.visible = false;
@@ -414,6 +422,9 @@ export class OrcWarlord implements Target {
   }
 
   private setState(s: State) {
+    // Its tell (combat/core.ts): the colour says how to answer it; a blow now is a counter-hit.
+    const tell = ({ attack: ['normal', 0.5, 0] } as Partial<Record<State, [AttackKind, number, number]>>)[s];
+    if (tell && this.alive) combat.windup(this, tell[1], tell[0], tell[2]);
     this.state = s;
     this.st = 0;
   }

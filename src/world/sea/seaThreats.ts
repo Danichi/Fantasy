@@ -301,7 +301,7 @@ export class SeaSerpent implements Target, SeaTarget {
   private segs: THREE.Mesh[] = [];
   private head: THREE.Group;
   private trail: THREE.Vector3[] = [];
-  private yaw = 0;
+  yaw = 0;
   private st = 0;
   private circle = Math.random() * 6.28;
   private bit = false;
@@ -516,7 +516,7 @@ export class Shark implements Target, SeaTarget {
   position = new THREE.Vector3();
   pos = new THREE.Vector3();
   private group = new THREE.Group();
-  private yaw = Math.random() * 6.28;
+  yaw = Math.random() * 6.28;
   private circle = Math.random() * 6.28;
   private biteT = 6 + Math.random() * 4; // they circle a while first: time to swim for it
   private lunge = 0;

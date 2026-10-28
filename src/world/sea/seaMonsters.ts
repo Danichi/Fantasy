@@ -707,7 +707,7 @@ export class StormWyrm extends SeaBeast {
   private trail: THREE.Vector3[] = [];
   private body: Part;
   private ang = 0;
-  private yaw = 0;
+  yaw = 0;
   private flash: THREE.Line | null = null;
   private hitDeck = false;
 
@@ -894,7 +894,7 @@ export class OldTeeth extends SeaBeast {
   private st = 0;
   private body: Part;
   private fish = new THREE.Group();
-  private yaw = 0;
+  yaw = 0;
   private ang = 0;
   private rammed = false;
 
@@ -1040,7 +1040,7 @@ export class Leviathan extends SeaBeast {
   private body = new THREE.Group();
   private barbs: { part: Part; mesh: THREE.Mesh; local: THREE.Vector3 }[] = [];
   private ang = 0;
-  private yaw = 0;
+  yaw = 0;
   private breachT = 14;
   /** a rogue wave from a breach (Sailing throws the ship with it) */
   onBreach?: (dir: THREE.Vector2, size: number) => void;

@@ -4,6 +4,7 @@ import { events } from '../core/events';
 import { baseMods, type CombatMods } from '../combat/mods';
 import { targets, type Target, type IncomingAttack, type DefenceResult } from '../combat/targets';
 import { physics } from '../physics/physics';
+import { strike, type DmgType } from '../combat/core';
 import type { FX } from '../fx/particles';
 import type { Player } from '../player/player';
 import type { Spells } from '../magic/spells';
@@ -93,6 +94,8 @@ export interface HitOpts {
   noVerdict?: boolean;
   /** already shared through Chains of Dawn */
   chained?: boolean;
+  /** damage type (default: fire if fire, the weapon's for melee, arcane for spells) */
+  type?: DmgType;
 }
 interface Buff { left: number; v?: number }
 
@@ -271,10 +274,13 @@ export class SkillRuntime {
     if (!t.alive || amount <= 0) return 0;
     const dir = o.dir ?? t.position.clone().sub(this.player.pos).setY(0).normalize();
     if (dir.lengthSq() < 1e-4) dir.copy(this.player.forward);
-    const dmg = Math.max(1, Math.round(amount * this.targetMult(t, o.fire) * (o.crit ? 2 : 1) * (0.92 + Math.random() * 0.16)));
-    if (o.stun) t.stunned = true;
-    t.takeHit({ damage: dmg, poise: (o.poise ?? 20) * this.player.mods.poise, dir, at: t.center.clone(), crit: !!o.crit, source: o.source ?? 'spell' });
-    events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: !!o.crit, enemyId: t.id });
+    // Through the combat core (combat/core.ts): damage type, play-made crits, posture and stagger.
+    const src = o.source ?? 'spell';
+    const type: DmgType = o.type ?? (o.fire ? 'fire' : src === 'melee' ? this.player.weaponDmgType() : 'arcane');
+    const r = strike(t, { base: amount * this.targetMult(t, o.fire), type, poise: (o.poise ?? 20) * this.player.mods.poise, from: this.player.pos.clone().sub(dir), source: src, forceCrit: !!o.crit, noCrit: !!o.chained, keen: this.player.mods.crit });
+    const dmg = r.damage;
+    if (o.stun && t.alive) t.stunned = true;
+    events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: r.crit, enemyId: t.id });
     if (!o.noVerdict) this.addVerdict(t);
     // Chains of Dawn: the others feel 30% of it.
     if (!o.chained && this.chain.includes(t)) {

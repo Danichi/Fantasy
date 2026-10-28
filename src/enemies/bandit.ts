@@ -8,6 +8,7 @@ import { newTargetId, targets, type HitInfo, type Target } from '../combat/targe
 import { buildCharacter, type Look, type BuiltCharacter } from '../npc/charBuilder';
 import { buildSword } from '../items/weaponModels';
 import type { Player } from '../player/player';
+import { HumanoidBrain, ARCHETYPES, UAL_MOVES } from '../combat/ai';
 
 // Road bandits (World Expansion phase 4): humans built from the character
 // kit, animated with the Universal Animation Library. Swordsmen close in and
@@ -84,7 +85,7 @@ export class Bolts {
   }
 }
 
-type State = 'idle' | 'patrol' | 'chase' | 'aim' | 'windup' | 'attack' | 'hurt' | 'dying';
+type State = 'idle' | 'patrol' | 'chase' | 'aim' | 'attack' | 'hurt' | 'dying';
 
 export class Bandit implements Target {
   id = newTargetId();
@@ -104,17 +105,21 @@ export class Bandit implements Target {
   private built: BuiltCharacter | null = null;
   private actions: Record<string, THREE.AnimationAction> = {};
   private clip = '';
-  private yaw = Math.random() * 6.28;
+  yaw = Math.random() * 6.28;
   private state: State = 'idle';
   private st = 0;
   private cooldown = 1 + Math.random();
-  private vel = new THREE.Vector3();
-  private grounded = false;
+  vel = new THREE.Vector3();
+  grounded = false;
+  /** swordsmen fight with the shared brain (combat/ai.ts): grunts close in, skirmishers circle for your back */
+  readonly brain: HumanoidBrain;
   private hitDone = false;
   private rb: RAPIER.RigidBody;
   private col: RAPIER.Collider;
   private kcc: RAPIER.KinematicCharacterController;
   private patrolTarget: THREE.Vector3;
+  /** posture (combat/core.ts): the drill yard softens it */
+  postureMax?: number;
   /** sparring: never drops below 1 hp */
   nonLethal = false;
   /** melee damage per landed swing, and a cooldown multiplier (sparring ladder tuning) */
@@ -139,6 +144,20 @@ export class Bandit implements Target {
     this.maxHp = this.hp = role === 'chief' ? 420 : role === 'crossbow' ? 80 : 110;
     this.position.copy(at);
     this.patrolTarget = at.clone();
+    const arch = this.id % 3 === 0 ? ARCHETYPES.skirmisher : ARCHETYPES.grunt;
+    this.brain = new HumanoidBrain(this, { ...arch, run: 4.1 }, UAL_MOVES, {
+      damage: () => this.hitDamage,
+      duration: (c) => this.actions[c]?.getClip().duration ?? 1.5,
+      onParried: () => {
+        this.stunned = true;
+        this.state = 'hurt';
+        this.st = 0;
+        this.daze = 2.0; // reeling: wide open to a riposte
+        this.play('hit', true);
+        const d = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+        this.vel.set(-d.x * 3, 2, -d.z * 3);
+      },
+    });
     scene.add(this.group);
     this.rb = physics.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(at.x, at.y + 0.9, at.z));
     this.col = physics.world.createCollider(RAPIER.ColliderDesc.capsule(0.5, 0.36).setCollisionGroups(groups(G_ENEMY, 0)), this.rb);
@@ -202,13 +221,24 @@ export class Bandit implements Target {
       events.emit('enemyDied', { at: this.center.clone(), enemyId: this.id, kind: this.kind });
       return;
     }
-    // Chiefs shrug off light hits; everyone else flinches.
-    if (this.role !== 'chief' || h.poise > 30) {
+    this.brain.onHurt(h);
+    // Staggered only when the blow got through its poise (combat/core.ts).
+    if (h.react && h.react !== 'none') {
       this.state = 'hurt';
       this.st = 0;
-      this.vel.set(h.dir.x * 3, 1.5, h.dir.z * 3);
+      const k = h.react === 'knockdown' ? 4.5 : 3;
+      this.vel.set(h.dir.x * k, 1.5, h.dir.z * k);
       this.play('hit', true);
     }
+  }
+
+  /** Posture broken: reel, open to a finisher (combat/core.ts). */
+  onBreak(sec: number) {
+    this.brain.interrupt();
+    this.state = 'hurt';
+    this.st = 0;
+    this.daze = sec;
+    this.play('hit', true, 0.4);
   }
 
   update(dt: number, player: Player) {
@@ -253,16 +283,19 @@ export class Bandit implements Target {
         break;
       }
       case 'chase':
-        this.yaw = dampAngle(this.yaw, wantYaw, 9, dt);
-        if (!aware) (this.state = 'patrol'), (this.st = 0);
-        else if (dist < 2.2 && this.cooldown <= 0) {
-          this.state = 'windup';
+        if (!aware && !this.brain.attacking) {
+          this.brain.interrupt();
+          this.state = 'patrol';
           this.st = 0;
-          this.play('sword_attack', true, 1.15);
-        } else if (dist > 1.8) {
-          speed = 4.1;
-          this.play('jog');
-        } else this.play('sword_idle');
+          break;
+        }
+        // The brain moves it and picks its swings (combat/ai.ts); here only the look.
+        this.brain.paceK = this.pace;
+        this.brain.update(dt, player);
+        if (this.brain.clip) this.showClip(this.brain.clip, this.brain.mt);
+        else if (Math.hypot(this.vel.x, this.vel.z) > 2.4) this.play('jog');
+        else if (Math.hypot(this.vel.x, this.vel.z) > 0.5) this.play('walk');
+        else this.play('sword_idle');
         break;
       case 'aim':
         this.yaw = dampAngle(this.yaw, wantYaw, 7, dt);
@@ -276,22 +309,18 @@ export class Bandit implements Target {
           this.play('jog');
         } else {
           this.play('bow_aim');
+          // Reloading: sidestep so you can't simply walk up the line of fire.
+          if (this.cooldown > 0.4) {
+            const side = Math.sin(this.id * 1.7 + this.st * 0.6) > 0 ? 1 : -1;
+            this.vel.x = Math.cos(this.yaw) * 1.6 * side;
+            this.vel.z = -Math.sin(this.yaw) * 1.6 * side;
+          }
           if (this.cooldown <= 0 && this.st > 0.9) {
             this.state = 'attack';
             this.st = 0;
             this.hitDone = false;
             this.play('bow_shoot', true);
           }
-        }
-        break;
-      case 'windup':
-        this.yaw = dampAngle(this.yaw, wantYaw, 10, dt);
-        if (this.st > 0.35) {
-          this.state = 'attack';
-          this.st = 0;
-          this.hitDone = false;
-          const d = to.setY(0).normalize();
-          this.vel.set(d.x * 3.2, 0, d.z * 3.2);
         }
         break;
       case 'attack':
@@ -308,13 +337,6 @@ export class Bandit implements Target {
             this.state = 'aim';
             this.st = 0;
           }
-        } else {
-          if (!this.hitDone && this.st > 0.12) this.checkHit(player);
-          if (this.st > 0.55) {
-            this.cooldown = (1.1 + Math.random() * 0.8) * this.pace;
-            this.state = 'chase';
-            this.st = 0;
-          }
         }
         break;
       case 'hurt':
@@ -328,7 +350,7 @@ export class Bandit implements Target {
     if (speed !== 0) {
       this.vel.x = Math.sin(this.yaw) * speed;
       this.vel.z = Math.cos(this.yaw) * speed;
-    } else if (this.state !== 'attack' && this.state !== 'hurt') {
+    } else if (this.state !== 'attack' && this.state !== 'hurt' && this.state !== 'chase') {
       this.vel.x *= Math.exp(-10 * dt);
       this.vel.z *= Math.exp(-10 * dt);
     } else {
@@ -348,31 +370,18 @@ export class Bandit implements Target {
     this.sync();
   }
 
-  private checkHit(player: Player) {
-    const a = player.pos.clone().setY(player.pos.y + 0.35);
-    const b = player.pos.clone().setY(player.pos.y + 1.5);
-    if (segmentPointDistance(a, b, this.center) > 1.45) return;
-    this.hitDone = true;
-    const dir = this.position.clone().sub(player.pos).setY(0).normalize();
-    player.receiveAttack({
-      damage: this.hitDamage,
-      from: this.position.clone(),
-      parryable: true,
-      poise: 26,
-      onParried: () => {
-        this.stunned = true;
-        this.state = 'hurt';
-        this.st = 0;
-        this.daze = 2.0; // reeling: wide open to a riposte
-        this.play('hit', true);
-        this.vel.set(-dir.x * 3, 2, -dir.z * 3);
-      },
-    });
+  /** Show a clip at a given time (the brain times its swings in clip seconds). */
+  private showClip(name: string, t: number) {
+    const a = this.actions[name];
+    if (!a) return;
+    if (this.clip !== name) this.play(name, true, 0);
+    a.time = Math.min(t, a.getClip().duration - 0.01);
   }
 
   private sync() {
     this.group.position.copy(this.position);
-    this.group.rotation.y = this.yaw;
+    this.group.position.y += this.brain?.hop ?? 0;
+    this.group.rotation.y = this.yaw + (this.brain?.spin ?? 0);
     this.center.set(this.position.x, this.position.y + 1.0, this.position.z);
   }
 

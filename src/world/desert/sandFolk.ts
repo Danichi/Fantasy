@@ -24,7 +24,7 @@ export class Scrapshell extends Beastie {
   private claw = new THREE.Group();
   private small = new THREE.Group();
   private legs: THREE.Mesh[] = [];
-  private yaw = Math.random() * 6.28;
+  yaw = Math.random() * 6.28;
   private mode: 'idle' | 'chase' | 'snap' | 'guard' | 'back' = 'idle';
   private hitDone = false;
   private cool = 1;
@@ -196,7 +196,7 @@ export class DuneAngler extends Beastie {
   private lureMat: THREE.MeshStandardMaterial;
   private mode: 'lurk' | 'rise' | 'bite' | 'out' | 'sink' = 'lurk';
   private out = 0;
-  private yaw = Math.random() * 6.28;
+  yaw = Math.random() * 6.28;
   private hitDone = false;
   constructor(home: THREE.Vector3, scene: THREE.Scene, fx: FX) {
     super(home, scene, fx);

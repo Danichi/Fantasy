@@ -78,6 +78,16 @@ class Dummy implements Target {
   maxHp = 9999;
   radius = 0.34;
   halfHeight = 0.45;
+  /** posture to break and poise to stagger (combat/core.ts): practise finishers on straw */
+  postureMax = 90;
+  poiseMax = 30;
+  yaw: number;
+  armour = 'wood' as const;
+  /** slumped on its post after a posture break */
+  private sag = 0;
+  onBreak(sec: number) {
+    this.sag = sec;
+  }
   position: THREE.Vector3;
   center: THREE.Vector3;
   private tilt = new THREE.Vector2();
@@ -86,6 +96,7 @@ class Dummy implements Target {
 
   constructor(at: THREE.Vector3, yaw: number, scene: THREE.Scene, mats: { wood: THREE.Material; straw: THREE.Material; burlap: THREE.Material; rope: THREE.Material }) {
     this.position = at.clone();
+    this.yaw = yaw;
     this.center = at.clone().add(new THREE.Vector3(0, 1.3, 0));
     const g = new THREE.Group();
     g.position.copy(at);
@@ -131,7 +142,9 @@ class Dummy implements Target {
   }
 
   update(dt: number) {
-    // Damped spring back to upright.
+    // Damped spring back to upright (slumped forward while its posture is broken).
+    this.sag = Math.max(0, this.sag - dt);
+    if (this.sag > 0) this.tiltV.x += (0.5 - this.tilt.x) * 30 * dt;
     this.tiltV.addScaledVector(this.tilt, -60 * dt).multiplyScalar(Math.exp(-3.5 * dt));
     this.tilt.addScaledVector(this.tiltV, dt);
     this.pivot.rotation.set(this.tilt.x, 0, this.tilt.y);

@@ -2,22 +2,21 @@ import * as THREE from 'three';
 import { ignoresPlayer } from '../origins/stealth';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
-import { clamp, dampAngle, segmentPointDistance } from '../core/math';
+import { clamp } from '../core/math';
 import { events } from '../core/events';
 import { newTargetId, targets, type HitInfo, type Target } from '../combat/targets';
 import { Character } from '../player/character';
 import { Animator } from '../player/animator';
 import type { Player } from '../player/player';
 import type { FX } from '../fx/particles';
+import { HumanoidBrain, ARCHETYPES, MOVESETS } from '../combat/ai';
 
 // The Orc Warrior model is skinned to the hero's skeleton (tools/rig-orcs.mjs),
 // so the crypt's orcs walk, swing, flinch and fall with the hero's mocap.
 const MODEL_URL = '/assets/npc/orcWarrior.glb';
 const HEIGHT = 1.75;
 const GRAV = 20;
-const CLIPS = ['idle', 'walk', 'run', 'walk_back', 'run_back', 'strafe_l', 'strafe_r', 'attack_light_1', 'hit_react', 'death'];
-/** The swing, timed in clip seconds (the hero's light attack: slash1 clipTiming). */
-const SWING = { clip: 'attack_light_1', speed: 1.1, hitFrom: 0.5, hitTo: 0.72, lungeFrom: 0.3, lungeTo: 0.62 };
+const CLIPS = ['idle', 'walk', 'run', 'walk_back', 'run_back', 'strafe_l', 'strafe_r', 'attack_light_1', 'attack_light_2', 'attack_light_3', 'attack_heavy', 'attack_leap', 'skill_spin', 'kick', 'guard_break', 'hit_react', 'death'];
 const HURT = 0.55; // seconds of flinch
 const PARRY_DAZE = 2.2; // seconds reeling after a parry
 const DEATH_CLIP = 2.2; // seconds of the death clip to play before sinking away
@@ -75,14 +74,14 @@ export class OrcMob implements Target {
   center = new THREE.Vector3();
   readonly group = new THREE.Group();
 
-  private state: 'idle' | 'chase' | 'attack' | 'hurt' | 'dying' = 'idle';
+  private state: 'idle' | 'chase' | 'hurt' | 'dying' = 'idle';
   private st = 0;
-  private cooldown = 0;
   private deathT = 0;
-  private hitDone = false;
-  private vel = new THREE.Vector3();
-  private yaw = Math.random() * Math.PI * 2;
-  private grounded = true;
+  vel = new THREE.Vector3();
+  yaw = Math.random() * Math.PI * 2;
+  grounded = true;
+  /** a brute (combat/ai.ts): heavy chops, leaping slams, a whirl, kicks and grabs */
+  readonly brain: HumanoidBrain;
   private rb: RAPIER.RigidBody;
   private col: RAPIER.Collider;
   private kcc: RAPIER.KinematicCharacterController;
@@ -91,6 +90,20 @@ export class OrcMob implements Target {
 
   constructor(at: THREE.Vector3, private scene: THREE.Scene, private fx: FX) {
     this.position.copy(at);
+    this.brain = new HumanoidBrain(this, { ...ARCHETYPES.brute, run: 3.2 }, MOVESETS.orc, {
+      damage: () => 17,
+      duration: (c) => this.anim?.duration(c) || 1.5,
+      onParried: () => {
+        this.stunned = true;
+        this.daze = PARRY_DAZE;
+        this.setState('hurt');
+        const d = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+        this.vel.set(-d.x * 4, 3.5, -d.z * 4);
+      },
+      onBlow: (_m, res) => {
+        if (res === 'blocked' || res === 'guardBroken') this.fx.sparks(this.center.clone().add(new THREE.Vector3(Math.sin(this.yaw), 0.2, Math.cos(this.yaw)).multiplyScalar(0.8)));
+      },
+    });
     const fallback = fallbackOrcMob();
     this.group.add(fallback);
     scene.add(this.group);
@@ -129,13 +142,22 @@ export class OrcMob implements Target {
       this.die();
       return;
     }
-    if (h.source === 'spell' || h.poise >= 18) {
-      this.stunned = true;
+    this.brain.onHurt(h);
+    // Staggered only when the blow got through its poise (combat/core.ts).
+    if (h.react && h.react !== 'none') {
       this.setState('hurt');
       const back = h.dir.clone().setY(0).normalize();
-      this.vel.set(back.x * 3.5, 3.4, back.z * 3.5);
+      const k = h.react === 'knockdown' ? 4.5 : 3.5;
+      this.vel.set(back.x * k, 3.4, back.z * k);
       this.fx.sparks(this.center, back);
     }
+  }
+
+  /** Posture broken: reel, open to a finisher (combat/core.ts). */
+  onBreak(sec: number) {
+    this.brain.interrupt();
+    this.setState('hurt');
+    this.daze = sec;
   }
 
   private die() {
@@ -158,7 +180,6 @@ export class OrcMob implements Target {
 
   update(dt: number, player: Player) {
     this.st += dt;
-    this.cooldown -= dt;
     this.daze = Math.max(0, this.daze - dt);
 
     if (this.state === 'dying') {
@@ -172,39 +193,16 @@ export class OrcMob implements Target {
     const to = player.pos.clone().sub(this.position);
     const dist = Math.hypot(to.x, to.z);
     const aware = !player.dead && !ignoresPlayer(this) && dist < 15;
-    const wantYaw = Math.atan2(to.x, to.z);
-    const fwd = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
 
     if (this.state === 'idle') {
       this.vel.x *= Math.exp(-10 * dt);
       this.vel.z *= Math.exp(-10 * dt);
       if (aware) this.setState('chase');
     } else if (this.state === 'chase') {
-      this.yaw = dampAngle(this.yaw, wantYaw, 8, dt);
-      if (!aware) this.setState('idle');
-      else if (this.grounded && dist < 2.1 && this.cooldown <= 0) {
-        this.hitDone = false;
-        this.setState('attack');
-      } else if (this.grounded) {
-        const dir = to.setY(0).normalize();
-        const speed = 1.45;
-        this.vel.x = dir.x * speed;
-        this.vel.z = dir.z * speed;
-      }
-    } else if (this.state === 'attack') {
-      const t = this.st * SWING.speed; // clip seconds
-      // Track the player through the windup, then commit to the swing.
-      if (t < SWING.lungeFrom) this.yaw = dampAngle(this.yaw, wantYaw, 10, dt);
-      const lunge = t > SWING.lungeFrom && t < SWING.lungeTo ? 2.2 : 0;
-      const k = Math.exp(-14 * dt);
-      this.vel.x = this.vel.x * k + fwd.x * lunge * (1 - k);
-      this.vel.z = this.vel.z * k + fwd.z * lunge * (1 - k);
-      if (!this.hitDone && t >= SWING.hitFrom && t <= SWING.hitTo) this.checkHit(player);
-      const dur = this.anim?.duration(SWING.clip) || 1.5;
-      if (t > dur - 0.15) {
-        this.cooldown = 1.0 + Math.random() * 0.8;
-        this.setState('chase');
-      }
+      if (!aware && !this.brain.attacking) {
+        this.brain.interrupt();
+        this.setState('idle');
+      } else if (this.grounded) this.brain.update(dt, player);
     } else if (this.state === 'hurt') {
       this.vel.x *= Math.exp(-8 * dt);
       this.vel.z *= Math.exp(-8 * dt);
@@ -236,7 +234,8 @@ export class OrcMob implements Target {
     if (!anim) return;
     const s = this.state;
     if (s === 'dying') anim.setFull('death', Math.min(this.deathT, DEATH_CLIP), 0.15);
-    else if (s === 'attack') anim.setFull(SWING.clip, this.st * SWING.speed, 0.12, 0.25);
+    else if (this.brain.clip) anim.setFull(this.brain.clip, this.brain.mt, 0.12, 0.25);
+    else if (s === 'hurt' && this.daze > 0.6 && !this.stunned) anim.setFull('guard_break', Math.min(0.6, this.st), 0.1, 0.2); // posture broken
     else if (s === 'hurt') anim.setFull('hit_react', this.st * 1.1, 0.08, 0.2);
     else anim.setFull(null, 0);
     const c = Math.cos(-this.yaw), sn = Math.sin(-this.yaw);
@@ -244,31 +243,10 @@ export class OrcMob implements Target {
     anim.update(dt, { local, grounded: this.grounded });
   }
 
-  private checkHit(player: Player) {
-    const a = player.pos.clone().setY(player.pos.y + 0.35);
-    const b = player.pos.clone().setY(player.pos.y + 1.45);
-    // Reach: a point in front of the orc at chest height.
-    const reach = this.center.clone().add(new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(0.9));
-    if (segmentPointDistance(a, b, reach) > 1.0) return;
-    this.hitDone = true;
-    const dir = this.position.clone().sub(player.pos).setY(0).normalize();
-    player.receiveAttack({
-      damage: 17,
-      from: this.position.clone(),
-      parryable: true,
-      poise: 28,
-      onParried: () => {
-        this.stunned = true;
-        this.daze = PARRY_DAZE;
-        this.setState('hurt');
-        this.vel.set(-dir.x * 4, 3.5, -dir.z * 4);
-      },
-    });
-  }
-
   private syncVisual() {
     this.group.position.copy(this.position);
-    this.group.rotation.y = this.yaw;
+    this.group.position.y += this.brain?.hop ?? 0;
+    this.group.rotation.y = this.yaw + (this.brain?.spin ?? 0);
     this.center.set(this.position.x, this.position.y + 0.8, this.position.z);
   }
 

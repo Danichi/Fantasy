@@ -1,5 +1,7 @@
 import { DISCIPLINES } from '../paths/data';
 import * as THREE from 'three';
+import { peekCombat } from '../combat/core';
+import type { Target } from '../combat/targets';
 import type { Player } from '../player/player';
 import { targets } from '../combat/targets';
 import { events } from '../core/events';
@@ -37,7 +39,12 @@ export class HUD {
   /** which set the number keys use */
   mode: 'items' | 'moves' = 'items';
   private reticle: HTMLDivElement;
-  private ehp = new Map<number, { e: HTMLDivElement; i: HTMLElement; b: HTMLElement; shown: number; trail: number }>();
+  private ehp = new Map<number, { e: HTMLDivElement; i: HTMLElement; b: HTMLElement; p: HTMLElement; shown: number; trail: number }>();
+  /** enemy tells over their heads (combat/core.ts), and the last blow on each enemy (for the damage numbers) */
+  private tells: { t: Target; e: HTMLDivElement; left: number }[] = [];
+  private lastStrike = new Map<number, { at: number; typeMult: number; reason?: string; shown: boolean }>();
+  /** floating damage numbers (a setting: the pause screen toggles it) */
+  damageNumbers = readDamageNumbers();
   private toastEl: HTMLDivElement;
   private toastT = 0;
   private banner: HTMLDivElement;
@@ -128,7 +135,7 @@ export class HUD {
     this.promptEl = el('div', 'prompt', this.root);
     // The boss bar sits at the top centre, under the compass: a brass-framed
     // bar under a parchment name plate, with notches where its phases turn.
-    this.bossEl = el('div', 'bossbar', this.root, '<div class="bb-plate"><i class="bb-orn"></i><span class="nm"></span><i class="bb-orn r"></i></div><div class="bb"><b></b><i></i><span class="bb-notches"></span></div>');
+    this.bossEl = el('div', 'bossbar', this.root, '<div class="bb-plate"><i class="bb-orn"></i><span class="nm"></span><i class="bb-orn r"></i></div><div class="bb"><b></b><i></i><span class="bb-notches"></span></div><div class="bb-post"><i></i></div>');
     this.fadeEl = el('div', 'fade', this.root);
     this.levelEl = el('div', 'levelup', this.root);
     events.on('levelUp', ({ level }) => {
@@ -148,8 +155,15 @@ export class HUD {
       this.bars[stat === 'mana' ? 'mp' : 'st'].root.classList.add('flash');
     });
     events.on('needTarget', () => this.toast('Lock on to a target to cast this (middle mouse)'));
-    events.on('enemyHit', ({ at, amount, crit }) => this.damageNumber(at, amount, crit));
-    events.on('parrySuccess', () => this.showBanner('PARRIED'));
+    events.on('enemyHit', ({ at, amount, crit, enemyId }) => this.damageNumber(at, amount, crit, enemyId));
+    events.on('strike', ({ target, typeMult, reason }) => this.lastStrike.set(target.id, { at: performance.now(), typeMult, reason, shown: false }));
+    events.on('parrySuccess', ({ perfect }) => this.showBanner(perfect === false ? 'DEFLECTED' : 'PERFECT PARRY'));
+    events.on('telegraph', ({ target, kind, sec }) => {
+      // A tell over the enemy's head: white parry, gold heavy, red unblockable, yellow grab.
+      if (kind === 'normal' && target !== this.player.lock && target.center.distanceTo(this.player.center) > 6) return;
+      const e = el('div', 'tell ' + kind, this.root, kind === 'unblockable' ? '!' : kind === 'grab' ? '✋' : '');
+      this.tells.push({ t: target, e, left: Math.max(0.35, sec + 0.15) });
+    });
     events.on('blockImpact', ({ guardBroken }) => guardBroken && this.showBanner('GUARD BROKEN'));
     events.on('playerDamaged', () => {
       this.vignette.classList.add('hurt');
@@ -265,10 +279,22 @@ export class HUD {
     return { x: (this.tmp.x * 0.5 + 0.5) * window.innerWidth, y: (-this.tmp.y * 0.5 + 0.5) * window.innerHeight, on: onScreen };
   }
 
-  private damageNumber(at: THREE.Vector3, amount: number, crit: boolean) {
+  private lastNumber = { id: -1, amount: -1, at: 0 };
+  private damageNumber(at: THREE.Vector3, amount: number, crit: boolean, enemyId = -1) {
+    if (!this.damageNumbers) return;
+    // Some enemies report their own hits too: show each blow once.
+    const now = performance.now();
+    if (enemyId === this.lastNumber.id && amount === this.lastNumber.amount && now - this.lastNumber.at < 80) return;
+    this.lastNumber = { id: enemyId, amount, at: now };
     const p = this.project(at.clone().add(new THREE.Vector3(0, 0.4, 0)));
     if (!p.on) return;
-    const d = el('div', 'dmg' + (crit ? ' crit' : ''), this.root, String(amount));
+    // What the blow was: a backstab, a counter, the wrong weapon for this armour...
+    const ls = this.lastStrike.get(enemyId);
+    const fresh = ls && now - ls.at < 120 && !ls.shown;
+    if (ls && fresh) ls.shown = true;
+    const tag = fresh && ls.reason && ls.reason !== 'skill' ? `<small>${ls.reason.toUpperCase()}</small>` : '';
+    const feel = fresh ? (ls.typeMult >= 1.25 ? ' weak' : ls.typeMult <= 0.75 ? ' resist' : '') : '';
+    const d = el('div', 'dmg' + (crit ? ' crit' : '') + feel, this.root, tag + String(amount));
     d.style.left = `${p.x + (Math.random() - 0.5) * 30}px`;
     d.style.top = `${p.y}px`;
     setTimeout(() => d.remove(), 950);
@@ -398,8 +424,26 @@ export class HUD {
       // Notches the bar has dropped past darken.
       this.bossEl.querySelectorAll<HTMLElement>('.bb-notches u').forEach((u) => u.classList.toggle('past', parseFloat(u.style.left) / 100 >= f));
       this.bossOverlap(dt);
+      // The boss's posture.
+      const bst = peekCombat(this.boss);
+      const bpf = bst ? (bst.broken ? 1 : bst.frac) : 0;
+      const post = this.bossEl.querySelector('.bb-post') as HTMLElement;
+      post.classList.toggle('on', bpf > 0.02);
+      post.classList.toggle('broken', !!bst?.broken);
+      (post.querySelector('i') as HTMLElement).style.transform = `scaleX(${bpf})`;
       if (!this.boss.alive) this.bossBar(null);
     }
+
+    // Tells over enemies' heads.
+    for (const tl of this.tells) {
+      tl.left -= dt;
+      const s = this.project(tl.t.center.clone().add(new THREE.Vector3(0, (tl.t.halfHeight ?? 0.4) + tl.t.radius + 0.9, 0)));
+      tl.e.style.display = s.on && tl.t.alive ? 'block' : 'none';
+      tl.e.style.left = `${s.x}px`;
+      tl.e.style.top = `${s.y}px`;
+      if (tl.left <= 0 || !tl.t.alive) tl.e.remove();
+    }
+    this.tells = this.tells.filter((tl) => tl.left > 0 && tl.t.alive);
 
     // Lock-on reticle.
     const lock = p.lock;
@@ -424,7 +468,9 @@ export class HUD {
           const n = el('span', 'ehp-name', e);
           n.textContent = t.level ? `${t.label} · Lv ${t.level}` : t.label;
         }
-        h = { e, i, b, shown: 0, trail: 1 };
+        const pz = el('div', 'ehp-post', e);
+        const p = el('i', '', pz);
+        h = { e, i, b, p, shown: 0, trail: 1 };
         this.ehp.set(t.id, h);
       }
       const frac = Math.max(0, t.hp / t.maxHp);
@@ -439,6 +485,13 @@ export class HUD {
         h.e.style.top = `${s.y}px`;
         h.i.style.width = `${frac * 100}%`;
         h.b.style.width = `${h.trail * 100}%`;
+        // Posture under the health: fills toward a break, glows when broken.
+        const st = peekCombat(t);
+        const pf = st ? (st.broken ? 1 : st.frac) : 0;
+        h.e.classList.toggle('post-on', pf > 0.02);
+        h.e.classList.toggle('broken', !!st?.broken);
+        h.p.style.width = `${pf * 100}%`;
+        h.p.style.background = pf > 0.75 ? '#ff7a2a' : pf > 0.45 ? '#ffb340' : '#ffd98a';
       }
     }
     for (const [id, h] of this.ehp) {
@@ -452,5 +505,21 @@ export class HUD {
       this.toastT -= dt;
       if (this.toastT <= 0) this.toastEl.classList.remove('show');
     }
+  }
+}
+
+/** Damage numbers on or off (the pause screen's setting, remembered on this machine). */
+export function readDamageNumbers() {
+  try {
+    return localStorage.getItem('dmgNumbers') !== 'off';
+  } catch {
+    return true;
+  }
+}
+export function writeDamageNumbers(on: boolean) {
+  try {
+    localStorage.setItem('dmgNumbers', on ? 'on' : 'off');
+  } catch {
+    /* private window: it lasts this session */
   }
 }

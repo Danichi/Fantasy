@@ -12,7 +12,8 @@ import { physics, groups, G_PLAYER, STATIC_ONLY } from '../physics/physics';
 import { clamp, damp, wrapAngle, segmentSegmentDistance, smoothstep } from '../core/math';
 import { events } from '../core/events';
 import { Equipment } from '../items/equipment';
-import { ACTIONS, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, resolveAction, flairAt, type ActionDef } from '../combat/actions';
+import { ACTIONS, BRANCHES, STRING_BRANCH, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, resolveAction, flairAt, type ActionDef } from '../combat/actions';
+import { strike, combat, combatOf, finisherOpen, isBoss, FAMILY_DMG, type DmgType } from '../combat/core';
 import { targets, hurtSegment, type Target, type IncomingAttack, type DefenceResult } from '../combat/targets';
 import { surfaceAt, heightAt as heightAtGround } from '../world/terrain';
 import { waterDepthAt } from '../world/water';
@@ -23,6 +24,17 @@ import { Progression } from '../progression/progression';
 import { Paths } from '../paths/paths';
 import { baseMods, type CombatMods } from '../combat/mods';
 
+/** The enemy a blow most likely came from (attacks that don't name their attacker). */
+function nearestAttacker(from: THREE.Vector3): Target | undefined {
+  let best: Target | undefined, bd = 3.5;
+  for (const t of targets) {
+    if (!t.alive) continue;
+    const d = Math.hypot(t.position.x - from.x, t.position.z - from.z) - t.radius;
+    if (d < bd) (bd = d), (best = t);
+  }
+  return best;
+}
+
 const CAPSULE_HALF = 0.55;
 const CAPSULE_R = 0.32;
 const CENTER_Y = CAPSULE_HALF + CAPSULE_R;
@@ -31,7 +43,31 @@ const JUMP_V = 5.8;
 const BUFFER_TIME = 0.35;
 export const SIM_STEP = 1 / 60;
 
-type Buffered = 'attack' | 'offhand' | 'dodge' | 'parry' | 'cast' | 'originAbility';
+type Buffered = 'attack' | 'offhand' | 'dodge' | 'parry' | 'cast' | 'originAbility' | 'kick';
+
+// ---- combat rework: timing (seconds of action time) ----
+/** hold the button this long into a string's next cut for its heavy branch */
+const BRANCH_HOLD = 0.2;
+/** a press this long after the string window opens takes the delayed branch */
+const DELAY_GAP = 0.24;
+/** a blow that connects lets you cancel this much earlier; a whiff, this much later */
+const HIT_CONFIRM = 0.14;
+const WHIFF_LAG = 0.08;
+/** a parry this close to its first frame is perfect; later in the window it only deflects */
+const PERFECT_PARRY = 0.12;
+/** a blow that meets a dodge this soon into its i-frames is a perfect dodge */
+const PERFECT_DODGE = 0.16;
+/** after a perfect dodge, the next blow inside this many seconds is a counter */
+const COUNTER_WINDOW = 1.1;
+/** a heavy released this soon after reaching full charge lands on the beat */
+const PERFECT_RELEASE = 0.16;
+/** charge (seconds held) for each tier, and what each tier is worth */
+const CHARGE_TIERS = [0, 0.25, 0.55, 0.9];
+const TIER_DMG = [1, 1.2, 1.45, 1.75];
+/** blows the player can't be staggered out of */
+const HYPER = new Set(['heavy', 'airAttack', 'link3', 'finisher', 'guardCounter']);
+/** hit-stop per weapon family (heavier weapons bite longer) */
+const WEIGHT_STOP: Record<string, number> = { dagger: 0.045, sword: 0.065, spear: 0.065, staff: 0.06, axe: 0.08, mace: 0.09, greatsword: 0.105 };
 
 interface ActiveAction {
   def: ActionDef; // resolved (clip timing applied when the clip is loaded)
@@ -50,6 +86,14 @@ interface ActiveAction {
   hitCheckedAt?: number;
   /** index of the next entry in def.events */
   ev: number;
+  /** a blow connected (hit-confirm cancels) */
+  connected: boolean;
+  /** charge tier reached (0-3), when it was full, and a release on the beat */
+  tier: number;
+  fullAt: number;
+  perfect: boolean;
+  /** the button let go of a charge */
+  released: boolean;
 }
 
 /**
@@ -113,7 +157,17 @@ export class Player {
   private mountVisual = new THREE.Group();
 
   act: ActiveAction | null = null;
-  private buffer: { a: Buffered; t: number } | null = null;
+  private buffer: { a: Buffered; t: number; actT: number; actId: string | null } | null = null;
+  /** the attack button: down, and for how long (string branches) */
+  private attackHeld = false;
+  private attackHeldFor = 0;
+  /** seconds left of the counter window a perfect dodge opens */
+  counterT = 0;
+  /** can't be staggered again until this runs out */
+  private staggerCd = 0;
+  private perfectDodgeAct: ActiveAction | null = null;
+  /** who the finisher is for */
+  private finTarget: Target | null = null;
   blocking = false;
   sprinting = false;
   lock: Target | null = null;
@@ -417,7 +471,12 @@ export class Player {
     if (this.moveIntent.lengthSq() > 0) this.moveIntent.normalize();
 
     const now = performance.now() / 1000;
-    const buf = (a: Buffered) => (this.buffer = { a, t: now });
+    const buf = (a: Buffered) => (this.buffer = { a, t: now, actT: this.act?.t ?? -1, actId: this.act?.def.id ?? null });
+    this.attackHeld = input.held('attack');
+    this.attackHeldFor = this.attackHeld ? input.heldFor('attack') : 0;
+    if (input.wasPressed('kick') && !this.aiming) buf('kick');
+    // Locked on: the wheel moves the lock to the next enemy left or right.
+    if (this.lock && input.wheel !== 0) this.switchLock(cam, Math.sign(input.wheel));
     // Boundary Style: F held while standing still raises the ring (the skill runtime decides if it can).
     this.parryHeldT = input.held('parry') ? this.parryHeldT + SIM_STEP : 0;
     this.stillForDomain = this.grounded && !this.mounted && !this.swimming && !this.sprinting && (this.moveIntent.lengthSq() < 0.001 || this.domainMoves);
@@ -445,12 +504,25 @@ export class Player {
   }
 
   // ---- actions --------------------------------------------------------------
+  /** The equipped family's version of a move (or the sword's). */
+  private moveDef(id: string): ActionDef | undefined {
+    return this.actionFor?.(id) ?? ACTIONS[id];
+  }
+
   private startAction(id: string, t0?: number): boolean {
     id = this.remapAction?.(id) ?? id;
-    const raw = this.actionFor?.(id) ?? ACTIONS[id];
+    // Branches and directional moves are built from the family's own moves.
+    const br = BRANCHES[id];
+    const raw = br ? this.moveDef(br.base) : this.moveDef(id);
     if (!raw) return false;
     const usingClip = !!raw.clip && this.char.has(raw.clip);
-    const def = resolveAction(raw, usingClip);
+    let def = resolveAction(raw, usingClip);
+    if (br) def = { ...br.build(def), clipTiming: undefined };
+    // The light string's branches ride on whatever family's cut this is.
+    const sb = STRING_BRANCH[id];
+    if (sb && def.combo) def = { ...def, combo: { ...def.combo, heavy: def.combo.heavy ?? sb.heavy, delayed: def.combo.delayed ?? sb.delayed } };
+    // Rolls by armour weight: light gear rolls far and long, heavy gear short and costly.
+    if (def.roll && !def.roll.back) def = this.weighRoll(def);
     const m = this.mods;
     const stam = def.stamina * m.staminaCost * (def.roll ? m.dodgeCost : 1);
     if (stam > 0 && this.stamina <= 0) {
@@ -463,7 +535,7 @@ export class Player {
     const speed = (def.weaponSpeed ? (w?.def.stats.speed ?? 1) * m.attackSpeed : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1) * (id.startsWith('cast') ? m.castSpeed : 1);
     this.poseFrom = this.lastPose;
     this.poseFade = 0;
-    this.act = { def, t: t0 ?? def.startAt ?? 0, speed, hitSet: new Set(), charge: 0, charging: false, fired: false, usingClip, landed: false, mult: 1, ev: 0 };
+    this.act = { def, t: t0 ?? def.startAt ?? 0, speed, hitSet: new Set(), charge: 0, charging: false, fired: false, usingClip, landed: false, mult: 1, ev: 0, connected: false, tier: 0, fullAt: 0, perfect: false, released: false };
     this.bladePrev.main = this.bladePrev.off = null;
     this.lastPresentT = -1;
 
@@ -473,8 +545,65 @@ export class Player {
       const dir = def.roll.back ? this.forward.negate() : this.moveIntent.lengthSq() > 0 ? this.moveIntent.clone() : this.forward;
       this.act.rollDir = dir;
     }
-    if (def.hit) events.emit('swing', { heavy: id === 'heavy' });
+    if (def.hit) events.emit('swing', { heavy: HYPER.has(id) });
     return true;
+  }
+
+  /** How heavy the armour is: light (< 10), medium, heavy (> 20). */
+  get loadClass(): 'light' | 'medium' | 'heavy' {
+    const a = this.equip?.armorValue ?? 0;
+    return a < 10 ? 'light' : a > 20 ? 'heavy' : 'medium';
+  }
+  private weighRoll(d: ActionDef): ActionDef {
+    const load = this.loadClass;
+    if (load === 'medium') return d;
+    const k = load === 'light' ? { dist: 1.12, i: 1.15, st: 0.85 } : { dist: 0.78, i: 0.8, st: 1.3 };
+    const i = d.iframes && ([d.iframes[0], d.iframes[0] + (d.iframes[1] - d.iframes[0]) * k.i] as [number, number]);
+    return { ...d, roll: { ...d.roll!, dist: d.roll!.dist * k.dist }, iframes: i, stamina: d.stamina * k.st };
+  }
+
+  /** Damage type of the weapon in a hand (unarmed blows are blunt). */
+  weaponDmgType(hand: 'main' | 'off' = 'main'): DmgType {
+    const w = hand === 'off' ? this.equip?.offItem : this.equip?.mainWeapon;
+    return w ? FAMILY_DMG[w.def.kind] ?? 'slash' : 'blunt';
+  }
+
+  /** A broken or downed enemy close in front: the one a finisher is for. */
+  finisherTarget(): Target | null {
+    const f = this.forward;
+    const ok = (t: Target, reach: number) => {
+      if (!finisherOpen(t)) return false;
+      const to = t.position.clone().sub(this.pos).setY(0);
+      const d = to.length() - t.radius;
+      return d < reach && (d < 0.5 || to.normalize().dot(f) > 0.2) && Math.abs(t.center.y - this.center.y) < 1.8;
+    };
+    if (this.lock && ok(this.lock, 3)) return this.lock;
+    let best: Target | null = null, bd = Infinity;
+    for (const t of targets) {
+      if (!t.alive || !ok(t, 2.4)) continue;
+      const d = t.position.distanceTo(this.pos);
+      if (d < bd) (bd = d), (best = t);
+    }
+    return best;
+  }
+
+  /** What an attack press from rest does: a finisher, a directional opener when locked on, or the first cut. */
+  private opener(): string {
+    const fin = this.finisherTarget();
+    if (fin) {
+      this.finTarget = fin;
+      return 'finisher';
+    }
+    if (this.blocking) return this.blockHitT < 0.7 ? 'guardCounter' : this.equip.hasShield ? 'shieldBash' : 'slash1';
+    const lk = this.lock;
+    if (lk?.alive && this.moveIntent.lengthSq() > 0.25) {
+      const to = lk.position.clone().sub(this.pos).setY(0).normalize();
+      const d = this.moveIntent.dot(to);
+      if (d > 0.6) return 'thrust';
+      if (d < -0.6) return 'retreatCut';
+      return 'sideSweep';
+    }
+    return 'slash1';
   }
 
   private endAction() {
@@ -493,8 +622,8 @@ export class Player {
     }
     const a = this.act;
     const eq = this.equip;
-    const mainCombo = (d: ActionDef) => d.id.startsWith('slash') || d.id === 'heavy';
-    const offCombo = (d: ActionDef) => d.id.startsWith('offslash');
+    const parry = () => (eq.hasShield ? 'parryShield' : eq.dualWield ? 'parryDual' : this.actionFor?.('parryWeapon') ? 'parryWeapon' : null);
+    const shove = () => (this.grounded && !this.mounted ? (eq.hasShield ? 'shieldBash' : 'barge') : null);
     let next: string | null = null;
     if (!a) {
       if (b.a === 'originAbility') {
@@ -502,19 +631,33 @@ export class Player {
         this.useOriginAbility();
         return;
       }
-      if (b.a === 'attack' && eq.mainWeapon) next = !this.grounded ? 'airAttack' : this.sprinting ? 'sprintAttack' : 'slash1';
+      if (b.a === 'attack' && eq.mainWeapon) next = !this.grounded ? 'airAttack' : this.sprinting ? 'sprintAttack' : this.opener();
       else if (b.a === 'offhand' && eq.dualWield) next = 'offslash1';
+      else if (b.a === 'kick') next = shove();
       else if (b.a === 'dodge') next = this.grounded ? (this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep') : null;
-      else if (b.a === 'parry') next = eq.hasShield ? 'parryShield' : eq.dualWield ? 'parryDual' : this.actionFor?.('parryWeapon') ? 'parryWeapon' : null;
+      else if (b.a === 'parry') next = parry();
       else if (b.a === 'cast') next = this.spellAction();
       if (next === null && b.a === 'dodge' && !this.grounded) return; // keep it for landing
     } else {
       const d = a.def;
       const comboOpen = d.combo && a.t >= d.combo.from;
-      if (b.a === 'attack' && eq.mainWeapon && comboOpen) next = mainCombo(d) && d.combo ? d.combo.next : 'slash1';
-      else if (b.a === 'offhand' && eq.dualWield && comboOpen) next = offCombo(d) && d.combo ? d.combo.next : 'offslash1';
-      else if (b.a === 'dodge' && a.t >= d.cancel && this.grounded) next = this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep';
-      else if (b.a === 'parry' && a.t >= d.cancel) next = eq.hasShield ? 'parryShield' : eq.dualWield ? 'parryDual' : this.actionFor?.('parryWeapon') ? 'parryWeapon' : null;
+      // Hit-confirm: a blow that connected can be cancelled sooner; a whiff leaves you open longer.
+      const cancelAt = d.cancel + (a.connected ? -HIT_CONFIRM : d.hit ? WHIFF_LAG : 0);
+      if (b.a === 'attack' && eq.mainWeapon && comboOpen) {
+        const c = d.combo!;
+        // A broken enemy in reach: the string ends in a finisher.
+        const fin = this.finisherTarget();
+        if (fin) {
+          this.finTarget = fin;
+          next = 'finisher';
+        } else if (c.heavy && this.attackHeld && this.attackHeldFor < BRANCH_HOLD) return; // still deciding: tap or hold
+        else if (c.heavy && this.attackHeld) next = c.heavy;
+        else if (c.delayed && b.actId === d.id && b.actT > c.from + DELAY_GAP) next = c.delayed;
+        else next = c.next;
+      } else if (b.a === 'offhand' && eq.dualWield && comboOpen) next = d.id.startsWith('offslash') && d.combo ? d.combo.next : 'offslash1';
+      else if (b.a === 'kick' && a.t >= cancelAt) next = shove();
+      else if (b.a === 'dodge' && a.t >= cancelAt && this.grounded) next = this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep';
+      else if (b.a === 'parry' && a.t >= cancelAt) next = parry();
       else return; // keep buffering
     }
     this.buffer = null;
@@ -553,12 +696,31 @@ export class Player {
       this.startAction('heavy', heavy.chargeAt !== undefined ? heavy.chargeAt * heavy.dur * 0.6 : 0.3);
       return;
     }
-    // Charging: hold at the charge point while the button stays down.
+    // Charging: hold at the charge point while the button stays down. Three
+    // tiers; let go just as it fills and the blow lands on the beat.
+    const wasCharging = a.charging;
     a.charging = false;
-    if (d.chargeAt !== undefined && a.t >= d.chargeAt * d.dur && input.held('attack') && a.charge < 0.9) {
+    if (d.chargeAt !== undefined && a.t >= d.chargeAt * d.dur && input.held('attack') && !a.released) {
       a.charge += dt;
-      a.charging = true;
-      return;
+      const tier = CHARGE_TIERS.reduce((t, need, i) => (a.charge >= need ? i : t), 0);
+      if (tier > a.tier) {
+        a.tier = tier;
+        if (tier === 3) a.fullAt = a.charge;
+        events.emit('chargeTier', { tier, perfect: false });
+      }
+      // Held far too long: the arms give and it swings anyway.
+      if (a.charge < CHARGE_TIERS[3] + 0.75) {
+        a.charging = true;
+        return;
+      }
+      a.released = true;
+    }
+    if (wasCharging && !a.charging) {
+      a.released = true;
+      if (a.tier === 3 && a.charge - a.fullAt <= PERFECT_RELEASE) {
+        a.perfect = true;
+        events.emit('chargeTier', { tier: 3, perfect: true });
+      }
     }
     // Air attack: hold the falling pose until we actually land.
     if (d.air && !this.grounded && d.hit && a.t >= d.hit.from + 0.1) {
@@ -660,6 +822,27 @@ export class Player {
       }
     }
     this.lock = best;
+  }
+
+  /** Move the lock to the next enemy to the left (-1) or right (+1) of the current one, on screen. */
+  private switchLock(cam: ThirdPersonCamera, dir: number) {
+    const cur = this.lock;
+    if (!cur) return;
+    const camF = new THREE.Vector3();
+    cam.camera.getWorldDirection(camF);
+    const right = new THREE.Vector3().crossVectors(camF, new THREE.Vector3(0, 1, 0)).normalize();
+    const side = (t: Target) => t.center.clone().sub(cam.camera.position).normalize().dot(right);
+    const s0 = side(cur);
+    let best: Target | null = null, bs = Infinity;
+    for (const t of targets) {
+      if (t === cur || !t.alive || !t.lockable) continue;
+      if (t.center.distanceTo(this.center) > this.lockRange) continue;
+      if (t.center.clone().sub(cam.camera.position).normalize().dot(camF) < 0.2) continue;
+      const ds = (side(t) - s0) * dir;
+      if (ds <= 0.01 || !this.canSee(t)) continue;
+      if (ds < bs) (bs = ds), (best = t);
+    }
+    if (best) this.lock = best;
   }
 
   private lockHidden = 0;
@@ -918,9 +1101,9 @@ export class Player {
         if (!this.reachable(t)) continue;
         a.hitSet.add(t.id);
         const dir = t.position.clone().sub(this.pos).setY(0).normalize();
-        const dmg = Math.round(base * 1.2 * (1 - (d / (2.6 + t.radius)) * 0.5));
-        t.takeHit({ damage: dmg, poise: 60, dir, at: t.center.clone(), crit: false, source: 'melee' });
-        events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: false, enemyId: t.id });
+        const r = strike(t, { base: base * 1.2 * (1 - (d / (2.6 + t.radius)) * 0.5), type: 'blunt', poise: 60, from: this.pos.clone(), at: t.center.clone(), source: 'melee', heavy: true, noCrit: true, react: 'stagger' });
+        void dir;
+        events.emit('enemyHit', { at: t.center.clone(), amount: r.damage, crit: false, enemyId: t.id });
       }
     }
     this.airTime = 0;
@@ -1170,60 +1353,117 @@ export class Player {
   private detectHits(a: ActiveAction, at: number) {
     if (!a.def.hit) return;
     const h = a.def.hit;
-    const seg = this.bladeSegment(h.hand);
+    const sweep = a.def.sweep;
+    const fin = a.def.id === 'finisher';
+    const seg = sweep ? null : this.bladeSegment(h.hand);
     const prev = this.bladePrev[h.hand];
     this.bladePrev[h.hand] = seg;
     // Hits are checked against the drawn pose. A slow frame can jump right over a fast blade's
     // window (a dagger's is a tenth of a second), so a frame that passes it still counts.
     const before = a.hitCheckedAt ?? -1;
     a.hitCheckedAt = at;
-    if (!seg || at < h.from || before > h.to) return;
+    if ((!seg && !sweep && !fin) || at < h.from || before > h.to) return;
     const from = prev ?? seg;
     const weapon = h.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
     const base = weapon?.def.stats.damage ?? 10;
     const b = new THREE.Vector3(), t = new THREE.Vector3();
+    const fwd = this.forward;
     for (const tg of targets) {
       if (!tg.alive || a.hitSet.has(tg.id)) continue;
-      if (tg.center.distanceTo(this.center) > 3.6) continue;
+      if (fin && tg !== this.finTarget) continue;
+      if (tg.center.distanceTo(this.center) > (sweep ? sweep.reach + tg.radius + 0.5 : 3.6)) continue;
       if (!this.reachable(tg)) continue; // the blade stops at the wall
-      // Sweep between the blade's previous and current positions.
       let swept = false;
-      for (let i = 0; i <= 6 && !swept; i++) {
-        const u = i / 6;
-        b.lerpVectors(from[0], seg[0], u);
-        t.lerpVectors(from[1], seg[1], u);
-        const [ha, hb] = hurtSegment(tg);
-        swept = segmentSegmentDistance(b, t, ha, hb) < tg.radius + 0.06;
+      if (fin) swept = true; // a finisher always lands on the one it's for
+      else if (sweep) {
+        // Shoves and spinning cuts hit by reach, not by the blade's path.
+        const to = tg.position.clone().sub(this.pos).setY(0);
+        const d = to.length() - tg.radius;
+        swept = d < sweep.reach && (d < 0.3 || to.normalize().dot(fwd) >= sweep.arc) && Math.abs(tg.center.y - this.center.y) < 1.6;
+      } else if (seg && from) {
+        // Sweep between the blade's previous and current positions.
+        for (let i = 0; i <= 6 && !swept; i++) {
+          const u = i / 6;
+          b.lerpVectors(from[0], seg[0], u);
+          t.lerpVectors(from[1], seg[1], u);
+          const [ha, hb] = hurtSegment(tg);
+          swept = segmentSegmentDistance(b, t, ha, hb) < tg.radius + 0.06;
+        }
       }
       // Short blades (the dagger) also land on whatever is right in front at the height of the thrust.
       if (!swept && !(at >= (h.from + h.to) / 2 && this.hitAssist?.(tg))) continue;
       a.hitSet.add(tg.id);
+      a.connected = true;
       const extra = this.meleeBonus?.(tg);
       const ws = weapon?.def.stats ?? {};
-      const crit = tg.stunned || !!extra?.crit || Math.random() < this.mods.crit + (ws.crit ?? 0);
-      const charge = 1 + a.charge * 0.6;
+      const tierK = TIER_DMG[a.tier] * (a.perfect ? 1.2 : 1);
       const light = a.def.id.startsWith('slash') || a.def.id.startsWith('offslash') ? this.mods.lightAttack : 1;
       const bonus = (1 + this.equip.bonus('damagePct')) * this.paths.meleePower(weapon?.def.stats.speed ?? 1) * this.mods.melee * light * a.mult * (extra?.mult ?? 1);
-      const dmg = Math.round(base * h.dmg * charge * bonus * (crit ? 2.6 : 1) * (0.92 + Math.random() * 0.16));
       const dir = tg.position.clone().sub(this.pos).setY(0).normalize();
       const at2 = tg.center.clone().addScaledVector(dir, -tg.radius * 0.8);
-      tg.takeHit({ damage: dmg, poise: h.poise * charge * this.paths.poisePower * this.mods.poise * (ws.stagger ?? 1), dir, at: at2, crit, source: 'melee' });
+      const counter = this.counterT > 0;
+      const heavy = HYPER.has(a.def.id) || a.tier >= 2;
+      const poise = h.poise * (1 + a.tier * 0.25) * (a.perfect ? 1.5 : 1) * this.paths.poisePower * this.mods.poise * (ws.stagger ?? 1);
+      const dmg0 = base * h.dmg * tierK * bonus;
+      // Through the combat core (combat/core.ts): type, play-made crits, posture, reactions.
+      const r = strike(tg, {
+        base: fin ? dmg0 + tg.maxHp * (isBoss(tg) ? 0.07 : 0.22) : dmg0,
+        type: a.def.dtype ?? this.weaponDmgType(h.hand),
+        poise,
+        posture: (poise * 0.7 + dmg0 * 0.18) * (a.def.posture ?? 1) * (counter ? 1.5 : 1),
+        from: this.pos.clone(),
+        at: at2,
+        source: 'melee',
+        heavy,
+        keen: this.mods.crit + (ws.crit ?? 0),
+        forceCrit: !!extra?.crit || counter,
+        pierce: ws.pierce,
+        finisher: fin,
+        react: a.def.react,
+        guardBreak: a.def.guardBreak,
+      });
+      const amount = r.damage, crit = r.crit;
+      if (counter) this.counterT = 0;
+      if (fin) {
+        // The break is spent: the enemy gets up (if it can).
+        const st = combatOf(tg);
+        st.brokenT = Math.min(st.brokenT, 0.05);
+        tg.stunned = false;
+        events.emit('finisher', { target: tg, at: at2 });
+        events.emit('slowMo', { scale: 0.3, sec: 0.45 });
+      }
       // The weapon's own nature: fire that lingers, frost that locks, a blade that feeds you.
       if (ws.burn && tg.alive) afflictions.burn(tg, ws.burn);
       if (ws.frost && tg.alive && Math.random() < ws.frost) afflictions.freeze(tg);
-      if (ws.lifesteal && !this.dead) this.hp = Math.min(this.maxHp, this.hp + dmg * ws.lifesteal);
-      events.emit('enemyHit', { at: at2, amount: dmg, crit, enemyId: tg.id });
-      events.emit('meleeHit', { target: tg, amount: dmg, crit, action: a.def.id });
-      const heavy = a.def.id === 'heavy' || a.def.id === 'airAttack';
-      this.onHitStop?.(crit ? 0.16 : heavy ? 0.12 : 0.07);
-      this.onShake?.(crit ? 0.4 : heavy ? 0.3 : 0.16);
+      if (ws.lifesteal && !this.dead) this.hp = Math.min(this.maxHp, this.hp + amount * ws.lifesteal);
+      events.emit('enemyHit', { at: at2, amount, crit, enemyId: tg.id });
+      events.emit('meleeHit', { target: tg, amount, crit, action: a.def.id });
+      // Hit-stop by the weapon's weight: a dagger flicks, a greatsword bites.
+      const wstop = WEIGHT_STOP[weapon?.def.kind ?? ''] ?? 0.06;
+      this.onHitStop?.(fin ? 0.22 : wstop * (heavy ? 1.6 : 1) * (crit ? 1.45 : 1) * (r.broke ? 1.8 : 1));
+      this.onShake?.(fin ? 0.5 : crit ? 0.4 : heavy ? 0.3 : 0.16);
     }
   }
 
   // ---- defence ----------------------------------------------------------------
   receiveAttack(att: IncomingAttack): DefenceResult {
     if (this.dead) return 'dodged';
+    att.attacker ??= att.projectile ? undefined : nearestAttacker(att.from);
+    // Older attacks don't say what they are: the attacker's last tell does (a red slam is
+    // unblockable), or else a big blow that can't be parried is heavy (blockable, at a price).
+    const armed = !att.kind && att.attacker && !att.projectile ? combatOf(att.attacker) : null;
+    const kind = att.kind ?? (armed && armed.armedT > 0 && armed.armedKind !== 'normal' ? armed.armedKind : !att.parryable && !att.projectile && att.poise >= 70 ? 'heavy' : 'normal');
+    const answerable = kind !== 'unblockable' && kind !== 'grab';
     if (this.inIframes()) {
+      // Perfect dodge: the blow meets the very start of the roll. Time slows and
+      // the next blow is a counter.
+      const a = this.act;
+      if (a?.def.iframes && !att.projectile && a !== this.perfectDodgeAct && a.t - a.def.iframes[0] <= PERFECT_DODGE * a.speed) {
+        this.perfectDodgeAct = a;
+        this.counterT = COUNTER_WINDOW;
+        events.emit('perfectDodge', { at: this.center });
+        events.emit('slowMo', { scale: 0.35, sec: 0.4 });
+      }
       this.onDodged?.(att);
       return 'dodged';
     }
@@ -1232,19 +1472,39 @@ export class Player {
     const hooked = this.defend?.(att, facing);
     if (hooked) return hooked;
     const a = this.act;
-    const pw = a?.def.parry ? a.def.parry[0] + (a.def.parry[1] - a.def.parry[0]) * this.mods.parryWindow : 0;
-    if (a?.def.parry && a.t >= a.def.parry[0] && a.t <= pw && att.parryable && facing > 0.1) {
-      att.onParried?.();
-      events.emit('parrySuccess', { at: this.center.addScaledVector(toAtt, 0.6) });
-      this.onHitStop?.(0.18);
-      this.onShake?.(0.25);
-      return 'parried';
+    // Parry: inside the first frames it's perfect (the attacker reels, open to a
+    // riposte); later in the window it only deflects (no damage, no opening).
+    if (a?.def.parry && answerable && att.parryable && facing > 0.1) {
+      const p0 = a.def.parry[0];
+      const p1 = p0 + (a.def.parry[1] - p0) * this.mods.parryWindow;
+      if (a.t >= p0 && a.t <= p1) {
+        const at = this.center.addScaledVector(toAtt, 0.6);
+        const perfect = a.t - p0 <= PERFECT_PARRY * this.mods.parryWindow;
+        combat.parried(att.attacker, perfect);
+        if (perfect) {
+          att.onParried?.();
+          events.emit('perfectParry', { at });
+          events.emit('parrySuccess', { at, perfect: true });
+          events.emit('slowMo', { scale: 0.4, sec: 0.3 });
+          this.onHitStop?.(0.18);
+          this.onShake?.(0.25);
+          return 'parried';
+        }
+        this.stamina = Math.max(0, this.stamina - 6 - att.damage * 0.12);
+        this.staminaDelay = 0.6;
+        this.blockHitT = 0;
+        events.emit('parrySuccess', { at, perfect: false });
+        events.emit('blockImpact', { at, guardBroken: false });
+        this.onShake?.(0.14);
+        return 'blocked';
+      }
     }
     // A raised shield (or a guarding weapon) covers what's in front of you.
     const guard = this.equip.hasShield ? null : this.weaponGuard?.() ?? null;
-    if (this.blocking && (this.equip.hasShield || guard) && facing > this.blockFacing && this.blockT > 0.06) {
+    if (this.blocking && answerable && (this.equip.hasShield || guard) && facing > this.blockFacing && this.blockT > 0.06) {
       const st = guard ?? this.equip.offItem!.def.stats;
-      const cost = (att.damage * (1 - (st.stability ?? 0.4)) * 1.1 + 4) * this.mods.blockCost;
+      // Heavy blows cost far more to hold.
+      const cost = (att.damage * (1 - (st.stability ?? 0.4)) * 1.1 + 4) * this.mods.blockCost * (kind === 'heavy' ? 1.8 : 1);
       this.stamina -= cost;
       this.staminaDelay = 0.8;
       this.blockHitT = 0;
@@ -1265,7 +1525,9 @@ export class Player {
       this.onShake?.(0.12);
       return 'blocked';
     }
-    if (this.blocking && this.equip.hasShield) events.emit('guardMissed', { from: att.from.clone() });
+    // Unblockables and grabs go straight through a guard or a parry: dodge them.
+    if (!answerable && (this.blocking || a?.def.parry)) events.emit('unblockable', { kind, from: att.from.clone() });
+    else if (this.blocking && this.equip.hasShield) events.emit('guardMissed', { from: att.from.clone() });
     const armor = this.equip.armorValue;
     const dmg = att.damage * (100 / (100 + armor * 5)) * (att.burn ? 1 - this.fireResist : 1);
     this.applyDamage(dmg);
@@ -1275,10 +1537,17 @@ export class Player {
       const burnScale = 1 - this.fireResist;
       this.burn = { dps: att.burn * burnScale, left: 3 };
     }
-    // Hyper-armour through the middle of heavy swings.
-    const heavyArmor = ((a?.def.id === 'heavy' || a?.def.id === 'airAttack') && a.def.hit && a.t > a.def.hit.from - 0.2 && a.t < a.def.hit.to) || !!this.hyperArmour?.();
-    if (!this.dead && !heavyArmor && !this.staggerImmune && att.poise > (this.equip.poise + this.poiseFlat) * this.poiseMul * 0.8) {
+    // Hyper-armour through the middle of heavy swings (and the whole of finishers and guard counters).
+    const heavyArmor = (!!a && HYPER.has(a.def.id) && !!a.def.hit && a.t > a.def.hit.from - 0.2 && a.t < a.def.hit.to) || (!!a && (a.def.hyper ?? false) && a.def.id !== 'heavy') || !!this.hyperArmour?.();
+    if (kind === 'grab' && !this.dead && !this.staggerImmune) {
+      // Seized and thrown: down for a moment, whatever your poise.
+      this.startAction('guardBreak');
+      this.vel.addScaledVector(toAtt, -4.5);
+      this.vel.y = Math.max(this.vel.y, 2.5);
+    } else if (!this.dead && !heavyArmor && !this.staggerImmune && this.staggerCd <= 0 && att.poise > (this.equip.poise + this.poiseFlat) * this.poiseMul * 0.8) {
+      // A moment's grace after each stagger: a crowd can't stunlock you.
       this.startAction('stagger');
+      this.staggerCd = 1.0;
       this.vel.addScaledVector(toAtt, -3.5);
     }
     if (att.knock && !this.dead) {
@@ -1329,6 +1598,8 @@ export class Player {
   }
 
   private updateStats(dt: number) {
+    this.counterT = Math.max(0, this.counterT - dt);
+    this.staggerCd = Math.max(0, this.staggerCd - dt);
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
     else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen + this.mods.staminaRegen) * dt);
     this.mana = Math.min(this.maxMana, this.mana + MANA_REGEN * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen + this.mods.manaRegen) * dt);
@@ -1372,7 +1643,7 @@ export class Player {
     const it = this.equip.get(ref);
     if (!it || it.def.kind !== 'spell' || this.dead) return;
     this.equip.activeSpell = ref;
-    this.buffer = { a: 'cast', t: performance.now() / 1000 };
+    this.buffer = { a: 'cast', t: performance.now() / 1000, actT: this.act?.t ?? -1, actId: this.act?.def.id ?? null };
   }
 
 

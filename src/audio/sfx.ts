@@ -465,4 +465,176 @@ export const sfx = {
     ng.gain.value = 0.18;
     n.connect(bp).connect(ng).connect(bus);
   },
+
+  // ---- combat (combat rework, phase 5) ----------------------------------------------
+
+  /** A blade through the air: heavier weapons are lower and longer. weight 0 (dagger) .. 1 (greatsword). */
+  whoosh(weight = 0.4, volume = 0.22) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.005, dur = 0.12 + weight * 0.16;
+    const n = noise(c, t, dur + 0.05);
+    const bp = c.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 1.6;
+    bp.frequency.setValueAtTime(1600 - weight * 900, t);
+    bp.frequency.exponentialRampToValueAtTime(3800 - weight * 2200, t + dur * 0.5);
+    bp.frequency.exponentialRampToValueAtTime(900 - weight * 400, t + dur);
+    const g = c.createGain();
+    env(g, t, volume, dur * 0.35, 0, dur * 0.65);
+    n.connect(bp).connect(g).connect(out);
+  },
+
+  /**
+   * A blow landing, by what it hit: flesh thuds, plate and stone clang or knock,
+   * bone cracks, slime squelches, wood chops.
+   */
+  impact(material: string, heavy = false, volume = 0.45) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.005;
+    const v = volume * (heavy ? 1.3 : 1);
+    // The body of the hit: a low thump.
+    const o = c.createOscillator();
+    o.type = 'sine';
+    const base = material === 'slime' ? 90 : material === 'stone' ? 70 : material === 'plate' || material === 'shell' ? 140 : 110;
+    o.frequency.setValueAtTime(base * (heavy ? 0.8 : 1), t);
+    o.frequency.exponentialRampToValueAtTime(base * 0.45, t + 0.12);
+    const og = c.createGain();
+    env(og, t, v * 0.9, 0.003, 0.02, heavy ? 0.22 : 0.13);
+    o.connect(og).connect(out);
+    o.start(t);
+    o.stop(t + 0.35);
+    // The texture: a burst of filtered noise.
+    const n = noise(c, t, 0.3);
+    const f = c.createBiquadFilter();
+    f.type = material === 'slime' ? 'lowpass' : 'bandpass';
+    f.frequency.value = material === 'bone' ? 2600 : material === 'wood' ? 1400 : material === 'slime' ? 700 : material === 'plate' || material === 'stone' || material === 'shell' ? 3200 : 900;
+    f.Q.value = material === 'bone' ? 3 : 1.2;
+    const ng = c.createGain();
+    env(ng, t, v * (material === 'slime' ? 0.7 : 0.5), 0.002, 0.01, material === 'slime' ? 0.2 : 0.08);
+    n.connect(f).connect(ng).connect(out);
+    // Metal and stone ring a moment.
+    if (material === 'plate' || material === 'shell' || material === 'stone') {
+      for (const fr of material === 'stone' ? [420, 610] : [1180, 1730, 2410]) {
+        const r = c.createOscillator();
+        r.type = 'triangle';
+        r.frequency.value = fr * (0.97 + Math.random() * 0.06);
+        const rg = c.createGain();
+        env(rg, t, v * 0.12, 0.002, 0.01, material === 'stone' ? 0.15 : 0.45);
+        r.connect(rg).connect(out);
+        r.start(t);
+        r.stop(t + 0.6);
+      }
+    }
+  },
+
+  /** Steel on steel: a parry (perfect rings bright and long), a block (a dull clank). */
+  clang(kind: 'perfect' | 'deflect' | 'block' | 'break' = 'block', volume = 0.5) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.005;
+    const bright = kind === 'perfect' ? 1.6 : kind === 'deflect' ? 1.15 : 0.8;
+    const ring = kind === 'perfect' ? 1.1 : kind === 'deflect' ? 0.45 : 0.2;
+    for (const fr of [620, 1240, 1890, 2960, 4100]) {
+      const o = c.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = fr * bright * (0.985 + Math.random() * 0.03);
+      const g = c.createGain();
+      env(g, t, volume * 0.13, 0.002, 0.005, ring * (1 - fr / 9000));
+      o.connect(g).connect(out);
+      o.start(t);
+      o.stop(t + ring + 0.1);
+    }
+    const n = noise(c, t, 0.12);
+    const hp = c.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = kind === 'block' || kind === 'break' ? 600 : 2500;
+    const ng = c.createGain();
+    env(ng, t, volume * (kind === 'break' ? 0.6 : 0.35), 0.001, 0.01, 0.07);
+    n.connect(hp).connect(ng).connect(out);
+    if (kind === 'break') this.impact('stone', true, volume * 0.7);
+  },
+
+  /** An enemy's tell: a white glint ticks, gold thrums, red blares low, yellow rises. */
+  sting(kind: 'normal' | 'heavy' | 'unblockable' | 'grab', volume = 0.3) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.005;
+    if (kind === 'normal') {
+      const o = c.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = 2900;
+      const g = c.createGain();
+      env(g, t, volume * 0.25, 0.002, 0.01, 0.12);
+      o.connect(g).connect(out);
+      o.start(t);
+      o.stop(t + 0.2);
+      return;
+    }
+    const o = c.createOscillator();
+    o.type = kind === 'unblockable' ? 'sawtooth' : 'square';
+    const f0 = kind === 'unblockable' ? 110 : kind === 'grab' ? 330 : 220;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(kind === 'grab' ? f0 * 1.8 : f0 * 0.92, t + 0.35);
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = kind === 'unblockable' ? 900 : 1500;
+    const g = c.createGain();
+    env(g, t, volume * (kind === 'unblockable' ? 0.5 : 0.3), 0.01, 0.12, 0.25);
+    o.connect(lp).connect(g).connect(out);
+    o.start(t);
+    o.stop(t + 0.5);
+  },
+
+  /** A posture breaking: a crack and a heavy, falling groan of metal. */
+  breakCrash(volume = 0.6) {
+    if (!this.enabled || volume < 0.01) return;
+    this.clang('break', volume);
+    const { c, out } = audio();
+    const t = c.currentTime + 0.02;
+    const o = c.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(240, t);
+    o.frequency.exponentialRampToValueAtTime(60, t + 0.5);
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 800;
+    const g = c.createGain();
+    env(g, t, volume * 0.35, 0.01, 0.05, 0.45);
+    o.connect(lp).connect(g).connect(out);
+    o.start(t);
+    o.stop(t + 0.6);
+  },
+
+  /** A heavy charging: a rising tick per tier; the beat lands bright. */
+  chargeTick(tier: number, perfect = false, volume = 0.25) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.005;
+    const o = c.createOscillator();
+    o.type = perfect ? 'triangle' : 'sine';
+    o.frequency.value = perfect ? 1760 : 440 * Math.pow(1.335, tier);
+    const g = c.createGain();
+    env(g, t, volume * (perfect ? 0.6 : 0.35), 0.003, perfect ? 0.08 : 0.02, perfect ? 0.4 : 0.12);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + 0.6);
+  },
+
+  /** A perfect dodge: time catching its breath. */
+  slip(volume = 0.35) {
+    if (!this.enabled || volume < 0.01) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.005;
+    const n = noise(c, t, 0.5);
+    const bp = c.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 6;
+    bp.frequency.setValueAtTime(4000, t);
+    bp.frequency.exponentialRampToValueAtTime(500, t + 0.45);
+    const g = c.createGain();
+    env(g, t, volume * 0.4, 0.02, 0.1, 0.3);
+    n.connect(bp).connect(g).connect(out);
+  },
 };

@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
@@ -57,7 +58,7 @@ export class TideWarden implements Target {
   private ring: THREE.Mesh;
   private state: State = 'dormant';
   private st = 0;
-  private yaw = 0;
+  yaw = 0;
   private vel = new THREE.Vector3();
   private cooldown = 1.5;
   private poise = 0;
@@ -149,6 +150,13 @@ export class TideWarden implements Target {
     return this.state;
   }
 
+  readonly ownPoise = true;
+  readonly boss = true;
+  /** Posture broken (combat/core.ts). */
+  onBreak() {
+    if (this.alive && this.state !== 'dormant') this.setState('stagger');
+  }
+
   takeHit(h: HitInfo) {
     if (!this.alive) return;
     if (this.state === 'dormant') this.setState('wake');
@@ -181,6 +189,9 @@ export class TideWarden implements Target {
   }
 
   private setState(s: State) {
+    // Its tell (combat/core.ts): the colour says how to answer it; a blow now is a counter-hit.
+    const tell = ({ slam: ['unblockable', 0.8, 1.0], sweep: ['heavy', 0.7, 1.0], wave: ['unblockable', 0.6, 0] } as Partial<Record<State, [AttackKind, number, number]>>)[s];
+    if (tell && this.alive) combat.windup(this, tell[1], tell[0], tell[2]);
     this.state = s;
     this.st = 0;
     this.hitDone = false;

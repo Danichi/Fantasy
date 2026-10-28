@@ -1,4 +1,5 @@
 import { sampleF, sampleV3, type HandPose, type ProcPose, type V3 } from '../player/rigLayer';
+import type { DmgType, Reaction } from './core';
 
 // ---------------------------------------------------------------------------
 // Player actions. Times are in seconds at 1x speed. `clip` names a Mixamo clip
@@ -15,7 +16,20 @@ export interface ActionDef {
   clip?: string;
   proc?: (t: number) => ProcPose; // t normalised 0..1
   hit?: { from: number; to: number; dmg: number; poise: number; hand: 'main' | 'off' };
-  combo?: { next: string; from: number };
+  /** damage type of this move's blows (default: the weapon family's) */
+  dtype?: DmgType;
+  /** posture damage multiplier (shoves and shield bashes break guards and posture) */
+  posture?: number;
+  /** at least this reaction on every blow */
+  react?: Reaction;
+  /** batters a raised guard aside */
+  guardBreak?: boolean;
+  /** hits by reach instead of the blade's sweep: everything within `reach` m in front (cos > arc) */
+  sweep?: { reach: number; arc: number };
+  /** the player can't be staggered through this move */
+  hyper?: boolean;
+  /** next in the string; `heavy`: hold the button into this branch; `delayed`: press late for this one */
+  combo?: { next: string; from: number; heavy?: string; delayed?: string };
   heavyFrom?: string; // light attack that turns into this heavy if held
   cancel: number; // dodge may interrupt after this time
   move?: { dist: number; from: number; to: number };
@@ -358,3 +372,121 @@ Object.assign(ACTIONS, {
 export const LIGHT_COMBO_START = 'slash1';
 export const OFF_COMBO_START = 'offslash1';
 
+
+
+// ---------------------------------------------------------------------------
+// Combat rework (phase 2): branches, directional moves, shoves, finishers.
+//
+// These are built at the moment they start from whatever the equipped weapon
+// family's own moves are (its clip, its reach, its timing), so a spear's lunge
+// is a spear's lunge. Each transform takes the RESOLVED base move (clip timing
+// already applied) and returns the new move.
+// ---------------------------------------------------------------------------
+
+/** Scale a resolved move's blow. */
+function blow(d: ActionDef, dmg: number, poise: number): ActionDef['hit'] {
+  return d.hit ? { ...d.hit, dmg, poise } : undefined;
+}
+/** Slow or quicken a resolved move: every time in it scales by k (k < 1 is faster). */
+function retime(d: ActionDef, k: number): ActionDef {
+  const sc = (v?: number) => (v === undefined ? v : v * k);
+  return {
+    ...d,
+    dur: d.dur * k,
+    hit: d.hit && { ...d.hit, from: d.hit.from * k, to: d.hit.to * k },
+    combo: d.combo && { ...d.combo, from: d.combo.from * k },
+    cancel: d.cancel * k,
+    track: d.track * k,
+    move: d.move && { ...d.move, from: d.move.from * k, to: d.move.to * k },
+    iframes: d.iframes && [d.iframes[0] * k, d.iframes[1] * k],
+    chargeAt: d.chargeAt,
+    startAt: sc(d.startAt),
+  } as ActionDef;
+}
+
+export interface Branch {
+  /** the move it's built from (the family's version) */
+  base: string;
+  name: string;
+  build(d: ActionDef): ActionDef;
+}
+
+export const BRANCHES: Record<string, Branch> = {
+  // ---- strings: hold the button into the next cut for its heavy branch ----
+  link1: {
+    base: 'sprintAttack', name: 'Rising Thrust',
+    build: (d) => ({ ...d, id: 'link1', stamina: 18, dtype: 'pierce', hit: blow(d, 1.7, 50), posture: 1.3, move: { dist: 1.2, from: d.hit ? d.hit.from * 0.3 : 0.1, to: d.hit ? d.hit.to : 0.6 }, combo: { next: 'slash3', from: d.cancel * 0.9 } }),
+  },
+  link2: {
+    base: 'slash1', name: 'Whirling Cut',
+    build: (d) => ({ ...d, id: 'link2', stamina: 20, hit: blow(d, 1.4, 42), sweep: { reach: 2.4, arc: -1 }, flair: [{ kind: 'spin', from: d.hit ? d.hit.from - 0.12 : 0.2, to: d.hit ? d.hit.to + 0.1 : 0.6, amt: 1 }], combo: { next: 'slash3', from: d.cancel } }),
+  },
+  link3: {
+    base: 'heavy', name: 'Crushing Overhead',
+    build: (d) => ({ ...retime({ ...d, chargeAt: undefined }, 0.85), id: 'link3', stamina: 26, hit: blow(d, 2.4, 80), posture: 1.6, hyper: true, react: 'stagger', combo: undefined }),
+  },
+  delay2: {
+    base: 'slash2', name: 'Hesitation Cut',
+    build: (d) => ({ ...d, id: 'delay2', stamina: 16, hit: blow(d, 1.4, 34), posture: 1.25, combo: { next: 'slash3', from: d.combo?.from ?? d.cancel, heavy: 'link2' } }),
+  },
+  // ---- locked on: the direction you push picks the opener ----
+  thrust: {
+    base: 'sprintAttack', name: 'Lunge',
+    build: (d) => ({ ...d, id: 'thrust', stamina: 16, dtype: 'pierce', hit: blow(d, 1.35, 34), move: { dist: 1.7, from: 0.05, to: d.hit ? d.hit.to : 0.6 }, combo: { next: 'slash2', from: d.cancel * 0.9, heavy: 'link2' } }),
+  },
+  retreatCut: {
+    base: 'slash2', name: 'Retreating Cut',
+    build: (d) => ({ ...d, id: 'retreatCut', stamina: 15, hit: blow(d, 0.95, 22), move: { dist: -1.6, from: 0.02, to: d.hit ? d.hit.to : 0.5 }, iframes: [0.02, 0.16], combo: { next: 'thrust', from: d.cancel } }),
+  },
+  sideSweep: {
+    base: 'slash1', name: 'Side Sweep',
+    build: (d) => ({ ...d, id: 'sideSweep', stamina: 15, hit: blow(d, 1.05, 26), sweep: { reach: 2.3, arc: -0.2 }, flair: [{ kind: 'bank', from: 0.05, to: d.hit ? d.hit.to + 0.1 : 0.6, amt: 0.25 }], combo: { next: 'slash2', from: d.combo?.from ?? d.cancel, heavy: 'link2' } }),
+  },
+  // ---- out of a guard ----
+  guardCounter: {
+    base: 'slash3', name: 'Guard Counter',
+    build: (d) => ({ ...retime(d, 0.78), id: 'guardCounter', stamina: 14, dtype: 'pierce', hit: blow(d, 1.55, 55), posture: 1.8, hyper: true, combo: { next: 'slash1', from: d.cancel * 0.78 } }),
+  },
+  // ---- finisher: on a broken or downed enemy ----
+  finisher: {
+    base: 'heavy', name: 'Finisher',
+    build: (d) => ({ ...retime({ ...d, chargeAt: undefined }, 0.9), id: 'finisher', stamina: 0, hit: blow(d, 4, 200), hyper: true, react: 'knockdown', iframes: [0, d.dur * 0.9], combo: undefined, track: d.dur * 0.6 }),
+  },
+};
+
+/** The light string's heavy and delayed branches. */
+export const STRING_BRANCH: Record<string, { heavy: string; delayed?: string }> = {
+  slash1: { heavy: 'link1', delayed: 'delay2' },
+  slash2: { heavy: 'link2' },
+  slash3: { heavy: 'link3' },
+};
+
+// A shove (G): no weapon needed. Batters guards aside and breaks posture.
+ACTIONS.barge = {
+  id: 'barge', dur: 0.72, stamina: 14,
+  proc: (t) => ({
+    right: { ...GUARD_R, grip: [-0.15, 1.1, sampleF([[0, 0.2], [0.3, 0.05], [0.45, 0.42], [0.7, 0.4], [1, 0.3]], t)], w: 1 },
+    spinePitch: sampleF([[0, 0], [0.25, -0.15], [0.42, 0.3], [0.7, 0.2], [1, 0]], t),
+    spineYaw: sampleF([[0, 0], [0.25, 0.4], [0.42, -0.25], [1, 0]], t),
+    hipsDrop: sampleF([[0, 0], [0.25, 0.1], [0.5, 0.04], [1, 0]], t),
+  }),
+  hit: { from: 0.3, to: 0.46, dmg: 0.35, poise: 62, hand: 'main' }, dtype: 'blunt', posture: 2.2, guardBreak: true, react: 'stagger',
+  sweep: { reach: 1.75, arc: 0.45 }, move: { dist: 1.0, from: 0.22, to: 0.46 }, cancel: 0.5, track: 0.28,
+  // The hero's Mixamo front kick, when it's loaded.
+  clip: 'kick',
+  clipTiming: { dur: 1.167, speed: 1.3, hit: { from: 0.4, to: 0.62, dmg: 0.35, poise: 62, hand: 'main' }, cancel: 0.78, track: 0.36 },
+};
+// The same with a shield: the rim driven into them.
+ACTIONS.shieldBash = {
+  ...ACTIONS.barge, id: 'shieldBash', stamina: 16,
+  proc: (t) => ({
+    left: { ...SHIELD_BLOCK_L, grip: [0.08, 1.22, sampleF([[0, 0.3], [0.25, 0.2], [0.42, 0.62], [0.7, 0.55], [1, 0.36]], t)], w: 1 },
+    right: GUARD_R,
+    spinePitch: sampleF([[0, 0], [0.25, -0.1], [0.42, 0.28], [1, 0]], t),
+    spineYaw: sampleF([[0, 0], [0.25, -0.35], [0.42, 0.3], [1, 0]], t),
+  }),
+  hit: { from: 0.28, to: 0.46, dmg: 0.55, poise: 75, hand: 'main' }, posture: 2.6,
+  // The shield's own thrust (the parry clip, played slower and driven forward).
+  clip: 'parry_shield',
+  clipTiming: { dur: 0.458, speed: 0.7, hit: { from: 0.12, to: 0.32, dmg: 0.55, poise: 75, hand: 'main' }, cancel: 0.4, track: 0.14 },
+};

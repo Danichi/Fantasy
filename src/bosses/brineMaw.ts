@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import { Creature, type CreatureBase } from '../creatures/creature';
 import { CrabVisual, crabDark, type CrabPose } from '../creatures/crab/visual';
@@ -79,6 +80,9 @@ export class BrineMaw extends Creature implements BossBody {
   }
 
   private setMode(m: Mode, len = 1) {
+    // Its tell (combat/core.ts): the colour says how to answer it; a blow now is a counter-hit.
+    const tell = ({ snap: ['normal', 0.1, 0], sweep: ['heavy', 0.15, 0], rear: ['unblockable', 0.2, 1.2] } as Partial<Record<Mode, [AttackKind, number, number]>>)[m];
+    if (tell) combat.windup(this, len + tell[1], tell[0], tell[2] ? len + tell[2] : 0);
     this.mode = m;
     this.modeT = 0;
     this.modeLen = len;

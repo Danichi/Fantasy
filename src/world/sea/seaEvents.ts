@@ -133,7 +133,7 @@ class Whale extends SeaEvent {
   readonly id = 'whale' as const;
   private body = new THREE.Group();
   private tail: THREE.Mesh;
-  private yaw = Math.random() * 6;
+  yaw = Math.random() * 6;
   private part: Part;
   constructor(scene: THREE.Scene, fx: FX, at: THREE.Vector3) {
     super(scene, fx, at);
@@ -316,7 +316,7 @@ export class Shoal extends SeaEvent {
   fish: Part | null = null;
   fishKind = 'bluefin';
   private fishMesh: THREE.Group | null = null;
-  private yaw = Math.random() * 6;
+  yaw = Math.random() * 6;
   constructor(scene: THREE.Scene, fx: FX, at: THREE.Vector3, bigGame: boolean) {
     super(scene, fx, at);
     if (bigGame) {

@@ -392,14 +392,16 @@ export class InventoryUI {
   }
 }
 
-export function buildOverlays(onStart: (origin: Origin | null) => void, initialOrigin: Origin = 'human', music?: { muted: boolean; setMuted(m: boolean): void }) {
+export function buildOverlays(onStart: (origin: Origin | null) => void, initialOrigin: Origin = 'human', music?: { muted: boolean; setMuted(m: boolean): void }, numbers?: { on: boolean; set(on: boolean): void }) {
   const root = document.getElementById('ui')!;
   const controls = `
     <div class="controls">
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</span><span><kbd>Mouse</kbd> Look</span>
       <span><kbd>Shift</kbd> Sprint · attack while sprinting to lunge</span><span><kbd>Space</kbd> Dodge roll</span>
-      <span><kbd>LMB</kbd> Attack · hold for heavy</span><span><kbd>RMB</kbd> Block / off-hand attack</span>
-      <span><kbd>F</kbd> Parry</span><span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on</span>
+      <span><kbd>LMB</kbd> Attack · hold to charge a heavy (let go as it fills)</span><span><kbd>RMB</kbd> Block / off-hand attack · LMB while blocking: counter</span>
+      <span>Hold <kbd>LMB</kbd> into a string's next cut to branch it · locked on, push a direction as you strike</span>
+      <span><kbd>F</kbd> Parry (the last instant is a perfect parry)</span><span><kbd>G</kbd> Kick / shield bash: breaks guards</span>
+      <span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on · wheel switches target</span><span>A broken or downed enemy: attack for a finisher</span>
       <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span><span><kbd>V</kbd> Origin ability</span>
       <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory · <kbd>K</kbd> Skills</span>
       <span><kbd>E</kbd> Interact (doors, chests, gates)</span><span><kbd>M</kbd> World map · draw the map in dungeons</span>
@@ -414,7 +416,7 @@ export function buildOverlays(onStart: (origin: Origin | null) => void, initialO
   const selectedOrigin = initialOrigin;
   const help = document.createElement('div');
   help.className = 'overlay hidden';
-  help.innerHTML = `<div class="title-card"><h1>CONTROLS</h1><p class="sub">Parry a slime's leap with good timing to stagger it, then strike for a critical riposte.</p>${controls}<p class="sub" style="margin-top:22px">Press H or click to close</p></div>`;
+  help.innerHTML = `<div class="title-card"><h1>CONTROLS</h1><p class="sub">Read the tells: white, parry it · gold, a heavy blow · red, dodge it · yellow, a grab. Wear their posture down to break them, then finish them. Kaela Voss at the drill yard teaches it all.</p>${controls}<p class="sub" style="margin-top:22px">Press H or click to close</p></div>`;
   root.appendChild(help);
   // The origin is chosen once, when a new game begins: never on the pause
   // screen, and not when continuing a saved character.
@@ -443,7 +445,9 @@ export function buildOverlays(onStart: (origin: Origin | null) => void, initialO
   const row = document.createElement('div');
   row.className = 'desk-row';
   const musicLabel = () => (music?.muted ? 'Music: Off' : 'Music: On');
+  const numbersLabel = () => (numbers?.on ? 'Damage numbers: On' : 'Damage numbers: Off');
   if (music) row.innerHTML = `<button data-a="music">${musicLabel()}</button>`;
+  if (numbers) row.innerHTML += `<button data-a="numbers">${numbersLabel()}</button>`;
   if (desktop) row.innerHTML += '<button data-a="fs">Toggle fullscreen (F11)</button><button data-a="quit">Quit game</button>';
   row.addEventListener('click', (e) => {
     const btn = e.target as HTMLElement;
@@ -453,6 +457,9 @@ export function buildOverlays(onStart: (origin: Origin | null) => void, initialO
     if (a === 'music' && music) {
       music.setMuted(!music.muted);
       btn.textContent = musicLabel();
+    } else if (a === 'numbers' && numbers) {
+      numbers.set(!numbers.on);
+      btn.textContent = numbersLabel();
     } else if (a === 'quit') desktop?.quit();
     else if (a === 'fs') desktop?.toggleFullscreen();
   });

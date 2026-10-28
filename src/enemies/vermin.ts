@@ -57,7 +57,7 @@ export class Rat implements Target {
   hp = 16;
   maxHp = 16;
   readonly root = ratModel();
-  private yaw = Math.random() * 6.28;
+  yaw = Math.random() * 6.28;
   private cooldown = 1 + Math.random();
   private hurtT = 0;
   private deathT = 0;
@@ -70,6 +70,10 @@ export class Rat implements Target {
     scene.add(this.root);
     targets.add(this);
     this.sync();
+  }
+
+  onBreak(sec: number) {
+    this.hurtT = sec;
   }
 
   takeHit(h: HitInfo) {

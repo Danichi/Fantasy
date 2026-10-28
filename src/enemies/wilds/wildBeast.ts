@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../../combat/core';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -102,7 +103,7 @@ export class WildBeast implements Target {
   protected actions = new Map<string, THREE.AnimationAction>();
   protected active: THREE.AnimationAction | null = null;
   protected vel = new THREE.Vector3();
-  protected yaw = Math.random() * Math.PI * 2;
+  yaw = Math.random() * Math.PI * 2;
   protected rb: RAPIER.RigidBody;
   protected col: RAPIER.Collider;
   protected kcc: RAPIER.KinematicCharacterController;
@@ -283,6 +284,12 @@ export class WildBeast implements Target {
 
   // ---- damage ------------------------------------------------------------------------------
 
+  readonly ownPoise = true;
+  /** Posture broken (combat/core.ts): it reels. */
+  onBreak() {
+    if (this.state !== 'dying') this.flinch(new THREE.Vector3());
+  }
+
   takeHit(h: HitInfo) {
     if (!this.alive || this.state === 'dying' || this.state === 'dormant') return;
     this.hp -= h.damage;
@@ -339,6 +346,8 @@ export class WildBeast implements Target {
   }
 
   protected setState(s: State) {
+    const tell = ({ windup: ['normal', 0.5, 0], charge: ['heavy', 0.4, 0] } as Partial<Record<State, [AttackKind, number, number]>>)[s];
+    if (tell && this.alive) combat.windup(this, tell[1], tell[0], tell[2]);
     this.state = s;
     this.st = 0;
     this.hitDone = false;

@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import { dampAngle } from '../core/math';
 import { events } from '../core/events';
@@ -42,7 +43,7 @@ export class CorruptedBrother implements Target {
   private clip = '';
   private state: State = 'waiting';
   private st = 0;
-  private yaw = 0;
+  yaw = 0;
   private cool = 1.5;
   private combo = 0;
   private hitDone = false;
@@ -116,9 +117,23 @@ export class CorruptedBrother implements Target {
     this.clip = name;
   }
   private set(s: State) {
+    // Its tell (combat/core.ts): the colour says how to answer it; a blow now is a counter-hit.
+    const tell = ({ combo: ['normal', 0.5, 0], ring: ['unblockable', 0.8, 0] } as Partial<Record<State, [AttackKind, number, number]>>)[s];
+    if (tell && this.alive) combat.windup(this, tell[1], tell[0], tell[2]);
     this.state = s;
     this.st = 0;
     this.hitDone = false;
+  }
+
+  readonly ownPoise = true;
+  readonly boss = true;
+  /** Posture broken (combat/core.ts): he reels. */
+  onBreak() {
+    if (!this.alive || this.state === 'waiting' || this.state === 'dying' || this.state === 'enrage') return;
+    this.poise = 0;
+    this.stunned = true;
+    this.set('hurt');
+    this.play('hit', true);
   }
 
   takeHit(h: HitInfo) {

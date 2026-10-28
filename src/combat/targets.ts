@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Armour, AttackKind, CritReason, DmgType, Reaction } from './core';
 
 export interface HitInfo {
   damage: number;
@@ -8,6 +9,14 @@ export interface HitInfo {
   at: THREE.Vector3;
   crit: boolean;
   source: 'melee' | 'spell';
+  /** combat core: how the blow moved it (none: it held its ground), what kind of blow, why it crit */
+  react?: Reaction;
+  type?: DmgType;
+  reason?: CritReason;
+  /** this blow broke its posture */
+  broke?: boolean;
+  /** batters a raised guard aside (shoves, shield bashes) */
+  guardBreak?: boolean;
 }
 
 /** Anything the player can hit or lock on to. */
@@ -30,6 +39,21 @@ export interface Target {
   label?: string;
   level?: number;
   takeHit(h: HitInfo): void;
+  // ---- combat core (combat/core.ts): all optional ----
+  /** facing (radians, 0 = +Z): backstabs */
+  yaw?: number;
+  /** what it's made of (default from its kind) */
+  armour?: Armour;
+  /** a boss: bigger posture, shorter breaks don't apply */
+  boss?: boolean;
+  postureMax?: number;
+  poiseMax?: number;
+  /** reads raw poise itself (its own stagger meter): gets every blow's poise unfiltered */
+  ownPoise?: boolean;
+  /** posture broke: reel for `sec` seconds */
+  onBreak?(sec: number): void;
+  /** a blow landing at this point hits a weak spot */
+  weakPoint?(at: THREE.Vector3): boolean;
 }
 
 export const targets = new Set<Target>();
@@ -52,6 +76,10 @@ export interface IncomingAttack {
   poison?: number;
   /** webbing: seconds you are slowed and stuck (a roll tears free sooner) */
   web?: number;
+  /** combat core: how it can be answered (default normal: block, parry or dodge) */
+  kind?: AttackKind;
+  /** who swung it (parries build its posture) */
+  attacker?: Target;
 }
 
 export type DefenceResult = 'dodged' | 'parried' | 'blocked' | 'guardBroken' | 'hit';

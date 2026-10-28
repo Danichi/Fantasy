@@ -1,4 +1,10 @@
 // Fonts are bundled so the game works offline (desktop build).
+import { combat } from './combat/core';
+import { director } from './combat/ai';
+import { combatFeedback } from './combat/feedback';
+import { TrainingYard } from './combat/trainingYard';
+import { CombatDebug } from './combat/debugOverlay';
+import { WeaponTrail } from './fx/weaponTrail';
 import './render/stylize';
 import { initCompressedGltf } from './core/gltf';
 import '@fontsource/cinzel/500.css';
@@ -23,7 +29,7 @@ import { FX } from './fx/particles';
 import { BeastSpawner } from './enemies/beastSpawner';
 import { Spells } from './magic/spells';
 import { buildIcons, pumpIcons, setOnIconsReady, loadBakedIcons, exportAllIcons } from './ui/icons';
-import { HUD } from './ui/hud';
+import { HUD, writeDamageNumbers } from './ui/hud';
 import { InventoryUI, buildOverlays } from './ui/inventory';
 import { Music } from './audio/music';
 import { Ambient } from './world/ambient';
@@ -468,6 +474,10 @@ async function boot() {
 
   // ---- UI ------------------------------------------------------------------
   const hud = new HUD(player, r.camera);
+  // Combat rework: tells, impacts, parries, breaks and finishers seen and heard (combat/feedback.ts).
+  combatFeedback(fx, player, (t) => hud.showBanner(t));
+  const combatDebug = new CombatDebug(r.scene, player); // F9
+  const trail = new WeaponTrail(r.scene, player);
   // Where a raised shield covers, and a crosshair to aim it.
   const guardArc = new GuardArc(r.scene, player);
   hud.resource = () => skillRt.resources();
@@ -1509,6 +1519,14 @@ async function boot() {
     return quests.markers().filter((m) => m.quest === tracked).map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label, tracked: true }));
   };
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
+  // Kaela Voss's drill yard (combat rework): a drill for each part of the fighting.
+  const kaelaSpec = NPCS.find((n) => n.id === 'kaela');
+  const yard = new TrainingYard(r.scene, encounters.bolts, player, new THREE.Vector3(kaelaSpec?.pos[0] ?? -13.5, 0, kaelaSpec?.pos[1] ?? 0.5), worldFlags, (m) => hud.toast(m), (n) => player.prog.addXp(n));
+  const baseServices = town.serviceOptions;
+  town.serviceOptions = (id, show, back) => [
+    ...(id === 'kaela' ? [{ label: 'Drill me in the fighting arts.', run: () => yard.menu(show, back) }] : []),
+    ...(baseServices?.(id, show, back) ?? []),
+  ];
   microDiscoveries = new MicroDiscoveries(
     r.scene,
     world.mats,
@@ -1747,7 +1765,15 @@ async function boot() {
     pausedByUser = false;
     input.fallbackLook = true;
     input.requestLock();
-  }, player.prog.origin, music);
+  }, player.prog.origin, music, {
+    get on() {
+      return hud.damageNumbers;
+    },
+    set: (on: boolean) => {
+      hud.damageNumbers = on;
+      writeDamageNumbers(on);
+    },
+  });
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
   // ---- Origins (feat/origins): a new game opens the character creator ----
@@ -1880,6 +1906,13 @@ async function boot() {
   let paused = false;
   let simSteps = 0;
   player.onHitStop = (s) => (hitStop = Math.max(hitStop, s));
+  // Combat rework: time slows for a moment on a perfect parry, a perfect dodge or a finisher.
+  let slowT = 0, slowScale = 1;
+  events.on('slowMo', ({ scale, sec }) => {
+    if (TEST_MODE) return; // tests measure the world in real seconds
+    slowScale = slowT > 0 ? Math.min(slowScale, scale) : scale;
+    slowT = Math.max(slowT, sec);
+  });
 
   let acc = 0;
   let last = performance.now();
@@ -1912,6 +1945,8 @@ async function boot() {
     slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
     if (realm.mode === 'overworld') sailing.preStep(STEP);
     player.update(STEP, input, cam);
+    combat.tick(STEP); // posture, poise and wind-ups of everything that fights (combat/core.ts)
+    director.tick(STEP, player); // attack turns (combat/ai.ts)
     skillRt.update(STEP);
     arms.update(STEP, input); // Arms and Crafting (feat/arms)
     herbalism.update(STEP);
@@ -1932,6 +1967,7 @@ async function boot() {
       crownRoad.update(STEP, player, time.state.night);
       roadLife.step(STEP, player);
       duel.update(STEP);
+      yard.update(STEP);
       gravewood.update(STEP, player);
       desert?.update(STEP, player);
       wilds?.update(STEP, player);
@@ -1984,8 +2020,9 @@ async function boot() {
     // Pause the world while the title/pause overlay is up (never in tests).
     const overlayUp = !TEST_MODE && (!started || pausedByUser);
     // Hit-stop is a brief slow-motion rather than a hard freeze.
-    const timeScale = hitStop > 0 ? 0.1 : 1;
+    const timeScale = hitStop > 0 ? 0.1 : slowT > 0 ? slowScale : 1;
     hitStop = Math.max(0, hitStop - dt);
+    slowT = Math.max(0, slowT - dt);
     const simDt = dt * timeScale;
     acc += simDt;
     let steps = 0;
@@ -2021,6 +2058,8 @@ async function boot() {
     tickDelverFur(dt);
     tickUndeadHair(dt);
     guardArc.update(dt);
+    combatDebug.update();
+    trail.update(dt);
     updateSnare(player);
     r.camera.getWorldDirection(player.aimDir);
     ground.update(r.camera.position);
@@ -2238,6 +2277,7 @@ async function boot() {
       THREE, r, input, player, cam, physics, fx, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
+      yard, combatDebug, // combat rework: the drill yard and the F9 overlay
       ghLife, outcast, ghSide, scrapTowns,
       wilds, roadLife, herbalism, riches, gwKey, sanctum,
       origins, creator, // ---- Origins (feat/origins) ----

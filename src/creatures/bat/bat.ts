@@ -56,7 +56,7 @@ export class Bat extends Creature {
   private setMode(m: Mode, len = 1) {
     this.mode = m;
     this.modeT = 0;
-    this.modeLen = len;
+    this.modeLen = len;    if (m === 'dive') this.tell(0.55);
   }
   private volume(player: Player) {
     return Math.max(0, 0.35 * (1 - player.pos.distanceTo(this.position) / 30));

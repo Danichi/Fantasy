@@ -32,7 +32,7 @@ export class CharacterCreator {
   private cam = new THREE.PerspectiveCamera(28, 1, 0.1, 40);
   private hero: { root: THREE.Group; mixer: THREE.AnimationMixer; parts: PartsHandle; mats: THREE.Material[] } | null = null;
   private token = 0;
-  private yaw = 0.5;
+  yaw = 0.5;
   private dragging = false;
   private spread = false;
   private raf = 0;
