@@ -417,7 +417,7 @@ export class HumanoidBrain {
         this.start(m);
         return;
       }
-      if (this.plannedT > 3.5) {
+      if (this.plannedT > 2.2) {
         // Couldn't get there: give the turn back.
         this.planned = null;
         director.release(b);
