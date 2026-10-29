@@ -2,9 +2,14 @@
 // While the text is still typing, a click or key only finishes the sentence:
 // the replies appear (and become clickable) once the NPC has had their say.
 
+/** The tone of a reply (shown as a little chip before it). */
+export type Tone = 'kind' | 'neutral' | 'rude' | 'threat' | 'persuade' | 'bribe' | 'gift';
+const TONE_NAME: Record<Tone, string> = { kind: 'Kind', neutral: 'Neutral', rude: 'Rude', threat: 'Threaten', persuade: 'Persuade', bribe: 'Bribe', gift: 'Gift' };
+
 export interface DialogueOption {
   label: string;
   run: () => void; // usually says something else, or closes
+  tone?: Tone;
 }
 
 export class DialogueUI {
@@ -49,10 +54,13 @@ export class DialogueUI {
 
   /** who is speaking right now (NPCs keep talking while their words type out) */
   speaker = '';
+  /** how the speaker feels about you (shown beside their name while it's them talking) */
+  mood: { speaker: string; label: string; cls: string } | null = null;
 
   show(name: string, title: string, text: string, options: DialogueOption[]) {
     this.speaker = name;
-    this.nameEl.innerHTML = `${name}<small>${title}</small>`;
+    const m = this.mood?.speaker === name ? this.mood : null;
+    this.nameEl.innerHTML = `${name}<small>${title}</small>${m ? `<span class="mood mood-${m.cls}">${m.label}</span>` : ''}`;
     this.full = text;
     this.shown = 0;
     this.options = options;
@@ -60,7 +68,7 @@ export class DialogueUI {
     this.optsEl.innerHTML = '';
     options.forEach((o, i) => {
       const b = document.createElement('button');
-      b.innerHTML = `<kbd>${i + 1}</kbd>${o.label}`;
+      b.innerHTML = `<kbd>${i + 1}</kbd>${o.tone ? `<span class="tone tone-${o.tone}">${TONE_NAME[o.tone]}</span>` : ''}${o.label}`;
       b.addEventListener('click', (e) => {
         e.stopPropagation();
         if (this.typing) this.skip();

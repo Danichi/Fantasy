@@ -1090,7 +1090,7 @@ async function boot() {
   folkServices.set('dunmore', stableFor('dunmore', kingsRoad.stableYard, 'waystation'));
   folkServices.set('hobbs', stableFor('hobbs', PORT_SPOTS.stable, 'portAurelle'));
   folkServices.set('capOstler', stableFor('capOstler', CAPITAL_SPOTS.stable, 'royalCapital'));
-  folkServices.set('rook', stableFor('rook', crownRoad.stableYard, 'kingsmile'));
+  folkServices.set('fenwick', stableFor('fenwick', crownRoad.stableYard, 'kingsmile'));
   Object.assign(crownHooks, {
     toast: (m: string) => hud.toast(m),
     bossBar: (t: { hp: number; maxHp: number; alive: boolean } | null, name?: string) => hud.bossBar(t, name),

@@ -50,7 +50,7 @@ export const CAST: Record<string, Authored> = {
     about: 'Forty years at the anvil. Came from the dwarf-holds as a boy and never went back. The Glen needed a smith more than the holds did.',
     want: 'Starmetal. Just one ingot of it. I\'ve been dreaming of the blade for thirty years.',
     secret: 'I can\'t stand dwarven ale. I drink it to be polite and pour half in the quench tub.',
-    ties: [{ id: 'carpenter', bond: 'friend' }, { id: 'tessa', bond: 'friend' }],
+    ties: [{ id: 'carpenter', bond: 'friend' }, { id: 'baker', bond: 'friend' }],
     topics: [
       { q: 'Tell me about the dwarf-holds.', a: 'Cold, dark, loud, and full of relatives. I loved it. I\'d never go back.', min: 'neutral' },
       { q: 'What makes a good blade?', a: 'Patience, mostly. Good iron, a clean fire, and a smith who doesn\'t rush the quench. Most rush the quench.', min: 'warm' },
@@ -113,7 +113,7 @@ export const CAST: Record<string, Authored> = {
     about: 'I brew what keeps adventurers breathing. Most of them come back. Most.',
     want: 'Duskbloom that isn\'t half rotten by the time the caravans bring it.',
     secret: 'I failed my guild examinations twice. Everything I know I taught myself from my grandmother\'s notebook.',
-    ties: [{ id: 'wenna', bond: 'friend' }],
+    ties: [{ id: 'baker', bond: 'friend' }],
     topics: [
       { q: 'Any advice for the road?', a: 'Drink the red one when you\'re bleeding, the blue one when your head hurts from spellwork, and never, ever drink anything a bandit leaves behind.', min: 'neutral' },
     ],

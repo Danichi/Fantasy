@@ -96,6 +96,10 @@ export interface Memory {
   /** persuasion tried today */
   persuadeDay?: number;
   apologyDay?: number;
+  /** the last day a kind word counted */
+  kindDay?: number;
+  /** the last day they gave you something */
+  lastGiftFrom?: number;
 }
 
 export interface Rumour {
@@ -111,6 +115,14 @@ export interface Rumour {
   about?: string;
 }
 
+/** Something the town says you did ("you drove the wolves off the pens"). */
+export interface Told {
+  text: string;
+  good: boolean;
+  community: string;
+  day: number;
+}
+
 export interface SocialSave {
   disp: Record<string, number>;
   standing: Record<string, number>;
@@ -121,7 +133,7 @@ export interface SocialSave {
   gone: Record<string, number>;
   rumours: Rumour[];
   /** deeds the town talks about (newest first) */
-  told: string[];
+  told: Told[];
 }
 
 export class Reputation {
@@ -132,7 +144,7 @@ export class Reputation {
   dead = new Set<string>();
   gone = new Map<string, number>();
   rumours: Rumour[] = [];
-  told: string[] = [];
+  told: Told[] = [];
   /** profile lookups (social/people.ts fills this in) */
   firstImpression: (id: string) => number = () => 0;
   communityFor: (id: string) => string = () => 'roads';
@@ -222,7 +234,7 @@ export class Reputation {
     if (o.text) {
       // It goes round the town over the next few hours rather than at once.
       this.rumours.push({ text: o.text, community: c, deed, left: crime ? 3 : 6, standing: ds * k, about: o.who });
-      this.told.unshift(o.text);
+      this.told.unshift({ text: o.text, good: !crime && ds >= 0, community: c, day: this.day() });
       this.told.length = Math.min(this.told.length, 12);
       // The people who saw it feel it straight away.
       if (crime) this.shift(c, ds * 0.4 * k);

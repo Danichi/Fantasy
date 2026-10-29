@@ -466,6 +466,46 @@
   border: 1px solid #8a6431; border-bottom-width: 2px; border-radius: 3px;
   font: 700 11px/1 var(--sans); text-align: center;
 }
+/* How the speaker feels about you, and the tone of each reply (NPC overhaul). */
+#ui .dialogue .who .mood {
+  margin-left: auto; padding: 3px 9px 4px; border-radius: 10px;
+  font: 700 11px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase;
+  border: 1px solid currentColor; background: rgba(255, 249, 230, .6);
+}
+#ui .dialogue .mood-hostile { color: #8e1b12; background: rgba(214, 120, 100, .25); }
+#ui .dialogue .mood-cold { color: #9a3a1c; }
+#ui .dialogue .mood-wary { color: #8a6418; }
+#ui .dialogue .mood-neutral { color: #6b5a40; }
+#ui .dialogue .mood-warm { color: #4f7a2a; }
+#ui .dialogue .mood-friend { color: #2f7a4a; background: rgba(150, 210, 160, .25); }
+#ui .dialogue .mood-devoted { color: #1f6a7a; background: rgba(140, 200, 220, .3); }
+#ui .dialogue .mood-afraid { color: #6a3a8a; background: rgba(190, 160, 220, .25); }
+#ui .dialogue .opts .tone {
+  flex: none; margin-right: 9px; padding: 2px 6px 3px; border-radius: 3px;
+  font: 700 10px/1 var(--sans); letter-spacing: .06em; text-transform: uppercase;
+  color: #fff8e8; background: #7a6a50;
+}
+#ui .dialogue .opts .tone-kind { background: #4f8a3a; }
+#ui .dialogue .opts .tone-rude { background: #b5651d; }
+#ui .dialogue .opts .tone-threat { background: #9b2218; }
+#ui .dialogue .opts .tone-persuade { background: #3a6a9a; }
+#ui .dialogue .opts .tone-bribe { background: #a8841c; }
+#ui .dialogue .opts .tone-gift { background: #8a4a8a; }
+/* Speech bubbles: what people say as you pass (and to each other). */
+#ui .bark {
+  position: absolute; transform: translate(-50%, -100%); max-width: 240px; pointer-events: none;
+  padding: 6px 11px 7px; border-radius: 10px;
+  color: var(--ink-dark); font: italic 400 14px/1.3 var(--fell); text-align: center;
+  background: linear-gradient(180deg, rgba(255, 249, 230, .95), rgba(240, 225, 190, .92));
+  border: 1px solid rgba(122, 90, 46, .55); box-shadow: 0 2px 6px rgba(40, 25, 10, .25);
+  transition: opacity .3s;
+}
+#ui .bark::after {
+  content: ''; position: absolute; left: 50%; bottom: -6px; margin-left: -6px;
+  border: 6px solid transparent; border-bottom: 0; border-top-color: rgba(240, 225, 190, .95);
+}
+#ui .bark.hostile { color: #8e1b12; }
+#ui .bark.friend { color: #2f6a3a; }
 /* NPC nameplates: a small parchment label rather than a dark box. */
 #ui .npc-tag {
   padding: 4px 11px 5px;

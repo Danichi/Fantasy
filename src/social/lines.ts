@@ -305,7 +305,7 @@ export function fill(text: string, p: Profile, c: LineCtx, extra: Record<string,
   return text
     .replace(/\{you\}/g, c.you)
     .replace(/\{town\}/g, c.town)
-    .replace(/\{deed\}/g, c.deed ?? 'nothing much')
+    .replace(/\{deed\}/g, extra.deed ?? c.deed ?? 'nothing much')
     .replace(/\{other\}/g, extra.other ?? c.other ?? 'old Hob')
     .replace(/\{bond\}/g, extra.bond ?? 'friend')
     .replace(/\{about\}/g, p.about)
