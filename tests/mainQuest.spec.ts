@@ -30,7 +30,10 @@ test('a test game starts after the fall, with A Stranger in Elder Glen tracked a
     // Two of the Glen's troubles done: the waypoint points at Maud.
     q.signal('glen-trust');
     q.signal('glen-trust');
-    g.player.teleport(new T.Vector3(0, heightAt(0, 30) + 0.3, 30));
+    q.update(1, g.player.pos);
+    // Stand 40 m south of wherever Maud is just now (she keeps her own hours), looking south.
+    const m = q.markers().find((k: { quest: string }) => k.quest === 'mq-stranger') ?? { x: 10, z: -10 };
+    g.player.teleport(new T.Vector3(m.x, heightAt(m.x, m.z + 40) + 0.3, m.z + 40));
     for (let i = 0; i < 20; i++) {
       await sleep(100);
       q.update(1, g.player.pos);
