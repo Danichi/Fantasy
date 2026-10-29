@@ -9,17 +9,20 @@ import type { FX } from '../fx/particles';
 import { heightAt } from '../world/terrainHeight';
 
 // The Champions' Game (main story). The Hollow King, who has ruled the Dark
-// for thousands of years, is dying, and the great powers each want his
-// throne. Sworn never to fight one another, they fight through champions,
-// summoned into the world at each turning of the Sunwheel: an "age". The
-// wheel turns faster as he weakens. The First Age was a thousand years ago,
-// the Second three hundred, the Third forty, the Fourth ten; the Fifth is now,
-// and you are the Dawn's champion of it. Champions who live keep their
-// patron's favour, and grow. A Fifth Age champion is a peer. A Fourth is a
-// veteran; a Third a legend; a Second is something out of a war-song; and a
-// First Age champion has been fed by a god for a thousand years.
+// for thousands of years, is dying, and seven great powers each want his
+// throne. Eighty years ago they swore the Accord: they will never fight one
+// another, and each may summon one champion every twenty years. Each summoning
+// is an "age". The First Age was eighty years ago, the Second sixty, the Third
+// forty, the Fourth twenty; the Fifth is now, and you are the Dawn's champion
+// of it. Most powers take their new champion home and train them for years
+// (the Dragon King in the Deep Mountains, the Demon Lord on the Deep
+// Continent), so you hear of your own year long before you meet it. The Game
+// thins every age, but the ones who live keep their patron's favour and grow:
+// a Fifth Age champion is a peer; a Fourth a veteran; a Third a legend; a
+// Second something out of a war-song; and a First Age champion has been fed by
+// a god for eighty years. There are very few of those left. They are the worst.
 
-export type PowerId = 'dawn' | 'dragonGod' | 'dragonKing' | 'verdant' | 'ironBelow' | 'hollow';
+export type PowerId = 'dawn' | 'dragonGod' | 'dragonKing' | 'verdant' | 'ironBelow' | 'demonLord' | 'drowned' | 'hollow';
 
 export interface Power {
   id: PowerId;
@@ -29,6 +32,8 @@ export interface Power {
   known: string;
   /** what its champions carry: the tells you learn to read */
   marks: string;
+  /** where it summons its champions, and keeps them while they learn */
+  home: string;
 }
 
 export const POWERS: Record<PowerId, Power> = {
@@ -36,31 +41,49 @@ export const POWERS: Record<PowerId, Power> = {
     id: 'dawn', name: 'The Dawn', color: '#ffcf6a',
     known: 'Cresha\'s own god, sung to every morning in the Temple. The Sunwheel is its mark, cut into stones older than the kingdom.',
     marks: 'The Sunwheel. Warm hands. A light that comes back however often it is put out.',
+    home: 'Nowhere. It is the weakest of the seven now, and drops its champions wherever it can reach, untaught.',
   },
   dragonGod: {
     id: 'dragonGod', name: 'The Dragon God', color: '#ff6a3a',
     known: 'Ashfang, worshipped in Valoria. A god of fire that remembers every insult.',
     marks: 'Ember-coloured eyes. A coiled flame worked into armour. Heat that does not come from any fire.',
+    home: 'The Ember Temples of Valoria, where the priests teach them to hold a cup and a grudge.',
   },
   dragonKing: {
     id: 'dragonKing', name: 'The Dragon King', color: '#e8c050',
     known: 'Veyrmos, a living dragon in the far north who has not slept in four hundred years. Not a god. He would tell you the difference does not matter.',
     marks: 'A crowned claw. Pupils that narrow in bright light. A habit of never turning their back on a door.',
+    home: 'The Deep Mountains in the far north, in the dragon\'s own halls.',
   },
   verdant: {
     id: 'verdant', name: 'The Verdant Mother', color: '#7ad08a',
     known: 'The elves\' green goddess. Patience older than stone.',
     marks: 'A ring of thorns. They do not age. Plants lean toward them.',
+    home: 'The heart of the elven woods, where no one else is let in.',
   },
   ironBelow: {
     id: 'ironBelow', name: 'The Iron Below', color: '#a0a8b8',
     known: 'The buried god of the oldest dwarf-holds. It wants the Dark for a forge.',
     marks: 'Black iron that is cold to the touch. An anvil with an eye. Grukk\'s warband was paid in it.',
+    home: 'The sunken forges under the oldest dwarf-holds.',
+  },
+  demonLord: {
+    id: 'demonLord', name: 'The Demon Lord', color: '#d0405a',
+    known: 'He rules the Deep Continent, past the edge of every map Cresha makes. He takes his champions home and keeps them for years, and what comes back is finished.',
+    marks: 'A brand of black flame on the palm. Shadows that fall the wrong way. They do not bleed red.',
+    home: 'The Deep Continent, across the sea, where he trains them himself.',
+  },
+  drowned: {
+    id: 'drowned', name: 'The Drowned Queen', color: '#4ab8c8',
+    known: 'She rules the trenches under the open sea. Sailors leave her a coin at every crossing and do not say her name on deck.',
+    marks: 'Salt that never dries on them. Eyes like sea-glass. Gulls will not land near them.',
+    home: 'The trenches under the open sea. Some of hers come up years later. Some never come up at all.',
   },
   hollow: {
     id: 'hollow', name: '???', color: '#9a7aa8',
     known: 'Nobody will say who sends him.',
     marks: 'A Sunwheel on his shield, cut backwards.',
+    home: 'Unknown.',
   },
 };
 
@@ -89,7 +112,7 @@ export const CHAMPIONS: Record<string, ChampionDef> = {
   malric: {
     id: 'malric', name: 'Ser Malric Dane', epithet: 'the Wheelbreaker', age: 4, power: 'ironBelow',
     look: L({ body: 'male', beard: true, hairColor: 0x1a1414, skin: 0xc89a74, cloth: 0x23262c, pauldron: true, height: 1.97 }),
-    about: 'Summoned ten years ago, in the Fourth Age. He has spent those years hunting the Dawn\'s champions, and is good at it. He paid Grukk in black iron to dig for a Sunwheel door.',
+    about: 'Summoned twenty years ago, in the Fourth Age, the same night as the Dawn\'s fourth. He has spent those years hunting the Dawn\'s champions, and is good at it. He paid Grukk in black iron to dig for a Sunwheel door.',
     clues: { malricIron: 'Grukk\'s warband was paid in black iron, cold to the touch.', malricEye: 'An anvil with an eye on his pauldron.' },
     taunts: ['The Dawn sends them young now.', 'Your fourth lasted longer than this. Not much longer.', 'Every wheel I break, the Iron Below remembers.', 'Better. Not good. Better.'],
   },
@@ -100,37 +123,30 @@ export const CHAMPIONS: Record<string, ChampionDef> = {
     clues: { heskLedger: 'The Chancellor\'s ledger pays "H." in black iron ingots.', heskIron: 'Her knife was black iron, cold even after she\'d held it.' },
     taunts: ['Shh.', 'You hear that? No? Good.'],
   },
-  dorian: {
-    id: 'dorian', name: 'Cadet Dorian Vale', epithet: 'Best Blade of the Year', age: 5, power: 'dragonKing', hidden: true,
-    look: L({ body: 'male', hair: 'simpleparted', hairColor: 0xd8b070, skin: 0xfff0e6, cloth: 0x7a1f1f, height: 1.86 }),
-    about: 'Summoned this year, like you. Arrived at the Academy a season before you did with a story about a farm in the north that nobody can find on a map.',
-    clues: { dorianDoor: 'He never sits with his back to a door. Not once.', dorianEyes: 'In the noon sun on the ring, his pupils narrowed to slits.' },
-    taunts: ['Same year, same road. Different master.', 'Don\'t look at me like that. You\'d do the same.'],
-  },
   veyr: {
     id: 'veyr', name: 'Master Veyr', epithet: 'of the Ninefold Duels', age: 3, power: 'dragonKing', hidden: true,
     look: L({ body: 'male', hair: 'buzzed', hairColor: 0xb8b4ae, skin: 0xe0b894, cloth: 0x2a2a3a, height: 1.82 }),
     about: 'He fought the Ninefold Duels forty years ago, when the Third Age turned. He has been winning ever since. He is going blind, and he is still the best blade in the valley.',
-    clues: { veyrClaw: 'A crowned claw is etched under the guard of his sword.', veyrDoor: 'He keeps his back to the wall, always, and his eyes on the door.', veyrAge: 'Kaela fought him when she was twenty. He looked the same then as now.' },
+    clues: { veyrStyle: 'Dorian Vale fights in the style of the Ninefold Duels. Only one master in Cresha still teaches it: Master Veyr of Elder Glen.', veyrLetters: 'Dorian writes to Elder Glen every week, to "the Master". The wax on his letters is stamped with a crowned claw.', veyrClaw: 'A crowned claw is etched under the guard of his sword.', veyrDoor: 'He keeps his back to the wall, always, and his eyes on the door.', veyrAge: 'Kaela fought him when she was twenty. He looked the same then as now.' },
   },
   varro: {
     id: 'varro', name: 'Legate Cassius Varro', epithet: 'the Ember Legate', age: 2, power: 'dragonGod',
     look: L({ body: 'male', hair: 'buzzed', hairColor: 0x0c0a0a, skin: 0x8a5a3a, cloth: 0x6a1410, pauldron: true, height: 2.0 }),
-    about: 'Valoria\'s envoy to the Crown. Summoned three hundred years ago in the Second Age. He has outlived every king who ever received him, and he is polite about it.',
+    about: 'Valoria\'s envoy to the Crown. Summoned sixty years ago in the Second Age. He has outlived three kings who received him, and every champion who has ever drawn on him, and he is polite about it.',
     clues: {},
-    taunts: ['Three hundred years, little Fifth. I have killed champions with a cup in my hand.', 'Ashfang sends his regards. All of them.'],
+    taunts: ['Sixty years, little Fifth. I have killed champions with a cup in my hand.', 'Ashfang sends his regards. All of them.'],
   },
   ysra: {
     id: 'ysra', name: 'Ysra the Undying', epithet: 'the Thornmother\'s Blade', age: 1, power: 'verdant',
     look: L({ body: 'female', hair: 'long', hairColor: 0xd8e8c8, skin: 0xe8dcc8, cloth: 0x2a4a2a, height: 1.9 }),
-    about: 'A First Age champion. The first champion of the Dawn wrote of her a thousand years ago: "a woman who fought like she had been doing it for a hundred years." She has been doing it for eleven hundred now.',
+    about: 'A First Age champion. The Verdant Mother summoned her eighty years ago already grey, a warrior from wherever she came from, and she has not aged a day since. The Dawn\'s first champion wrote of her: "a woman who fought like she had been doing it for a hundred years." She has been doing it for eighty more.',
     clues: {},
     taunts: ['Little sapling.', 'I knew your first. She was braver than you.'],
   },
   wheelShield: {
     id: 'wheelShield', name: 'The Wheel-Shield', epithet: 'who would not say who sent him', age: 1, power: 'hollow', hidden: true,
     look: L({ body: 'male', hair: 'buzzed', hairColor: 0x101010, skin: 0x8a8a90, cloth: 0x0a0a10, pauldron: true, height: 2.15 }),
-    about: 'A First Age champion. He carries the Sunwheel on his shield, cut backwards. The Dawn\'s first champion met him a thousand years ago and wrote that he would not say who sent him. He still won\'t.',
+    about: 'A First Age champion. He carries the Sunwheel on his shield, cut backwards. The Dawn\'s first champion met him eighty years ago and wrote that he would not say who sent him. He still won\'t. Every one of the seven powers summoned one champion in the First Age; he must be one of them. Nobody knows which.',
     clues: {},
     taunts: ['...', 'Five.'],
   },
@@ -138,24 +154,37 @@ export const CHAMPIONS: Record<string, ChampionDef> = {
   elin: {
     id: 'elin', name: 'Elin', epithet: 'the Dawn\'s First', age: 1, power: 'dawn', dead: true,
     look: L({ body: 'female', hair: 'buns', hairColor: 0x6a4428, cloth: 0xc8a050, height: 1.7 }),
-    about: 'The Dawn\'s champion of the First Age. Her camps and her grave are somewhere in Cresha, and her journal with them. She wrote that she had a life before.',
+    about: 'The Dawn\'s champion of the First Age, eighty years ago. Her camps and her grave are somewhere in Cresha, and her journal with them. She wrote that she had a life before.',
   },
   oswald: {
     id: 'oswald', name: 'Ser Oswald Marr', epithet: 'the Dawn\'s Second', age: 2, power: 'dawn', dead: true,
     look: L({ body: 'male', beard: true, cloth: 0x8a5a2a, pauldron: true }),
-    about: 'The Dawn\'s champion of the Second Age, three hundred years ago. His tomb was lost in the caves under Hollow Ridge. Ingrid\'s adventuring party went looking for it ten years ago, and only Ingrid came back.',
+    about: 'The Dawn\'s champion of the Second Age, sixty years ago. His tomb was lost in the caves under Hollow Ridge. Ingrid\'s adventuring party went looking for it ten years ago, and only Ingrid came back.',
   },
   hallam: {
     id: 'hallam', name: 'Ser Hallam', epithet: 'the Dawn\'s Third', age: 3, power: 'dawn', dead: true,
     look: L({ body: 'male', hair: 'simpleparted', cloth: 0x3a5f9e }),
-    about: 'The Dawn\'s champion of the Third Age, a knight of the north road. He died holding Harrow Ford on the Crown Road. A young soldier named Corvin took his sword and his title so the line would hold.',
+    about: 'The Dawn\'s champion of the Third Age, forty years ago: a knight of the north road. He died holding Harrow Ford on the Crown Road. A young soldier named Corvin took his sword and his title so the line would hold.',
   },
   tobin: {
     id: 'tobin', name: 'Ser Tobin Reyes', epithet: 'the Dawn\'s Fourth', age: 4, power: 'dawn', dead: true,
     look: L({ body: 'male', hair: 'simpleparted', cloth: 0x5a7a3a, pauldron: true }),
-    about: 'The Dawn\'s champion of the Fourth Age. Malric broke him on an old battlefield past Kingsmile and left him to the Dark. What the Dark made of him is still standing there: the Rust Knight.',
+    about: 'The Dawn\'s champion of the Fourth Age, twenty years ago. Malric broke him on an old battlefield past Kingsmile and left him to the Dark. What the Dark made of him is still standing there: the Rust Knight.',
   },
 };
+
+/**
+ * The Game, counted (Archivist Mell's index). In every age each of the seven
+ * powers summoned one champion; this is how many the chronicles think still
+ * walk. The old ages are thin, and what is left of them is the worst of it.
+ */
+export const AGES: { age: 1 | 2 | 3 | 4 | 5; when: string; walk: number; note: string }[] = [
+  { age: 1, when: 'eighty years ago', walk: 2, note: 'Seven were summoned. Two still walk. Everyone who has met either of them says the same thing afterwards: run.' },
+  { age: 2, when: 'sixty years ago', walk: 3, note: 'Seven were summoned. Three still walk, the chronicles think. Each of them has buried a king or two.' },
+  { age: 3, when: 'forty years ago', walk: 4, note: 'Seven were summoned. Four still walk. They are old now, and that has made them careful, not slow.' },
+  { age: 4, when: 'twenty years ago', walk: 5, note: 'Seven were summoned. Five still walk, in their prime, and hungry. These are the ones you will meet first.' },
+  { age: 5, when: 'this year', walk: 7, note: 'Seven were summoned, the same night as you. Six were taken home by their masters, to the Deep Mountains, the Deep Continent, the trenches under the sea, and are being taught. You will hear of them long before you meet them. When they come out, they will be ready.' },
+];
 
 /** How strong a champion of each age is. */
 export const AGE_STATS: Record<number, { hp: number; dmg: number; posture: number; pace: number; poiseK: number; special: number }> = {

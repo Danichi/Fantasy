@@ -229,12 +229,13 @@ export function setupAct1(c: ActCtx) {
       await s.voice('There you are.', 2.2);
       await s.voice('I called you. Out of your own world, into this one, as I have called four before you.', 4.2);
       await s.voice('Every wheel in this land is mine. Touch them, and they will carry you.', 3.6);
-      await s.voice('The others are coming for you, little Fifth. Be quick. Be quicker than the four.', 3.8);
+      await s.voice('Six others fell out of the sky the same night as you. The other powers caught theirs and carried them home: to the Deep Mountains, to the Deep Continent, under the sea. They are being taught. I could only catch you in a wheat field.', 6);
+      await s.voice('You will not meet them for a while. When you do, they will be ready. Be readier. And the older ones are already out here, little Fifth. Be quick. Be quicker than the four.', 5);
       await s.dark(0, 0.8);
       await s.card('', 'The Sunwheel Wakes', 'Touch any wheel to travel to another you have touched, or to rest.', 3.6);
     });
     story.awakenWheel();
-    story.note(CH[1], 'Elder Glen was afraid of you, so you made yourself useful, and the village began to trust you. Magus Orren sent you to the waystone at the east gate. When you touched it the voice spoke again: it called you here, out of your own world, as it called four before you. The Sunwheels answer you now.');
+    story.note(CH[1], 'Elder Glen was afraid of you, so you made yourself useful, and the village began to trust you. Magus Orren sent you to the waystone at the east gate. When you touched it the voice spoke again: it called you here, out of your own world, as it called four before you. Six other champions were summoned the same night, it said, and their masters carried them home to train; you will not meet them for a while. The Sunwheels answer you now.');
     quests.signal('wheel-woken');
     c.save();
   };
@@ -290,7 +291,7 @@ export function setupAct1(c: ActCtx) {
       await s.champion(4, 'Ser Malric Dane', 'the Wheelbreaker', 'Champion of the Iron Below', 3.2);
       await s.say('Ser Malric Dane', 'Your wardens are breathing. I\'m not a butcher. Grukk was, but Grukk was cheap.');
       await s.say(null, 'He turns a box of black iron over in his gauntlet. The Sunwheel is cut into its lid. Grukk dug it up for him.', 3.4);
-      await s.say('Ser Malric Dane', 'Ten years I\'ve been at this. I broke your fourth myself. Here is my offer, Fifth: walk away from the Game. Go and be a farmer. The Iron Below will let you.');
+      await s.say('Ser Malric Dane', 'Twenty years I\'ve been at this. I came down the same night as your fourth, and I broke him myself. Here is my offer, Fifth: walk away from the Game. Go and be a farmer. The Iron Below will let you.');
       const pick = await s.choose('Ser Malric Dane', 'the Wheelbreaker', 'Walk away. Live a small life. Last chance.', [
         { label: 'Put the box down.', tone: 'threat' },
         { label: 'What happened to the fourth?', tone: 'persuade' },

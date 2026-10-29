@@ -175,16 +175,25 @@ test('champions of the ages: each older age is far stronger, the First is all bu
     ws.takeHit({ damage: 500, poise: 400, dir: new T.Vector3(1, 0, 0), at: ws.center.clone(), crit: false, source: 'melee' });
     const firstAge = { lost: before - ws.hp, max: ws.maxHp };
     S.clearFight();
-    // Dorian: two clues, a wrong name, then the right one.
-    S.state.clue('dorianDoor');
-    S.state.clue('dorianEyes');
+    // Master Veyr (whom Dorian writes to): two clues, a wrong name, then the right one.
+    S.state.clue('veyrStyle');
+    S.state.clue('veyrLetters');
     const codex = S.state.codex();
-    const wrong = S.state.nameAs('dorian', 'ironBelow');
-    const right = S.state.nameAs('dorian', 'dragonKing');
+    const wrong = S.state.nameAs('veyr', 'ironBelow');
+    const right = S.state.nameAs('veyr', 'dragonKing');
+    // The census of the ages, once Mell has told you how the Game is counted.
+    const count = (html: string) => [...html.matchAll(/(\d) of 7 still walk/g)].map((m) => Number(m[1]));
+    const before = { census: count(codex).length, powers: (codex.match(/class="codex-power"/g) ?? []).length };
+    S.flags.censusKnown = true;
+    S.state.meet('malric');
+    const census = count(S.state.codex());
+    S.state.slay('hesk');
+    const afterHesk = count(S.state.codex());
+    const chips = (S.state.codex().match(/class="unknown"/g) ?? []).length;
     return {
       hp: ages.map((s) => s.hp), dmg: ages.map((s) => s.dmg), poise: ages.map((s) => s.poiseK),
-      firstAge, wrong, right, patron: S.state.patronOf('dorian'), naming: /data-name="dorian"/.test(codex),
-      ages: Object.values(CHAMPIONS).map((c) => c.age).sort(),
+      firstAge, wrong, right, patron: S.state.patronOf('veyr'), naming: /data-name="veyr"/.test(codex),
+      before, census, afterHesk, chips, dorianIsChampion: 'dorian' in CHAMPIONS,
     };
   }, HELPERS);
   for (let i = 1; i < 5; i++) {
@@ -198,6 +207,11 @@ test('champions of the ages: each older age is far stronger, the First is all bu
   expect(res.wrong).toBe(false);
   expect(res.right).toBe(true);
   expect(res.patron).toBe('dragonKing');
+  expect(res.before).toEqual({ census: 0, powers: 7 });
+  expect(res.census).toEqual([2, 3, 4, 5, 7]); // fewer from every older age
+  expect(res.afterHesk).toEqual([2, 3, 4, 4, 7]);
+  expect(res.chips).toBeGreaterThan(10); // most of them are still unknown to you
+  expect(res.dorianIsChampion).toBe(false);
   expect(new Set(res.ages).size).toBe(5);
   expect(errors).toEqual([]);
 });
@@ -215,14 +229,15 @@ test('Act II and Act III part one: the index, Dorian, the ledger, the Feast, the
     out.archiveSay = h.say('mell');
     await h.settle();
     out.archive = { stage: h.stage('mq-archive'), met: ['elin', 'oswald', 'hallam', 'tobin'].every((id) => S.state.met.has(id)) };
-    // Dorian.
-    S.state.clue('dorianDoor');
+    out.census = S.flags.censusKnown;
+    // Dorian, claw-sworn: he writes to Master Veyr.
+    S.state.clue('veyrStyle');
     q.accept('mq-dorian');
     g.time.hour = 12;
     for (let i = 0; i < 6; i++) { q.update(1, g.player.pos); await h.tick(2); }
     h.say('dorian');
     await h.settle();
-    S.state.nameAs('dorian', 'dragonKing');
+    S.state.nameAs('veyr', 'dragonKing');
     S.director.autoChoice = 0;
     h.say('dorian');
     await h.settle();
@@ -247,7 +262,7 @@ test('Act II and Act III part one: the index, Dorian, the ledger, the Feast, the
     await h.tick(10);
     await h.settle();
     for (let i = 0; i < 20 && h.stage('mq-feast') !== 'done@1'; i++) await h.tick(4);
-    out.feast = { stage: h.stage('mq-feast'), choice: S.flags.feast, varro: S.state.met.has('varro'), clue: S.state.clues.has('heskIron') };
+    out.feast = { stage: h.stage('mq-feast'), choice: S.flags.feast, varro: S.state.met.has('varro'), clue: S.state.clues.has('heskIron'), slain: S.state.slain.has('hesk') };
     // The Wheelbreaker at dawn.
     g.time.hour = 6;
     for (let i = 0; i < 6; i++) { q.update(1, g.player.pos); await h.tick(2); }
@@ -292,10 +307,11 @@ test('Act II and Act III part one: the index, Dorian, the ledger, the Feast, the
   }, HELPERS);
   expect(res.archiveSay).toContain('index');
   expect(res.archive).toEqual({ stage: 'done@0', met: true });
+  expect(res.census).toBe(true);
   expect(res.dorian).toEqual({ stage: 'done@3', flag: 'friend' });
   expect(res.ledger0).toBe('active@0');
   expect(res.ledger).toEqual({ stage: 'done@2', feast: 'active@0', clue: true });
-  expect(res.feast).toEqual({ stage: 'done@1', choice: 'shield', varro: true, clue: true });
+  expect(res.feast).toEqual({ stage: 'done@1', choice: 'shield', varro: true, clue: true, slain: true });
   expect(res.duel).toEqual({ stage: 'done@1', box: true, four: 'active@0' });
   expect(res.spokes).toBe(4);
   expect(res.fourStage).toBe('active@1');

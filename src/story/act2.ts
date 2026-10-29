@@ -7,8 +7,9 @@ import { CHAMPIONS } from './champions';
 import type { ActCtx } from './act1';
 
 // Act II: The Academy and the Crown. At the Academy the archivist has a list
-// of four names; your classmate Dorian is another power's champion of your
-// own year, and you can work out whose. In the Capital the King's treasury is
+// of four names, and the count of the Game; your classmate Dorian is
+// claw-sworn, a mortal in another power's pay, and you can work out whose
+// champion he writes to. In the Capital the King's treasury is
 // short, and the gold has been buying black iron for a quiet woman; at the
 // Feast of the Dawn, under the eyes of a Second Age champion who has outlived
 // every king he ever bowed to, she strikes; and at dawn on the Plaza of
@@ -37,17 +38,17 @@ export const ACT2_QUESTS: QuestDef[] = [
     rewards: { gold: 60, xp: 200 },
   },
   {
-    id: 'mq-dorian', title: 'Same Year, Same Road', giver: 'mell', region: 'portAurelle', main: true, requires: ['academy-rival', 'mq-archive'],
-    summary: 'Dorian Vale arrived a season before you, from a farm in the north no map shows. He never sits with his back to a door. Find out who sent him.',
-    offer: 'One more thing. Your classmate, Dorian Vale. He came a season before you, with a story about a farm in the north. I have looked. There is no farm. Watch him.',
+    id: 'mq-dorian', title: 'The Claw-Sworn', giver: 'mell', region: 'portAurelle', main: true, requires: ['academy-rival', 'mq-archive'],
+    summary: 'Dorian Vale arrived a season before you, from a farm in the north no map shows, and he fights in a style nobody teaches any more. He writes a letter every week. Find out who he answers to.',
+    offer: 'One more thing. Your classmate, Dorian Vale. He came a season before you, with a story about a farm in the north. I have looked. There is no farm. And every week, at noon, he sends a letter to somewhere in your Elder Glen. Watch him.',
     acceptLabel: 'I\'ll watch him.',
     stages: [
       { note: 'Watch Dorian at the ring at noon.', objectives: [{ type: 'hour', from: 11.5, to: 14, text: 'Be at the Academy ring around noon' }] },
-      { note: 'Watch Dorian practise in the noon sun.', hook: 'dorian:noon', objectives: [{ type: 'signal', id: 'dorian-watched', text: 'Watch Dorian practise (the Academy ring)' }] },
-      { note: 'Name Dorian\'s patron (Powers & Champions, P).', objectives: [{ type: 'signal', id: 'named-dorian', text: 'Work out who sent Dorian (the Powers & Champions page, P)' }] },
-      { note: 'Confront Dorian.', hook: 'dorian:confront', objectives: [{ type: 'signal', id: 'dorian-faced', text: 'Talk to Dorian about who sent him' }] },
+      { note: 'Watch Dorian write his letter.', hook: 'dorian:noon', objectives: [{ type: 'signal', id: 'dorian-watched', text: 'Watch Dorian at noon (the Academy ring)' }] },
+      { note: 'Work out whose champion Dorian writes to (Powers & Champions, P).', objectives: [{ type: 'signal', id: 'named-dorian', text: 'Name the patron of the master Dorian writes to (the Powers & Champions page, P)' }] },
+      { note: 'Confront Dorian.', hook: 'dorian:confront', objectives: [{ type: 'signal', id: 'dorian-faced', text: 'Talk to Dorian about who he answers to' }] },
     ],
-    done: 'Same year, same road. Different master.',
+    done: 'Claw-sworn. Not a champion: a squire, for one. And his master\'s real Fifth is still up in the mountains.',
     rewards: { gold: 80, xp: 320 },
   },
   {
@@ -101,59 +102,64 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
   const readIndex = () => {
     void story.play('archive', async (s) => {
       s.bars(true);
-      await s.say('Archivist Mell', 'Four names, each in a different hand, a different century. The Temple calls them "the Dawn\'s summoned." I call them the dead.');
-      await s.say('Archivist Mell', 'Elin. A thousand years ago. She wrote a journal, and walked into the wilds, and her grave was never found.');
-      await s.say('Archivist Mell', 'Ser Oswald Marr. Three hundred years ago. Buried somewhere under Hollow Ridge, the chronicle says, with a spoke of gold in his hands.');
+      await s.say('Archivist Mell', 'Four names, each in a different hand, twenty years apart. The Temple calls them "the Dawn\'s summoned." I call them the dead.');
+      await s.say('Archivist Mell', 'Elin. Eighty years ago. She wrote a journal, and walked into the wilds, and her grave was never found.');
+      await s.say('Archivist Mell', 'Ser Oswald Marr. Sixty years ago. Buried somewhere under Hollow Ridge, the chronicle says, with a spoke of gold in his hands.');
       await s.say('Archivist Mell', 'Ser Hallam. Forty years. He died holding Harrow Ford on the Crown Road. Your Ser Corvin was there. Ask him, if you dare.');
-      await s.say('Archivist Mell', 'Ser Tobin Reyes. Ten years. He simply stopped writing to the Temple. Nobody knows where he fell.');
+      await s.say('Archivist Mell', 'Ser Tobin Reyes. Twenty years. He simply stopped writing to the Temple. Nobody knows where he fell.');
       await s.say('Archivist Mell', 'And every one of them died with another power\'s champion close by. Every one.');
+      await s.say('Archivist Mell', 'You should know how the Game is counted. Eighty years ago seven powers swore the Accord: each may summon one champion every twenty years. Every summoning is an age. Seven in the First Age. Two of those still walk.', 6);
+      await s.say('Archivist Mell', 'Fewer of the old ones every age, and each one left is worse. The ones from your own year you won\'t see for a long while: their masters keep them close and teach them. It\'s the old ones who are out here with you.', 6);
       for (const id of ['elin', 'oswald', 'hallam', 'tobin']) story.state.meet(id);
+      F.censusKnown = true;
     });
-    story.note(CH[0], 'At the Knight\'s Academy, Archivist Mell showed you her index of the Dawn\'s summoned. Four names: Elin, a thousand years ago; Ser Oswald Marr, three hundred, buried under Hollow Ridge; Ser Hallam, forty, who died at Harrow Ford with Ser Corvin beside him; Ser Tobin Reyes, ten, who simply stopped writing. Every one died with another power\'s champion close by.');
+    story.note(CH[0], 'At the Knight\'s Academy, Archivist Mell showed you her index of the Dawn\'s summoned. Four names, twenty years apart: Elin, eighty years ago; Ser Oswald Marr, sixty, buried under Hollow Ridge; Ser Hallam, forty, who died at Harrow Ford with Ser Corvin beside him; Ser Tobin Reyes, twenty, who simply stopped writing. Every one died with another power\'s champion close by. Under the Accord, seven powers each summon one champion every twenty years; the old ages are thin now, and what is left of them is the worst of it. (The count is on the Powers & Champions page.)');
     quests.signal('archive-read');
   };
 
   // ---- Dorian ----------------------------------------------------------------------------
-  // (Winning the rival bout shows you the first thing: he keeps his back to the wall.)
+  // (Crossing blades with him in the rival bout shows you the first thing: whose school he fights in.)
   const prev = quests.hooks.get('academy-rival:done');
   quests.hooks.set('academy-rival:done', (q) => {
     prev?.(q);
-    story.state.clue('dorianDoor');
+    story.state.clue('veyrStyle');
   });
   quests.hooks.set('dorian:noon', () => {
-    story.saying('dorian-noon', 'dorian', () => quests.wants('dorian-watched') ? { label: '(Watch him practise in the noon sun.)', run: () => { story.h.dialogue.close(); watchDorian(); } } : null);
+    story.saying('dorian-noon', 'dorian', () => quests.wants('dorian-watched') ? { label: '(Watch him, from across the ring.)', run: () => { story.h.dialogue.close(); watchDorian(); } } : null);
   });
   const watchDorian = () => {
     void story.play('dorian-noon', async (s) => {
       s.bars(true);
-      await s.say(null, 'Dorian runs the forms alone in the full noon sun, sweat in his eyes. He turns, and for a heartbeat, in the glare, the pupils of his eyes are not round. They are slits, like a cat\'s. Like something older than a cat\'s.', 5);
-      await s.voice('There. Did you see? Whose eyes do that?', 3);
+      await s.say(null, 'At noon, with the ring empty, Dorian sits on the wall and writes. He folds the letter, drips wax on it, and presses a ring into the wax. When the courier rides out, you see the seal: a crowned claw. The letter is going to Elder Glen.', 5.5);
+      await s.voice('A crowned claw. Who in your village fights in the old style, and never turns his back on a door?', 3.6);
     });
-    story.state.clue('dorianEyes');
-    if (!story.state.met.has('dorian')) story.state.meet('dorian');
+    story.state.clue('veyrLetters');
     quests.signal('dorian-watched');
   };
   story.state.onNamed = (id) => {
-    if (id === 'dorian') quests.signal('named-dorian');
+    if (id === 'veyr') {
+      F.veyrNamed = true;
+      quests.signal('named-dorian');
+    }
     if (id === 'hesk') F.heskNamed = true;
-    if (id === 'veyr') F.veyrNamed = true;
   };
   quests.hooks.set('dorian:confront', () => {
-    story.saying('dorian-confront', 'dorian', () => quests.wants('dorian-faced') ? { label: 'You serve the Dragon King.', run: () => { story.h.dialogue.close(); confrontDorian(); } } : null);
+    story.saying('dorian-confront', 'dorian', () => quests.wants('dorian-faced') ? { label: 'You\'re writing to Master Veyr.', run: () => { story.h.dialogue.close(); confrontDorian(); } } : null);
   });
   const confrontDorian = () => {
     void story.play('dorian-confront', async (s) => {
       s.bars(true);
-      await s.say('Cadet Dorian Vale', '...Took you long enough. Yes. Veyrmos, in the north. He found me in a field the same week the wheel found you.');
-      await s.say('Cadet Dorian Vale', 'Same year, same road. Different master. He told me to watch you. Not to kill you. Not this year.');
-      const pick = await s.choose('Cadet Dorian Vale', 'Fifth Age · the Dragon King', 'So. What are we?', [
+      await s.say('Cadet Dorian Vale', '...Took you long enough. Yes. Master Veyr took me in when I was eight. I\'m claw-sworn: the Dragon King pays my fees, and I write down what I see. This year, that\'s you.');
+      await s.say('Cadet Dorian Vale', 'I\'m not one of you. Nobody summoned me. I\'m a farm boy who\'s good with a sword, and the Dragon King lets me be useful.');
+      await s.say('Cadet Dorian Vale', 'His own Fifth came down into the Deep Mountains the same night you fell into the wheat. They\'re making something out of him up there. When they let him come down, I\'ll know his face. Will you?');
+      const pick = await s.choose('Cadet Dorian Vale', 'Claw-sworn · the Dragon King', 'So. What are we?', [
         { label: 'Then let\'s not be enemies. Not this year.', tone: 'kind' },
         { label: 'Stay out of my way, Dorian.', tone: 'threat' },
       ]);
       F.dorian = pick === 0 ? 'friend' : 'rival';
-      if (pick === 0) await s.say('Cadet Dorian Vale', 'Deal. And when it\'s next year, I\'ll tell you first. That\'s more than any of the old ones will do.');
-      else await s.say('Cadet Dorian Vale', 'Fine. Then I\'ll see you on the road.');
-      story.note(CH[1], `Dorian Vale is the Dragon King's champion of the Fifth Age: your own year, a different master. ${F.dorian === 'friend' ? 'You agreed not to be enemies, this year.' : 'You told him to stay out of your way.'}`);
+      if (pick === 0) await s.say('Cadet Dorian Vale', 'Deal. And when he comes down out of the mountains, I\'ll tell you first. That\'s more than Master Veyr would.');
+      else await s.say('Cadet Dorian Vale', 'Fine. Then I\'ll write that down too.');
+      story.note(CH[1], `Dorian Vale is claw-sworn: no champion, but a mortal in the Dragon King's pay, who writes every week to Master Veyr of Elder Glen, a champion of the Third Age. The Dragon King's own Fifth Age champion is in the Deep Mountains, being made into something. ${F.dorian === 'friend' ? 'You agreed not to be enemies, and he will tell you when the Dragon King\'s Fifth comes down.' : 'You told him to stay out of your way.'}`);
       quests.signal('dorian-faced');
     });
   };
@@ -205,7 +211,8 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
       await s.say(null, 'The hall is gold and noise. Then a man in dark red walks through it, and the noise goes out of the room ahead of him like air.', 4);
       await s.champion(2, 'Legate Cassius Varro', 'the Ember Legate', 'Champion of the Dragon God', 3.6);
       await s.say('Legate Cassius Varro', 'So you are the Dawn\'s new one. Sit, sit. I have had dinner with your second, and your third. Your second had better manners.');
-      await s.say('Legate Cassius Varro', 'Three hundred years, little Fifth. I have killed champions with a cup in my hand. Tonight I am only here for the wine. Probably.');
+      await s.say('Legate Cassius Varro', 'Sixty years, little Fifth. I have killed champions with a cup in my hand. Tonight I am only here for the wine. Probably.');
+      await s.say('Legate Cassius Varro', 'Ashfang\'s own Fifth is still in the Ember Temples, learning which fork to stab with. Pray you meet that one late.');
       story.state.meet('varro');
       await s.say(null, 'Behind the King, a serving woman sets down a jug, and her hand comes up with a knife in it, black as a hole.', 3.2);
       const pick = await s.choose('The Feast of the Dawn', 'The King\'s right hand', 'The knife is already moving.', [
@@ -241,6 +248,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
   const finishFeast = () => {
     if (F.feastDone) return;
     F.feastDone = true;
+    story.state.slay('hesk');
     story.note(CH[3], F.feast === 'shield'
       ? 'At the Feast of the Dawn you took Hesk the Quiet\'s black-iron knife meant for the King. Legate Cassius Varro, a champion of the Second Age who serves the Dragon God, crossed the hall faster than anyone could see and burned her to ash with one hand. "Not at dinner, child."'
       : 'At the Feast of the Dawn, under the eyes of Legate Cassius Varro of the Second Age, Hesk the Quiet put her knife into the King\'s side. You ran her down in the palace forecourt and killed her. The King lives.');
@@ -276,7 +284,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
       m.face(player.pos);
       await s.cam(at.clone().add(new THREE.Vector3(5, 2.4, 6)), at.clone().setY(at.y + 1.6), 0);
       await s.say('Ser Malric Dane', 'Hesk was my friend. Did you know that? No. Why would you.');
-      await s.say('Ser Malric Dane', 'Ten years I\'ve hunted the Dawn\'s champions. Your fourth begged. Your fourth begged, and I left him for the Dark.');
+      await s.say('Ser Malric Dane', 'Twenty years I\'ve hunted the Dawn\'s champions. Your fourth begged. Your fourth begged, and I left him for the Dark.');
       await s.say('Ser Malric Dane', 'In the open, then. In front of all of them. Let\'s see what it means.');
       s.remove(m);
     });
@@ -299,7 +307,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
     void story.play('duel-after', async (s) => {
       s.bars(true);
       await s.say('Ser Malric Dane', '...Huh.', 1.8);
-      await s.say('Ser Malric Dane', 'Ten years. Nobody\'s put me on my knees in ten years.');
+      await s.say('Ser Malric Dane', 'Twenty years. Nobody\'s put me on my knees in twenty years.');
       await s.say(null, 'He pulls something from his belt and tosses it at your feet: the black iron box, with the Sunwheel on its lid.', 3.2);
       await s.say('Ser Malric Dane', 'Keep it. It\'s only a spoke. The Iron Below has everything it needs from it already.');
       await s.say(null, 'High on a balcony over the plaza, a man in dark red raises a cup to you.', 2.8);
@@ -318,6 +326,9 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
 
   return {
     step() {
+      // (Already named, or named before Dorian's letters: the chapter moves on.)
+      if (quests.wants('named-dorian') && story.state.patronOf('veyr')) quests.signal('named-dorian');
+      if (!F.censusKnown && quests.isDone('mq-archive')) F.censusKnown = true;
       feastStep();
       heskStep();
       duelStep();

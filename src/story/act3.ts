@@ -13,7 +13,7 @@ import type { ActCtx } from './act1';
 // sword, and in the rusted armour of Ser Tobin, which the Dark has been
 // wearing on an old battlefield for five years. Set the spokes in the oldest
 // wheel and it turns; and the turning is felt, across the Dark, by things
-// that have been alive for a thousand years.
+// that have been fed by gods for eighty years.
 
 const CH = ['Act III · The Four Who Came Before', 'Act III · The Turning of the Wheel'];
 const ground = (x: number, z: number) => new THREE.Vector3(x, heightAt(x, z), z);
@@ -162,7 +162,7 @@ export function setupAct3(c: ActCtx, h: Act3Hooks) {
       s.bars(true);
       await s.cam(RING_AT.clone().add(new THREE.Vector3(9, 5, 9)), RING_AT.clone().setY(RING_AT.y + 1.5), 0);
       await s.say(null, 'One by one the spokes go into the sockets, and lock, and the ring of stones begins, very slowly, to turn.', 3.6);
-      await s.voice('Yes. Yes. Five spokes. Five of twelve. It has been a thousand years since my wheel turned this far.', 4);
+      await s.voice('Yes. Yes. Five spokes. Five of twelve. Not since the First Age has my wheel turned this far.', 4);
       s.shake(0.4);
       await s.dark(1, 2.4);
       await s.say(null, 'And across the Dark, something notices.', 2.6);
@@ -206,7 +206,7 @@ export function setupAct3(c: ActCtx, h: Act3Hooks) {
       await s.champion(1, 'Ysra the Undying', 'the Thornmother\'s Blade', 'Champion of the Verdant Mother', 3.6);
       await s.say('Ysra the Undying', 'Not this one. Not yet.', 2.6);
       await s.say('The Wheel-Shield', '...', 2);
-      await s.say(null, 'Two things that have been alive for a thousand years look at each other over your head. The grass between them goes grey. Then the Wheel-Shield lowers his shield, and is simply not there any more.', 5);
+      await s.say(null, 'Two people who have been fed by gods for eighty years look at each other over your head. The grass between them goes grey. Then the Wheel-Shield lowers his shield, and is simply not there any more.', 5);
       await s.say('Ysra the Undying', 'Little sapling. I knew your first. Elin. She was braver than you, and she died anyway.', 3.6);
       await s.say('Ysra the Undying', 'The Thornmother has not decided what you are for. When she has, I will come for you. Grow, until then. Grow fast.', 4);
       s.remove(y);

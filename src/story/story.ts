@@ -361,4 +361,5 @@ export class Story {
 
 const CHAMPION_POWER_NAME: Record<string, string> = {
   dawn: 'the Dawn', dragonGod: 'the Dragon God', dragonKing: 'the Dragon King', verdant: 'the Verdant Mother', ironBelow: 'the Iron Below',
+  demonLord: 'the Demon Lord', drowned: 'the Drowned Queen',
 };
