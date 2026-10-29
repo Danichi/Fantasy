@@ -204,6 +204,11 @@ export function greetingFor(id: string, fallback: string, c: TalkCtx, visit: num
   return plain.length ? plain[visit % plain.length].text : fallback;
 }
 
+/** A story beat this person wants to tell you about right now (raids, the crypt...), if any. */
+export function storyGreeting(id: string, c: TalkCtx) {
+  return VOICES[id]?.greet.find((g) => g.when?.(c))?.text;
+}
+
 /** Extra things to ask this townsperson about right now. */
 export function topicsFor(id: string, c: TalkCtx) {
   return (VOICES[id]?.topics ?? []).filter((t) => !t.when || t.when(c)).map((t) => ({ q: t.q, a: typeof t.a === 'string' ? t.a : t.a(c) }));

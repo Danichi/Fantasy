@@ -6,6 +6,7 @@ import type { ProcPose } from '../player/rigLayer';
 import type { ItemDef } from '../items/itemDefs';
 import { targets, type Target, type IncomingAttack, type DefenceResult } from './targets';
 import { events } from '../core/events';
+import { combat } from './core';
 import { clamp } from '../core/math';
 import { familyOf, FAMILIES, type FamilyDef } from '../items/weapons';
 import { twoHanded } from '../items/weapons/kinds';
@@ -83,11 +84,12 @@ export class ArmsRuntime {
     const recv = p.receiveAttack.bind(p);
     p.receiveAttack = (att: IncomingAttack): DefenceResult => {
       const r = recv(att);
-      if (r === 'dodged' && !p.dead && p.act?.def.roll) this.open('dodge');
+      // Combat rework: Cross openings come from perfect defence (a perfect dodge sets the counter window).
+      if (r === 'dodged' && !p.dead && p.act?.def.roll && p.counterT > 0) this.open('dodge');
       return r;
     };
     events.on('meleeHit', (e) => this.onMeleeHit(e.target, e.amount, e.action));
-    events.on('parrySuccess', () => this.open('parry'));
+    events.on('parrySuccess', ({ perfect }) => perfect !== false && this.open('parry'));
     events.on('equipmentChanged', () => this.onEquip());
     events.on('enemyDied', ({ enemyId }) => {
       this.cracked.delete(enemyId);
@@ -228,7 +230,8 @@ export class ArmsRuntime {
       const base = rt.cc.lastHitFlow;
       let extra = (gale.flow - 1) * base;
       if (gale.tipFlow && t.center.distanceTo(p.center) > 2.1) extra += gale.tipFlow * base;
-      if (gale.stagger && t.alive) t.takeHit({ damage: 0, poise: (p.act?.def.hit?.poise ?? 20) * (gale.stagger - 1), dir: t.position.clone().sub(p.pos).setY(0).normalize(), at: t.center.clone(), crit: false, source: 'melee' });
+      // The family's extra stagger under Gale Style goes into posture (combat/core.ts).
+      if (gale.stagger && t.alive) combat.addPosture(t, (p.act?.def.hit?.poise ?? 20) * (gale.stagger - 1) * 0.7);
       rt.flow = clamp(rt.flow + extra, 0, rt.flowMax);
     }
     void amount;

@@ -68,7 +68,7 @@ class FlowerGirl implements Target {
   private clip = '';
   private target = new THREE.Vector3();
   private wait = 0;
-  private yaw = 0;
+  yaw = 0;
   private deathT = -1;
   onDeath?: (at: THREE.Vector3) => void;
 

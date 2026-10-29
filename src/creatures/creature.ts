@@ -7,6 +7,7 @@ import { newTargetId, targets, type HitInfo, type Target } from '../combat/targe
 import { heightAt } from '../world/terrainHeight';
 import type { Player } from '../player/player';
 import type { FX } from '../fx/particles';
+import { combat, type AttackKind } from '../combat/core';
 
 // The body every hand-built creature shares: a kinematic capsule that walks
 // on the terrain and around the static world, a health pool scaled by its
@@ -120,6 +121,24 @@ export abstract class Creature implements Target {
   protected onDeath(): void {}
   /** Called on every hit that doesn't kill. */
   protected onHurt(_h: HitInfo): void {}
+  /** Show an attack's tell (white parry, gold heavy, red unblockable, yellow grab) and open the counter-hit window. */
+  protected tell(sec: number, kind: AttackKind = 'normal', armour = 0) {
+    combat.windup(this, sec, kind, armour);
+  }
+  /** seconds left reeling from a posture break (combat/core.ts): it doesn't think */
+  protected brokenT = 0;
+  /** Posture broken: reel, open to a finisher. Creatures show it with their own hurt. */
+  onBreak(sec: number) {
+    if (!this.alive) return;
+    this.brokenT = sec;
+    this.wish.set(0, 0, 0);
+    this.onBroken(sec);
+  }
+  /** How it shows a posture break (default: its hurt reaction to a crushing blow). */
+  protected onBroken(_sec: number) {
+    const dir = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).negate();
+    this.onHurt({ damage: 0, poise: 999, dir, at: this.center.clone(), crit: true, source: 'melee', react: 'knockdown' });
+  }
   /** Remove the look from the scene. */
   protected abstract disposeLook(): void;
 
@@ -152,6 +171,10 @@ export abstract class Creature implements Target {
     if (this.disposed) return;
     if (!this.alive) {
       this.deadT += dt;
+      this.wish.set(0, 0, 0);
+    } else if (this.brokenT > 0) {
+      // Reeling from a posture break: no thinking, no attacking.
+      this.brokenT -= dt;
       this.wish.set(0, 0, 0);
     } else {
       this.think(dt, player);

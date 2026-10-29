@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import { Creature, type CreatureBase } from '../creatures/creature';
 import { WolfVisual, greyjawDark, type WolfPose } from '../creatures/wolf/visual';
@@ -97,6 +98,9 @@ export class Greyjaw extends Creature implements BossBody {
   }
 
   private setMode(m: Mode, len = 1) {
+    // Its tell (combat/core.ts): the colour says how to answer it; a blow now is a counter-hit.
+    const tell = ({ snarl: ['normal', 0.2, 0], gather: ['unblockable', 0.25, 1.0] } as Partial<Record<Mode, [AttackKind, number, number]>>)[m];
+    if (tell) combat.windup(this, len + tell[1], tell[0], tell[2] ? len + tell[2] : 0);
     this.mode = m;
     this.modeT = 0;
     this.modeLen = len;

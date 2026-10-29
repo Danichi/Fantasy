@@ -66,7 +66,8 @@ export class Spider extends Creature {
   private setMode(m: Mode, len = 1) {
     this.mode = m;
     this.modeT = 0;
-    this.modeLen = len;
+    this.modeLen = len;    if (m === 'crouch') this.tell(len + 0.15);
+    else if (m === 'spit') this.tell(len * 0.45);
   }
   private get forward() {
     return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));

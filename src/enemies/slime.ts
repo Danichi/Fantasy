@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import { ignoresPlayer } from '../origins/stealth';
 import RAPIER from '@dimforge/rapier3d-compat';
@@ -177,7 +178,7 @@ export class Slime implements Target {
   private st = 0;
   private vel = new THREE.Vector3();
   private grounded = true;
-  private yaw = Math.random() * Math.PI * 2;
+  yaw = Math.random() * Math.PI * 2;
   private home: THREE.Vector3;
   private nextIdleHop = 1 + Math.random() * 2;
   private cooldown = 0;
@@ -277,6 +278,12 @@ export class Slime implements Target {
   }
 
   // ---- Target ----------------------------------------------------------------
+  readonly ownPoise = true;
+  /** Posture broken (combat/core.ts): it splats and quivers. */
+  onBreak() {
+    if (this.alive && this.state !== 'dying') this.setState('hurt');
+  }
+
   takeHit(h: HitInfo) {
     if (!this.alive || this.state === 'dying') return;
     this.hp -= h.damage;
@@ -319,6 +326,9 @@ export class Slime implements Target {
   }
 
   private setState(s: State) {
+    // Its tell (combat/core.ts): the colour says how to answer it; a blow now is a counter-hit.
+    const tell = ({ crouch: ['normal', 0.5, 0], windup: ['normal', 0.4, 0] } as Partial<Record<State, [AttackKind, number, number]>>)[s];
+    if (tell && this.alive) combat.windup(this, tell[1], tell[0], tell[2]);
     this.state = s;
     this.st = 0;
   }

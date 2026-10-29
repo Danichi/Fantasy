@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import { Creature, type CreatureBase } from '../creatures/creature';
 import { UndeadVisual, type UndeadPose } from '../creatures/undeadHumanoid/visual';
@@ -93,6 +94,9 @@ export class DeadLord extends Creature implements BossBody {
   }
 
   private setMode(m: Mode, len = 1) {
+    // Its tell (combat/core.ts): the colour says how to answer it; a blow now is a counter-hit.
+    const tell = ({ windup: ['normal', 0.1, 0], chopUp: ['unblockable', 0.15, 1.0] } as Partial<Record<Mode, [AttackKind, number, number]>>)[m];
+    if (tell) combat.windup(this, len + tell[1], tell[0], tell[2] ? len + tell[2] : 0);
     this.mode = m;
     this.modeT = 0;
     this.modeLen = len;

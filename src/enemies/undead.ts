@@ -1,8 +1,9 @@
+import { reactOf } from '../combat/core';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
-import { clamp, dampAngle, segmentPointDistance, smoothstep } from '../core/math';
+import { clamp, smoothstep } from '../core/math';
 import { events } from '../core/events';
 import { newTargetId, targets, type HitInfo, type Target } from '../combat/targets';
 import { Character } from '../player/character';
@@ -13,6 +14,7 @@ import { buildSword, buildRoundShield } from '../items/weaponModels';
 import { sfx } from '../audio/sfx';
 import type { Player } from '../player/player';
 import type { FX } from '../fx/particles';
+import { HumanoidBrain, ARCHETYPES, MOVESETS } from '../combat/ai';
 
 // ---------------------------------------------------------------------------
 // The Gravewood's dead: zombies (the Sketchfab zombie, rebound onto the hero's
@@ -26,34 +28,19 @@ export type UndeadKind = 'zombie' | 'skeleton';
 
 interface Stats {
   hp: number;
+  /** damage of a blow (each move scales it: combat/ai.ts MOVESETS) */
   damage: number;
-  poise: number;
   speed: number;
-  /** stagger threshold per hit */
-  staggerPoise: number;
   rise: number; // seconds to climb out
-  swings: { clip: string; speed: number; hitFrom: number; hitTo: number; lunge: number }[];
 }
 
 const STATS: Record<UndeadKind, Stats> = {
-  zombie: {
-    hp: 78, damage: 14, poise: 24, speed: 1.45, staggerPoise: 18, rise: 2.6,
-    swings: [
-      { clip: 'attack_light_2', speed: 0.85, hitFrom: 0.34, hitTo: 0.56, lunge: 1.4 },
-      { clip: 'attack_light_1', speed: 0.9, hitFrom: 0.5, hitTo: 0.74, lunge: 1.6 },
-    ],
-  },
-  skeleton: {
-    hp: 66, damage: 16, poise: 30, speed: 2.35, staggerPoise: 24, rise: 1.9,
-    swings: [
-      { clip: 'attack_light_1', speed: 1.1, hitFrom: 0.5, hitTo: 0.72, lunge: 2.2 },
-      { clip: 'attack_heavy', speed: 1.0, hitFrom: 0.55, hitTo: 0.95, lunge: 2.6 },
-    ],
-  },
+  zombie: { hp: 78, damage: 14, speed: 1.45, rise: 2.6 },
+  skeleton: { hp: 66, damage: 16, speed: 2.35, rise: 1.9 },
 };
 
 const ZOMBIE_URL = '/assets/gravewood/gwZombie.glb';
-const CLIPS = ['idle', 'walk', 'run', 'walk_back', 'strafe_l', 'strafe_r', 'attack_light_1', 'attack_light_2', 'attack_heavy', 'hit_react', 'death', 'cast_big', 'block_idle'];
+const CLIPS = ['idle', 'walk', 'run', 'walk_back', 'strafe_l', 'strafe_r', 'attack_light_1', 'attack_light_2', 'attack_light_3', 'attack_heavy', 'attack_sprint', 'kick', 'guard_break', 'hit_react', 'death', 'cast_big', 'block_idle'];
 const DEPTH = 1.9; // how deep they start
 const GRAV = 20;
 
@@ -218,7 +205,6 @@ function buildBones(skel: THREE.Skeleton): THREE.BufferGeometry {
 
 let skeletonGeo: THREE.BufferGeometry | null = null;
 /** Last time one of the dead staggered the player: a pack can't chain-stun you. */
-let lastStagger = -1e9;
 let preloading: Promise<void> | null = null;
 
 /**
@@ -257,7 +243,7 @@ export function preloadUndead(extra: string[] = [], gpu?: { renderer: THREE.WebG
 
 // ---- the undead ------------------------------------------------------------------------------
 
-type State = 'rising' | 'idle' | 'chase' | 'attack' | 'hurt' | 'dying';
+type State = 'rising' | 'idle' | 'chase' | 'hurt' | 'dying';
 
 export class Undead implements Target {
   id = newTargetId();
@@ -277,13 +263,12 @@ export class Undead implements Target {
   private stats: Stats;
   private state: State = 'rising';
   private st = 0;
-  private cooldown = 0.6 + Math.random() * 0.8;
   private deathT = 0;
-  private hitDone = false;
-  private swing = 0;
-  private vel = new THREE.Vector3();
-  private yaw: number;
-  private grounded = true;
+  vel = new THREE.Vector3();
+  yaw: number;
+  grounded = true;
+  /** the fighting brain (combat/ai.ts): spacing, turns, its move list */
+  readonly brain: HumanoidBrain;
   private rb: RAPIER.RigidBody;
   private col: RAPIER.Collider;
   private kcc: RAPIER.KinematicCharacterController;
@@ -303,6 +288,25 @@ export class Undead implements Target {
     this.yaw = yaw;
     // Each one moves at its own pace, so a wave doesn't march in step.
     this.pace = 0.85 + Math.random() * 0.3;
+    // Skeletons fight behind a shield; zombies shamble in, claw and grab.
+    const arch = kind === 'skeleton'
+      ? { ...ARCHETYPES.shield, run: this.stats.speed * this.pace * 1.5, strafe: 1.2 }
+      : { ...ARCHETYPES.grunt, run: this.stats.speed * this.pace, strafe: 0.55, hold: 2.6, evade: 0, retaliate: 0.15, aggression: 0.9 };
+    this.brain = new HumanoidBrain(this, arch, MOVESETS[kind], {
+      damage: () => this.stats.damage,
+      duration: (c) => this.anim?.duration(c) || 1.4,
+      shield: kind === 'skeleton',
+      onParried: () => {
+        this.stunned = true;
+        this.daze = 2.2; // reeling: wide open to a riposte
+        this.setState('hurt');
+        const d = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+        this.vel.set(-d.x * 3.5, 3, -d.z * 3.5);
+      },
+      onBlow: (_m, res) => {
+        if (res === 'blocked' || res === 'guardBroken') this.fx.sparks(this.center.clone().add(new THREE.Vector3(Math.sin(this.yaw), 0.3, Math.cos(this.yaw)).multiplyScalar(0.7)));
+      },
+    });
     scene.add(this.group);
     this.group.visible = false;
 
@@ -390,20 +394,31 @@ export class Undead implements Target {
 
   takeHit(h: HitInfo) {
     if (!this.alive || this.state === 'dying' || this.state === 'rising') return;
-    // Skeletons catch blows on the shield when facing them and not mid-swing.
-    const fwd = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    const blocked = this.kind === 'skeleton' && this.state !== 'attack' && h.source !== 'spell' && h.dir.clone().setY(0).normalize().dot(fwd) < -0.6 && Math.random() < 0.35;
-    this.hp -= blocked ? h.damage * 0.25 : h.damage;
+    // A skeleton with its shield up takes most of a blow from the front (combat/ai.ts).
+    const g = this.brain.guardFilter(h);
+    const blocked = g < 1;
+    this.hp -= h.damage * g;
     this.flash = 1;
+    const fwd = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
     if (blocked) this.fx.sparks(this.center.clone().addScaledVector(fwd, 0.4), fwd);
     else this.fx.add.spawn({ pos: h.at ?? this.center, spread: 2, count: 8, life: [0.3, 0.6], size: [0.06, 0.01], color: this.kind === 'zombie' ? 0x5a1a10 : 0xe8e0c8, color2: 0x201008, gravity: 8 });
     if (this.hp <= 0) return this.die();
-    if (!blocked && (h.source === 'spell' || h.poise >= this.stats.staggerPoise)) {
-      this.stunned = true;
+    this.brain.onHurt(h);
+    // Staggered only when the blow got through its poise (combat/core.ts).
+    const react = reactOf(h, 20);
+    if (!blocked && react !== 'none') {
       this.setState('hurt');
       const back = h.dir.clone().setY(0).normalize();
-      this.vel.set(back.x * 3, 2.2, back.z * 3);
+      const k = react === 'knockdown' ? 4.5 : 3;
+      this.vel.set(back.x * k, react === 'knockdown' ? 3.2 : 2.2, back.z * k);
     }
+  }
+
+  /** Posture broken: reel, open to a finisher (combat/core.ts). */
+  onBreak(sec: number) {
+    this.brain.interrupt();
+    this.setState('hurt');
+    this.daze = sec;
   }
 
   private die() {
@@ -432,7 +447,6 @@ export class Undead implements Target {
 
   update(dt: number, player: Player, crowd: Undead[]) {
     this.st += dt;
-    this.cooldown -= dt;
     this.daze = Math.max(0, this.daze - dt);
     this.flash = Math.max(0, this.flash - dt * 5);
 
@@ -464,9 +478,6 @@ export class Undead implements Target {
 
     const to = player.pos.clone().sub(this.position);
     const dist = Math.hypot(to.x, to.z);
-    const wantYaw = Math.atan2(to.x, to.z);
-    const fwd = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    const speed = this.stats.speed * this.pace;
 
     if (this.kind === 'zombie' && (this.groanT -= dt) <= 0) {
       this.groanT = 4 + Math.random() * 7;
@@ -475,48 +486,8 @@ export class Undead implements Target {
 
     if (this.state === 'idle' || this.state === 'chase') {
       // The graveyard's dead always know where you are.
-      if (player.dead) {
-        this.vel.x *= Math.exp(-8 * dt);
-        this.vel.z *= Math.exp(-8 * dt);
-      } else {
-        this.state = 'chase';
-        this.yaw = dampAngle(this.yaw, wantYaw, this.kind === 'zombie' ? 4 : 8, dt);
-        const reach = this.kind === 'zombie' ? 1.9 : 2.2;
-        // Only two of the dead swing at a time; the rest hang back and circle.
-        const swinging = crowd.filter((o) => o !== this && o.state === 'attack').length;
-        if (this.grounded && dist < reach && this.cooldown <= 0 && swinging < 2) {
-          this.hitDone = false;
-          this.swing = Math.floor(Math.random() * this.stats.swings.length);
-          this.setState('attack');
-        } else if (this.grounded) {
-          const dir = to.setY(0).normalize();
-          const waiting = swinging >= 2 && dist < reach + 1.6;
-          if (waiting) {
-            // Sidestep around the player at arm's length.
-            const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(this.pace > 1 ? 1 : -1);
-            this.vel.x = side.x * speed * 0.5 - dir.x * 0.4;
-            this.vel.z = side.z * speed * 0.5 - dir.z * 0.4;
-          } else {
-            const s = dist > reach * 0.85 ? speed : 0;
-            this.vel.x = dir.x * s;
-            this.vel.z = dir.z * s;
-          }
-        }
-      }
-    } else if (this.state === 'attack') {
-      const w = this.stats.swings[this.swing];
-      const t = this.st * w.speed; // clip seconds
-      if (t < w.hitFrom * 0.8) this.yaw = dampAngle(this.yaw, wantYaw, 9, dt);
-      const lunge = t > w.hitFrom - 0.2 && t < w.hitTo ? w.lunge : 0;
-      const k = Math.exp(-14 * dt);
-      this.vel.x = this.vel.x * k + fwd.x * lunge * (1 - k);
-      this.vel.z = this.vel.z * k + fwd.z * lunge * (1 - k);
-      if (!this.hitDone && t >= w.hitFrom && t <= w.hitTo) this.checkHit(player);
-      const dur = this.anim?.duration(w.clip) || 1.4;
-      if (t > dur - 0.2) {
-        this.cooldown = (this.kind === 'zombie' ? 1.3 : 0.9) + Math.random() * 0.9;
-        this.setState('chase');
-      }
+      this.state = 'chase';
+      if (this.grounded) this.brain.update(dt, player);
     } else if (this.state === 'hurt') {
       this.vel.x *= Math.exp(-8 * dt);
       this.vel.z *= Math.exp(-8 * dt);
@@ -525,18 +496,7 @@ export class Undead implements Target {
         this.setState('chase');
       }
     }
-
-    // Keep out of each other's way.
-    for (const o of crowd) {
-      if (o === this || !o.alive || !o.risen) continue;
-      const dx = this.position.x - o.position.x, dz = this.position.z - o.position.z;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < 0.81 && d2 > 1e-6) {
-        const d = Math.sqrt(d2), push = (0.9 - d) * 4;
-        this.vel.x += (dx / d) * push * dt * 10;
-        this.vel.z += (dz / d) * push * dt * 10;
-      }
-    }
+    void crowd; // (spacing between the dead is the brain's now)
 
     if (!this.grounded) this.vel.y -= GRAV * dt;
     else this.vel.y = Math.min(this.vel.y, 0) - 2 * dt;
@@ -559,16 +519,15 @@ export class Undead implements Target {
     const s = this.state;
     if (s === 'dying') anim.setFull('death', Math.min(this.deathT, 2.2), 0.15);
     else if (s === 'rising') anim.setFull('cast_big', 0.35 + this.st * 0.35, 0.05);
-    else if (s === 'attack') {
-      const w = this.stats.swings[this.swing];
-      anim.setFull(w.clip, this.st * w.speed, 0.12, 0.25);
-    } else if (s === 'hurt') anim.setFull('hit_react', this.st * 1.1, 0.08, 0.2);
+    else if (this.brain.clip) anim.setFull(this.brain.clip, this.brain.mt, 0.12, 0.25);
+    else if (s === 'hurt' && this.daze > 0.6 && !this.stunned) anim.setFull('guard_break', Math.min(0.6, this.st), 0.1, 0.2); // posture broken
+    else if (s === 'hurt') anim.setFull('hit_react', this.st * 1.1, 0.08, 0.2);
     else anim.setFull(null, 0);
     const c = Math.cos(-this.yaw), sn = Math.sin(-this.yaw);
     // Zombies shamble: their walk plays slow and heavy.
     const slow = this.kind === 'zombie' ? 0.75 : 1;
     const local = s === 'chase' ? { x: (this.vel.x * c + this.vel.z * sn) * slow, z: (-this.vel.x * sn + this.vel.z * c) * slow } : { x: 0, z: 0 };
-    if (this.kind === 'skeleton' && s === 'chase') anim.setUpper('block_idle', true, this.st);
+    if (this.kind === 'skeleton' && s === 'chase' && !this.brain.clip) anim.setUpper('block_idle', true, this.st);
     else if (this.kind === 'skeleton') anim.setUpper('block_idle', false, this.st);
     anim.update(dt, { local, grounded: true });
     // A zombie hunches, head lolling, as it shuffles.
@@ -580,34 +539,11 @@ export class Undead implements Target {
     for (const m of this.mats) m.emissive?.setRGB(0.4 * this.flash, 0.08 * this.flash, 0.05 * this.flash);
   }
 
-  private checkHit(player: Player) {
-    const a = player.pos.clone().setY(player.pos.y + 0.35);
-    const b = player.pos.clone().setY(player.pos.y + 1.45);
-    const reach = this.center.clone().add(new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(0.95));
-    if (segmentPointDistance(a, b, reach) > 1.0) return;
-    this.hitDone = true;
-    const dir = this.position.clone().sub(player.pos).setY(0).normalize();
-    const now = performance.now();
-    const poise = now - lastStagger < 1200 ? 0 : this.stats.poise;
-    if (poise) lastStagger = now;
-    player.receiveAttack({
-      damage: this.stats.damage,
-      from: this.position.clone(),
-      parryable: true,
-      poise,
-      onParried: () => {
-        this.stunned = true;
-        this.daze = 2.2; // reeling: wide open to a riposte
-        this.setState('hurt');
-        this.vel.set(-dir.x * 3.5, 3, -dir.z * 3.5);
-      },
-    });
-  }
-
   private syncVisual() {
     this.group.position.copy(this.position);
     this.group.position.y -= (1 - this.rise) * DEPTH;
-    this.group.rotation.y = this.yaw;
+    this.group.rotation.y = this.yaw + this.brain.spin;
+    this.group.position.y += this.brain.hop;
     this.center.set(this.position.x, this.position.y + 0.85, this.position.z);
   }
 

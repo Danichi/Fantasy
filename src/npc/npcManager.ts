@@ -149,6 +149,8 @@ const ACTIVITY_CLIP: Record<Activity, string> = {
 /** Per-job clip for 'work' (the smith hammers, the miller hauls, weavers fix). */
 const WORK_CLIP: Record<string, string> = { smith: 'chop', miller: 'fix', shepherd: 'arms', weaver: 'fix', innfolk: 'talk', farmer: 'farm' };
 const CLIPS = ['idle', 'idle_tired', 'talk', 'walk', 'sit', 'farm', 'water', 'chop', 'cheer', 'drink', 'arms', 'fix', 'dance'];
+/** loaded onto an actor only once trouble finds them (NPC overhaul) */
+const TROUBLE_CLIPS = ['hit', 'death', 'jog', 'crouch'];
 
 export class NpcManager {
   readonly settlements = new Map<string, Settlement>();
@@ -161,6 +163,10 @@ export class NpcManager {
   private live = new Set<string>();
   /** the NPC the player is talking to (held still, facing them) */
   engaged: NpcState | null = null;
+  /** NPC overhaul: people who aren't here any more (dead, or left town) */
+  absent?: (id: string) => boolean;
+  /** NPC overhaul: what trouble does to people (hurt, fleeing, knocked out, killed) */
+  private upset = new Map<NpcState, { mode: 'hit' | 'flee' | 'down' | 'dead' | 'hide'; t: number; from: THREE.Vector3 }>();
   // Far LOD: one sprite per look, baked from the real character in an idle pose.
   private atlas: THREE.WebGLRenderTarget;
   private cells = new Map<string, number>();
@@ -512,6 +518,16 @@ export class NpcManager {
         if (st.actor) this.release(st);
         continue;
       }
+      // Gone for good (or gone away): nobody there.
+      if (this.absent?.(st.rec.id) && !this.upset.has(st)) {
+        st.hidden = true;
+        if (st.actor) this.release(st);
+        continue;
+      }
+      if (this.trouble(st, dt, player)) {
+        if (st.hidden && st.actor) this.release(st);
+        continue;
+      }
       // Schedule changes: head to the new place along the waypoint graph.
       const idx = this.entryIndex(st.rec);
       // A quest giver doesn't walk off while the player is still with them.
@@ -655,11 +671,114 @@ export class NpcManager {
     this.spriteData.needsUpdate = true;
   }
 
+  /**
+   * Trouble (NPC overhaul): a blow staggers them, then they run from `from`;
+   * 'down' knocks them out for a while; 'dead' is the end; 'flee' just runs.
+   * Runners hide indoors for a while once they're clear.
+   */
+  react(id: string, mode: 'hit' | 'flee' | 'down' | 'dead', from: THREE.Vector3, sec = 5) {
+    const st = this.find(id);
+    if (!st) return;
+    const cur = this.upset.get(st);
+    if (cur?.mode === 'dead' || (cur?.mode === 'down' && mode !== 'dead')) return;
+    this.upset.set(st, { mode, t: mode === 'hit' ? 0.55 : sec, from: from.clone() });
+    const a = st.actor;
+    if (a && !a.actions.death && a.built.addClips) {
+      void a.built.addClips(TROUBLE_CLIPS).then(() => {
+        const acts = (a.built.mixer as unknown as { _actions: THREE.AnimationAction[] })._actions;
+        for (const x of acts) a.actions[x.getClip().name] ??= x;
+        a.current = '';
+      });
+    }
+    if (this.engaged === st) this.engaged = null;
+    if (st.actor) st.actor.current = '';
+  }
+  /** Everyone calms down and goes back to their day (tests). */
+  calm() {
+    for (const st of this.upset.keys()) this.placeBySchedule(st, true);
+    this.upset.clear();
+  }
+  /** Shaken up right now (running, down, dead or hiding): can't be talked to. */
+  troubled(id: string) {
+    const st = this.find(id);
+    return !!st && this.upset.has(st);
+  }
+
+  private playOnce(actor: Actor, name: string) {
+    if (actor.current === name) return;
+    const next = actor.actions[name];
+    if (!next) return this.play(actor, 'idle');
+    const prev = actor.current ? actor.actions[actor.current] : undefined;
+    next.reset();
+    next.setLoop(THREE.LoopOnce, 1);
+    next.clampWhenFinished = true;
+    next.play();
+    if (prev && prev !== next) prev.crossFadeTo(next, 0.15, false);
+    actor.current = name;
+  }
+
+  /** Move and animate someone in trouble; true while it overrides their routine. */
+  private trouble(st: NpcState, dt: number, player: THREE.Vector3) {
+    const u = this.upset.get(st);
+    if (!u) return false;
+    u.t -= dt;
+    const a = st.actor;
+    switch (u.mode) {
+      case 'hit':
+        if (a) this.playOnce(a, 'hit');
+        if (u.t <= 0) Object.assign(u, { mode: 'flee', t: 6 });
+        break;
+      case 'flee': {
+        const away = st.pos.clone().sub(u.from).setY(0);
+        if (away.lengthSq() < 1e-4) away.set(Math.sin(st.seed), 0, Math.cos(st.seed));
+        away.normalize();
+        st.pos.addScaledVector(away, 4.6 * dt);
+        st.pos.y = heightAt(st.pos.x, st.pos.z);
+        st.yaw = dampAngle(st.yaw, Math.atan2(away.x, away.z), 10, dt);
+        st.moving = false;
+        if (a) {
+          this.play(a, a.actions.jog ? 'jog' : 'walk');
+          if (!a.actions.jog && a.actions.walk) a.actions.walk.timeScale = 2.2;
+        }
+        // Clear of you: duck indoors for a while.
+        if (u.t <= 0 || st.pos.distanceTo(player) > 28) Object.assign(u, { mode: 'hide', t: 90 });
+        break;
+      }
+      case 'down':
+        if (a) this.playOnce(a, u.t > 2.5 ? 'death' : 'crouch');
+        if (u.t <= 0) {
+          this.upset.delete(st);
+          if (a) a.current = '';
+        }
+        break;
+      case 'dead':
+        if (a) this.playOnce(a, 'death');
+        if (u.t <= 0) {
+          st.hidden = true;
+          if (st.actor) this.release(st);
+        }
+        break;
+      case 'hide':
+        st.hidden = true;
+        if (u.t <= 0) {
+          this.upset.delete(st);
+          this.placeBySchedule(st, true);
+        }
+        break;
+    }
+    if (st.actor) {
+      st.actor.built.root.position.copy(st.pos);
+      st.actor.built.root.rotation.y = st.yaw;
+      st.actor.built.mixer.update(dt);
+    }
+    return true;
+  }
+
   /** The nearest visible NPC within reach (for talking), if any. */
   nearest(p: THREE.Vector3, reach = 2.6) {
     let best: NpcState | null = null, bd = reach;
     for (const st of this.npcs) {
-      if (!st.actor) continue;
+      if (!st.actor || this.upset.has(st)) continue;
       const d = st.pos.distanceTo(p);
       if (d < bd) (bd = d), (best = st);
     }

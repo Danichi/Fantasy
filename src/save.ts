@@ -52,6 +52,9 @@ export interface WorldSave {
   sailing?: import('./world/sea/sailing').SailingSave;
   /** Arms and Crafting (feat/arms): known recipes, depleted gathering nodes, buffs, crafting settings */
   arms?: import('./crafting/crafting').ArmsSave;
+  /** NPC overhaul: how people feel about you, your standing, bounties, who's gone */
+  social?: import('./social/reputation').SocialSave;
+  requests?: import('./social/requests').RequestSave;
 }
 
 export interface SaveData {

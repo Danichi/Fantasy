@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import { ignoresPlayer } from '../origins/stealth';
 import RAPIER from '@dimforge/rapier3d-compat';
@@ -81,7 +82,7 @@ export class Beast implements Target {
   private actions = new Map<string, THREE.AnimationAction>();
   private activeAction: THREE.AnimationAction | null = null;
   private vel = new THREE.Vector3();
-  private yaw = Math.random() * Math.PI * 2;
+  yaw = Math.random() * Math.PI * 2;
   private home: THREE.Vector3;
   private rb: RAPIER.RigidBody;
   private col: RAPIER.Collider;
@@ -209,6 +210,8 @@ export class Beast implements Target {
   }
 
   private setState(next: State) {
+    const tell = ({ attack: ['normal', 0.35, 0] } as Partial<Record<State, [AttackKind, number, number]>>)[next];
+    if (tell && this.alive) combat.windup(this, tell[1], tell[0], tell[2]);
     if (next === this.state) return;
     this.state = next;
     this.t = 0;
@@ -217,6 +220,15 @@ export class Beast implements Target {
 
   /** seconds left reeling from a parry (wide open to a riposte) */
   private daze = 0;
+
+  /** Posture broken (combat/core.ts): it reels. */
+  onBreak(sec: number) {
+    if (!this.alive || this.state === 'dying') return;
+    this.state = 'idle';
+    this.setState('hurt');
+    this.playAction('hurt', 0.05);
+    this.daze = sec;
+  }
 
   takeHit(hit: HitInfo) {
     if (!this.alive || this.state === 'dying') return;

@@ -54,7 +54,9 @@ export class Boar extends Creature {
   private setMode(m: Mode, len = 1) {
     this.mode = m;
     this.modeT = 0;
-    this.modeLen = len;
+    this.modeLen = len;    // The pawing is the tell for the rush (heavy: block it and it costs you), the head-dip for the hook.
+    if (m === 'paw') this.tell(len + 0.35, 'heavy');
+    else if (m === 'gore') this.tell(0.3);
   }
 
   private get forward() {

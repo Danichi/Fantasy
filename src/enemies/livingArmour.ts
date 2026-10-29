@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
@@ -54,7 +55,7 @@ export class LivingArmour implements Target {
   private eyes: THREE.Mesh[] = [];
   private state: State = 'idle';
   private st = 0;
-  private yaw = 0;
+  yaw = 0;
   private vel = new THREE.Vector3();
   private cooldown = 1;
   private poiseAcc = 0;
@@ -175,8 +176,21 @@ export class LivingArmour implements Target {
     return this.state === 'dying' && this.deathT > 5;
   }
 
+  readonly ownPoise = true;
+  /** Posture broken (combat/core.ts): the armour sags, open to a finisher. */
+  onBreak() {
+    if (this.alive) this.setState('stagger');
+  }
+
   takeHit(h: HitInfo) {
     if (!this.alive) return;
+    // A shove or a shield bash batters the shield aside at once.
+    if (this.state === 'guard' && h.guardBreak) {
+      this.setState('stagger');
+      this.fx.sparks(h.at, h.dir.clone().negate());
+      events.emit('blockImpact', { at: h.at, guardBroken: true });
+      return;
+    }
     // Facing the blow with the shield raised: most of it is absorbed.
     const facing = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).dot(h.dir) < -0.3;
     if (this.state === 'guard' && facing && h.source === 'melee' && !h.crit) {
@@ -223,6 +237,9 @@ export class LivingArmour implements Target {
   }
 
   private setState(s: State) {
+    // Its tell (combat/core.ts): the colour says how to answer it; a blow now is a counter-hit.
+    const tell = ({ windup: ['normal', 0.6, 0] } as Partial<Record<State, [AttackKind, number, number]>>)[s];
+    if (tell && this.alive) combat.windup(this, tell[1], tell[0], tell[2]);
     this.state = s;
     this.st = 0;
   }

@@ -50,7 +50,8 @@ export class ThirdPersonCamera {
     if (!inp.uiMode) {
       this.yaw -= inp.mouseDX * this.sensitivity;
       this.pitch = clamp(this.pitch + inp.mouseDY * this.sensitivity, -0.6, 1.2);
-      this.distance = clamp(this.distance + inp.wheel * 0.35, 2.6, 7.2);
+      // (Locked on, the wheel switches targets instead: player.ts.)
+      if (!this.lockTarget) this.distance = clamp(this.distance + inp.wheel * 0.35, 2.6, 7.2);
     }
 
     // Pivot trails the player slightly for weight, but never far.

@@ -1,8 +1,12 @@
+import { combat } from '../../combat/core';
 import * as THREE from 'three';
 import { events } from '../../core/events';
 import type { IncomingAttack, DefenceResult, Target } from '../../combat/targets';
 import type { CombatMods } from '../../combat/mods';
 import type { SkillRuntime } from '../skills';
+
+/** The light string's branches and the locked-on openers (combat/actions.ts BRANCHES). */
+const BRANCH_FLOW = new Set(['link1', 'link2', 'link3', 'delay2', 'thrust', 'retreatCut', 'sideSweep', 'guardCounter']);
 import { heightAt } from '../../world/terrainHeight';
 
 // The three sword styles each reshape one basic action, and build their
@@ -128,6 +132,9 @@ export class CombatClasses {
     const rt = this.rt;
     if (this.active === 'gale') {
       this.lastHitFlow = this.now - this.lastDodge < 2 ? 1 : 0.25;
+      // Combat rework: a string's branches and openers ride the wind harder; a finisher fills it.
+      if (action === 'finisher') this.lastHitFlow += 2;
+      else if (BRANCH_FLOW.has(action)) this.lastHitFlow += 0.5;
       this.addFlow(this.lastHitFlow);
       if (action === 'slash3' && rt.has('updraft')) rt.hit(t, 1, { poise: 160, source: 'melee', noVerdict: true });
     }
@@ -310,7 +317,9 @@ export class CombatClasses {
       return 'blocked';
     }
     att.onParried?.();
-    events.emit('parrySuccess', { at: p.center.clone().lerp(at, 0.5) });
+    // The ring turns a blow as cleanly as a perfect parry: it wears the attacker's posture down.
+    combat.parried(att.attacker ?? foe ?? undefined, true);
+    events.emit('parrySuccess', { at: p.center.clone().lerp(at, 0.5), perfect: true });
     rt.vfx.burst(p.center.clone().lerp(at, 0.6), 'frost', 0.6, 4);
     p.onHitStop?.(0.08);
     if (rt.has('stillWater')) p.stamina = Math.min(p.maxStamina, p.stamina + 6);

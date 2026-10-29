@@ -49,6 +49,8 @@ export interface BuiltCharacter {
   mixer: THREE.AnimationMixer;
   bones: Map<string, THREE.Bone>;
   skeleton: THREE.Skeleton;
+  /** load more clips onto this character later (only when needed) */
+  addClips?: (keys: string[]) => Promise<void>;
 }
 
 // ---- re-binding skinned geometry onto another skeleton -----------------------------
@@ -360,19 +362,22 @@ export async function buildCharacter(look: Look, clips: string[] = ['idle', 'tal
 
   // Animations, retargeted onto this rig (once per rig and clip).
   const mixer = new THREE.AnimationMixer(model);
-  for (const key of clips) {
-    const ck = `${rig}|${key}`;
-    let clip = retargetCache.get(ck);
-    if (!clip) {
-      const c = await loadClip(key);
-      if (!c) continue;
-      clip = retargetClip(c.clip, c.rest, rest, HUMANOID_TO_UE);
-      clip.name = key;
-      retargetCache.set(ck, clip);
+  const addClips = async (keys: string[]) => {
+    for (const key of keys) {
+      const ck = `${rig}|${key}`;
+      let clip = retargetCache.get(ck);
+      if (!clip) {
+        const c = await loadClip(key);
+        if (!c) continue;
+        clip = retargetClip(c.clip, c.rest, rest, HUMANOID_TO_UE);
+        clip.name = key;
+        retargetCache.set(ck, clip);
+      }
+      mixer.clipAction(clip);
     }
-    mixer.clipAction(clip);
-  }
+  };
+  await addClips(clips);
   const bones = new Map<string, THREE.Bone>();
   for (const b of anchor.skeleton.bones) bones.set(b.name, b);
-  return { root, model, mixer, bones, skeleton: anchor.skeleton };
+  return { root, model, mixer, bones, skeleton: anchor.skeleton, addClips };
 }

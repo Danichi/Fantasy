@@ -242,6 +242,28 @@ body.book-open .bossbar { display: none; }
   animation: dmgrise 0.9s ease-out forwards;
 }
 .dmg.crit { color: #ffcf5a; font-size: 26px; }
+.dmg small { display: block; font: 700 10px/1 var(--sans); letter-spacing: 0.14em; color: #ffd98a; margin-bottom: 2px; text-align: center; }
+.dmg.weak { color: #ff9a4a; }
+.dmg.resist { color: #a8a39a; font-size: 15px; }
+/* Posture under an enemy's health (combat/core.ts): fills toward a break. */
+.ehp .ehp-post { position: absolute; left: 6px; right: 6px; top: 100%; margin-top: 2px; height: 3px; background: rgba(0, 0, 0, 0.55); display: none; }
+.ehp.post-on .ehp-post { display: block; }
+.ehp .ehp-post i { position: absolute; left: 0; top: 0; bottom: 0; }
+.ehp.broken .ehp-post { animation: postBroken 0.5s ease-in-out infinite alternate; }
+@keyframes postBroken { from { box-shadow: 0 0 2px #ffb340; } to { box-shadow: 0 0 9px #ffd98a; } }
+.bossbar .bb-post { position: relative; height: 5px; margin: 4px 14% 0; background: rgba(12, 8, 4, 0.8); border: 1px solid rgba(201, 155, 71, 0.6); opacity: 0; transition: opacity 0.25s; }
+.bossbar .bb-post.on { opacity: 1; }
+.bossbar .bb-post i { position: absolute; inset: 0; transform-origin: center; background: linear-gradient(90deg, #ff7a2a, #ffd98a, #ff7a2a); }
+.bossbar .bb-post.broken { animation: postBroken 0.5s ease-in-out infinite alternate; }
+/* Enemy tells (combat/core.ts): white parry, gold heavy, red unblockable, yellow grab. */
+.tell { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; transform: rotate(45deg); display: none; pointer-events: none; animation: tellIn 0.18s ease-out; }
+.tell.normal { background: rgba(255, 255, 255, 0.9); box-shadow: 0 0 10px #bfd8ff; width: 10px; height: 10px; margin: -5px 0 0 -5px; }
+.tell.heavy { background: #ffd27a; box-shadow: 0 0 12px #ffb030; }
+.tell.unblockable, .tell.grab { width: 30px; height: 30px; margin: -15px 0 0 -15px; font: 900 20px/30px var(--serif); text-align: center; color: #fff; }
+.tell.unblockable { background: #d8221a; box-shadow: 0 0 18px #ff3a2a, 0 0 0 2px #2a0400; }
+.tell.grab { background: #e8c020; box-shadow: 0 0 18px #fff060, 0 0 0 2px #3a2a00; font-size: 15px; }
+.tell.unblockable, .tell.grab { transform: none; border-radius: 50%; }
+@keyframes tellIn { from { opacity: 0; scale: 1.8; } to { opacity: 1; scale: 1; } }
 @keyframes dmgrise {
   0% { transform: translate(-50%, 0) scale(1.35); opacity: 0; }
   15% { opacity: 1; transform: translate(-50%, -6px) scale(1); }

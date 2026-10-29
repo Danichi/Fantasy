@@ -38,7 +38,7 @@ export class Watchman implements Foe {
   private built: BuiltCharacter | null = null;
   private actions: Record<string, THREE.AnimationAction> = {};
   private clip = '';
-  private yaw = 0;
+  yaw = 0;
   private state: State = 'run';
   private st = 0;
   private cd = Math.random();

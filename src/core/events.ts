@@ -5,7 +5,8 @@ export interface GameEvents {
   playerDamaged: { amount: number; blocked: boolean };
   playerDied: {};
   playerRespawned: {};
-  parrySuccess: { at: Vector3 };
+  /** perfect: inside the parry's first frames (a late parry only deflects) */
+  parrySuccess: { at: Vector3; perfect?: boolean };
   blockImpact: { at: Vector3; guardBroken: boolean };
   /** a blow got round a raised shield (from the side or behind) */
   guardMissed: { from: Vector3 };
@@ -27,6 +28,26 @@ export interface GameEvents {
   /** a creature den (boar wallow, spider hollow, bat roost) was emptied */
   denCleared: { id: string; species: string };
   swing: { heavy: boolean };
+  // ---- combat rework (combat/core.ts) ----
+  /** every blow the player lands, after the target took it */
+  strike: { target: import('../combat/targets').Target; at: Vector3; damage: number; crit: boolean; reason?: import('../combat/core').CritReason; react: import('../combat/core').Reaction; broke: boolean; armour: import('../combat/core').Armour; type: import('../combat/core').DmgType; heavy: boolean; typeMult: number; killed: boolean };
+  /** an enemy winds up an attack: its tell (the colour says how to answer it) */
+  telegraph: { target: import('../combat/targets').Target; kind: import('../combat/core').AttackKind; sec: number };
+  /** an enemy's posture broke (open to a finisher), and recovered */
+  postureBreak: { target: import('../combat/targets').Target; at: Vector3 };
+  postureRecover: { target: import('../combat/targets').Target };
+  /** the defence ladder: a parry inside the first frames, a last-moment dodge, a block answered with a counter */
+  perfectParry: { at: Vector3 };
+  perfectDodge: { at: Vector3 };
+  guardCounter: { at: Vector3 };
+  /** a finisher landed on a broken or downed enemy */
+  finisher: { target: import('../combat/targets').Target; at: Vector3 };
+  /** a heavy reached a charge tier (1-3), or was released on the beat */
+  chargeTier: { tier: number; perfect: boolean };
+  /** time briefly slows (perfect defence, finishers): scale and seconds */
+  slowMo: { scale: number; sec: number };
+  /** an attack the player couldn't block: unblockables, grabs */
+  unblockable: { kind: import('../combat/core').AttackKind; from: Vector3 };
   spellCast: { spell: string };
   spellImpact: { at: Vector3; spell: string };
   footstep: { at: Vector3; surface: string };

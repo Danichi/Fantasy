@@ -1,4 +1,10 @@
 // Fonts are bundled so the game works offline (desktop build).
+import { combat } from './combat/core';
+import { director } from './combat/ai';
+import { combatFeedback } from './combat/feedback';
+import { TrainingYard } from './combat/trainingYard';
+import { CombatDebug } from './combat/debugOverlay';
+import { WeaponTrail } from './fx/weaponTrail';
 import './render/stylize';
 import { initCompressedGltf } from './core/gltf';
 import '@fontsource/cinzel/500.css';
@@ -23,7 +29,7 @@ import { FX } from './fx/particles';
 import { BeastSpawner } from './enemies/beastSpawner';
 import { Spells } from './magic/spells';
 import { buildIcons, pumpIcons, setOnIconsReady, loadBakedIcons, exportAllIcons } from './ui/icons';
-import { HUD } from './ui/hud';
+import { HUD, writeDamageNumbers } from './ui/hud';
 import { InventoryUI, buildOverlays } from './ui/inventory';
 import { Music } from './audio/music';
 import { Ambient } from './world/ambient';
@@ -41,7 +47,12 @@ import { Encounters } from './world/encounters';
 import { Caravans } from './world/caravans';
 import { setupRoadQuests } from './quests/roadQuests';
 import { setupClassTrials } from './quests/classTrials';
-import { rumours, greetingFor, topicsFor } from './npc/townTalk';
+import { rumours, greetingFor, storyGreeting, topicsFor } from './npc/townTalk';
+import { setupSocial } from './social/wiring';
+import { setupTrouble } from './social/trouble';
+import { setupRequests } from './social/requests';
+import { RepPanel } from './ui/repPanel';
+import { PERSONAL_QUESTS } from './social/personalQuests';
 import { buildPortAurelle, PORT_SPOTS } from './world/portAurelle';
 import { Fishing, type FishingSpot } from './world/fishing';
 import { Duel } from './combat/duel';
@@ -468,6 +479,10 @@ async function boot() {
 
   // ---- UI ------------------------------------------------------------------
   const hud = new HUD(player, r.camera);
+  // Combat rework: tells, impacts, parries, breaks and finishers seen and heard (combat/feedback.ts).
+  combatFeedback(fx, player, (t) => hud.showBanner(t));
+  const combatDebug = new CombatDebug(r.scene, player); // F9
+  const trail = new WeaponTrail(r.scene, player);
   // Where a raised shield covers, and a crosshair to aim it.
   const guardArc = new GuardArc(r.scene, player);
   hud.resource = () => skillRt.resources();
@@ -631,6 +646,32 @@ async function boot() {
   });
   // Lightbinders gather Radiance under the open sky by day.
   skillRt.env = () => ({ daylight: realm.mode === 'overworld' && time.hour >= 6 && time.hour < 19 && weather.p.rain < 0.5 });
+  // ---- The NPC overhaul: personalities, reputation, conversations, speech bubbles ----
+  const social = setupSocial({
+    npcs, townSpecs: NPCS, dialogue, shopUI, camera: r.camera,
+    townHeads: () => town.npcs.map((n) => ({ id: n.spec.id, head: n.head, visible: n.root.visible })),
+    hour: () => time.hour, day: () => time.day, rain: () => weather.p.rain > 0.4,
+    gold: () => player.prog.gold, addGold: (n) => player.prog.addGold(n), level: () => player.prog.level,
+    items: () => player.equip.items.filter((i) => i.def.kind !== 'key' && i.def.kind !== 'spell' && player.equip.slotOf(i.uid) === undefined).map((i) => ({ id: i.def.id, name: i.def.name, kind: i.def.kind, qty: i.qty })),
+    take: (id, n) => takeItem(id, n), give: (id, n) => giveItem(id, n), toast: (m) => hud.toast(m),
+    weaponOut: () => !!player.act || player.blocking || !!player.lock,
+    playerPos: () => player.pos,
+    save: saveData?.world?.social,
+  });
+  town.converse = (spec) => social.talk(spec);
+  // Good deeds travel too: raids beaten back, beasts slain.
+  events.on('raidEnded', ({ won }) => {
+    if (!won) return;
+    const site = raids.save.lastSite ?? 'glen';
+    social.rep.act('raidDefended', { community: site === 'glen' ? 'elderGlen' : 'roads', text: site === 'glen' ? 'you stood with the Watch when the wolves came' : 'you helped drive off a night raid on the King\'s Road' });
+    social.rep.shift('watch', 30);
+  });
+  events.on('deed', ({ id, label }) => {
+    if (!id.startsWith('boss:')) return;
+    social.rep.act('bossSlain', { community: 'roads', text: 'you ' + label.charAt(0).toLowerCase() + label.slice(1) });
+    social.rep.shift('elderGlen', 25);
+    social.rep.shift('guild', 30);
+  });
   // Townsfolk: one interactable that follows whoever is nearest.
   const folkTalk = {
     pos: new THREE.Vector3(0, -999, 0),
@@ -650,24 +691,27 @@ async function boot() {
       const back = () => folkTalk.action();
       const show = (t: string, opts: { label: string; run: () => void }[]) => dialogue.show(n.rec.name, title, t, opts);
       const ctx = { ...talkCtx(), met: true };
-      show(greetingFor(n.rec.id, npcs.lineFor(n), ctx, 1), [
-        ...quests.options(n.rec.id, show, back),
-        ...topicsFor(n.rec.id, ctx).map((t) => ({ label: t.q, run: () => show(t.a, [{ label: 'Anything else?', run: back }, { label: 'Farewell.', run: () => dialogue.close() }]) })),
-        ...(folkServices.get(n.rec.id)?.(show, back) ?? []),
-        ...town.sellOptions(n.rec.id, n.rec.name, title, back),
-        {
-          label: 'Heard any news?',
-          run: () => {
-            // Everyone has heard something; ask again for something else.
-            const news = rumours({ ...talkCtx(), met: true }, n.rec.settlement === 'elderGlen');
-            const k = folkNews.get(n.rec.id) ?? n.seed % news.length;
-            folkNews.set(n.rec.id, k + 1);
-            bosses.heard(news[k % news.length]);
-            show(news[k % news.length], [{ label: 'Anything else?', run: () => folkTalk.action() }, { label: 'Farewell.', run: () => dialogue.close() }]);
-          },
+      social.talk({
+        id: n.rec.id, name: n.rec.name, title,
+        // Their own words the first time you meet; a story beat after that, if they have one.
+        intro: greetingFor(n.rec.id, npcs.lineFor(n), { ...ctx, met: false }, 0),
+        story: storyGreeting(n.rec.id, ctx),
+        services: [
+          ...(requests.prepare(n.rec.id), quests.options(n.rec.id, show, back)),
+          ...(folkServices.get(n.rec.id)?.(show, back) ?? []),
+          ...town.sellOptions(n.rec.id, n.rec.name, title, back),
+        ],
+        topics: topicsFor(n.rec.id, ctx),
+        news: () => {
+          // Everyone has heard something; ask again for something else.
+          const news = rumours({ ...talkCtx(), met: true }, n.rec.settlement === 'elderGlen');
+          const k = folkNews.get(n.rec.id) ?? n.seed % news.length;
+          folkNews.set(n.rec.id, k + 1);
+          bosses.heard(news[k % news.length]);
+          return news[k % news.length];
         },
-        { label: 'Farewell.', run: () => dialogue.close() },
-      ]);
+        back,
+      });
     },
   };
   realm.overworldInteractables.push(folkTalk);
@@ -737,7 +781,14 @@ async function boot() {
     quests, scene: r.scene, fx, player, time, fauna, cowRange: farm.ranges.cows, farm, npcs, beasts: slimes,
     count: countItem, take: takeItem, give: giveItem, toast: (m) => hud.toast(m),
   });
-  town.questOptions = (id, show, back) => quests.options(id, show, back);
+  social.hookQuests(quests);
+  quests.add(...PERSONAL_QUESTS);
+  // Favours: people who like you ask for a hand now and then (NPC overhaul).
+  const requests = setupRequests(social, quests, () => time.day, saveData?.world?.requests);
+  town.questOptions = (id, show, back) => {
+    requests.prepare(id);
+    return quests.options(id, show, back);
+  };
   // ---- Herbalism: alchemy tables, recipes, elixir buffs, blade oils and thrown flasks ----
   const herbalism = new Herbalism(r.scene, player, fx, {
     toast: (m) => hud.toast(m),
@@ -813,6 +864,21 @@ async function boot() {
     action: () => fishing.start(spot),
   })));
   const duel = new Duel(r.scene, encounters.bolts, player);
+  // Trouble: townsfolk can be struck, crimes are seen, the Watch comes (NPC overhaul).
+  npcs.absent = (id) => !social.people.present(id);
+  const trouble = setupTrouble({
+    social, npcs, player, scene: r.scene, bolts: encounters.bolts, dialogue, hour: () => time.hour, toast: (m) => hud.toast(m),
+    townNpcs: () => town.npcs.filter((n) => n.spec.id !== 'guild').map((n) => ({ id: n.spec.id, name: n.spec.name, pos: n.pos, visible: n.root.visible })),
+    serve: (days) => {
+      for (let i = 0; i < days; i++) time.skipTo(8);
+      player.hp = player.maxHp;
+    },
+    settlementAt: (p) => {
+      for (const s of npcs.settlements.values()) if (Math.hypot(s.center.x - p.x, s.center.z - p.z) < s.radius) return s.id;
+      return undefined;
+    },
+    truce: () => !!npcs.raidOn || realm.mode !== 'overworld',
+  });
   let duelWin: (() => void) | null = null;
   const ringAt = PORT_SPOTS.academyRing.clone().setY(heightAt(PORT_SPOTS.academyRing.x, PORT_SPOTS.academyRing.z));
   /** A sparring bout in the Academy ring; `onWin` runs if the player wins. */
@@ -1080,7 +1146,7 @@ async function boot() {
   folkServices.set('dunmore', stableFor('dunmore', kingsRoad.stableYard, 'waystation'));
   folkServices.set('hobbs', stableFor('hobbs', PORT_SPOTS.stable, 'portAurelle'));
   folkServices.set('capOstler', stableFor('capOstler', CAPITAL_SPOTS.stable, 'royalCapital'));
-  folkServices.set('rook', stableFor('rook', crownRoad.stableYard, 'kingsmile'));
+  folkServices.set('fenwick', stableFor('fenwick', crownRoad.stableYard, 'kingsmile'));
   Object.assign(crownHooks, {
     toast: (m: string) => hud.toast(m),
     bossBar: (t: { hp: number; maxHp: number; alive: boolean } | null, name?: string) => hud.bossBar(t, name),
@@ -1424,6 +1490,7 @@ async function boot() {
     { id: 'inventory', label: 'Inventory', key: 'I', isOpen: () => inv.open, open: () => inv.toggle(true), close: () => inv.toggle(false) },
     { id: 'skills', label: 'Skills', key: 'K', isOpen: () => skills.open, open: () => skills.toggle(true), close: () => skills.toggle(false) },
     { id: 'journal', label: 'Journal', key: 'J', isOpen: () => questUI.open, open: () => questUI.toggle(true), close: () => questUI.toggle(false) },
+    { id: 'people', label: 'People', key: 'P', isOpen: () => repPanel.open, open: () => repPanel.toggle(true), close: () => repPanel.toggle(false) },
     { id: 'herbal', label: 'Herbal', key: 'O', isOpen: () => herbalism.isOpen, open: () => herbalism.openCodex(), close: () => herbalism.ui.close() },
     { id: 'seamanship', label: 'Seamanship', key: 'N', isOpen: () => seaPanel.open, open: () => seaPanel.toggle(true), close: () => seaPanel.toggle(false) },
     {
@@ -1436,6 +1503,12 @@ async function boot() {
   questUI.onShowOnMap = (x, z) => {
     worldMap.focus(x, z);
     book.show('map');
+  };
+  const repPanel = new RepPanel(social.people, social.townName);
+  repPanel.onToggle = (open) => {
+    input.uiMode = open || inv.open || mapUI.open || dialogue.open || questUI.open;
+    if (open) input.exitLock();
+    else if (!inv.open && !mapUI.open && !dialogue.open && !questUI.open) input.requestLock();
   };
   questUI.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open || dialogue.open;
@@ -1509,6 +1582,14 @@ async function boot() {
     return quests.markers().filter((m) => m.quest === tracked).map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label, tracked: true }));
   };
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
+  // Kaela Voss's drill yard (combat rework): a drill for each part of the fighting.
+  const kaelaSpec = NPCS.find((n) => n.id === 'kaela');
+  const yard = new TrainingYard(r.scene, encounters.bolts, player, new THREE.Vector3(kaelaSpec?.pos[0] ?? -13.5, 0, kaelaSpec?.pos[1] ?? 0.5), worldFlags, (m) => hud.toast(m), (n) => player.prog.addXp(n));
+  const baseServices = town.serviceOptions;
+  town.serviceOptions = (id, show, back) => [
+    ...(id === 'kaela' ? [{ label: 'Drill me in the fighting arts.', run: () => yard.menu(show, back) }] : []),
+    ...(baseServices?.(id, show, back) ?? []),
+  ];
   microDiscoveries = new MicroDiscoveries(
     r.scene,
     world.mats,
@@ -1707,7 +1788,7 @@ async function boot() {
     if (TEST_MODE && !location.search.includes('save')) return;
     const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), sites: sites.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, social: social.save(), requests: requests.save(), pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), sites: sites.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   // Guild contracts show in the quest log (tracker, journal, map, waypoint).
@@ -1747,7 +1828,15 @@ async function boot() {
     pausedByUser = false;
     input.fallbackLook = true;
     input.requestLock();
-  }, player.prog.origin, music);
+  }, player.prog.origin, music, {
+    get on() {
+      return hud.damageNumbers;
+    },
+    set: (on: boolean) => {
+      hud.damageNumbers = on;
+      writeDamageNumbers(on);
+    },
+  });
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
   // ---- Origins (feat/origins): a new game opens the character creator ----
@@ -1880,6 +1969,13 @@ async function boot() {
   let paused = false;
   let simSteps = 0;
   player.onHitStop = (s) => (hitStop = Math.max(hitStop, s));
+  // Combat rework: time slows for a moment on a perfect parry, a perfect dodge or a finisher.
+  let slowT = 0, slowScale = 1;
+  events.on('slowMo', ({ scale, sec }) => {
+    if (TEST_MODE) return; // tests measure the world in real seconds
+    slowScale = slowT > 0 ? Math.min(slowScale, scale) : scale;
+    slowT = Math.max(slowT, sec);
+  });
 
   let acc = 0;
   let last = performance.now();
@@ -1912,6 +2008,8 @@ async function boot() {
     slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
     if (realm.mode === 'overworld') sailing.preStep(STEP);
     player.update(STEP, input, cam);
+    combat.tick(STEP); // posture, poise and wind-ups of everything that fights (combat/core.ts)
+    director.tick(STEP, player); // attack turns (combat/ai.ts)
     skillRt.update(STEP);
     arms.update(STEP, input); // Arms and Crafting (feat/arms)
     herbalism.update(STEP);
@@ -1932,6 +2030,7 @@ async function boot() {
       crownRoad.update(STEP, player, time.state.night);
       roadLife.step(STEP, player);
       duel.update(STEP);
+      yard.update(STEP);
       gravewood.update(STEP, player);
       desert?.update(STEP, player);
       wilds?.update(STEP, player);
@@ -1984,8 +2083,9 @@ async function boot() {
     // Pause the world while the title/pause overlay is up (never in tests).
     const overlayUp = !TEST_MODE && (!started || pausedByUser);
     // Hit-stop is a brief slow-motion rather than a hard freeze.
-    const timeScale = hitStop > 0 ? 0.1 : 1;
+    const timeScale = hitStop > 0 ? 0.1 : slowT > 0 ? slowScale : 1;
     hitStop = Math.max(0, hitStop - dt);
+    slowT = Math.max(0, slowT - dt);
     const simDt = dt * timeScale;
     acc += simDt;
     let steps = 0;
@@ -2021,6 +2121,8 @@ async function boot() {
     tickDelverFur(dt);
     tickUndeadHair(dt);
     guardArc.update(dt);
+    combatDebug.update();
+    trail.update(dt);
     updateSnare(player);
     r.camera.getWorldDirection(player.aimDir);
     ground.update(r.camera.position);
@@ -2134,6 +2236,9 @@ async function boot() {
     worldMap.update(dt, player.pos, player.yaw, realm.mode === 'overworld' && !overlayUp);
     dialogue.update(dt);
     if (realm.mode === 'overworld') town.update(dt, player.pos);
+    social.barks.enabled = realm.mode === 'overworld' && !dialogue.open;
+    social.update(dt);
+    if (realm.mode === 'overworld') trouble.update(dt);
     physDebug?.update();
     origins.frame(paused ? 0 : dt); // ---- Origins (feat/origins) ----
     r.followShadow(renderPos);
@@ -2213,6 +2318,10 @@ async function boot() {
       arms.reset(); // Arms and Crafting (feat/arms)
       quests.state = {};
       quests.tracked = null;
+      social.rep.reset();
+      social.barks.clear();
+      trouble.reset();
+      requests.reset();
       for (const k of Object.keys(worldFlags)) delete worldFlags[k];
       realm.progress = structuredClone(fresh.dungeon);
       realm.mineProgress = { gateOpen: false, guardianDead: false };
@@ -2235,9 +2344,10 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
+      yard, combatDebug, // combat rework: the drill yard and the F9 overlay
       ghLife, outcast, ghSide, scrapTowns,
       wilds, roadLife, herbalism, riches, gwKey, sanctum,
       origins, creator, // ---- Origins (feat/origins) ----

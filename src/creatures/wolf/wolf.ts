@@ -112,7 +112,7 @@ export class Wolf extends Creature {
     }
     this.mode = m;
     this.modeT = 0;
-    this.modeLen = len;
+    this.modeLen = len;    if (m === 'snarl') this.tell(len + 0.2);
   }
   private get forward() {
     return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));

@@ -6,6 +6,7 @@ import type { ProcPose } from '../player/rigLayer';
 import type { ItemInstance } from '../items/equipment';
 import { ITEMS, type ItemDef } from '../items/itemDefs';
 import { targets, hurtSegment, type Target } from './targets';
+import { strike } from './core';
 import { afflictions } from './afflictions';
 import { physics } from '../physics/physics';
 import { heightAt } from '../world/terrain';
@@ -350,11 +351,11 @@ export class Ranged {
 
   private hitTarget(s: Shot, t: Target) {
     const p = this.player;
-    const crit = t.stunned || Math.random() < s.crit;
-    const dmg = Math.max(1, Math.round(s.dmg * (crit ? 2.2 : 1) * (0.92 + Math.random() * 0.16)));
     const dir = s.vel.clone().setY(0).normalize();
     const at = t.center.clone().addScaledVector(dir, -t.radius * 0.8);
-    t.takeHit({ damage: dmg, poise: s.poise * p.paths.poisePower * p.mods.poise, dir, at, crit, source: 'melee' });
+    // Through the combat core: arrows pierce, crits come from play (a stunned, broken or unaware target).
+    const r = strike(t, { base: s.dmg, type: 'pierce', poise: s.poise * p.paths.poisePower * p.mods.poise, from: at.clone().addScaledVector(dir, -2), at, source: 'melee', keen: s.crit });
+    const dmg = r.damage, crit = r.crit;
     const as = ITEMS[s.ammo]?.stats ?? {};
     if (as.burn && t.alive) afflictions.burn(t, as.burn);
     if (as.frost && t.alive && Math.random() < as.frost) afflictions.freeze(t);

@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { physics, groups, G_ENEMY } from '../physics/physics';
@@ -65,7 +66,7 @@ export class SandGolem implements Target {
   private eye: THREE.PointLight;
   private state: State = 'dormant';
   private st = 0;
-  private yaw = 0;
+  yaw = 0;
   private cooldown = 2;
   private hitDone = false;
   private poiseDmg = 0;
@@ -133,6 +134,14 @@ export class SandGolem implements Target {
     return this.state !== 'dormant' && this.state !== 'gone';
   }
 
+  readonly ownPoise = true;
+  /** Posture broken (combat/core.ts): it kneels, open to a finisher. */
+  onBreak() {
+    if (this.state === 'stagger' || this.state === 'dying') return;
+    this.set('stagger');
+    this.stunned = true;
+  }
+
   takeHit(h: HitInfo) {
     if (!this.alive || this.state === 'dormant' || this.state === 'rising' || this.state === 'dying') return;
     const mult = this.state === 'stagger' ? 1.5 : 1;
@@ -166,6 +175,9 @@ export class SandGolem implements Target {
   }
 
   private set(s: State) {
+    // Its tell (combat/core.ts): the colour says how to answer it; a blow now is a counter-hit.
+    const tell = ({ slam: ['unblockable', 0.9, 1.2], sweep: ['heavy', 0.7, 1.0], throw: ['normal', 0.6, 0] } as Partial<Record<State, [AttackKind, number, number]>>)[s];
+    if (tell && this.alive) combat.windup(this, tell[1], tell[0], tell[2]);
     this.state = s;
     this.st = 0;
     this.hitDone = false;

@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import { Creature, levelScale, type CreatureBase } from '../creatures/creature';
 import { BoarVisual } from '../creatures/boar/visual';
@@ -206,6 +207,8 @@ export class WarBoar extends Creature {
     this.setMode('home', 99);
   }
   private setMode(m: BoarMode, len = 1) {
+    const tell = ({ paw: ['heavy', 0.35, 0], gore: ['normal', 0.1, 0] } as Partial<Record<BoarMode, [AttackKind, number, number]>>)[m];
+    if (tell) combat.windup(this, len + tell[1], tell[0], tell[2] ? len + tell[2] : 0);
     this.mode = m;
     this.modeT = 0;
     this.modeLen = len;
@@ -450,6 +453,8 @@ export class GoblinChief extends Creature {
     this.setMode('home', 99);
   }
   private setMode(m: ChiefMode, len = 1) {
+    const tell = ({ crouch: ['unblockable', 0.25, 0.9], combo: ['normal', 0.1, 0] } as Partial<Record<ChiefMode, [AttackKind, number, number]>>)[m];
+    if (tell) combat.windup(this, len + tell[1], tell[0], tell[2] ? len + tell[2] : 0);
     this.mode = m;
     this.modeT = 0;
     this.modeLen = len;

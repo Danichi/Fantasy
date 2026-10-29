@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../../combat/core';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -74,7 +75,7 @@ export class Rootwarden implements Target {
   private barkMat: THREE.MeshStandardMaterial;
   private state: State = 'dormant';
   private st = 0;
-  private yaw: number;
+  yaw: number;
   private cooldown = 1.5;
   private hitDone = false;
   private poise = 0;
@@ -193,6 +194,18 @@ export class Rootwarden implements Target {
     return this.state === 'fallen';
   }
 
+  readonly ownPoise = true;
+  readonly boss = true;
+  /** Posture broken (combat/core.ts): the giant kneels. */
+  onBreak() {
+    if (this.state === 'stagger' || this.state === 'dying' || this.state === 'fallen' || this.state === 'dormant') return;
+    this.poise = 0;
+    this.tele.cancel(this.mark);
+    this.lines = [];
+    this.set('stagger');
+    this.stunned = true;
+  }
+
   takeHit(h: HitInfo) {
     if (!this.alive || this.state === 'dying' || this.state === 'fallen') return;
     if (this.state === 'dormant') {
@@ -248,6 +261,9 @@ export class Rootwarden implements Target {
   }
 
   private set(s: State) {
+    // Its tell (combat/core.ts): the colour says how to answer it; a blow now is a counter-hit.
+    const tell = ({ slam: ['unblockable', 0.9, 1.2], sweep: ['heavy', 0.7, 1.0], roots: ['unblockable', 0.6, 0] } as Partial<Record<State, [AttackKind, number, number]>>)[s];
+    if (tell && this.alive) combat.windup(this, tell[1], tell[0], tell[2]);
     this.state = s;
     this.st = 0;
     this.hitDone = false;

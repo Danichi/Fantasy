@@ -240,7 +240,7 @@ export class SandShark implements Target {
   private body: Swimmer;
   private state: SharkState = 'roam';
   private st = 0;
-  private yaw = Math.random() * 6.28;
+  yaw = Math.random() * 6.28;
   private circleA = 0;
   private wander = new THREE.Vector3();
   private breachFrom = new THREE.Vector3();
@@ -492,7 +492,7 @@ export class SandRay implements Target {
   private body: Swimmer;
   private state: RayState = 'buried';
   private st = 0;
-  private yaw = Math.random() * 6.28;
+  yaw = Math.random() * 6.28;
   private a = 0;
   private hitDone = false;
   private flash = 0;

@@ -717,7 +717,7 @@ export function buildCrownRoad(scene: THREE.Scene, m: WorldMats, fx: FX, beasts:
     { id: 'aldo', name: 'Brother Aldo', title: 'Wandering Priest of the Dawn', post: kPlaces.fire.clone().add(new THREE.Vector3(2, 0, 2)), activity: 'sit', hours: [8, 23],
       lines: { any: ['The Barrow of the Old Kings stirs after dark. The dead there remember a wheel.', 'Rest by the fire. The Dawn keeps the night short.'] },
       look: { body: 'male', outfit: 'peasant', hair: 'buzzed', hairColor: 0xe6e2da, skin: 0xe0b894, linen: 0xfff4dc, cloth: 0xe8c060, height: 1.72 } },
-    { id: 'rook', name: 'Rook Fenwick', title: 'Stablemaster of the Kingsmile', post: kPlaces.stable, activity: 'work', hours: [6, 21],
+    { id: 'fenwick', name: 'Rook Fenwick', title: 'Stablemaster of the Kingsmile', post: kPlaces.stable, activity: 'work', hours: [6, 21],
       lines: { any: ['A fresh horse gets you to the capital before the orcs smell you.', 'Coach to the capital and back to the Glen, on the hour.'] },
       look: { body: 'female', outfit: 'ranger', hair: 'buzzedfemale', hairColor: 0x3a2618, skin: 0xa8744e, cloth: 0x7a5a3a, height: 1.72 } },
   ], [

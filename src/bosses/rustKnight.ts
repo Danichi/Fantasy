@@ -1,3 +1,4 @@
+import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import { Creature, type CreatureBase } from '../creatures/creature';
 import { creatureView } from '../creatures/view';
@@ -246,6 +247,9 @@ export class RustKnight extends Creature implements BossBody {
   }
 
   private setMode(m: Mode, len = 1) {
+    // Its tell (combat/core.ts): the colour says how to answer it; a blow now is a counter-hit.
+    const tell = ({ windSweep: ['heavy', 0.15, 0.8], overUp: ['normal', 0.1, 0], slamUp: ['unblockable', 0.2, 1.2], charge: ['heavy', 0, 0] } as Partial<Record<Mode, [AttackKind, number, number]>>)[m];
+    if (tell) combat.windup(this, len + tell[1], tell[0], tell[2] ? len + tell[2] : 0);
     this.mode = m;
     this.modeT = 0;
     this.modeLen = len;

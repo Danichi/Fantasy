@@ -211,7 +211,7 @@ export class SandCrab extends Beastie {
   private body: THREE.Group;
   private legs: THREE.Mesh[] = [];
   private claws: THREE.Group[] = [];
-  private yaw = Math.random() * 6.28;
+  yaw = Math.random() * 6.28;
   private mode: 'buried' | 'chase' | 'pinch' | 'back' = 'buried';
   private hitDone = false;
   private cool = 0;
@@ -424,7 +424,7 @@ export class RaySkimmer extends Beastie {
   private mount: Swimmer;
   private riderRoot = new THREE.Group();
   private mixer: THREE.AnimationMixer | null = null;
-  private yaw = Math.random() * 6.28;
+  yaw = Math.random() * 6.28;
   private orbit = Math.random() * 6.28;
   private throwT = 2;
   private mode: 'roam' | 'circle' | 'swoop' = 'roam';
