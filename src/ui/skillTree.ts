@@ -1,5 +1,19 @@
 import type { DisciplineDef } from '../paths/data';
 import { NODE_COST, TIER_GATE, treeOf, type Paths, type Tree, type TreeNode } from '../paths/paths';
+import { emblemIcon } from './icons';
+import { EMBLEMS } from './art/emblems';
+
+const emblemImgs = new Map<string, HTMLImageElement>();
+/** The emblem as an image for the tree canvas (loads once, then draws every frame). */
+function emblemImg(key: string) {
+  let img = emblemImgs.get(key);
+  if (!img) {
+    img = new Image();
+    img.src = emblemIcon(key);
+    emblemImgs.set(key, img);
+  }
+  return img;
+}
 
 // Canvas renderer for one discipline's tree. Each family gets its own look:
 //   combat  -> Sigil Wheel (rune circle, branches as wedges, tiers as rings)
@@ -27,6 +41,8 @@ export const ICONS: Record<string, string> = {
   cooking: 'M4 10h16v3a6 6 0 0 1-6 6h-4a6 6 0 0 1-6-6zM8 7c0-1 1-2 1-3M12 7c0-1 1-2 1-3M16 7c0-1 1-2 1-3',
   runecraft: 'M12 3l7 9-7 9-7-9zM12 3v18M8 9l8 6',
   beastbinding: 'M6 14c0-4 3-7 6-7s6 3 6 7-3 6-6 6-6-2-6-6zM8 7L6 3M16 7l2-4M10 13h.01M14 13h.01',
+  tailoring: 'M18 3L6 15M17 2a2 2 0 1 1 3 3M6 15c-3 1-3 5 0 6s5-2 3-5M14 9c4 0 7 2 7 6',
+  legendaryHero: 'M3 18h18M4 18l-1-10 5 4 4-8 4 8 5-4-1 10M12 13v2',
 };
 
 /** Hex values of the discipline colour tokens (the canvas and HUD can't read CSS variables). */
@@ -35,15 +51,11 @@ export const HEX: Record<string, string> = {
   '--c-steel': '#aeb8cc', '--c-ward': '#5fa8ff', '--c-light': '#ffe08a', '--c-shadow': '#b48cff', '--c-blood': '#d8574a', '--c-gold': '#d9b15a',
 };
 
-/** Hotbar icon for a skill: its class sigil in a ring, with the skill's initials. */
-export function skillIcon(discId: string, color: string, name: string, rank: number) {
+/** Hotbar icon for a skill: its painted emblem (ui/art/emblems.ts) with the rank as pips. */
+export function skillIcon(discId: string, color: string, name: string, rank: number, key = `${discId}:${name}`) {
   const c = HEX[color] ?? '#d9b15a';
-  const initials = name.split(/\s+/).filter((w) => /^[A-Z]/.test(w)).map((w) => w[0]).join('').slice(0, 2);
-  const pips = Array.from({ length: 5 }, (_, i) => `<circle cx="${22 + (i - 2) * 5}" cy="41" r="1.6" fill="${i < rank ? c : '#333'}"/>`).join('');
-  return `<svg viewBox="0 0 44 44" aria-hidden="true"><defs><radialGradient id="sg-${discId}" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="${c}" stop-opacity=".35"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs>
-    <circle cx="22" cy="20" r="17" fill="url(#sg-${discId})" stroke="${c}" stroke-width="1.2"/>
-    <g transform="translate(13 9) scale(0.75)" opacity=".55"><path d="${ICONS[discId] ?? ICONS.runecraft}" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></g>
-    <text x="22" y="25" text-anchor="middle" font-family="Cinzel, serif" font-size="13" font-weight="700" fill="#fff" stroke="#000" stroke-width="0.6" paint-order="stroke">${initials}</text>${pips}</svg>`;
+  const pips = Array.from({ length: 5 }, (_, i) => `<circle cx="${22 + (i - 2) * 5.2}" cy="41.2" r="1.9" fill="${i < rank ? c : '#2a2420'}" stroke="#120c08" stroke-width="0.7"/>`).join('');
+  return `<svg viewBox="0 0 44 44" aria-hidden="true"><image href="${emblemIcon(key)}" x="0" y="-1" width="44" height="44"/>${rank > 0 ? pips : ''}</svg>`;
 }
 
 const reduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -641,11 +653,23 @@ export class TreeView {
       c.fill();
       c.stroke();
       c.shadowBlur = 0;
-      c.strokeStyle = on ? dark : k;
-      c.lineWidth = 1.5;
-      c.beginPath();
-      c.arc(0, 0, 6, 0, 7);
-      c.stroke();
+      // The skill's emblem inside the node: in colour once learned, greyed until then.
+      const img = EMBLEMS[`${d.id}:${n.name}`] ? emblemImg(`${d.id}:${n.name}`) : null;
+      if (img?.complete && img.naturalWidth) {
+        c.save();
+        if (!on) {
+          c.globalAlpha = 0.6;
+          c.filter = 'grayscale(0.85)';
+        }
+        c.drawImage(img, -17, -17, 34, 34);
+        c.restore();
+      } else {
+        c.strokeStyle = on ? dark : k;
+        c.lineWidth = 1.5;
+        c.beginPath();
+        c.arc(0, 0, 6, 0, 7);
+        c.stroke();
+      }
     } else if (n.type === 'choice') {
       c.beginPath();
       c.arc(0, 0, 11, Math.PI / 2, Math.PI * 1.5);

@@ -205,7 +205,7 @@ body.book-open .bossbar { display: none; }
 .slot.move { border-color: rgba(111, 168, 255, 0.45); }
 .slot .cost { position: absolute; left: 4px; bottom: 3px; font: 700 9px/1 var(--sans); color: #9cc4ff; text-shadow: 0 1px 2px #000; }
 .slot .cd { position: absolute; inset: 0; pointer-events: none; }
-.slot.skill svg { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); }
+.slot.skill svg { position: absolute; inset: 2px; width: calc(100% - 4px); height: calc(100% - 4px); }
 .slot.skill.dim svg { opacity: 0.45; }
 .slot.skill .cd { border-radius: 2px; z-index: 2; }
 .resbox { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }

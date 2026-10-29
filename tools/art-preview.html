@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Icon art preview</title>
+<style>
+  body { margin: 0; background: #2a221c; font: 11px/1.2 system-ui, sans-serif; color: #e8dcc4; }
+  #grid { display: grid; grid-template-columns: repeat(var(--cols, 8), 132px); gap: 6px; padding: 8px; }
+  .cell { background: #e2d0aa; border-radius: 6px; padding: 4px; text-align: center; color: #3a2a1a; }
+  .cell.dark { background: #241c16; color: #cbb89a; }
+  .cell img { width: 112px; height: 112px; display: block; margin: 0 auto; }
+  .cell span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div id="grid"></div>
+<script type="module">
+  // Dev tool: /tools/art-preview.html?ids=a,b,c or ?prefix=brew_&tier=3, &dark=1, &cols=8
+  // Renders painted icon art (src/ui/art) without booting the game.
+  import { artFor, ART_IDS } from '/src/ui/art/registry.ts';
+  import { painted } from '/src/ui/art/finish.ts';
+  const q = new URLSearchParams(location.search);
+  let ids = q.get('ids')?.split(',') ?? ART_IDS();
+  if (q.get('prefix')) ids = ids.filter((id) => id.startsWith(q.get('prefix')));
+  if (q.get('tier')) ids = ids.filter((id) => !/_\d$/.test(id) || id.endsWith('_' + q.get('tier')));
+  const grid = document.getElementById('grid');
+  grid.style.setProperty('--cols', q.get('cols') ?? '8');
+  for (const id of ids) {
+    const art = artFor(id);
+    const cell = document.createElement('div');
+    cell.className = 'cell' + (q.get('dark') ? ' dark' : '');
+    cell.innerHTML = `<img src="${art ? painted(art) : ''}"><span>${id}</span>`;
+    grid.appendChild(cell);
+  }
+  window.__done = true;
+</script>
+</body>
+</html>
