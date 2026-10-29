@@ -212,7 +212,7 @@ test('champions of the ages: each older age is far stronger, the First is all bu
   expect(res.afterHesk).toEqual([2, 3, 4, 4, 7]);
   expect(res.chips).toBeGreaterThan(10); // most of them are still unknown to you
   expect(res.dorianIsChampion).toBe(false);
-  expect(new Set(res.ages).size).toBe(5);
+  expect([...new Set(res.ages)].sort()).toEqual([1, 2, 3, 4]); // (no Fifth Age champion to meet yet: they are in their masters' halls)
   expect(errors).toEqual([]);
 });
 
