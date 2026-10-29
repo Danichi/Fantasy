@@ -96,6 +96,15 @@ Attuned wheels show on the world map.
 **Next (with the regions):** the elven woods, the mountains and the sea hold
 the remaining spokes; Act IV is the chair.
 
+## Falling in a story fight
+
+If you die in a story fight, the story's fighters leave and that beat resets:
+it plays again when you come back (the opening replays in the wheat, the
+crypt door, the mirror, Hesk in the forecourt, the duel on the plaza, the
+turning at the ring; at the Night of Bells Malric comes again later). The
+two fights you can't win (Malric at the crypt, the Wheel-Shield) can't kill
+you: they end in their scenes. (`Story.playerFell`, `Story.lesson`.)
+
 ## Old saves
 
 `migrateMainQuest` (story/wiring.ts): old chapters in progress map to the
