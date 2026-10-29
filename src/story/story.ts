@@ -52,6 +52,9 @@ export interface StoryHooks {
   shake(n: number): void;
 }
 
+/** Distance on the ground (ignores height: a place's y may not match the hill under it). */
+export const flatDist = (a: THREE.Vector3, b: THREE.Vector3) => Math.hypot(a.x - b.x, a.z - b.z);
+
 export class Story {
   readonly ui = new StoryUI();
   readonly state = new StoryState();

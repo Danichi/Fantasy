@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { flatDist } from './story';
 import type { QuestDef } from '../quests/questLog';
 import { heightAt } from '../world/terrainHeight';
 import { PALACE, PLAZA } from '../world/capitalCity';
@@ -188,7 +189,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
   });
   const feastStep = () => {
     if (!F.feastReady || F.feastBegun || busy() || !quests.wants('feast-done')) return;
-    if (player.pos.distanceTo(FEAST_AT) > 24) return;
+    if (flatDist(player.pos, FEAST_AT) > 24) return;
     F.feastBegun = true;
     const at = FEAST_AT;
     void story.play('feast', async (s) => {
@@ -245,7 +246,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
   };
   const heskStep = () => {
     // (You fell chasing her: she's still in the forecourt when you come back.)
-    if (F.feast === 'chase' && !F.heskFight && !F.feastDone && F.feastBegun && !busy() && !player.dead && player.pos.distanceTo(FEAST_AT) < 24) {
+    if (F.feast === 'chase' && !F.heskFight && !F.feastDone && F.feastBegun && !busy() && !player.dead && flatDist(player.pos, FEAST_AT) < 24) {
       story.champion('hesk', FEAST_AT.clone().add(new THREE.Vector3(-6, 0, 4)), { scale: 0.75 });
       F.heskFight = true;
     }
@@ -263,7 +264,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
   });
   const duelStep = () => {
     if (!F.duelReady || F.duelBegun || busy() || !quests.wants('malric-beaten')) return;
-    if (player.pos.distanceTo(PLAZA_AT) > 30) return;
+    if (flatDist(player.pos, PLAZA_AT) > 30) return;
     F.duelBegun = true;
     const at = PLAZA_AT.clone().add(new THREE.Vector3(0, 0, -8));
     void story.play('duel', async (s) => {

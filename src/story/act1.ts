@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { flatDist } from './story';
 import type { QuestDef, QuestLog } from '../quests/questLog';
 import type { Player } from '../player/player';
 import type { Reputation } from '../social/reputation';
@@ -39,7 +40,7 @@ const CH = ['Act I · The Fall', 'Act I · A Stranger in Elder Glen', 'Act I · 
 /** Where you fall: the wheat south of the village. */
 export const FALL_AT = new THREE.Vector3(14, 0, 168);
 const MAUD_AT = new THREE.Vector3(10, 0, -10);
-const CRYPT_DOOR = new THREE.Vector3(CRYPT.x, 0, CRYPT.y + 10);
+const CRYPT_DOOR = new THREE.Vector3(CRYPT.x, heightAt(CRYPT.x, CRYPT.y + 10), CRYPT.y + 10);
 
 /** Elder Glen's side quests: help any of these and the Glen starts to trust you. */
 export const GLEN_FAVOURS = ['missing-heifer', 'crows-in-wheat', 'mill-wheel-jam', 'granary-rats', 'herbalist-list', 'smiths-ore-run', 'childrens-dare', 'night-watch', 'lost-ring', 'pips-cat', 'fish-supper', 'wool-for-vela', 'harvest-festival'];
@@ -250,7 +251,7 @@ export function setupAct1(c: ActCtx) {
       WARDENS.forEach((w, i) => story.ally(w.name, w.look as never, around(from, 4, i * 2), i === 0));
     }
     // At the door: the diggers' leavings come boiling up.
-    if (want && !F.cryptDoor && player.pos.distanceTo(CRYPT_DOOR) < 22) {
+    if (want && !F.cryptDoor && flatDist(player.pos, CRYPT_DOOR) < 22) {
       F.cryptDoor = true;
       void story.play('crypt-door', async (s) => {
         s.bars(true);
@@ -272,7 +273,7 @@ export function setupAct1(c: ActCtx) {
   });
   const malricStep = () => {
     if (!quests.isActive('mq-crypt', 3) || F.malricMet || !story.h.outdoors() || busy()) return;
-    if (player.pos.distanceTo(CRYPT_DOOR) > 30) return;
+    if (flatDist(player.pos, CRYPT_DOOR) > 30) return;
     F.malricMet = true;
     story.dismissAllies();
     const at = around(CRYPT_DOOR, 7, 1.2);
