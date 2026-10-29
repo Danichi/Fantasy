@@ -84,7 +84,7 @@ export function wireOrigins(w: OriginsWiring) {
     const c = x.t.cost ?? {};
     const why = origins.abilities.blocked(id);
     return {
-      svg: skillIcon('legendaryHero', '--c-gold', x.t.name, Math.max(0, x.i + 1)),
+      svg: skillIcon('legendaryHero', '--c-gold', x.t.name, Math.max(0, x.i + 1), 'origin:' + id),
       name: `${x.t.name} (${origins.def.name})`,
       cost: c.stamina ? `${c.stamina}` : c.mana ? `${c.mana}` : c.hpPct ? `${c.hpPct}%HP` : c.energy ? `${c.energy}E` : '',
       cd: x.t.cd ? origins.abilities.cooldown(id) / x.t.cd : 0,

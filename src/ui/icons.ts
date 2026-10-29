@@ -1,17 +1,18 @@
 import * as THREE from 'three';
 import { ITEMS, buildItemModel, type ItemDef } from '../items/itemDefs';
 import { isWeaponKind } from '../items/weapons/kinds';
+import { artFor } from './art/registry';
+import { classEmblem, paintEmblem } from './art/emblems';
 
 // Item icons: 3D items are rendered from their real models once at startup;
 // spells and potions are painted in 2D.
 
-const SIZE = 128;
+import { SIZE, OUT, RS, finish, painted, encode } from './art/finish';
 const cache = new Map<string, string>();
 
+
 function paintSpell(def: ItemDef) {
-  const c = document.createElement('canvas');
-  c.width = c.height = SIZE;
-  const g = c.getContext('2d')!;
+  return painted((g) => {
   const m = SIZE / 2;
   if (def.id === 'fireball') {
     for (let i = 0; i < 3; i++) {
@@ -50,13 +51,11 @@ function paintSpell(def: ItemDef) {
     g.arc(0, 0, 26, 0, Math.PI * 2);
     g.fill();
   }
-  return c.toDataURL();
+  });
 }
 
 function paintPotion(def: ItemDef) {
-  const c = document.createElement('canvas');
-  c.width = c.height = SIZE;
-  const g = c.getContext('2d')!;
+  return painted((g) => {
   const col = def.id === 'healthPotion' ? ['#ff6b6b', '#8a0e16'] : ['#7cc4ff', '#0f2f8a'];
   // Flask body.
   g.save();
@@ -92,13 +91,11 @@ function paintPotion(def: ItemDef) {
   // Cork.
   g.fillStyle = '#8a5a34';
   g.fillRect(50, 18, 28, 14);
-  return c.toDataURL();
+  });
 }
 
 function paintAccessory(def: ItemDef) {
-  const c = document.createElement('canvas');
-  c.width = c.height = SIZE;
-  const g = c.getContext('2d')!;
+  return painted((g) => {
   const m = SIZE / 2;
   if (def.slot === 'ring1' || def.slot === 'ring2') {
     const metal = def.id === 'ringSage' ? ['#f1f3f6', '#8d949c'] : ['#9a958e', '#4d4944'];
@@ -473,7 +470,7 @@ function paintAccessory(def: ItemDef) {
     g.closePath();
     g.fill();
   }
-  return c.toDataURL();
+  });
 }
 
 /**
@@ -492,14 +489,15 @@ const BAKED_DIR = '/assets/icons/';
 /** Load the baked icon manifest: those icons are plain images, no rendering at all. */
 export async function loadBakedIcons() {
   try {
-    const m = (await (await fetch(BAKED_DIR + 'manifest.json')).json()) as { square: string[]; wide: string[]; v: string };
+    const m = (await (await fetch(BAKED_DIR + 'manifest.json')).json()) as { square: string[]; wide: string[]; v: string; ext?: string };
+    const ext = m.ext ?? 'png';
     for (const id of m.square) {
       baked.square.add(id);
-      cache.set(id, `${BAKED_DIR}${id}.png?v=${m.v}`);
+      cache.set(id, `${BAKED_DIR}${id}.${ext}?v=${m.v}`);
     }
     for (const id of m.wide) {
       baked.wide.add(id);
-      wideCache.set(id, `${BAKED_DIR}wide/${id}.png?v=${m.v}`);
+      wideCache.set(id, `${BAKED_DIR}wide/${id}.${ext}?v=${m.v}`);
     }
   } catch {
     /* not baked yet: icons render at runtime */
@@ -507,11 +505,11 @@ export async function loadBakedIcons() {
 }
 
 /** Render every item's icon now and return them as data URLs (for baking). */
-export function exportAllIcons() {
+export function exportAllIcons(only?: string[]) {
   dataUrlMode = true;
   cache.clear();
   wideCache.clear();
-  for (const id of Object.keys(ITEMS)) {
+  for (const id of only ?? Object.keys(ITEMS)) {
     queued.delete(id);
     enqueue(id);
   }
@@ -552,26 +550,39 @@ export function pumpIcons(budgetMs = 4) {
 }
 
 export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | null, first: string[] = []) {
+  // A small studio: warm key from the upper left, a cool rim from behind that
+  // traces the silhouette, a soft fill, and the sky's reflections for metal.
   const scene = new THREE.Scene();
   scene.environment = env;
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
-  const key = new THREE.DirectionalLight(0xffffff, 2.4);
-  key.position.set(1, 2, 3);
-  scene.add(key);
-  const cam = new THREE.PerspectiveCamera(30, 1, 0.01, 20);
+  scene.environmentIntensity = 0.85;
+  scene.add(new THREE.HemisphereLight(0xfff4e0, 0x2a2420, 0.55));
+  const key = new THREE.DirectionalLight(0xfff0d8, 3.1);
+  key.position.set(-2.2, 3, 3.4);
+  const rim = new THREE.DirectionalLight(0xa8d0ff, 2.6);
+  rim.position.set(2.6, 1.6, -3);
+  const rim2 = new THREE.DirectionalLight(0xffd6a0, 1.1);
+  rim2.position.set(-3, -0.6, -2.4);
+  const fill = new THREE.DirectionalLight(0xffe6cc, 0.7);
+  fill.position.set(2.4, -1.2, 3);
+  scene.add(key, rim, rim2, fill);
+  const cam = new THREE.PerspectiveCamera(22, 1, 0.01, 40);
   const toSrgb = (c: number) => 255 * (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
+  // Filmic curve (ACES fit) so highlights roll off instead of clipping.
+  const aces = (x: number) => Math.min(1, Math.max(0, (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14)));
+  const EXPOSURE = 1.35, SAT = 1.18;
 
   // Icons are rendered in batches into one atlas and read back once per batch:
   // each GPU readback stalls the pipeline, so one per icon froze the game.
   type Job = { holder: THREE.Object3D; w: number; h: number; fill: number; done: (url: string) => void };
   const jobs: Job[] = [];
-  const AW = 1024, CW = 256, CH = 128, COLS = AW / CW, MAX_JOBS = 12;
+  const AW = 2048, CW = RS, CH = RS, COLS = AW / CW, MAX_JOBS = 8;
   const atlas = new THREE.WebGLRenderTarget(AW, AW, { samples: 4, type: THREE.FloatType });
   atlas.scissorTest = true;
   const snap = (holder: THREE.Object3D, w: number, h: number, fill: number, done: (url: string) => void) => jobs.push({ holder, w, h, fill, done });
   flushIcons = () => {
-    if (!jobs.length) return;
-    const batch = jobs.splice(0, MAX_JOBS);
+    while (jobs.length) flushBatch(jobs.splice(0, MAX_JOBS));
+  };
+  const flushBatch = (batch: Job[]) => {
     const prevTone = renderer.toneMapping;
     const prevClear = renderer.getClearAlpha();
     const prevTarget = renderer.getRenderTarget();
@@ -594,6 +605,8 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
       const dist = Math.max(size.y / (2 * t), size.x / (2 * t * cam.aspect)) * j.fill + size.z / 2;
       cam.position.copy(center).add(new THREE.Vector3(0, 0, dist));
       cam.lookAt(center);
+      cam.near = Math.max(0.005, dist - size.z * 2);
+      cam.far = dist + size.z * 2 + 1;
       cam.updateProjectionMatrix();
       atlas.viewport.set(cx, cy, j.w, j.h);
       atlas.scissor.set(cx, cy, j.w, j.h);
@@ -607,7 +620,7 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
     renderer.setRenderTarget(prevTarget);
     renderer.toneMapping = prevTone;
     renderer.setClearColor(0x000000, prevClear);
-    // Render targets receive linear colour; convert to sRGB when copying out.
+    // Render targets receive linear colour: tone-map, lift saturation, then sRGB.
     batch.forEach((j, i) => {
       const cx = (i % COLS) * CW, cy = Math.floor(i / COLS) * CH;
       const canvas = document.createElement('canvas');
@@ -615,30 +628,42 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
       canvas.height = j.h;
       const ctx = canvas.getContext('2d')!;
       const img = ctx.createImageData(j.w, j.h);
+      const rgb = [0, 0, 0];
       // Flip vertically (GL origin is bottom-left) and un-premultiply edges.
       for (let y = 0; y < j.h; y++) {
         for (let x = 0; x < j.w; x++) {
           const src = ((cy + j.h - 1 - y) * AW + cx + x) * 4, dst = (y * j.w + x) * 4;
           const a = Math.min(1, pixels[src + 3]);
-          for (let k = 0; k < 3; k++) img.data[dst + k] = toSrgb(Math.min(1, a > 0 ? pixels[src + k] / Math.max(a, 1e-3) : 0));
+          for (let k = 0; k < 3; k++) rgb[k] = aces((a > 0 ? pixels[src + k] / Math.max(a, 1e-3) : 0) * EXPOSURE);
+          const l = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+          for (let k = 0; k < 3; k++) img.data[dst + k] = toSrgb(Math.min(1, Math.max(0, l + (rgb[k] - l) * SAT)));
           img.data[dst + 3] = a * 255;
         }
       }
       ctx.putImageData(img, 0, 0);
+      const done = finish(canvas, Math.round((j.w / RS) * OUT), Math.round((j.h / RS) * OUT));
       if (dataUrlMode) {
-        j.done(canvas.toDataURL());
+        j.done(encode(done));
         return;
       }
       // Encode off the main thread; the icon appears when the blob is ready.
-      canvas.toBlob((blob) => {
+      done.toBlob((blob) => {
         if (!blob) return;
         j.done(URL.createObjectURL(blob));
         onIconsReady?.();
-      });
+      }, 'image/webp', 0.92);
     });
   };
 
   const one = (def: ItemDef) => {
+    // Painted art first (ui/art): potions, herbs, food, jewellery and the like.
+    const art = artFor(def.id);
+    if (art) {
+      cache.set(def.id, painted(art));
+      // Shields also sit in the wide off-hand frame.
+      if (def.kind === 'shield') wideCache.set(def.id, painted(art, true));
+      return;
+    }
     if (def.kind === 'spell') {
       cache.set(def.id, paintSpell(def));
       return;
@@ -654,20 +679,25 @@ export function buildIcons(renderer: THREE.WebGLRenderer, env: THREE.Texture | n
     }
     const holder = new THREE.Group();
     holder.add(model);
-    // Swords lie diagonally; shields face the camera; armour is framed as-is.
-    if (def.kind === 'sword' || isWeaponKind(def.kind) || def.kind === 'tool') holder.rotation.set(0, 0, -Math.PI / 4);
-    if (def.kind === 'ammo') holder.rotation.set(0.3, 0, -Math.PI / 4);
-    if (def.kind === 'shield') holder.rotation.set(0.15, -0.35, 0);
-    if (def.kind === 'armor' || def.kind === 'accessory') holder.rotation.set(0.25, -0.5, 0);
-    if (def.kind === 'material' || def.kind === 'consumable' || def.kind === 'key') holder.rotation.set(0.45, -0.5, 0);
-    snap(holder, SIZE, SIZE, 1.15, (url) => cache.set(def.id, url));
+    // Icon licence: a blade or haft drawn true to scale is a hairline on the diagonal,
+    // so long things are drawn thicker across (their length runs along the model's Y).
+    if (def.kind === 'sword' || isWeaponKind(def.kind) || def.kind === 'tool' || def.kind === 'ammo') model.scale.multiply(new THREE.Vector3(1.75, 1, 1.75));
+    // Weapons lie on the diagonal, point up and to the right, turned a little so the
+    // edge catches the light; shields and armour turn three-quarters to the key light.
+    if (def.kind === 'sword' || isWeaponKind(def.kind) || def.kind === 'tool') holder.rotation.set(0.2, 0.35, -Math.PI / 4, 'YXZ');
+    if (def.kind === 'ammo') holder.rotation.set(0.35, 0.3, -Math.PI / 4, 'YXZ');
+    if (def.kind === 'shield') holder.rotation.set(0.12, -0.42, 0);
+    if (def.kind === 'armor' || def.kind === 'accessory') holder.rotation.set(0.22, -0.55, 0);
+    if (def.kind === 'material' || def.kind === 'consumable' || def.kind === 'key') holder.rotation.set(0.5, -0.55, 0);
+    const long = def.kind === 'sword' || isWeaponKind(def.kind) || def.kind === 'tool' || def.kind === 'ammo';
+    snap(holder, RS, RS, long ? 1.02 : 1.16, (url) => cache.set(def.id, url));
     // Wide versions for the hand frames: blades horizontal, shields upright.
     if (def.kind === 'sword' || def.kind === 'shield' || isWeaponKind(def.kind)) {
       const wide = new THREE.Group();
       wide.add(model.clone()); // a copy: the square icon's holder still needs the original
       if (def.kind === 'sword' || isWeaponKind(def.kind)) wide.rotation.set(0.25, 0, -Math.PI / 2 + 0.12);
       else wide.rotation.set(0.1, -0.3, 0);
-      snap(wide, 256, 112, 1.08, (url) => wideCache.set(def.id, url));
+      snap(wide, RS, Math.round((RS * 7) / 16), 1.08, (url) => wideCache.set(def.id, url));
     }
   };
   builder = one;
@@ -682,6 +712,30 @@ export function wideIconFor(id: string) {
   const got = wideCache.get(id) ?? cache.get(id);
   if (!got) enqueue(id, true);
   return got ?? '';
+}
+
+const emblems = new Map<string, string>();
+/** A skill's, spell's or origin ability's painted emblem (painted once, then cached). */
+export function emblemIcon(key: string) {
+  let url = emblems.get(key);
+  if (!url) {
+    const art = artFor('emblem:' + key);
+    url = art ? painted(art) : '';
+    emblems.set(key, url);
+  }
+  return url;
+}
+
+/** A class's painted medallion for the Skills screen (ui/art/emblems.ts classEmblem). */
+export function classEmblemIcon(id: string, hex: string, sigil: string, family: string) {
+  const key = 'class:' + id;
+  let url = emblems.get(key);
+  if (!url) {
+    const spec = classEmblem(hex, sigil, family);
+    url = painted((g) => paintEmblem(g, spec));
+    emblems.set(key, url);
+  }
+  return url;
 }
 
 export function iconFor(id: string) {

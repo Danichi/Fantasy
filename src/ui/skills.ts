@@ -6,7 +6,8 @@ import {
   ATTRS, GATE_NODES, MASTERY_DISCOUNT, MASTERY_NAMES, MASTERY_XP, MAX_LEVEL, MAX_RANK, NODE_COST, levelCost, masteryRank, treeOf,
   type TreeNode,
 } from '../paths/paths';
-import { ICONS, TreeView, drawSealed } from './skillTree';
+import { ICONS, HEX, TreeView, drawSealed } from './skillTree';
+import { classEmblemIcon } from './icons';
 import { SkillRuntime } from '../paths/skills';
 import { PASSIVES } from '../paths/effects';
 import { legacyCardInfo, renderLegacy } from '../origins/legacyUI';
@@ -160,7 +161,7 @@ export class SkillsUI {
       <circle cx="28" cy="28" r="27" fill="#07080c" stroke="#363f55"/><circle cx="28" cy="28" r="20" fill="url(#skg-${d.id})"/>
       <g class="ring"><circle cx="28" cy="28" r="24" fill="none" stroke="var(${d.color})" stroke-opacity=".18" stroke-width="2"/>${dots}</g>
       <circle cx="28" cy="28" r="24" fill="none" stroke="var(${d.color})" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="${(C * p).toFixed(2)} ${C.toFixed(2)}" transform="rotate(-90 28 28)" style="filter:drop-shadow(0 0 3px var(${d.color}))"/>
-      <g transform="translate(16 16)"><path d="${ICONS[d.id] ?? ICONS.runecraft}" fill="none" stroke="var(${d.color})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <image href="${classEmblemIcon(d.id, HEX[d.color] ?? '#d9b15a', ICONS[d.id] ?? ICONS.runecraft, d.fam)}" x="5" y="5" width="46" height="46"/>
     </svg>`;
   }
 
