@@ -72,7 +72,7 @@ function terrainMaterial(renderer: THREE.WebGLRenderer, splat: THREE.DataTexture
     tNoise: { value: worldNoise() },
     tCobble: { value: paintedTexture('cobbles', aniso, 7) },
     tDirt: { value: paintedTexture('dirt', aniso, 8) },
-    tRock: { value: rockDetail(aniso) },
+    tCliff: { value: rockDetail(aniso) },
     tMacro: { value: macroTexture() },
     tMap: { value: paintedMapTexture() },
     uWorld: { value: new THREE.Vector4(WORLD_X0, WORLD_Z0, WORLD_W, WORLD_H) },
@@ -101,7 +101,7 @@ vWN = normal;`);
         `#include <common>
         varying vec3 vWPos;
         varying vec3 vWN;
-        uniform sampler2D tSplat, tNoise, tCobble, tDirt, tMacro, tMap, tRoads, tRoadsW, tRock;
+        uniform sampler2D tSplat, tNoise, tCobble, tDirt, tMacro, tMap, tRoads, tRoadsW, tCliff;
         uniform vec4 uRoadRect, uRoadRectW, uCityRect, uCap;
         uniform float uSize;
         uniform vec4 uWorld;
@@ -265,7 +265,7 @@ vWN = normal;`);
           // the cliff from both sides, carried as light and shade on the strata.
           if (dist < 160.0) {
             vec3 ax = abs(wn);
-            vec3 rx = texture2D(tRock, vWPos.zy / 5.0).rgb, rz = texture2D(tRock, vWPos.xy / 5.0).rgb;
+            vec3 rx = texture2D(tCliff, vWPos.zy / 5.0).rgb, rz = texture2D(tCliff, vWPos.xy / 5.0).rgb;
             vec3 rt = (rx * ax.x + rz * ax.z) / max(ax.x + ax.z, 1e-3);
             float detail = clamp(dot(rt, vec3(0.3, 0.55, 0.15)) / 0.42, 0.45, 1.6);
             cR *= mix(1.0, detail, 0.9 * (1.0 - smoothstep(90.0, 160.0, dist)));
