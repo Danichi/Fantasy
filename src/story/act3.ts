@@ -18,12 +18,20 @@ import type { ActCtx } from './act1';
 const CH = ['Act III · The Four Who Came Before', 'Act III · The Turning of the Wheel'];
 const ground = (x: number, z: number) => new THREE.Vector3(x, heightAt(x, z), z);
 
-/** Harrow Ford: a cairn by the Crown Road where Ser Hallam fell. */
-const HF = crownAt(820, -42);
-export const HARROW_FORD = new THREE.Vector3(HF.x, HF.y, HF.z);
-const RING = ground(STANDING_STONES.x, STANDING_STONES.z);
+/**
+ * Harrow Ford: a cairn by the Crown Road where Ser Hallam fell. Placed when the
+ * story is set up (no terrain lookups while the modules load).
+ */
+export const HARROW_FORD = new THREE.Vector3();
+let harrowYaw = 0;
+function placeHarrowFord() {
+  const hf = crownAt(820, -42);
+  HARROW_FORD.set(hf.x, hf.y, hf.z);
+  harrowYaw = hf.yaw;
+}
+const ring = () => ground(STANDING_STONES.x, STANDING_STONES.z);
 
-export const ACT3_QUESTS: QuestDef[] = [
+const act3Quests = (): QuestDef[] => [
   {
     id: 'mq-four', title: 'The Four Who Came Before', giver: 'librarian', region: 'royalCapital', main: true, requires: ['mq-wheelbreaker'],
     summary: 'Each of the Dawn\'s four dead champions carried a spoke of the Sunwheel. Find where each one fell.',
@@ -48,7 +56,7 @@ export const ACT3_QUESTS: QuestDef[] = [
     summary: 'Set the five spokes in the oldest Sunwheel, the ring of standing stones above Elder Glen.',
     offer: '',
     stages: [
-      { note: 'Set the spokes in the ring of standing stones above Elder Glen.', hook: 'turning:ring', objectives: [{ type: 'signal', id: 'wheel-turned', text: 'Set the spokes in the standing stones (north-west of Elder Glen)', at: [RING.x, RING.z] }] },
+      { note: 'Set the spokes in the ring of standing stones above Elder Glen.', hook: 'turning:ring', objectives: [{ type: 'signal', id: 'wheel-turned', text: 'Set the spokes in the standing stones (north-west of Elder Glen)', at: [STANDING_STONES.x, STANDING_STONES.z] }] },
       { note: 'Go back to Elder Glen. You need to sit down.', objectives: [{ type: 'talk', npc: 'maud', text: 'Go home to Elder Glen', reply: 'Maud. I saw something in the Dark.', say: 'Sit. Drink this. No, all of it. ...You look like Wren\'s father did, when he came back from the hard winter. Whatever it was, it let you go. Hold on to that. Now tell me everything, slowly.' }] },
     ],
     done: 'Whatever comes next, the Glen is behind you.',
@@ -93,7 +101,7 @@ function buildCairn(scene: THREE.Scene) {
   lance.rotation.z = 0.35;
   g.add(lance);
   g.position.set(HARROW_FORD.x, y, HARROW_FORD.z);
-  g.rotation.y = HF.yaw;
+  g.rotation.y = harrowYaw;
   g.traverse((o) => ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
   scene.add(g);
   return g;
@@ -102,7 +110,8 @@ function buildCairn(scene: THREE.Scene) {
 export function setupAct3(c: ActCtx, h: Act3Hooks) {
   const { story, quests, player } = c;
   const F = story.flags;
-  quests.add(...ACT3_QUESTS);
+  placeHarrowFord();
+  quests.add(...act3Quests());
   const busy = () => !!story.director.active;
   buildCairn(h.scene);
   const spoke = (id: string, who: string, text: string) => {
@@ -146,11 +155,12 @@ export function setupAct3(c: ActCtx, h: Act3Hooks) {
     });
   });
   const turnWheel = () => {
+    const RING_AT = ring();
     if (F.turning) return;
     F.turning = 1;
     void story.play('turning', async (s) => {
       s.bars(true);
-      await s.cam(RING.clone().add(new THREE.Vector3(9, 5, 9)), RING.clone().setY(RING.y + 1.5), 0);
+      await s.cam(RING_AT.clone().add(new THREE.Vector3(9, 5, 9)), RING_AT.clone().setY(RING_AT.y + 1.5), 0);
       await s.say(null, 'One by one the spokes go into the sockets, and lock, and the ring of stones begins, very slowly, to turn.', 3.6);
       await s.voice('Yes. Yes. Five spokes. Five of twelve. It has been a thousand years since my wheel turned this far.', 4);
       s.shake(0.4);
@@ -160,7 +170,7 @@ export function setupAct3(c: ActCtx, h: Act3Hooks) {
     });
     const go = () => {
       if (busy()) return void story.whenFree(go);
-      const at = RING.clone().add(new THREE.Vector3(-8, 0, -6));
+      const at = RING_AT.clone().add(new THREE.Vector3(-8, 0, -6));
       const ws = story.champion('wheelShield', at, { floor: 0.999 });
       ws.onFloor = () => {};
       story.lesson(true);

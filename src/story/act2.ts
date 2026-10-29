@@ -17,9 +17,12 @@ import type { ActCtx } from './act1';
 const CH = ['Act II · The Academy', 'Act II · Same Year, Same Road', 'Act II · The Missing Gold', 'Act II · The Feast of the Dawn', 'Act II · The Wheelbreaker'];
 
 const ground = (x: number, z: number) => new THREE.Vector3(x, heightAt(x, z), z);
-/** The palace forecourt (the feast is held in the great hall above it). */
-const FEAST_AT = ground(PALACE[0] + 46, PALACE[1] + 8);
-const PLAZA_AT = ground(PLAZA[0], PLAZA[1]);
+/** The palace forecourt (the feast is held in the great hall above it). (Heights are looked
+ * up when needed: not while the modules load, before the capital's terraces are in.) */
+const FEAST_XZ = [PALACE[0] + 46, PALACE[1] + 8] as const;
+const PLAZA_XZ = [PLAZA[0], PLAZA[1]] as const;
+const feastAt = () => ground(FEAST_XZ[0], FEAST_XZ[1]);
+const plazaAt = () => ground(PLAZA_XZ[0], PLAZA_XZ[1]);
 
 export const ACT2_QUESTS: QuestDef[] = [
   {
@@ -67,7 +70,7 @@ export const ACT2_QUESTS: QuestDef[] = [
     acceptLabel: 'I\'ll be at your right hand.',
     stages: [
       { note: 'Come to the palace for the Feast of the Dawn, after dark.', objectives: [{ type: 'hour', from: 19, to: 2, text: 'Wait for the Feast (after dark)' }] },
-      { note: 'Go to the palace forecourt.', hook: 'feast:hall', objectives: [{ type: 'signal', id: 'feast-done', text: 'Attend the Feast of the Dawn (the palace)', at: [FEAST_AT.x, FEAST_AT.z] }] },
+      { note: 'Go to the palace forecourt.', hook: 'feast:hall', objectives: [{ type: 'signal', id: 'feast-done', text: 'Attend the Feast of the Dawn (the palace)', at: [FEAST_XZ[0], FEAST_XZ[1]] }] },
     ],
     done: 'Cresha owes you a king. I will not forget it, and neither will Valoria, I suspect.',
     rewards: { gold: 400, xp: 700, guildRep: 50 },
@@ -78,7 +81,7 @@ export const ACT2_QUESTS: QuestDef[] = [
     offer: '',
     stages: [
       { note: 'Meet Ser Malric on the Plaza of Crowns at dawn.', objectives: [{ type: 'hour', from: 5, to: 8, text: 'Be on the Plaza of Crowns at dawn (5:00 to 8:00)' }] },
-      { note: 'Face Ser Malric Dane.', hook: 'wheelbreaker:duel', objectives: [{ type: 'signal', id: 'malric-beaten', text: 'Face Ser Malric on the Plaza of Crowns', at: [PLAZA_AT.x, PLAZA_AT.z] }] },
+      { note: 'Face Ser Malric Dane.', hook: 'wheelbreaker:duel', objectives: [{ type: 'signal', id: 'malric-beaten', text: 'Face Ser Malric on the Plaza of Crowns', at: [PLAZA_XZ[0], PLAZA_XZ[1]] }] },
     ],
     done: 'You beat a Fourth Age champion in front of half the city. They\'ll be singing it in the Gilded Stag by tonight.',
     rewards: { gold: 500, xp: 1000, items: [['knightSword', 1]], guildRep: 60 },
@@ -189,9 +192,9 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
   });
   const feastStep = () => {
     if (!F.feastReady || F.feastBegun || busy() || !quests.wants('feast-done')) return;
-    if (flatDist(player.pos, FEAST_AT) > 24) return;
+    if (flatDist(player.pos, feastAt()) > 24) return;
     F.feastBegun = true;
-    const at = FEAST_AT;
+    const at = feastAt();
     void story.play('feast', async (s) => {
       s.bars(true);
       await s.card('Act II', 'The Feast of the Dawn', '', 2.6);
@@ -246,8 +249,8 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
   };
   const heskStep = () => {
     // (You fell chasing her: she's still in the forecourt when you come back.)
-    if (F.feast === 'chase' && !F.heskFight && !F.feastDone && F.feastBegun && !busy() && !player.dead && flatDist(player.pos, FEAST_AT) < 24) {
-      story.champion('hesk', FEAST_AT.clone().add(new THREE.Vector3(-6, 0, 4)), { scale: 0.75 });
+    if (F.feast === 'chase' && !F.heskFight && !F.feastDone && F.feastBegun && !busy() && !player.dead && flatDist(player.pos, feastAt()) < 24) {
+      story.champion('hesk', feastAt().clone().add(new THREE.Vector3(-6, 0, 4)), { scale: 0.75 });
       F.heskFight = true;
     }
     if (!F.heskFight || F.feastDone) return;
@@ -264,9 +267,9 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
   });
   const duelStep = () => {
     if (!F.duelReady || F.duelBegun || busy() || !quests.wants('malric-beaten')) return;
-    if (flatDist(player.pos, PLAZA_AT) > 30) return;
+    if (flatDist(player.pos, plazaAt()) > 30) return;
     F.duelBegun = true;
-    const at = PLAZA_AT.clone().add(new THREE.Vector3(0, 0, -8));
+    const at = plazaAt().clone().add(new THREE.Vector3(0, 0, -8));
     void story.play('duel', async (s) => {
       s.bars(true);
       const m = await s.actor(CHAMPIONS.malric.look, at, 0);

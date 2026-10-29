@@ -40,7 +40,9 @@ const CH = ['Act I · The Fall', 'Act I · A Stranger in Elder Glen', 'Act I · 
 /** Where you fall: the wheat south of the village. */
 export const FALL_AT = new THREE.Vector3(14, 0, 168);
 const MAUD_AT = new THREE.Vector3(10, 0, -10);
-const CRYPT_DOOR = new THREE.Vector3(CRYPT.x, heightAt(CRYPT.x, CRYPT.y + 10), CRYPT.y + 10);
+// (Places keep y = 0: distances are measured along the ground, and nothing looks up
+// terrain heights while the modules load, before the world's shapes are all in.)
+const CRYPT_DOOR = new THREE.Vector3(CRYPT.x, 0, CRYPT.y + 10);
 
 /** Elder Glen's side quests: help any of these and the Glen starts to trust you. */
 export const GLEN_FAVOURS = ['missing-heifer', 'crows-in-wheat', 'mill-wheel-jam', 'granary-rats', 'herbalist-list', 'smiths-ore-run', 'childrens-dare', 'night-watch', 'lost-ring', 'pips-cat', 'fish-supper', 'wool-for-vela', 'harvest-festival'];
