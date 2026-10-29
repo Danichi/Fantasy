@@ -40,7 +40,7 @@ import { buildCrops } from './world/crops';
 import { FarmLife } from './world/farmLife';
 import { buildRoadFurniture } from './world/roadNetwork';
 import { Foraging } from './world/foraging';
-import { buildKingsRoad, WAYSTONES } from './world/kingsRoad';
+import { buildKingsRoad } from './world/kingsRoad';
 import { buildTiles, prefetchTiles } from './world/tilePool';
 import { Horses } from './world/horses';
 import { Encounters } from './world/encounters';
@@ -73,6 +73,7 @@ import { buildGlenLandmarks, LANDMARK_CLEARINGS } from './world/glenLandmarks';
 import { QuestLog } from './quests/questLog';
 import { setupElderGlenQuests } from './quests/elderGlenQuests';
 import { setupMainQuest } from './quests/mainQuest';
+import { setupMainStory, migrateMainQuest } from './story/wiring';
 import { linkGuildContracts } from './quests/guildContracts';
 import { setupGlenMoreQuests } from './quests/glenMoreQuests';
 import { buildGlenLife } from './world/glenLife';
@@ -314,6 +315,7 @@ async function boot() {
     day: () => time.day,
     talk: (name, title, text, options) => dialogue.show(name, title, text, options.map((o) => ({ label: o.label, run: () => { dialogue.close(); o.run(); } }))),
     level: (x, z) => zoneLevel(x, z, () => 0.5),
+    wheel: (id) => main.touchStone(id),
     ready: (k) => creatureReady(k),
     teleport: (at) => player.teleport(at),
     count: (id) => countItem(id),
@@ -698,6 +700,7 @@ async function boot() {
         story: storyGreeting(n.rec.id, ctx),
         services: [
           ...(requests.prepare(n.rec.id), quests.options(n.rec.id, show, back)),
+          ...story.optionsFor(n.rec.id),
           ...(folkServices.get(n.rec.id)?.(show, back) ?? []),
           ...town.sellOptions(n.rec.id, n.rec.name, title, back),
         ],
@@ -787,7 +790,7 @@ async function boot() {
   const requests = setupRequests(social, quests, () => time.day, saveData?.world?.requests);
   town.questOptions = (id, show, back) => {
     requests.prepare(id);
-    return quests.options(id, show, back);
+    return [...quests.options(id, show, back), ...story.optionsFor(id)];
   };
   // ---- Herbalism: alchemy tables, recipes, elixir buffs, blade oils and thrown flasks ----
   const herbalism = new Herbalism(r.scene, player, fx, {
@@ -827,7 +830,7 @@ async function boot() {
   events.on('blockImpact', ({ guardBroken }) => !guardBroken && quests.signal('trial-boundary'));
   events.on('parrySuccess', () => quests.signal('trial-boundary'));
   skillRt.cc.onBeat = () => quests.signal('trial-cross');
-  const mainQuest = setupMainQuest(quests, { grukkDead: () => realm.progress.bossDead, gravewoodCleared: () => gravewood.cleared });
+  const mainQuest = setupMainQuest(quests, { grukkDead: () => realm.progress.bossDead, gravewoodCleared: () => gravewood.cleared, test: TEST_MODE, opening: () => {} });
   // ---- Road encounters, caravans and the King's Road quests (phase 4) ------------------
   const encounters = new Encounters(r.scene, player, slimes, fx);
   encounters.enabled = !TEST_MODE;
@@ -1600,41 +1603,6 @@ async function boot() {
     (m) => hud.toast(m),
   );
   realm.overworldInteractables.push(...microDiscoveries.interactables);
-  // Waystones: touching one attunes it; once Magus Orren has explained the Sunwheel
-  // (The Sunwheel quest), attuned stones carry you between each other.
-  realm.overworldInteractables.push(...WAYSTONES.map((w) => ({
-    pos: w.pos, radius: 2.4,
-    label: () => (quests.isDone('the-sunwheel') ? 'Travel by waystone' : worldFlags['way:' + w.id] ? 'The waystone hums under your hand' : 'Touch the waystone'),
-    enabled: () => true,
-    action: () => {
-      const first = !worldFlags['way:' + w.id];
-      worldFlags['way:' + w.id] = true;
-      if (!quests.isDone('the-sunwheel')) {
-        dialogue.show('A Waystone', w.name, first
-          ? 'A grey stone older than the road, carved on both faces with the Sunwheel. As your palm touches it the carving warms and glows faintly blue, as if it has remembered you. Magus Orren in Elder Glen might know what these are.'
-          : 'The Sunwheel glows at your touch, but nothing more happens. Something is still missing.', [{ label: 'Step back.', run: () => dialogue.close() }]);
-        save();
-        return;
-      }
-      const others = WAYSTONES.filter((o) => o.id !== w.id && worldFlags['way:' + o.id]);
-      dialogue.show('A Waystone', w.name, others.length ? 'The Sunwheel blazes blue. Other stones you have touched answer from far away.' : 'The Sunwheel blazes blue, but no other stone you have touched answers yet.', [
-        ...others.map((o) => ({
-          label: `Travel to ${o.name}`,
-          run: () => {
-            dialogue.close();
-            if (player.mounted) horses.dismount();
-            fx.add.spawn({ pos: player.center, spread: 1.2, count: 60, life: [0.4, 0.9], size: [0.1, 0.02], color: 0xbfe8ff, color2: 0x5a9cff, upBias: 1.4 });
-            const to = o.pos.clone().add(new THREE.Vector3(2.2, 0.5, 0));
-            player.teleport(to.setY(heightAt(to.x, to.z) + 0.5));
-            time.skipTo((time.hour + 0.25) % 24);
-            hud.toast(`The waystone at ${o.name} lets you go.`);
-            save();
-          },
-        })),
-        { label: 'Not now.', run: () => dialogue.close() },
-      ]);
-    },
-  })));
   // ---- The Academy's ranks, ladder, examination and dormitory; the Quiet Hands' den ----
   const academy = setupAcademy({
     quests, player, time, flags: worldFlags, lookOf: (id) => npcs.find(id)?.rec.look,
@@ -1751,8 +1719,42 @@ async function boot() {
     const prev = folkServices.get(id);
     folkServices.set(id, (show, back) => [...(prev?.(show, back) ?? []), ...herbalism.serviceOptions(id, show, back)]);
   }
+  // ---- The main story: the Fifth Summon (src/story) ----
+  const main = setupMainStory({
+    scene: r.scene, camera: r.camera, cam, input, dialogue, player, fx, bolts: encounters.bolts, quests, flags: worldFlags,
+    toast: (m) => hud.toast(m), card: (t, sub) => hud.regionCard(t, sub, true), bossBar: (t, name) => hud.bossBar(t, name),
+    save: () => save(), give: (id, n) => giveItem(id, n), count: countItem, take: takeItem,
+    restoreInput: () => {
+      input.uiMode = dialogue.open || inv.open || skills.open || mapUI.open || shopUI.open || questUI.open || repPanel.open;
+      if (!input.uiMode && started) input.requestLock();
+    },
+    teleport: (to) => {
+      if (player.mounted) horses.dismount();
+      player.teleport(to);
+      cam.snapTo(to);
+    },
+    outdoors: () => realm.mode === 'overworld' && !realm.interior,
+    test: TEST_MODE, shake: (n) => cam.shake(n),
+    time, raids, rep: social.rep,
+    stoneSites: () => sites.of('stone').map((st) => ({ id: st.id, x: st.x, z: st.z, n: st.n, read: !!sites.state[st.id]?.done })),
+    gravewoodCleared: () => gravewood.cleared,
+    gravewoodPedestal: () => gravewood.pedestalBase,
+    elinRead: () => !!(sites.state.championCamp2 as { k?: { read?: boolean } } | undefined)?.k?.read,
+    hollowCleared: () => !!realm.progress.kit?.hollowRidge?.boss,
+    rustKnightDown: () => (bosses.state.rustKnight?.kills ?? 0) > 0,
+    ready: () => started,
+    saved: saveData?.world?.story,
+  });
+  const story = main.story;
+  realm.overworldInteractables.push(...main.interactables);
+  questUI.storyRecap = () => story.state.recap();
+  repPanel.codex = () => story.state.codex();
+  repPanel.onName = (id, power) => story.state.nameAs(id, power as never);
+  const baseSiteMarks = worldMap.siteMarkers;
+  worldMap.siteMarkers = () => [...baseSiteMarks(), ...story.wheel.markers()];
   // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
+  migrateMainQuest(saveData?.world?.quests, !!saveData?.world?.story);
   quests.fromJSON(saveData?.world?.quests);
   // ---- Origins (feat/origins): passives, Renown, legendary abilities, flight, NPC reactions ----
   const origins = wireOrigins({ player, skillRt, fx, scene: r.scene, input, cam, hud, dialogue, shopUI, quests, realm, time, weather, gravewood, foraging });
@@ -1788,7 +1790,7 @@ async function boot() {
     if (TEST_MODE && !location.search.includes('save')) return;
     const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, social: social.save(), requests: requests.save(), pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), sites: sites.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, story: story.save(), social: social.save(), requests: requests.save(), pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), sites: sites.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   // Guild contracts show in the quest log (tracker, journal, map, waypoint).
@@ -1950,7 +1952,7 @@ async function boot() {
       // Dying in the Sanctum Below puts you back up the stair.
       if (realm.interior?.kind === 'sanctum') await realm.leaveInterior();
       // Dying in the Gravewood's trap wakes you at its gate.
-      const at = gravewood.respawnPoint ?? realm.respawnPoint;
+      const at = gravewood.respawnPoint ?? (realm.mode === 'overworld' && !realm.interior ? story.wheel.respawn : null) ?? realm.respawnPoint;
       player.respawn(at);
       cam.snapTo(at);
     }, 4200);
@@ -2027,6 +2029,7 @@ async function boot() {
       npcs.raidOn = raids.hidingSettlement;
       frontier.update(STEP);
       encounters.update(STEP, time.hour, weather.p.rain);
+      main.step(STEP);
       crownRoad.update(STEP, player, time.state.night);
       roadLife.step(STEP, player);
       duel.update(STEP);
@@ -2089,7 +2092,7 @@ async function boot() {
     const simDt = dt * timeScale;
     acc += simDt;
     let steps = 0;
-    if (paused || overlayUp || mapUI.open || worldMap.open) acc = 0;
+    if (paused || overlayUp || mapUI.open || worldMap.open || story.director.holdWorld) acc = 0;
     while (acc >= STEP && steps < MAX_STEPS) {
       acc -= STEP;
       steps++;
@@ -2238,6 +2241,7 @@ async function boot() {
     if (realm.mode === 'overworld') town.update(dt, player.pos);
     social.barks.enabled = realm.mode === 'overworld' && !dialogue.open;
     social.update(dt);
+    main.frame(dt);
     if (realm.mode === 'overworld') trouble.update(dt);
     physDebug?.update();
     origins.frame(paused ? 0 : dt); // ---- Origins (feat/origins) ----
@@ -2319,6 +2323,7 @@ async function boot() {
       quests.state = {};
       quests.tracked = null;
       social.rep.reset();
+      story.reset();
       social.barks.clear();
       trouble.reset();
       requests.reset();
@@ -2344,7 +2349,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       yard, combatDebug, // combat rework: the drill yard and the F9 overlay

@@ -12,7 +12,10 @@ export class RepPanel {
   open = false;
   onToggle?: (open: boolean) => void;
   private el: HTMLDivElement;
-  private tab: 'places' | 'people' = 'places';
+  private tab: 'places' | 'people' | 'codex' = 'places';
+  /** the main story's Powers & Champions page, and naming a champion's patron */
+  codex?: () => string;
+  onName?: (champion: string, power: string) => void;
 
   constructor(private people: People, private townName: (sid: string) => string) {
     this.el = document.createElement('div');
@@ -22,8 +25,13 @@ export class RepPanel {
       const t = e.target as HTMLElement;
       if (t.closest('[data-close]')) this.toggle(false);
       const tab = t.closest<HTMLElement>('[data-tab]')?.dataset.tab;
-      if (tab === 'places' || tab === 'people') {
+      if (tab === 'places' || tab === 'people' || tab === 'codex') {
         this.tab = tab;
+        this.render();
+      }
+      const nm = t.closest<HTMLElement>('[data-name]');
+      if (nm) {
+        this.onName?.(nm.dataset.name!, nm.dataset.power!);
         this.render();
       }
     });
@@ -38,6 +46,13 @@ export class RepPanel {
     }, true);
   }
 
+  /** Open on a tab (the story opens the Powers & Champions page). */
+  openTab(tab: 'places' | 'people' | 'codex') {
+    this.tab = tab;
+    if (this.open) this.render();
+    else this.toggle(true);
+  }
+
   toggle(open: boolean) {
     if (open === this.open) return;
     this.open = open;
@@ -49,7 +64,9 @@ export class RepPanel {
   private render() {
     const rep = this.people.rep;
     let body = '';
-    if (this.tab === 'places') {
+    if (this.tab === 'codex' && this.codex) {
+      body = this.codex();
+    } else if (this.tab === 'places') {
       const rows = Object.keys(COMMUNITIES).map((c) => {
         const s = rep.standingOf(c);
         const pct = ((s - BAR_MIN) / (BAR_MAX - BAR_MIN)) * 100;
@@ -71,6 +88,6 @@ export class RepPanel {
         return `<div class="rep-person"><div><b>${esc(p!.name)}</b><small>${esc(this.people.titleOf(p!.id) || p!.job)} · ${esc(where)}</small></div><span class="mood mood-${rep.fears(p!.id) ? 'afraid' : mood}">${rep.fears(p!.id) ? 'Afraid' : MOOD_NAME[mood]}</span>${notes || likes ? `<p>${esc([notes, likes].filter(Boolean).join(' · '))}</p>` : ''}</div>`;
       }).join('') : '<p class="j-empty">You haven\'t really talked to anyone yet.</p>'}</section>`;
     }
-    this.el.innerHTML = `<header><span>PEOPLE</span><button data-close>✕</button></header><div class="rep-tabs"><button data-tab="places" class="${this.tab === 'places' ? 'on' : ''}">Towns &amp; factions</button><button data-tab="people" class="${this.tab === 'people' ? 'on' : ''}">People you know</button></div><div class="rep-body">${body}</div><footer>P · close</footer>`;
+    this.el.innerHTML = `<header><span>PEOPLE</span><button data-close>✕</button></header><div class="rep-tabs"><button data-tab="places" class="${this.tab === 'places' ? 'on' : ''}">Towns &amp; factions</button><button data-tab="people" class="${this.tab === 'people' ? 'on' : ''}">People you know</button>${this.codex ? `<button data-tab="codex" class="${this.tab === 'codex' ? 'on' : ''}">Powers &amp; Champions</button>` : ''}</div><div class="rep-body">${body}</div><footer>P · close</footer>`;
   }
 }

@@ -12,6 +12,7 @@ import { ROAD_LIFE_ITEMS } from '../world/roadLife/roadItems';
 import { BREW_ITEMS } from './brews';
 import { REAGENT_ITEMS, HERBALIST_TOOLS } from './reagents';
 import { GRAVEWOOD_KEY_ITEMS } from '../world/gravewoodKey';
+import { STORY_ITEMS } from '../story/items';
 import { GHAGRABBA_ITEMS } from '../world/desert/ghagrabbaItems';
 import { DUNGEON_ITEMS } from './dungeonItems';
 
@@ -522,6 +523,7 @@ export const ITEMS: Record<string, ItemDef> = {
   ...WILDS_ITEMS,
   ...ROAD_LIFE_ITEMS,
   ...GRAVEWOOD_KEY_ITEMS,
+  ...STORY_ITEMS,
   ...GHAGRABBA_ITEMS,
   ...DUNGEON_ITEMS,
 };

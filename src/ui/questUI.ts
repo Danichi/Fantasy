@@ -29,6 +29,8 @@ export class QuestUI {
   private visible = true;
   private target: { x: number; z: number; label: string; d: number } | null = null;
   private wpPos = new THREE.Vector3();
+  /** the main story's recap ("The Story So Far", top of the journal) */
+  storyRecap?: () => string;
   /** "Show on map" in the journal */
   onShowOnMap?: (x: number, z: number) => void;
 
@@ -148,12 +150,14 @@ export class QuestUI {
     const item = (id: string, title: string, sub: string, cls: string) =>
       `<button class="j-item ${cls} ${this.selected === id ? 'sel' : ''}" data-quest="${id}"><b>${esc(title)}</b><small>${esc(sub)}</small></button>`;
     const list =
+      (this.storyRecap ? `<button class="j-item ${this.selected === '__story' ? 'sel' : ''}" data-quest="__story"><b>The Story So Far</b><small>Everything that has happened to you</small></button>` : '') +
       `<div class="j-group">ACTIVE · ${active.length}</div>` +
       (active.length ? active.map((q) => item(q.id, q.title, q.stages[this.quests.state[q.id].stage].note, this.quests.tracked === q.id ? 'tracked' : '')).join('') : '<p class="j-empty">No active quests. Townsfolk with a gold ❗ over their heads have work for you.</p>') +
       `<div class="j-group">COMPLETED · ${done.length}</div>` +
       done.map((q) => item(q.id, q.title, 'Complete', 'done')).join('');
     let detail = '<p class="j-empty">Select a quest.</p>';
-    const q = this.selected ? this.quests.defs.get(this.selected) : null;
+    if (this.selected === '__story' && this.storyRecap) detail = this.storyRecap();
+    const q = this.selected && this.selected !== '__story' ? this.quests.defs.get(this.selected) : null;
     if (q) {
       const st = this.quests.state[q.id];
       const stages = st ? q.stages.slice(0, st.status === 'done' ? q.stages.length : st.stage + 1) : [];

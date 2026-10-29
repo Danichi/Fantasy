@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { LOOK, LOOK_STYLE } from './looks';
 
+/** How far into the Dark mirror the world looks (0..1; story/darkMirror.ts drives it). */
+export const DARK = { value: 0 };
+
 // ---------------------------------------------------------------------------
 // Lean single-chain post-processing, replacing EffectComposer on Medium/High:
 //   scene -> HDR target (MSAA, with depth)
@@ -95,6 +98,7 @@ const FINAL_FRAG = /* glsl */ `
   uniform float uNear, uFar, uTime, uExposure, uBloom, uHaze, uClouds, uMist;
   uniform sampler2D tAO; uniform float uAO;
   uniform float uLook; uniform vec2 uTexel;
+  uniform float uDark;
   varying vec2 vUv;
 
   vec3 aces(vec3 x) {
@@ -258,9 +262,20 @@ const FINAL_FRAG = /* glsl */ `
       col = mix(col, floor(col * 5.0 + 0.5) / 5.0, 0.6);
       col = col * vec3(1.04, 1.02, 0.97) + 0.035;
     }
+    // The Dark mirror (story): the same world, drained and bruised, a red-black sky, ash on the air.
+    if (uDark > 0.001) {
+      float ld = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      vec3 dk = mix(vec3(ld) * vec3(0.62, 0.52, 0.78), col * vec3(0.55, 0.42, 0.7), 0.25);
+      if (sky) dk = mix(vec3(0.16, 0.03, 0.05), vec3(0.42, 0.08, 0.1), smoothstep(0.2, 0.9, vUv.y)) + ld * 0.08;
+      vec2 pxd = vUv / uTexel;
+      float ash = step(0.996, noise2(pxd / 3.0 + vec2(0.0, uTime * 40.0)));
+      dk += ash * vec3(0.5, 0.4, 0.45);
+      dk *= 0.92 + 0.08 * sin(uTime * 2.3 + noise2(pxd / 120.0) * 6.0);
+      col = mix(col, dk, uDark);
+    }
     // Vignette.
     vec2 q = vUv - 0.5;
-    col *= 1.0 - dot(q, q) * 0.28;
+    col *= 1.0 - dot(q, q) * (0.28 + uDark * 1.1);
     gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
   }`;
 
@@ -339,7 +354,7 @@ export class Post {
         uNear: { value: 0.1 }, uFar: { value: 900 }, uTime: { value: 0 },
         uExposure: { value: 1.0 }, uBloom: { value: LOOK_STYLE.bloom }, uHaze: { value: 0.00072 }, uClouds: { value: 0.85 }, uMist: { value: 0 },
         tAO: { value: null }, uAO: { value: LOOK_STYLE.ao },
-        uLook: LOOK, uTexel: { value: new THREE.Vector2(1, 1) },
+        uLook: LOOK, uTexel: { value: new THREE.Vector2(1, 1) }, uDark: DARK,
       },
       depthTest: false,
       depthWrite: false,

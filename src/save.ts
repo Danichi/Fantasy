@@ -55,6 +55,8 @@ export interface WorldSave {
   /** NPC overhaul: how people feel about you, your standing, bounties, who's gone */
   social?: import('./social/reputation').SocialSave;
   requests?: import('./social/requests').RequestSave;
+  /** the main story's memory (src/story/state.ts) */
+  story?: import('./story/state').StorySave;
 }
 
 export interface SaveData {

@@ -82,6 +82,8 @@ export interface SiteHooks {
   day: () => number;
   /** a conversation with choices */
   talk: (name: string, title: string, text: string, options: { label: string; run: () => void }[]) => void;
+  /** the Sunwheel network (main story): a Sunwheel stone touched after it's been read */
+  wheel?: (id: string) => void;
   /** level of the wild here */
   level: (x: number, z: number) => number;
   /** a creature kind's geometry is built (sites wait before spawning it) */

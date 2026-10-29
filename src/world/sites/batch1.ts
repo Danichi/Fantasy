@@ -524,8 +524,10 @@ export const STONE: SiteType = {
     return {
       actions: [{
         at: k.at(0, 1.1), radius: 2.6,
-        label: () => (st.done ? 'Read the stone again' : 'Read the carving on the stone'),
+        label: () => (st.done ? (c.hooks.wheel ? 'Touch the Sunwheel' : 'Read the stone again') : 'Read the carving on the stone'),
         act: () => {
+          // Once read, the stone is one of the Sunwheel network's wheels.
+          if (st.done && c.hooks.wheel) return c.hooks.wheel('stone:' + c.site.id);
           const first = !st.done;
           c.finish();
           gm.emissiveIntensity = 1.4;
