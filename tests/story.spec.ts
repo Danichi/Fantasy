@@ -183,7 +183,7 @@ test('champions of the ages: each older age is far stronger, the First is all bu
     const right = S.state.nameAs('veyr', 'dragonKing');
     // The census of the ages, once Mell has told you how the Game is counted.
     const count = (html: string) => [...html.matchAll(/(\d) of 7 still walk/g)].map((m) => Number(m[1]));
-    const before = { census: count(codex).length, powers: (codex.match(/class="codex-power"/g) ?? []).length };
+    const unread = { census: count(codex).length, powers: (codex.match(/class="codex-power"/g) ?? []).length };
     S.flags.censusKnown = true;
     S.state.meet('malric');
     const census = count(S.state.codex());
@@ -193,7 +193,7 @@ test('champions of the ages: each older age is far stronger, the First is all bu
     return {
       hp: ages.map((s) => s.hp), dmg: ages.map((s) => s.dmg), poise: ages.map((s) => s.poiseK),
       firstAge, wrong, right, patron: S.state.patronOf('veyr'), naming: /data-name="veyr"/.test(codex),
-      before, census, afterHesk, chips, dorianIsChampion: 'dorian' in CHAMPIONS,
+      unread, census, afterHesk, chips, dorianIsChampion: 'dorian' in CHAMPIONS,
     };
   }, HELPERS);
   for (let i = 1; i < 5; i++) {
@@ -207,7 +207,7 @@ test('champions of the ages: each older age is far stronger, the First is all bu
   expect(res.wrong).toBe(false);
   expect(res.right).toBe(true);
   expect(res.patron).toBe('dragonKing');
-  expect(res.before).toEqual({ census: 0, powers: 7 });
+  expect(res.unread).toEqual({ census: 0, powers: 7 });
   expect(res.census).toEqual([2, 3, 4, 5, 7]); // fewer from every older age
   expect(res.afterHesk).toEqual([2, 3, 4, 4, 7]);
   expect(res.chips).toBeGreaterThan(10); // most of them are still unknown to you
