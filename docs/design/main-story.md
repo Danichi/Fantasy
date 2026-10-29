@@ -36,11 +36,18 @@ You are **the Dawn's champion of the Fifth Age**. Its first four are dead.
 
 **Your own year comes later.** The other six Fifth Age champions were summoned
 the same night as you, and their masters carried them home to train them. You
-are warned about them (the Dawn at the waystone, Mell, Varro at the Feast,
+are warned about them (the Dawn at the waystone and after Mell's index, Varro at the Feast,
 Dorian) but you don't meet one for a long while. The ones out in the world with
 you are the older ages.
 
-**The census.** Once Mell explains the Accord, the Powers & Champions page
+**The Game is a secret.** Everyone knows the great powers by name, and some
+champions are famous as heroes and legends (the Temple's four lost knights,
+Legate Varro). Nobody knows the Game: the chair, the Accord, how it is counted.
+Only the Dawn tells you, in cutscenes: the chair at the standing stones (Act I),
+the Accord and the count right after Mell's index (Act II). Orren, Mell, Mad
+Pell and Dorian only know pieces. Other champions know, and don't explain.
+
+**The census.** Once the Dawn has explained the Accord, the Powers & Champions page
 shows every age: how many still walk, whom you know, and a "?" for each one you
 don't. Champions you see die are counted out (`StoryState.slay`).
 
@@ -94,7 +101,7 @@ Attuned wheels show on the world map.
 5. *The Night of Bells*: a scripted gloam siege; who fights beside you depends on your reputation; Malric comes and you drive him off.
 
 **Act II, The Academy and the Crown**
-- *The Archivist's Index* (`mq-archive`): Mell's four names, twenty years apart, and how the Game is counted (the census opens).
+- *The Archivist's Index* (`mq-archive`): Mell's four names, twenty years apart (the Temple sings of them as the Dawn's knights). Then, in a cutscene, the Dawn tells you what no one else knows: the Accord, and how the Game is counted (the census opens).
 - *The Claw-Sworn* (`mq-dorian`): Dorian fights in Veyr's school (the rival bout) and sends a letter sealed with a crowned claw to Elder Glen at noon. Name Veyr's patron, confront Dorian (friend or rival); he tells you the Dragon King's own Fifth is in the Deep Mountains.
 - The existing Academy chapters, the Crown's Summons and the Oldest Prayer.
 - *The Missing Gold* (`mq-ledger`): Twig, the Chancellor (persuade, threaten or wait), the ledger.

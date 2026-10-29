@@ -102,18 +102,24 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
   const readIndex = () => {
     void story.play('archive', async (s) => {
       s.bars(true);
-      await s.say('Archivist Mell', 'Four names, each in a different hand, twenty years apart. The Temple calls them "the Dawn\'s summoned." I call them the dead.');
+      await s.say('Archivist Mell', 'Four names, each in a different hand, twenty years apart. The Temple sings of them as the Dawn\'s knights: heroes who came out of nowhere with the Sunwheel on them. I call them the dead.');
       await s.say('Archivist Mell', 'Elin. Eighty years ago. She wrote a journal, and walked into the wilds, and her grave was never found.');
       await s.say('Archivist Mell', 'Ser Oswald Marr. Sixty years ago. Buried somewhere under Hollow Ridge, the chronicle says, with a spoke of gold in his hands.');
       await s.say('Archivist Mell', 'Ser Hallam. Forty years. He died holding Harrow Ford on the Crown Road. Your Ser Corvin was there. Ask him, if you dare.');
       await s.say('Archivist Mell', 'Ser Tobin Reyes. Twenty years. He simply stopped writing to the Temple. Nobody knows where he fell.');
-      await s.say('Archivist Mell', 'And every one of them died with another power\'s champion close by. Every one.');
-      await s.say('Archivist Mell', 'You should know how the Game is counted. Eighty years ago seven powers swore the Accord: each may summon one champion every twenty years. Every summoning is an age. Seven in the First Age. Two of those still walk.', 6);
-      await s.say('Archivist Mell', 'Fewer of the old ones every age, and each one left is worse. The ones from your own year you won\'t see for a long while: their masters keep them close and teach them. It\'s the old ones who are out here with you.', 6);
+      await s.say('Archivist Mell', 'And every one of them died with some famous blade of another land close by. Every one. I don\'t know what that means. I only keep the index.');
       for (const id of ['elin', 'oswald', 'hallam', 'tobin']) story.state.meet(id);
+      // What nobody in this world knows: the voice tells you how the Game is counted.
+      await s.dark(0.35, 1.4);
+      await s.voice('She has found my four. She will never find the rest, so listen to me now. No one else in this world will tell you how the Game is counted.', 5);
+      await s.voice('Eighty years ago the seven of us who want his chair swore an Accord. We do not fight each other. Each of us may call one champion every twenty years. Each calling is an age.', 6);
+      await s.voice('Seven came in the First Age. Two still walk. Fewer are left of every age, and every one left is worse: twenty, forty, sixty, eighty years at a god\'s table.', 6);
+      await s.voice('The six who came with you were carried home to be taught. You will not meet them for a long while. The old ones are already out here with you.', 5);
+      await s.voice('This world knows our names. It knows some of our champions\' names, as heroes, as legends. It does not know the Game. Keep it that way.', 5);
       F.censusKnown = true;
+      await s.dark(0, 1.4);
     });
-    story.note(CH[0], 'At the Knight\'s Academy, Archivist Mell showed you her index of the Dawn\'s summoned. Four names, twenty years apart: Elin, eighty years ago; Ser Oswald Marr, sixty, buried under Hollow Ridge; Ser Hallam, forty, who died at Harrow Ford with Ser Corvin beside him; Ser Tobin Reyes, twenty, who simply stopped writing. Every one died with another power\'s champion close by. Under the Accord, seven powers each summon one champion every twenty years; the old ages are thin now, and what is left of them is the worst of it. (The count is on the Powers & Champions page.)');
+    story.note(CH[0], 'At the Knight\'s Academy, Archivist Mell showed you her index of the Dawn\'s summoned. Four names, twenty years apart: Elin, eighty years ago; Ser Oswald Marr, sixty, buried under Hollow Ridge; Ser Hallam, forty, who died at Harrow Ford with Ser Corvin beside him; Ser Tobin Reyes, twenty, who simply stopped writing. Every one died with some famous blade of another land close by. Afterwards the voice told you what no one else in this world knows: eighty years ago the seven powers who want the Hollow King\'s chair swore an Accord. They never fight each other; each may call one champion every twenty years, and each calling is an age. The old ages are thin now, and what is left of them is the worst of it. The world knows the powers, and some of their champions as heroes; it does not know the Game. (The count is on the Powers & Champions page.)');
     quests.signal('archive-read');
   };
 
@@ -151,7 +157,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
       s.bars(true);
       await s.say('Cadet Dorian Vale', '...Took you long enough. Yes. Master Veyr took me in when I was eight. I\'m claw-sworn: the Dragon King pays my fees, and I write down what I see. This year, that\'s you.');
       await s.say('Cadet Dorian Vale', 'I\'m not one of you. Nobody summoned me. I\'m a farm boy who\'s good with a sword, and the Dragon King lets me be useful.');
-      await s.say('Cadet Dorian Vale', 'His own Fifth came down into the Deep Mountains the same night you fell into the wheat. They\'re making something out of him up there. When they let him come down, I\'ll know his face. Will you?');
+      await s.say('Cadet Dorian Vale', 'I don\'t know what you are. I know the Dragon King has one too: a stranger who fell out of the sky into the Deep Mountains the same night you fell into the wheat. Master Veyr says I\'m not to ask about it. They\'re making something out of him up there. When they let him come down, I\'ll know his face. Will you?');
       const pick = await s.choose('Cadet Dorian Vale', 'Claw-sworn · the Dragon King', 'So. What are we?', [
         { label: 'Then let\'s not be enemies. Not this year.', tone: 'kind' },
         { label: 'Stay out of my way, Dorian.', tone: 'threat' },

@@ -100,11 +100,11 @@ export class StoryState {
     let html = '<section class="rep-places"><h3>The Seven Powers</h3>';
     for (const p of powers) {
       const champs = [...this.met].map((id) => CHAMPIONS[id]).filter((c) => c && this.patronOf(c.id) === p.id && alive(c.id));
-      html += `<div class="codex-power" style="--pc:${p.color}"><b>${esc(p.name)}</b><p>${esc(p.known)}</p><p class="marks">Its champions carry: ${esc(p.marks)}</p><p class="home">It summons them to: ${esc(p.home)}</p>${champs.length ? `<p class="champs">Known champions: ${champs.map((c) => esc(c.name)).join(', ')}</p>` : ''}</div>`;
+      html += `<div class="codex-power" style="--pc:${p.color}"><b>${esc(p.name)}</b><p>${esc(p.known)}</p><p class="marks">Its champions carry: ${esc(p.marks)}</p>${this.flags.censusKnown ? `<p class="home">It calls its champions to: ${esc(p.home)}</p>` : ''}${champs.length ? `<p class="champs">Known champions: ${champs.map((c) => esc(c.name)).join(', ')}</p>` : ''}</div>`;
     }
     // The census of the Game: once Archivist Mell has told you how it is counted.
     if (this.flags.censusKnown) {
-      html += '<h3>The Ages</h3><p class="codex-accord">Under the Accord each of the seven powers may summon one champion every twenty years. Every summoning is an age. The old ages are thin now; what is left of them is the worst of it.</p>';
+      html += '<h3>The Ages</h3><p class="codex-accord">As the Dawn told you, and no one else will: under the Accord each of the seven powers may call one champion every twenty years. Every calling is an age. The world knows the powers, and some of their champions as heroes; it does not know the Game. The old ages are thin now; what is left of them is the worst of it.</p>';
       for (const a of AGES) {
         const known = Object.values(CHAMPIONS).filter((c) => c.age === a.age && this.met.has(c.id) && alive(c.id));
         const names = [...(a.age === 5 ? ['You'] : []), ...known.map((c) => c.name)];

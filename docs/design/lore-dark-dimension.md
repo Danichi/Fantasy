@@ -29,7 +29,7 @@ and the main quest. Right now neither has one.
 
 - Instead, **every twenty years each of the seven powers may summon one champion** (the Accord; updated 2026-10-29, was "each year").
 - A power can teach its champion whatever it needs and use them to pursue its goals. Most take their new champion home to train (the Dragon King in the Deep Mountains, the Demon Lord on the Deep Continent), so the player meets their own year late.
-- The game **started eighty years ago**: five summonings, the First Age to the Fifth (was "five years ago"). Fewer survive from each older age, and those are far stronger. See main-story.md.
+- The game **started eighty years ago**: five summonings, the First Age to the Fifth (was "five years ago"). Fewer survive from each older age, and those are far stronger. The Accord itself is secret: the world knows the powers and some champions as heroes, and only the player's patron explains the Game, in cutscenes. See main-story.md.
 
 ## The player
 

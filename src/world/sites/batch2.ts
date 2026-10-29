@@ -344,7 +344,7 @@ const HERMITS: Hermit[] = [
     name: 'Mad Pell', title: 'Hermit', look: { body: 'male', outfit: 'peasant', hair: 'simpleparted', beard: true, hairColor: 0x3a2a1a, skin: 0xc8a080, cloth: 0x3a3a3a, linen: 0x7a7060, height: 1.7 },
     greet: '"It\'s leaking," he says before you\'ve said a word. "Violet, at the edges, where you don\'t look straight at it. The old lord over there is dying, and the walls are going thin. Nobody listens to Pell."',
     talk: (c, done) => [
-      { label: 'What\'s leaking?', run: () => c.hooks.talk('Mad Pell', 'Hermit', '"The Dark. The other side of everything. There\'s a lord over there older than the hills, and he\'s dying, and every great power in the world wants his chair. They swore not to fight for it. So they send others to fight for them. Champions. Summoned ones." He peers at you. "Ones like you."', [{ label: 'Like me?', run: () => {} }]) },
+      { label: 'What\'s leaking?', run: () => c.hooks.talk('Mad Pell', 'Hermit', '"The Dark. The other side of everything. There\'s a lord over there older than the hills, and he\'s dying, and the walls go thin when a thing like that dies. Things lean through. Things come through." He peers at you. "You came through. Didn\'t you. You smell of it."', [{ label: 'Like me?', run: () => {} }]) },
       ...fetchQuest(c, 'bones', 'boneDust', 3, '"Bone dust. Three pinches. From the walking dead, not the honest kind. I need it for a ward. Don\'t ask me what for."', '"Good, good." He packs it into a little bag and hangs it on his door. "Take this. I won\'t need it once the ward\'s up."',
         () => { c.hooks.gold(80); c.hooks.give('greaterHealthPotion', 2); c.hooks.xp(120); }, done),
     ],

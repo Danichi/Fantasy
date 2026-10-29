@@ -97,13 +97,13 @@ export const ACT1_QUESTS: QuestDef[] = [
   {
     id: 'mq-gravewood', title: 'The Dead Wood', giver: 'magus', region: 'cresha', main: true, requires: ['mq-crypt'],
     summary: 'The dead walk in the Gravewood. Magus Orren believes it is a thin place, where the Dark presses against the world, and that through the Sunwheel you might see what is pushing.',
-    offer: 'Champions. Powers. A dying king in the Dark. The library in the Capital has one book about it and I have read it until the spine broke. The Gravewood is a thin place: the Dark leaning on the world. Go to the standing stones on the hill north-west of here, and do what you did at the waystone. Look through the wheel. Then go to the Gravewood and break whatever is leaning.',
+    offer: 'The Dark. The other side of everything. The library in the Capital has one book about it, and I have read it until the spine broke; it knows less than it pretends to. The Gravewood is a thin place: the Dark leaning on the world. Go to the standing stones on the hill north-west of here, and do what you did at the waystone. Look through the wheel. Then go to the Gravewood and break whatever is leaning.',
     acceptLabel: 'I\'ll look through the wheel.',
     stages: [
       { note: 'Look through the Sunwheel at the standing stones (north-west hills).', objectives: [{ type: 'signal', id: 'ring-rite', text: 'Do the rite at the standing stones: look through the wheel', at: [STANDING_STONES.x, STANDING_STONES.z] }] },
       { note: 'Go into the Gravewood (south-west) and break the curse.', objectives: [{ type: 'signal', id: 'gravewood-cleared', text: 'Break the curse on the Gravewood', at: [GRAVEWOOD.x, GRAVEWOOD.y] }] },
       { note: 'Step through the pedestal\'s wheel into the Dark.', hook: 'gravewood:mirror', objectives: [{ type: 'signal', id: 'mirror-walked', text: 'Do the rite at the Gravewood pedestal and step into the Dark', at: [GRAVEWOOD.x, GRAVEWOOD.y] }] },
-      { note: 'Tell Magus Orren what you saw.', objectives: [{ type: 'talk', npc: 'magus', text: 'Tell Magus Orren what you saw in the Dark', reply: 'I was in the Dark. Something there is dying.', say: 'Dying. The book says the same: a king in the Dark, older than any record, and when he dies there will be a new one. And the great powers of this world all want to be it. They swore never to fight each other for it, so they fight through champions. Summoned ones. You. I am so sorry.' }] },
+      { note: 'Tell Magus Orren what you saw.', objectives: [{ type: 'talk', npc: 'magus', text: 'Tell Magus Orren what you saw in the Dark', reply: 'I was in the Dark. Something there is dying.', say: 'Dying. My book says only that something old rules over there, and that nothing has ever seen it die. If it is dying... no. I don\'t know what that means, and I don\'t like that I don\'t. Whatever brought you here knows. Ask it, not me. And be careful what it asks of you in return.' }] },
     ],
     done: 'This was left with the Order when the ward was raised: Dawnbreaker. It burns clean. Take it. You\'ll need it more than any of us.',
     rewards: { gold: 250, xp: 450, items: [['dawnbreaker', 1]], guildRep: 30 },

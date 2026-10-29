@@ -63,13 +63,13 @@ export const POWERS: Record<PowerId, Power> = {
   },
   ironBelow: {
     id: 'ironBelow', name: 'The Iron Below', color: '#a0a8b8',
-    known: 'The buried god of the oldest dwarf-holds. It wants the Dark for a forge.',
+    known: 'The buried god of the oldest dwarf-holds. The dwarves pray to it quietly, with their hammers down, and will not say what for.',
     marks: 'Black iron that is cold to the touch. An anvil with an eye. Grukk\'s warband was paid in it.',
     home: 'The sunken forges under the oldest dwarf-holds.',
   },
   demonLord: {
     id: 'demonLord', name: 'The Demon Lord', color: '#d0405a',
-    known: 'He rules the Deep Continent, past the edge of every map Cresha makes. He takes his champions home and keeps them for years, and what comes back is finished.',
+    known: 'He rules the Deep Continent, past the edge of every map Cresha makes. Ships that go looking for it do not come back. Mothers in the port towns use his name to frighten children, and the children are right.',
     marks: 'A brand of black flame on the palm. Shadows that fall the wrong way. They do not bleed red.',
     home: 'The Deep Continent, across the sea, where he trains them himself.',
   },
@@ -81,7 +81,7 @@ export const POWERS: Record<PowerId, Power> = {
   },
   hollow: {
     id: 'hollow', name: '???', color: '#9a7aa8',
-    known: 'Nobody will say who sends him.',
+    known: 'Nobody knows who sends him.',
     marks: 'A Sunwheel on his shield, cut backwards.',
     home: 'Unknown.',
   },
@@ -174,13 +174,14 @@ export const CHAMPIONS: Record<string, ChampionDef> = {
 };
 
 /**
- * The Game, counted (Archivist Mell's index). In every age each of the seven
- * powers summoned one champion; this is how many the chronicles think still
- * walk. The old ages are thin, and what is left of them is the worst of it.
+ * The Game, counted (as the Dawn tells it, after Archivist Mell's index: no
+ * one else in the world knows the Accord). In every age each of the seven
+ * powers called one champion; this is how many the Dawn says still walk. The
+ * old ages are thin, and what is left of them is the worst of it.
  */
 export const AGES: { age: 1 | 2 | 3 | 4 | 5; when: string; walk: number; note: string }[] = [
   { age: 1, when: 'eighty years ago', walk: 2, note: 'Seven were summoned. Two still walk. Everyone who has met either of them says the same thing afterwards: run.' },
-  { age: 2, when: 'sixty years ago', walk: 3, note: 'Seven were summoned. Three still walk, the chronicles think. Each of them has buried a king or two.' },
+  { age: 2, when: 'sixty years ago', walk: 3, note: 'Seven were summoned. Three still walk, the Dawn says. Each of them has buried a king or two.' },
   { age: 3, when: 'forty years ago', walk: 4, note: 'Seven were summoned. Four still walk. They are old now, and that has made them careful, not slow.' },
   { age: 4, when: 'twenty years ago', walk: 5, note: 'Seven were summoned. Five still walk, in their prime, and hungry. These are the ones you will meet first.' },
   { age: 5, when: 'this year', walk: 7, note: 'Seven were summoned, the same night as you. Six were taken home by their masters, to the Deep Mountains, the Deep Continent, the trenches under the sea, and are being taught. You will hear of them long before you meet them. When they come out, they will be ready.' },

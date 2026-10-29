@@ -97,7 +97,7 @@ const NAMED: Named[] = [
     lines: { any: ['A room, a meal, a song. The Stag does all three.', 'The bard’s late again. The bard is always late.'] },
     look: { body: 'male', outfit: 'peasant', hair: 'simpleparted', beard: true, hairColor: 0x6a4428, skin: 0xfff0e6, linen: 0xe8c8c0, height: 1.8 } },
   { id: 'lark', name: 'Lark', title: 'Bard of the Gilded Stag', post: [PLAZA[0] + 20, PLAZA[1] - 14], activity: 'talk', hours: [11, 25],
-    lines: { any: ['A song of the summoned hero? I’m still writing the ending.', 'Four summoned heroes in a thousand years. The songs about the other three are all tragedies. No pressure.'] },
+    lines: { any: ['A song of the summoned hero? I’m still writing the ending.', 'Four summoned heroes in eighty years. The songs about all four are tragedies. No pressure.'] },
     look: { body: 'female', outfit: 'ranger', hair: 'buzzedfemale', hairColor: 0xb8402e, skin: 0xe0b894, cloth: 0x2f7f86, height: 1.66 } },
   { id: 'capOstler', name: 'Wat Cobble', title: 'Ostler · The Crown Stables', post: [CAPITAL_SPOTS.stable.x - 6, CAPITAL_SPOTS.stable.z], activity: 'work', hours: [6, 21],
     lines: { any: ['Coach to Elder Glen and on to the coast, leaving on the hour.', 'Royal horses, royal prices. Worth every coin.'] },

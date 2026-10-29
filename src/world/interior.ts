@@ -1242,7 +1242,7 @@ export class Interior {
       globe.position.set(-2.6, 1.3, back + 5.2);
       this.group.add(globe);
       this.box(g.gold, 0.08, 0.9, 0.08, -2.6, 0.45, back + 5.2);
-      this.inspectProp(2.6, back + 5.6, 'Read the open folio', 'A chronicle of the summoned. Four heroes in a thousand years, each arriving “as the old wheel turns”. The margins are crowded with a later hand: Sunwheel stones, Elder Glen, the Gravewood. Someone here has been asking the same questions you are.');
+      this.inspectProp(2.6, back + 5.6, 'Read the open folio', 'A chronicle of the summoned. Four heroes in eighty years, twenty years apart, each arriving “as the old wheel turns”. The margins are crowded with a later hand: Sunwheel stones, Elder Glen, the Gravewood. Someone here has been asking the same questions you are.');
     } else {
       // A hall or warehouse: stacked goods, a clerk's desk.
       for (let i = 0; i < 10; i++) {
