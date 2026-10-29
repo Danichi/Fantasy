@@ -193,7 +193,7 @@ test('champions of the ages: each older age is far stronger, the First is all bu
     return {
       hp: ages.map((s) => s.hp), dmg: ages.map((s) => s.dmg), poise: ages.map((s) => s.poiseK),
       firstAge, wrong, right, patron: S.state.patronOf('veyr'), naming: /data-name="veyr"/.test(codex),
-      unread, census, afterHesk, chips, dorianIsChampion: 'dorian' in CHAMPIONS,
+      unread, census, afterHesk, chips, dorianIsChampion: 'dorian' in CHAMPIONS, ages: Object.values(CHAMPIONS).map((c) => c.age),
     };
   }, HELPERS);
   for (let i = 1; i < 5; i++) {
