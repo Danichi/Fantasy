@@ -46,8 +46,12 @@ export class People {
   /** checks whether a resident is a story character that can't die or leave (quests, mentors) */
   essential: (id: string) => boolean = () => false;
 
+  /** where to find people we haven't met yet: a person's settlement, and everyone who lives there */
+  settlementOf?: (id: string) => string | undefined;
+  residents?: (settlement: string) => PersonInfo[];
+
   constructor() {
-    this.rep.firstImpression = (id) => this.map.get(id)?.firstImpression ?? 0;
+    this.rep.firstImpression = (id) => this.get(id)?.firstImpression ?? 0;
     this.rep.communityFor = (id) => this.communityFor(id);
     this.rep.essentialCheck = (id) => this.isEssential(id);
   }
@@ -78,11 +82,17 @@ export class People {
     return fresh;
   }
 
+  /** A person's profile (their whole settlement is given profiles the first time anyone there is asked about). */
   get(id: string) {
+    const p = this.map.get(id);
+    if (p || !this.settlementOf || !this.residents) return p;
+    const sid = this.settlementOf(id);
+    if (!sid) return undefined;
+    this.register(this.residents(sid));
     return this.map.get(id);
   }
   has(id: string) {
-    return this.map.has(id);
+    return !!this.get(id);
   }
   all() {
     return [...this.map.values()];
@@ -95,11 +105,11 @@ export class People {
     return undefined;
   }
   communityFor(id: string) {
-    const p = this.map.get(id);
+    const p = this.get(id);
     return p ? communityOf(p.settlement) : 'roads';
   }
   isEssential(id: string) {
-    const p = this.map.get(id);
+    const p = this.get(id);
     return !!p && (p.essential || this.essential(id));
   }
   /** Here and about (not dead, not gone away). */

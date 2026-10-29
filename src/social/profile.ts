@@ -196,12 +196,12 @@ export function weaveTies(people: Profile[]) {
     const b = people[(i + 1 + (s % (n - 1))) % n];
     if (a.child !== b.child) continue;
     tie(a, b, 'friend', 'friend');
-    if ((s >> 4) % 7 === 0) {
-      const c = people[(i + 3 + ((s >> 8) % (n - 3))) % n];
+    if ((s >>> 4) % 7 === 0) {
+      const c = people[(i + 3 + ((s >>> 8) % Math.max(1, n - 3))) % n];
       if (!c.child && !a.child) tie(a, c, 'rival', 'rival');
     }
-    if ((s >> 12) % 11 === 0) {
-      const c = people[(i + 5 + ((s >> 9) % (n - 5 || 1))) % n];
+    if ((s >>> 12) % 11 === 0) {
+      const c = people[(i + 5 + ((s >>> 9) % (n - 5 || 1))) % n];
       if (!c.child && !a.child && !a.ties.some((t) => t.bond === 'spouse') && !c.ties.some((t) => t.bond === 'spouse')) tie(a, c, 'sweetheart', 'sweetheart');
     }
   }

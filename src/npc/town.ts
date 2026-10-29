@@ -13,7 +13,8 @@ import { ITEMS } from '../items/itemDefs';
 import { AdventurerGuild } from '../guild/adventurerGuild';
 import type { ShopUI, ShopOpts } from '../ui/shopUI';
 import { ARMS_STOCK } from '../items/armsShops';
-import { greetingFor, topicsFor, rumours, type TalkCtx } from './townTalk';
+import { greetingFor, storyGreeting, topicsFor, rumours, type TalkCtx } from './townTalk';
+import type { ConvoSpec } from '../social/conversation';
 
 // The townsfolk: who they are, where they stand, and what they teach or sell.
 
@@ -340,6 +341,8 @@ export class Town {
 
   /** the world as townsfolk see it (set by main): time, weather, story, your classes */
   talkCtx?: () => Omit<TalkCtx, 'met'>;
+  /** the conversation engine (NPC overhaul); without it, the old menus */
+  converse?: (spec: ConvoSpec) => void;
   private met = new Set<string>();
   private visits = new Map<string, number>();
   private asked = new Map<string, number>();
@@ -380,7 +383,9 @@ export class Town {
    * "Let's talk" for their topics and the local news.
    */
   talk(s: NpcSpec, text?: string) {
-    text ??= this.greet(s);
+    const sayText = text;
+    if (!this.converse) text ??= this.greet(s);
+    text ??= '';
     const npc = this.npcs.find((n) => n.spec.id === s.id);
     if (npc) npc.talkT = 1 + text.length / 60;
     const back = () => this.talk(s);
@@ -393,6 +398,21 @@ export class Town {
     if (s.id === 'froest') opts.push({ label: "Browse Fröst's wares.", run: () => this.shop() });
     else if (SHOPKEEPERS.has(s.id)) opts.push({ label: s.id === 'innkeeper' ? 'I need a room.' : 'Let me see your wares.', run: () => this.talkShop(s) });
     opts.push(...(this.mentorOptions?.(s, (t) => this.talk(s, t)) ?? []));
+    if (this.converse && s.id !== 'guild') {
+      const c = this.ctxFor(s.id);
+      const first = !this.met.has(s.id);
+      this.met.add(s.id);
+      return this.converse({
+        id: s.id, name: s.name, title: s.title,
+        intro: s.greeting,
+        story: c && !first ? storyGreeting(s.id, c) : undefined,
+        services: opts,
+        topics: [...s.lines, ...(c ? topicsFor(s.id, c) : [])],
+        news: () => this.rumour(s),
+        back,
+        say: sayText,
+      });
+    }
     opts.push({ label: "Let's talk.", run: () => this.topics(s, this.chat(s)) });
     opts.push({ label: 'Farewell.', run: () => this.dialogue.close() });
     this.dialogue.show(s.name, s.title, text, opts);

@@ -57,6 +57,8 @@ export interface ConvoSpec {
   news?: () => string;
   /** reopen this conversation at the top (services call this to come back) */
   back: () => void;
+  /** say this instead of a greeting (a mentor's answer, say) */
+  say?: string;
 }
 
 const FOLLOW: Record<string, string[]> = {
@@ -105,7 +107,7 @@ export class Conversation {
     if (!p) return void this.h.dialogue.show(spec.name, spec.title, spec.intro ?? 'Hello.', [...spec.services, { label: 'Farewell.', run: () => this.close() }]);
     const continuing = this.h.dialogue.open && this.cur?.id === spec.id;
     if (!continuing) this.served.delete(spec.id);
-    const text = continuing ? this.follow(p) : this.greet(spec, p);
+    const text = spec.say ?? (continuing ? this.follow(p) : this.greet(spec, p));
     this.cur = { id: spec.id, text };
     if (this.rep.refuses(spec.id) && !this.served.has(spec.id)) return this.refusal(spec, p, text);
     this.show(spec, text, this.menu(spec, p));
@@ -235,10 +237,10 @@ export class Conversation {
     fixed.push({ label: 'Is there anything you\'d not tell just anyone?', run: () => this.secret(spec, p) });
     // Then their own topics (some only once they trust you), the old ones, the news, the people in their life.
     const extra: DialogueOption[] = [];
+    if (spec.news) extra.push({ label: 'Heard any news?', run: () => again(spec.news!()) });
     const personal: PersonalTopic[] = CAST[p.id]?.topics ?? [];
     for (const t of personal) if (!t.min || atLeast(mood, t.min)) extra.push({ label: t.q, run: () => again(t.a) });
     for (const t of spec.topics ?? []) extra.push({ label: t.q, run: () => again(t.a) });
-    if (spec.news) extra.push({ label: 'Heard any news?', run: () => again(spec.news!()) });
     for (const t of p.ties.filter((t) => this.h.people.present(t.id)).slice(0, 2)) {
       const o = this.h.people.get(t.id);
       if (o) extra.push({ label: `What do you make of ${o.first}?`, run: () => again(this.line('tie.' + t.bond, p, { other: o.first, bond: t.bond })) });
@@ -342,7 +344,7 @@ export class Conversation {
     };
     const kindLine = pick('you.kind'), rudeLine = pick('you.rude'), threatLine = pick('you.threat');
     const react = (t: string) => this.show(spec, t, [{ label: 'Back.', run: () => spec.back() }, { label: 'Farewell.', run: () => this.close() }]);
-    this.show(spec, this.chatOpener(p), [
+    this.show(spec, this.follow(p), [
       {
         label: kindLine, tone: 'kind', run: () => {
           const m = this.rep.memOf(p.id);

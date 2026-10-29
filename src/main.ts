@@ -47,7 +47,8 @@ import { Encounters } from './world/encounters';
 import { Caravans } from './world/caravans';
 import { setupRoadQuests } from './quests/roadQuests';
 import { setupClassTrials } from './quests/classTrials';
-import { rumours, greetingFor, topicsFor } from './npc/townTalk';
+import { rumours, greetingFor, storyGreeting, topicsFor } from './npc/townTalk';
+import { setupSocial } from './social/wiring';
 import { buildPortAurelle, PORT_SPOTS } from './world/portAurelle';
 import { Fishing, type FishingSpot } from './world/fishing';
 import { Duel } from './combat/duel';
@@ -641,6 +642,19 @@ async function boot() {
   });
   // Lightbinders gather Radiance under the open sky by day.
   skillRt.env = () => ({ daylight: realm.mode === 'overworld' && time.hour >= 6 && time.hour < 19 && weather.p.rain < 0.5 });
+  // ---- The NPC overhaul: personalities, reputation, conversations, speech bubbles ----
+  const social = setupSocial({
+    npcs, townSpecs: NPCS, dialogue, shopUI, camera: r.camera,
+    townHeads: () => town.npcs.map((n) => ({ id: n.spec.id, head: n.head, visible: n.root.visible })),
+    hour: () => time.hour, day: () => time.day, rain: () => weather.p.rain > 0.4,
+    gold: () => player.prog.gold, addGold: (n) => player.prog.addGold(n), level: () => player.prog.level,
+    items: () => player.equip.items.filter((i) => i.def.kind !== 'key' && i.def.kind !== 'spell' && player.equip.slotOf(i.uid) === undefined).map((i) => ({ id: i.def.id, name: i.def.name, kind: i.def.kind, qty: i.qty })),
+    take: (id, n) => takeItem(id, n), give: (id, n) => giveItem(id, n), toast: (m) => hud.toast(m),
+    weaponOut: () => !!player.act || player.blocking || !!player.lock,
+    playerPos: () => player.pos,
+    save: saveData?.world?.social,
+  });
+  town.converse = (spec) => social.talk(spec);
   // Townsfolk: one interactable that follows whoever is nearest.
   const folkTalk = {
     pos: new THREE.Vector3(0, -999, 0),
@@ -660,24 +674,27 @@ async function boot() {
       const back = () => folkTalk.action();
       const show = (t: string, opts: { label: string; run: () => void }[]) => dialogue.show(n.rec.name, title, t, opts);
       const ctx = { ...talkCtx(), met: true };
-      show(greetingFor(n.rec.id, npcs.lineFor(n), ctx, 1), [
-        ...quests.options(n.rec.id, show, back),
-        ...topicsFor(n.rec.id, ctx).map((t) => ({ label: t.q, run: () => show(t.a, [{ label: 'Anything else?', run: back }, { label: 'Farewell.', run: () => dialogue.close() }]) })),
-        ...(folkServices.get(n.rec.id)?.(show, back) ?? []),
-        ...town.sellOptions(n.rec.id, n.rec.name, title, back),
-        {
-          label: 'Heard any news?',
-          run: () => {
-            // Everyone has heard something; ask again for something else.
-            const news = rumours({ ...talkCtx(), met: true }, n.rec.settlement === 'elderGlen');
-            const k = folkNews.get(n.rec.id) ?? n.seed % news.length;
-            folkNews.set(n.rec.id, k + 1);
-            bosses.heard(news[k % news.length]);
-            show(news[k % news.length], [{ label: 'Anything else?', run: () => folkTalk.action() }, { label: 'Farewell.', run: () => dialogue.close() }]);
-          },
+      social.talk({
+        id: n.rec.id, name: n.rec.name, title,
+        // Their own words the first time you meet; a story beat after that, if they have one.
+        intro: greetingFor(n.rec.id, npcs.lineFor(n), { ...ctx, met: false }, 0),
+        story: storyGreeting(n.rec.id, ctx),
+        services: [
+          ...quests.options(n.rec.id, show, back),
+          ...(folkServices.get(n.rec.id)?.(show, back) ?? []),
+          ...town.sellOptions(n.rec.id, n.rec.name, title, back),
+        ],
+        topics: topicsFor(n.rec.id, ctx),
+        news: () => {
+          // Everyone has heard something; ask again for something else.
+          const news = rumours({ ...talkCtx(), met: true }, n.rec.settlement === 'elderGlen');
+          const k = folkNews.get(n.rec.id) ?? n.seed % news.length;
+          folkNews.set(n.rec.id, k + 1);
+          bosses.heard(news[k % news.length]);
+          return news[k % news.length];
         },
-        { label: 'Farewell.', run: () => dialogue.close() },
-      ]);
+        back,
+      });
     },
   };
   realm.overworldInteractables.push(folkTalk);
@@ -1725,7 +1742,7 @@ async function boot() {
     if (TEST_MODE && !location.search.includes('save')) return;
     const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
-    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), sites: sites.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
+    writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, social: social.save(), pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), sites: sites.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
   // Guild contracts show in the quest log (tracker, journal, map, waypoint).
@@ -2173,6 +2190,8 @@ async function boot() {
     worldMap.update(dt, player.pos, player.yaw, realm.mode === 'overworld' && !overlayUp);
     dialogue.update(dt);
     if (realm.mode === 'overworld') town.update(dt, player.pos);
+    social.barks.enabled = realm.mode === 'overworld' && !dialogue.open;
+    social.update(dt);
     physDebug?.update();
     origins.frame(paused ? 0 : dt); // ---- Origins (feat/origins) ----
     r.followShadow(renderPos);
@@ -2274,7 +2293,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, social, folkTalk, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       yard, combatDebug, // combat rework: the drill yard and the F9 overlay
