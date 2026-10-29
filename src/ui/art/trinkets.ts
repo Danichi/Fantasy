@@ -42,7 +42,7 @@ export function paintTrinket(g: G, t: TrinketSpec, seed: string) {
     case 'flag': return flag(g, t);
     case 'compass': return compass(g, m);
     case 'lantern': return lantern(g, m);
-    case 'box': return box(g, m);
+    case 'box': return box(g, m, t);
     case 'orb': return orb(g, t);
     case 'crystal': return crystal(g, t, r);
     case 'heart': return heart(g, t, m);
@@ -516,8 +516,8 @@ function lantern(g: G, m: string) {
   shade(g, (q) => q.roundRect(36, 92, 56, 12, 3), m, { gloss: 2, band: 2, rim: true, box: [36, 92, 92, 104] });
 }
 
-function box(g: G, m: string) {
-  const wood = '#6a4a2a';
+function box(g: G, m: string, t: TrinketSpec) {
+  const wood = t.color ?? '#6a4a2a';
   shade(g, (q) => q.roundRect(20, 54, 88, 54, 4), wood, { band: 4, gloss: 1, box: [20, 54, 108, 108] });
   shade(g, (q) => {
     q.moveTo(20, 56);
@@ -533,6 +533,9 @@ function box(g: G, m: string) {
   g.arc(64, 59, 2.6, 0, Math.PI * 2);
   g.fill();
   g.fillRect(63, 59, 2, 7);
+  // A mark cut into the lid.
+  if (t.glyph) drawGlyph(g, t.glyph, 64, 40, 18, t.glow ?? light(wood, 0.35), 2.2);
+  if (t.color) return;
   // River weed.
   line(g, '#4a8a3a', 2.4, (q) => {
     q.moveTo(22, 80);
@@ -807,6 +810,7 @@ export const TRINKETS: Record<string, TrinketSpec> = {
   starReaderRing: { kind: 'ring', metal: 'silver', color: '#2a4ab8', glow: '#6a8aff' },
   oldKingsSignet: { kind: 'ring', metal: 'greenBronze', glyph: 'crown' },
   dentedSignet: { kind: 'ring', metal: 'gold', glyph: 'shield', color: '#b0802a' },
+  hallamsSeal: { kind: 'ring', metal: 'gold', glyph: 'sun', color: '#e0ac34', glow: '#ffd76a' },
   // amulets
   garnetAmulet: { kind: 'amulet', metal: 'silver', color: '#b01a2a' },
   scarabAmulet: { kind: 'amulet', metal: 'gold', color: '#2a9a8a', shape: 'scarab' },
@@ -849,6 +853,9 @@ export const TRINKETS: Record<string, TrinketSpec> = {
   tideKey: { kind: 'key', metal: 'greenBronze', shape: 'ornate', color: '#e8e0d0' },
   gravewoodKey: { kind: 'key', metal: 'iron', shape: 'ring', color: '#f08ab0' },
   sunkenKey: { kind: 'key', metal: 'gold', shape: 'ornate', glyph: 'eye', glow: '#5af0e0' },
+  // the main story
+  sunwheelSpoke: { kind: 'key', metal: 'gold', shape: 'ornate', glyph: 'sun', glow: '#ffd76a' },
+  blackIronBox: { kind: 'box', metal: 'iron', color: '#2c2c34', glyph: 'sun', glow: '#d9a83a' },
   // flags
   blackTideColours: { kind: 'flag', color: '#16161e', accent: '#f4f4f4' },
   regattaPennant: { kind: 'flag', color: '#c0302a', accent: '#e8c03a', shape: 'pennant', glyph: 'anchor' },
