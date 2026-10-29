@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { LOOK, LOOK_STYLE } from './looks';
 
 /** How far into the Dark mirror the world looks (0..1; story/darkMirror.ts drives it). */
 export const DARK = { value: 0 };
@@ -9,7 +8,11 @@ export const DARK = { value: 0 };
 //   scene -> HDR target (MSAA, with depth)
 //   bright pass + 3-level blur at 1/4 res -> bloom
 //   final: aerial-perspective haze and drifting cloud shadows reconstructed
-//          from depth, bloom, ACES tone mapping, warm painterly grade, vignette
+//          from depth, bloom, ACES tone mapping, the "wild" grade, vignette
+// The wild look (after Breath of the Wild): strong blue distance haze, so
+// hills stack in pale layers; bright, slightly washed-out colour; cool lifted
+// shade; soft bloom. No outlines, no brush filters: textures and models stay
+// clean and detailed.
 // ---------------------------------------------------------------------------
 
 const FS_VERT = /* glsl */ `
@@ -56,7 +59,15 @@ const AO_FRAG = /* glsl */ `
     float depth = texture2D(tDepth, vUv).r;
     if (depth >= 0.99999) { gl_FragColor = vec4(1.0); return; }
     vec3 p = viewPos(vUv, depth);
-    vec3 n = normalize(cross(dFdx(p), dFdy(p)));
+    // Normal from the nearer neighbour on each axis (not dFdx, which straddles
+    // 2x2 quads): flat ground seen at a low angle stays flat, with no stripes.
+    vec3 pr = viewPos(vUv + vec2(uTexel.x, 0.0), texture2D(tDepth, vUv + vec2(uTexel.x, 0.0)).r);
+    vec3 pl = viewPos(vUv - vec2(uTexel.x, 0.0), texture2D(tDepth, vUv - vec2(uTexel.x, 0.0)).r);
+    vec3 pu = viewPos(vUv + vec2(0.0, uTexel.y), texture2D(tDepth, vUv + vec2(0.0, uTexel.y)).r);
+    vec3 pd = viewPos(vUv - vec2(0.0, uTexel.y), texture2D(tDepth, vUv - vec2(0.0, uTexel.y)).r);
+    vec3 dx = abs(pr.z - p.z) < abs(p.z - pl.z) ? pr - p : p - pl;
+    vec3 dy = abs(pu.z - p.z) < abs(p.z - pd.z) ? pu - p : p - pd;
+    vec3 n = normalize(cross(dx, dy));
     float ssR = min(AO_R * uProjScale / max(-p.z, 0.1), 60.0);
     if (ssR < 1.5 || -p.z > 140.0) { gl_FragColor = vec4(1.0); return; }
     float ang0 = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 6.2832;
@@ -68,7 +79,7 @@ const AO_FRAG = /* glsl */ `
       vec3 q = viewPos(suv, texture2D(tDepth, suv).r);
       vec3 v = q - p;
       float vv = dot(v, v);
-      float vn = dot(v, n) + p.z * 0.002; // bias grows with distance (depth precision)
+      float vn = dot(v, n) + p.z * 0.003 - 0.03; // a small bias that grows with distance (depth precision)
       float f = max(AO_R * AO_R - vv, 0.0);
       sum += f * f * f * max(vn / (vv + 0.02), 0.0);
     }
@@ -97,7 +108,7 @@ const FINAL_FRAG = /* glsl */ `
   uniform vec3 uCamPos, uSunDir, uSunColor, uHazeColor;
   uniform float uNear, uFar, uTime, uExposure, uBloom, uHaze, uClouds, uMist;
   uniform sampler2D tAO; uniform float uAO;
-  uniform float uLook; uniform vec2 uTexel;
+  uniform vec2 uTexel;
   uniform float uDark;
   varying vec2 vUv;
 
@@ -112,71 +123,9 @@ const FINAL_FRAG = /* glsl */ `
   }
   float noise2(vec2 p) { return texture2D(tNoise, p).r; }
 
-  // Look test (render/looks.ts) helpers.
-  // Storybook: a 4-sector Kuwahara filter, the classic painted-brush look.
-  vec3 kuwahara(vec2 uv) {
-    vec3 m[4]; vec3 s2[4];
-    for (int k = 0; k < 4; k++) { m[k] = vec3(0.0); s2[k] = vec3(0.0); }
-    for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++) {
-      vec3 c = texture2D(tColor, uv + vec2(float(i), float(j)) * uTexel * 2.6).rgb;
-      if (any(isnan(c)) || any(isinf(c))) c = vec3(0.0);
-      c = min(c, vec3(8.0));
-      if (i <= 0 && j <= 0) { m[0] += c; s2[0] += c * c; }
-      if (i >= 0 && j <= 0) { m[1] += c; s2[1] += c * c; }
-      if (i <= 0 && j >= 0) { m[2] += c; s2[2] += c * c; }
-      if (i >= 0 && j >= 0) { m[3] += c; s2[3] += c * c; }
-    }
-    vec3 best = m[0] / 9.0; float bv = 1e9;
-    for (int k = 0; k < 4; k++) {
-      vec3 mu = m[k] / 9.0;
-      vec3 v = abs(s2[k] / 9.0 - mu * mu);
-      float t = v.r + v.g + v.b;
-      if (t < bv) { bv = t; best = mu; }
-    }
-    return best;
-  }
-  float linDist(vec2 uv) {
-    float d = texture2D(tDepth, uv).r;
-    if (d >= 0.99999) return 3000.0;
-    return -viewPos(uv, d).z;
-  }
-  // Ink from depth: silhouettes (jumps with open space behind) and folds (creases).
-  // Inverse view depth is linear across a flat surface, so only real edges and folds show.
-  float edgeLine(float px) {
-    vec2 ox = vec2(uTexel.x * px, 0.0), oy = vec2(0.0, uTexel.y * px);
-    float zc = linDist(vUv);
-    float wc = 1.0 / zc;
-    float wl = 1.0 / linDist(vUv - ox), wr = 1.0 / linDist(vUv + ox);
-    float wd = 1.0 / linDist(vUv - oy), wu = 1.0 / linDist(vUv + oy);
-    float jump = max(max(abs(wl - wc), abs(wr - wc)), max(abs(wd - wc), abs(wu - wc))) / wc;
-    float crease = (abs(wl + wr - 2.0 * wc) + abs(wd + wu - 2.0 * wc)) / wc;
-    // A real silhouette has open space behind it (grass in front of grass has not).
-    float back = max(max(1.0 / wl, 1.0 / wr), max(1.0 / wd, 1.0 / wu)) - zc;
-    float line = max(smoothstep(0.18, 0.35, jump) * smoothstep(1.0, 2.5, back), smoothstep(0.35, 0.7, crease) * 0.5 * (1.0 - smoothstep(0.1, 0.25, jump)));
-    line *= 1.0 - smoothstep(60.0, 260.0, zc);
-    // Thin things (grass blades) with open ground on both sides get no ink: only shapes do.
-    float thin = max(step(wl, wc * 0.85) * step(wr, wc * 0.85), step(wd, wc * 0.85) * step(wu, wc * 0.85));
-    return line * (1.0 - thin * 0.9);
-  }
-
-
   void main() {
     vec3 col = texture2D(tColor, vUv).rgb;
     if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
-    if (uLook > 0.5 && uLook < 1.5) col = kuwahara(vUv);
-    if (uLook > 2.5) {
-      // Tilt-shift: the top and bottom of the frame go soft, like a model under a lens.
-      float band = smoothstep(0.08, 0.36, abs(vUv.y - 0.52));
-      if (band > 0.0) {
-        vec3 acc = col; float w = 1.0;
-        for (int k = 0; k < 12; k++) {
-          float a = float(k) * 2.39996, r = (0.35 + 0.65 * fract(float(k) * 0.618)) * band * 11.0;
-          vec3 c = texture2D(tColor, vUv + vec2(cos(a), sin(a)) * r * uTexel).rgb;
-          if (!(any(isnan(c)) || any(isinf(c)))) { acc += min(c, vec3(8.0)); w += 1.0; }
-        }
-        col = acc / w;
-      }
-    }
     float depth = texture2D(tDepth, vUv).r;
     vec3 vp = viewPos(vUv, depth);
     vec3 wp = (uCamWorld * vec4(vp, 1.0)).xyz;
@@ -213,9 +162,11 @@ const FINAL_FRAG = /* glsl */ `
         ? uHaze * exp(-k * camH) * (1.0 - exp(-k * dy)) / (k * ray.y)
         : uHaze * exp(-k * camH) * dist;
       float f = 1.0 - exp(-max(amount, 0.0));
-      // Distant land also loses saturation into the haze (aerial perspective).
+      // Distant land loses saturation and turns blue long before the haze
+      // swallows it: hills stack in pale layers (aerial perspective).
       float farL = dot(col, vec3(0.3, 0.55, 0.15));
-      col = mix(col, vec3(farL), smoothstep(80.0, 900.0, dist) * 0.35);
+      float far = smoothstep(35.0, 600.0, dist);
+      col = mix(col, vec3(farL) * mix(vec3(1.0), uHazeColor * 1.2, 0.6), far * 0.62);
       // uMist (the Gravewood's cursed fog) lets the haze swallow everything.
       col = mix(col, haze, clamp(f, 0.0, mix(0.92, 0.995, uMist)));
     } else {
@@ -228,40 +179,15 @@ const FINAL_FRAG = /* glsl */ `
     col += texture2D(tBloom, vUv).rgb * uBloom;
     col = aces(col * uExposure);
 
-    // Map-palette grade (docs/ART-DIRECTION.md §2): deep, saturated, luminous.
+    // The wild grade: bright and a little washed out, warm light, cool lifted shade.
     float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    // Luminous rather than loud: gentle saturation, warm light, cool shade.
-    col = mix(vec3(luma), col, 1.12);
-    col = mix(col, col * vec3(1.025, 1.01, 0.975), smoothstep(0.35, 1.0, luma));
-    col = mix(col, col * vec3(0.93, 0.99, 1.07), 1.0 - smoothstep(0.0, 0.4, luma));
-    col = col * col * (3.0 - 2.0 * col) * 0.3 + col * 0.7;
-    if (uLook > 0.5 && uLook < 1.5) {
-      // Storybook: pastel wash on warm paper, soft sepia pencil contours, paper grain.
-      float l1 = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(vec3(l1), col, 0.92);
-      vec3 paper = vec3(0.98, 0.94, 0.85);
-      col = col * 0.84 + paper * 0.13 * (1.0 - 0.5 * l1);
-      if (!sky) col = mix(col, col * vec3(0.55, 0.44, 0.36), edgeLine(2.0) * 0.5);
-      vec2 px = vUv / uTexel;
-      col *= 0.95 + 0.05 * noise2(px / 260.0) + 0.035 * (noise2(px / 6.0) - 0.5);
-    }
-    if (uLook > 1.5 && uLook < 2.5 && !sky) {
-      // Cel: flat colour bands (light in four steps, hue kept), more colour, dark coloured ink.
-      float lc = max(dot(col, vec3(0.2126, 0.7152, 0.0722)), 1e-3);
-      float x = lc * 4.0;
-      float bl = (floor(x) + smoothstep(0.82, 1.0, fract(x)) + 0.45) / 4.0;
-      col = mix(col, col * (bl / lc), 0.8);
-      float l3 = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(vec3(l3), col, 1.2);
-      col = mix(col, col * vec3(0.2, 0.17, 0.26), edgeLine(1.6) * 0.95);
-    }
-    if (uLook > 2.5) {
-      // Facet: a brighter, simpler palette (gentle posterise, a little more colour).
-      float l2 = dot(col, vec3(0.2126, 0.7152, 0.0722));
-      col = mix(vec3(l2), col, 1.32);
-      col = mix(col, floor(col * 5.0 + 0.5) / 5.0, 0.6);
-      col = col * vec3(1.04, 1.02, 0.97) + 0.035;
-    }
+    col = mix(vec3(luma), col, 1.14);
+    col = mix(col, col * vec3(1.03, 1.01, 0.96), smoothstep(0.35, 1.0, luma));
+    // Shade never sinks to black: it lifts toward a soft sky blue.
+    col += vec3(0.022, 0.034, 0.055) * (1.0 - smoothstep(0.0, 0.45, luma));
+    col = mix(col, col * vec3(0.94, 0.99, 1.06), 1.0 - smoothstep(0.0, 0.4, luma));
+    // A gentle S-curve that keeps the highlights soft.
+    col = col * col * (3.0 - 2.0 * col) * 0.22 + col * 0.78;
     // The Dark mirror (story): the same world, drained and bruised, a red-black sky, ash on the air.
     if (uDark > 0.001) {
       float ld = dot(col, vec3(0.2126, 0.7152, 0.0722));
@@ -275,7 +201,7 @@ const FINAL_FRAG = /* glsl */ `
     }
     // Vignette.
     vec2 q = vUv - 0.5;
-    col *= 1.0 - dot(q, q) * (0.28 + uDark * 1.1);
+    col *= 1.0 - dot(q, q) * (0.2 + uDark * 1.1);
     gl_FragColor = vec4(pow(max(col, 0.0), vec3(1.0 / 2.2)), 1.0);
   }`;
 
@@ -352,9 +278,9 @@ export class Post {
         uCamPos: { value: new THREE.Vector3() }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
         uSunColor: { value: new THREE.Color(1.0, 0.93, 0.78) }, uHazeColor: { value: new THREE.Color(0.72, 0.86, 0.96) },
         uNear: { value: 0.1 }, uFar: { value: 900 }, uTime: { value: 0 },
-        uExposure: { value: 1.0 }, uBloom: { value: LOOK_STYLE.bloom }, uHaze: { value: 0.00072 }, uClouds: { value: 0.85 }, uMist: { value: 0 },
-        tAO: { value: null }, uAO: { value: LOOK_STYLE.ao },
-        uLook: LOOK, uTexel: { value: new THREE.Vector2(1, 1) }, uDark: DARK,
+        uExposure: { value: 1.0 }, uBloom: { value: 0.3 }, uHaze: { value: 0.00072 }, uClouds: { value: 0.85 }, uMist: { value: 0 },
+        tAO: { value: null }, uAO: { value: 0.75 },
+        uTexel: { value: new THREE.Vector2(1, 1) }, uDark: DARK,
       },
       depthTest: false,
       depthWrite: false,

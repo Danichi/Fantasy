@@ -1,10 +1,10 @@
-# Art Direction: "Storybook Frontier"
+# Art Direction: "Wild Frontier"
 
-The target is a bright, painterly open world in the spirit of Breath of the Wild and Studio Ghibli landscapes: wide, windy, alive, and readable at a glance. Every asset, shader and layout decision follows this page. When something looks wrong, check it against these rules before adding detail.
+The target is Breath of the Wild (chosen 2026-10-29): a bright open world with soft cel light, detailed textures, clean models and a huge, airy blue distance. Wide, windy, alive, readable at a glance, and beautiful from anywhere you stand. Every asset, shader and layout decision follows this page. When something looks wrong, check it against these rules before adding detail.
 
 ## 1. The five rules
 
-1. **Colour and light before detail.** Broad, soft colour shapes read better than fine texture. No photographic textures. A surface should look painted, not scanned.
+1. **Detailed textures, clean models.** Textures keep their full detail (only a whisper of softening, so nothing reads as a photograph). Models are clean: crisp silhouettes, no noise, no outlines, no brush filters. Light does the stylising, not the textures.
 2. **One lighting model for everything.** Terrain, buildings, props, characters and creatures all use the shared stylised lighting (`src/render/stylize.ts`). Nothing ships with its own realistic shading.
 3. **Nothing sits on bare ground.** Every building, rock, fence post and tree has grass, flowers, pebbles or dirt around its base. Empty flat ground near the player is a bug.
 4. **Distance turns blue.** Aerial perspective does the depth work: near is saturated and warm, far is pale and cool. Hills stack in visible layers.
@@ -14,7 +14,7 @@ The target is a bright, painterly open world in the spirit of Breath of the Wild
 
 - **Key light:** warm sun (`#fff1d6`), from a high angle, with soft shadows.
 - **Shadows are tinted, never black:** shadowed surfaces fall back to a cool sky fill (`#6f8fb8` sky, `#7a7050` bounce from the ground).
-- **Diffuse is wrapped and softly banded:** a gentle two-tone ramp with a wide, soft terminator. This is not a hard cel look.
+- **Soft cel light:** lit faces sit on one bright plateau and shade on one cool plateau, with a narrow soft band between them (`src/render/stylize.ts`). Not a hard cel step, and no ink outlines.
 - **Rim light:** a thin, bright sky-coloured rim on characters and creatures separates them from the background.
 - **Low specular:** only metal, water and wet stone get highlights, and those are broad.
 - **Time of day:** golden hour is the "hero" lighting for screenshots; midday stays bright but not flat.
@@ -77,7 +77,7 @@ Other regions (crypt, frontier, harbour) get their own small palettes, written d
 ## 8. Atmosphere and effects
 
 - **Sky:** a painted gradient with soft stylised clouds. No photographic sky.
-- **Haze:** height fog tinted toward the horizon colour, strong enough that hills 300 m away read as layers.
+- **Haze:** the signature. Height fog tinted toward the horizon colour, and distance that drains to pale blue long before it disappears: trees 100 m away are already softer and bluer, hills 300 m away stack in pale layers (`src/render/post.ts`).
 - **Always-on ambience:**
   - drifting pollen and leaves
   - wind streaks on gusts
@@ -85,7 +85,7 @@ Other regions (crypt, frontier, harbour) get their own small palettes, written d
   - butterflies over flowers
   - chimney smoke
   - fireflies at dusk
-- **Post-processing:** soft bloom on sky and highlights, a light warm grade that lifts shadows toward blue, and a subtle vignette. No chromatic aberration and no heavy sharpening.
+- **Post-processing:** soft bloom on sky and highlights; a bright, slightly washed-out grade, warm in the light, with shade lifted toward a soft sky blue (never black); a subtle vignette. No chromatic aberration, no heavy sharpening, no outlines, no painterly filters. (The old `?look=` test switch is gone: this is the only look.)
 
 ## 9. Performance budget (Intel Iris Xe, Medium preset)
 

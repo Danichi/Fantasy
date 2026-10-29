@@ -103,6 +103,11 @@ export class Renderer {
     this.scene.environmentIntensity = s.envIntensity * (1 - w.cloud * 0.3);
     // Overcast skies soften shadows.
     this.sun.shadow.radius = 3.2 + w.cloud * 6;
+    // A low sun grazes the ground: push the shadow lookup further off the surface
+    // or the terrain shadows itself in stripes.
+    const low = 1 - THREE.MathUtils.clamp(s.lightDir.y, 0, 1);
+    this.sun.shadow.normalBias = 0.05 + low * low * 0.16;
+    this.sun.shadow.bias = -0.0004 - low * 0.0008;
     this.sky?.setState(s.zenith, s.horizon, s.sunColor, s.sunDir, s.moonDir, s.night, w.cloud, flash, s.moonPhase);
     if (this.post) {
       const u = this.post.finalMat.uniforms;
@@ -110,7 +115,7 @@ export class Renderer {
       const stormy = THREE.MathUtils.smoothstep(w.cloud, 0.72, 1);
       haze.lerp(new THREE.Color(0.6, 0.64, 0.7).lerp(new THREE.Color(0.3, 0.34, 0.42), stormy).multiplyScalar(1 - s.night * 0.8), Math.min(1, w.cloud * 0.55 + w.fog * 0.6));
       (u.uSunColor.value as THREE.Color).copy(s.sunColor);
-      u.uHaze.value = 0.0016 + w.fog * 0.0045 + w.rain * 0.0015 + w.snow * 0.003;
+      u.uHaze.value = 0.0032 + w.fog * 0.0045 + w.rain * 0.0015 + w.snow * 0.003;
       u.uExposure.value = s.exposure * (1 - stormy * 0.26) * (1 + flash * 0.8);
       u.uClouds.value = 0.85 * (1 - w.cloud * 0.8) * (1 - s.night);
     } else if (this.scene.fog instanceof THREE.Fog) {

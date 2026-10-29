@@ -1,25 +1,25 @@
 import * as THREE from 'three';
-import { LOOK, LOOK_STYLE } from './looks';
 
-// One lighting model for everything (docs/ART-DIRECTION.md, rule 2).
+// One lighting model for everything (docs/ART-DIRECTION.md, rule 2): the
+// "wild" look, after Breath of the Wild.
 //
 // three.js builds every MeshStandard/Physical material from shared shader
 // chunks, so patching those chunks here restyles terrain, buildings, props,
 // characters and creatures at once, including materials that add their own
 // onBeforeCompile tweaks. Import this module before any material compiles.
 //
-//   - Wrapped, softly banded diffuse: a wide soft terminator instead of
-//     Lambert's hard falloff, so forms read as painted shapes.
+//   - Soft cel light: lit faces sit on one bright plateau, shade on one cool
+//     one, with a narrow soft band between (no hard cel step, no outlines).
 //   - Low, broad specular: only metal really shines.
-//   - Painterly textures: fine texture detail is blended toward a blurred mip,
-//     leaving broad colour variation instead of photographic grain.
-//   - A thin sky-coloured rim on grazing angles to separate silhouettes.
+//   - Detailed textures: full texture detail, only a whisper of softening so
+//     nothing reads as a photograph.
+//   - A clean sky-coloured rim on grazing angles to separate silhouettes.
 
 export const STYLE = {
-  /** 0 = off, 1 = full painterly texture flattening. */
-  textureSoftness: { value: LOOK_STYLE.softness },
-  rimColor: { value: new THREE.Color(0.75, 0.88, 1.0) },
-  rimStrength: { value: LOOK_STYLE.rim },
+  /** 0 = full texture detail, 1 = painterly flattening. */
+  textureSoftness: { value: 0.08 },
+  rimColor: { value: new THREE.Color(0.78, 0.9, 1.0) },
+  rimStrength: { value: 0.3 },
 };
 
 const S = THREE.ShaderChunk;
@@ -42,23 +42,11 @@ patch(
 	float dotNL = saturate( ndlRaw );
 	// Wrapped diffuse pushed through a soft band: lit faces sit on a broad
 	// plateau, the terminator is wide and gentle, backs stay in the cool fill.
-	float wrapped = saturate( ( ndlRaw + 0.35 ) / 1.35 );
-	float ramp = smoothstep( 0.18, 0.62, wrapped ) * 0.82 + wrapped * 0.18;
-	// Look test (render/looks.ts): storybook softer, cel in three flat steps, facet plain.
-	if ( uLookMode > 2.5 ) ramp = 0.22 + 0.78 * wrapped;
-	else if ( uLookMode > 1.5 ) ramp = 0.34 + 0.3 * smoothstep( 0.3, 0.34, wrapped ) + 0.36 * smoothstep( 0.6, 0.64, wrapped );
-	else if ( uLookMode > 0.5 ) ramp = smoothstep( 0.02, 0.9, wrapped ) * 0.88 + wrapped * 0.12;
+	float wrapped = saturate( ( ndlRaw + 0.3 ) / 1.3 );
+	// Soft cel: one bright plateau, one shade, a narrow soft band between them,
+	// and a little of the true falloff kept so big curved forms still turn.
+	float ramp = smoothstep( 0.36, 0.5, wrapped ) * 0.86 + wrapped * 0.14;
 	vec3 irradiance = ramp * directLight.color;`,
-);
-// Look test, facet: every surface shades by its own flat facets.
-patch(
-  'normal_fragment_begin',
-  `	vec3 normal = normalize( vNormal );`,
-  `	vec3 normal = normalize( vNormal );
-	if ( uLookMode > 2.5 ) {
-		vec3 lookFacet = normalize( cross( dFdx( vViewPosition ), dFdy( vViewPosition ) ) );
-		normal = dot( lookFacet, normal ) < 0.0 ? - lookFacet : lookFacet;
-	}`,
 );
 // Broad, quiet specular.
 patch(
@@ -67,7 +55,7 @@ patch(
   `reflectedLight.directSpecular += irradiance * dotNL * specularBRDF * material.multiScatteringCompensation * mix( 0.35, 1.0, material.metalness );`,
 );
 
-// Painterly texture sampling: blend toward a blurred mip level.
+// Texture sampling: full detail, with only a whisper of the broad colour mixed in.
 patch(
   'map_pars_fragment',
   `#ifdef USE_MAP
@@ -78,8 +66,7 @@ patch(
 #endif
 uniform float uStyleSoftness;
 uniform vec3 uStyleRim;
-uniform float uStyleRimStrength;
-uniform float uLookMode;`,
+uniform float uStyleRimStrength;`,
 );
 patch(
   'map_fragment',
@@ -172,7 +159,6 @@ const addStyleUniforms = (sh: THREE.WebGLProgramParametersWithUniforms, mat: Sty
   sh.uniforms.uStyleRim = STYLE.rimColor;
   const rim = mat.userData.styleRim;
   sh.uniforms.uStyleRimStrength = typeof rim === 'number' ? { value: rim } : STYLE.rimStrength;
-  sh.uniforms.uLookMode = LOOK;
 };
 Object.defineProperty(THREE.MeshStandardMaterial.prototype, 'onBeforeCompile', {
   configurable: true,
