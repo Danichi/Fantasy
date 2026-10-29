@@ -172,7 +172,7 @@ export function setupAct1(c: ActCtx) {
   // The fight in the field: a second wave, then help comes over the wall.
   const fallStep = () => {
     if (!quests.isActive('mq-fall', 0) || !F.fallWave || F.fallFought) return;
-    if (F.fallWave === 1 && story.foes.length <= 1) {
+    if (F.fallWave === 1 && story.aliveFoes <= 1) {
       F.fallWave = 2;
       const gate = ground(0, 112);
       story.ally('Kaela Voss', LOOKS.kaela, gate.clone().add(new THREE.Vector3(-4, 0, 6)));
@@ -180,7 +180,7 @@ export function setupAct1(c: ActCtx) {
       story.ui.subtitle('Kaela Voss', 'There! In the wheat! Brannoc, with me!');
       setTimeout(() => story.ui.subtitle(null, null), 2800);
       story.shades(4, player.pos, 9);
-    } else if (F.fallWave === 2 && story.foes.length === 0) {
+    } else if (F.fallWave === 2 && story.aliveFoes === 0) {
       F.fallFought = true;
       story.darkTo(0);
       quests.signal('fall-survived');
@@ -259,7 +259,7 @@ export function setupAct1(c: ActCtx) {
       }, { holdWorld: false });
       story.shades(4, CRYPT_DOOR, 6);
     }
-    if (want && F.cryptDoor && story.foes.length === 0 && !F.cryptHeld) {
+    if (want && F.cryptDoor && story.aliveFoes === 0 && !F.cryptHeld) {
       F.cryptHeld = true;
       story.ui.subtitle('Garrick', 'Go on down. We\'ll hold the door. Nothing comes up behind you.');
       setTimeout(() => story.ui.subtitle(null, null), 3200);
@@ -377,7 +377,7 @@ export function setupAct1(c: ActCtx) {
     go();
   };
   const mirrorStep = () => {
-    if (F.mirrorFight !== 1 || story.foes.length) return;
+    if (F.mirrorFight !== 1 || story.aliveFoes) return;
     F.mirrorFight = 2;
     void story.play('mirror-out', async (s) => {
       s.bars(true);

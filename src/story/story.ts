@@ -70,7 +70,6 @@ export class Story {
   /** things the story lets you say to particular people (keyed by a name for each, so it can be replaced) */
   private says = new Map<string, { npc: string; option: () => DialogueOption | null }>();
   private wake = false;
-  private wasInvulnerable = false;
 
   constructor(readonly h: StoryHooks, save?: StorySave) {
     this.state.load(save);
@@ -82,11 +81,10 @@ export class Story {
       },
       lockInput: (on) => {
         if (on) {
-          this.wasInvulnerable = h.player.invulnerable;
           h.input.uiMode = true;
           h.player.invulnerable = true;
         } else {
-          h.player.invulnerable = this.wasInvulnerable;
+          h.player.invulnerable = false;
           h.restoreInput();
         }
       },
@@ -252,6 +250,10 @@ export class Story {
       a.dispose();
     }
     this.allies = [];
+  }
+  /** The story's shades still on their feet. */
+  get aliveFoes() {
+    return this.foes.filter((f) => f.alive).length;
   }
   /** Living foes the story set loose (champions count while they stand). */
   get fighting() {
