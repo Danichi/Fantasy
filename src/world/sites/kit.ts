@@ -29,17 +29,35 @@ export function sunwheelMat() {
   return (glyphMat ??= new THREE.MeshStandardMaterial({ map: sunwheelTexture('rgba(80, 64, 46, 1)', false), emissiveMap: sunwheelTexture(), emissive: 0xffc860, emissiveIntensity: 0.25, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, roughness: 1 }));
 }
 
-/** A lumpy rock (a squashed, jittered icosahedron, welded so it stays whole). */
+/**
+ * A lumpy rock: a squashed icosahedron jittered at its corners, then carried
+ * onto a finer sphere with the jitter smoothed across it, so it reads as one
+ * clean weathered stone with smooth shading (the wild look), not a cut gem.
+ * (It draws exactly as many random numbers as it always has: site layouts
+ * built after it come out the same.)
+ */
 export function rockGeo(rnd: () => number, sx: number, sy: number, sz: number, detail = 1) {
-  let g: THREE.BufferGeometry = mergeVertices(new THREE.IcosahedronGeometry(1, detail).deleteAttribute('normal').deleteAttribute('uv'), 1e-4);
+  const coarse = mergeVertices(new THREE.IcosahedronGeometry(1, detail).deleteAttribute('normal').deleteAttribute('uv'), 1e-4);
+  const cp = coarse.getAttribute('position');
+  const pts: { x: number; y: number; z: number; k: number }[] = [];
+  for (let i = 0; i < cp.count; i++) pts.push({ x: cp.getX(i), y: cp.getY(i), z: cp.getZ(i), k: 0.82 + rnd() * 0.3 });
+  const g = mergeVertices(new THREE.IcosahedronGeometry(1, detail + 2).deleteAttribute('normal').deleteAttribute('uv'), 1e-4);
   const p = g.getAttribute('position');
+  const s2 = detail >= 2 ? 0.08 : 0.2; // how far each corner's jitter spreads
   for (let i = 0; i < p.count; i++) {
-    const k = 0.82 + rnd() * 0.3;
-    p.setXYZ(i, p.getX(i) * k * sx, p.getY(i) * k * sy, p.getZ(i) * k * sz);
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    let wsum = 0, ksum = 0;
+    for (const c of pts) {
+      const d2 = (x - c.x) ** 2 + (y - c.y) ** 2 + (z - c.z) ** 2;
+      const w = Math.exp(-d2 / s2);
+      wsum += w;
+      ksum += w * c.k;
+    }
+    const k = ksum / wsum;
+    p.setXYZ(i, x * k * sx, y * k * sy, z * k * sz);
   }
-  g = g.toNonIndexed();
   g.computeVertexNormals();
-  return g;
+  return g.toNonIndexed();
 }
 
 export class SiteKit {
