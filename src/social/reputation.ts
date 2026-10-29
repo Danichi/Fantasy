@@ -301,6 +301,11 @@ export class Reputation {
   save(): SocialSave {
     return { disp: this.disp, standing: this.standing, mem: this.mem, bounty: this.bounty, dead: [...this.dead], gone: Object.fromEntries(this.gone), rumours: this.rumours, told: this.told };
   }
+  /** Back to a clean slate (tests). */
+  reset() {
+    this.load({ disp: {}, standing: {}, mem: {}, bounty: {}, dead: [], gone: {}, rumours: [], told: [] });
+    this.recentlyHurt.clear();
+  }
   load(s: SocialSave | undefined) {
     if (!s) return;
     this.disp = s.disp ?? {};

@@ -148,7 +148,9 @@ const ACTIVITY_CLIP: Record<Activity, string> = {
 };
 /** Per-job clip for 'work' (the smith hammers, the miller hauls, weavers fix). */
 const WORK_CLIP: Record<string, string> = { smith: 'chop', miller: 'fix', shepherd: 'arms', weaver: 'fix', innfolk: 'talk', farmer: 'farm' };
-const CLIPS = ['idle', 'idle_tired', 'talk', 'walk', 'sit', 'farm', 'water', 'chop', 'cheer', 'drink', 'arms', 'fix', 'dance', 'hit', 'death', 'jog', 'crouch'];
+const CLIPS = ['idle', 'idle_tired', 'talk', 'walk', 'sit', 'farm', 'water', 'chop', 'cheer', 'drink', 'arms', 'fix', 'dance'];
+/** loaded onto an actor only once trouble finds them (NPC overhaul) */
+const TROUBLE_CLIPS = ['hit', 'death', 'jog', 'crouch'];
 
 export class NpcManager {
   readonly settlements = new Map<string, Settlement>();
@@ -680,8 +682,21 @@ export class NpcManager {
     const cur = this.upset.get(st);
     if (cur?.mode === 'dead' || (cur?.mode === 'down' && mode !== 'dead')) return;
     this.upset.set(st, { mode, t: mode === 'hit' ? 0.55 : sec, from: from.clone() });
+    const a = st.actor;
+    if (a && !a.actions.death && a.built.addClips) {
+      void a.built.addClips(TROUBLE_CLIPS).then(() => {
+        const acts = (a.built.mixer as unknown as { _actions: THREE.AnimationAction[] })._actions;
+        for (const x of acts) a.actions[x.getClip().name] ??= x;
+        a.current = '';
+      });
+    }
     if (this.engaged === st) this.engaged = null;
     if (st.actor) st.actor.current = '';
+  }
+  /** Everyone calms down and goes back to their day (tests). */
+  calm() {
+    for (const st of this.upset.keys()) this.placeBySchedule(st, true);
+    this.upset.clear();
   }
   /** Shaken up right now (running, down, dead or hiding): can't be talked to. */
   troubled(id: string) {

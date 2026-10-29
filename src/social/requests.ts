@@ -153,6 +153,12 @@ export function setupRequests(social: Social, quests: QuestLog, day: () => numbe
 
   return {
     prepare,
+    reset() {
+      for (const id of [...quests.defs.keys()]) if (id.startsWith('req:')) quests.defs.delete(id);
+      state.seq = {};
+      state.open = [];
+      state.asked = {};
+    },
     save: (): RequestSave => state,
   };
 }

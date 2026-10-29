@@ -2303,6 +2303,10 @@ async function boot() {
       arms.reset(); // Arms and Crafting (feat/arms)
       quests.state = {};
       quests.tracked = null;
+      social.rep.reset();
+      social.barks.clear();
+      trouble.reset();
+      requests.reset();
       for (const k of Object.keys(worldFlags)) delete worldFlags[k];
       realm.progress = structuredClone(fresh.dungeon);
       realm.mineProgress = { gateOpen: false, guardianDead: false };

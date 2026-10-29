@@ -129,6 +129,18 @@ export interface PersonSeed {
   named?: boolean;
 }
 
+const HONORIFICS = new Set(['master', 'ser', 'captain', 'elder', 'old', 'magus', 'lady', 'lord', 'king', 'queen', 'instructor', 'archivist', 'cadet', 'weaponsmaster', 'harbourmaster', 'grand', 'marshal', 'high', 'priestess', 'envoy', 'legate', 'herald', 'little', 'slick', 'knight-captain', 'chancellor', 'archmage', 'grandmaster', 'brother', 'sister', 'mother', 'father', 'sergeant', 'dame', 'sir', 'young', 'big', 'mad', 'royal']);
+
+/** What people call someone in passing: "Master Fröst" is Fröst, "Delphine “Dice” Coveley" is Dice. */
+export function firstName(name: string) {
+  const nick = name.match(/[“"]([^”"]+)[”"]/);
+  if (nick) return nick[1];
+  const words = name.split(/\s+/);
+  let i = 0;
+  while (i < words.length - 1 && HONORIFICS.has(words[i].toLowerCase())) i++;
+  return words[i];
+}
+
 /** Roll a townsperson's profile (the same every game). */
 export function rollProfile(p: PersonSeed): Profile {
   const r = mulberry32(seedOf(p.id));
@@ -150,7 +162,7 @@ export function rollProfile(p: PersonSeed): Profile {
   const likes = [...new Set([...base.slice(0, 2), GIFTS[Math.floor(r() * GIFTS.length)]])];
   const dislikes = GIFTS.filter((g) => !likes.includes(g)).sort(() => r() - 0.5).slice(0, 2);
   const pick = <T,>(a: T[]) => a[Math.floor(r() * a.length)];
-  const first = p.name.split(' ')[0];
+  const first = firstName(p.name);
   return {
     id: p.id, name: p.name, first, job, settlement: p.settlement, traits, voice, likes, dislikes, ties: [],
     want: pick(JOB_WANTS[job] ?? JOB_WANTS.default),
@@ -171,7 +183,8 @@ export function rollProfile(p: PersonSeed): Profile {
 export function weaveTies(people: Profile[]) {
   const bySurname = new Map<string, Profile[]>();
   for (const p of people) {
-    const fam = p.name.split(' ').slice(1).join(' ');
+    const words = p.name.split(' ');
+    const fam = words.length > 1 ? words[words.length - 1] : '';
     if (!fam) continue;
     const list = bySurname.get(fam) ?? [];
     list.push(p);

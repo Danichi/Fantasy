@@ -196,6 +196,8 @@ export class Conversation {
         this.show(spec, this.cur.text, this.menu(spec, p));
       },
     });
+    const amends = this.amends(spec, p);
+    if (amends) opts.push(amends);
     opts.push({ label: 'Farewell.', run: () => this.close() });
     this.show(spec, text, opts);
   }
@@ -211,8 +213,26 @@ export class Conversation {
     if ((m.insults > 0 || m.threats > 0 || MOODS.indexOf(mood) <= MOODS.indexOf('wary')) && m.apologyDay !== this.h.day()) {
       opts.push({ label: 'About before... I\'m sorry.', tone: 'kind', run: () => this.apologise(spec, p) });
     }
+    const amends = this.amends(spec, p);
+    if (amends) opts.push(amends);
     opts.push({ label: 'Farewell.', run: () => this.close() });
     return opts;
+  }
+
+  /** Elders and priests take amends for the whole town (a gift to the poor). */
+  private amends(spec: ConvoSpec, p: Profile): DialogueOption | null {
+    const c = this.h.people.communityFor(p.id);
+    if (!(p.job === 'elder' || p.job === 'priest' || p.id === 'maud' || p.id === 'priestess') || this.rep.standingOf(c) >= -60) return null;
+    const cost = Math.round(60 + Math.min(600, -this.rep.standingOf(c)) * 0.6);
+    const town = this.h.ctx(p.id).town;
+    return {
+      label: `I want to make amends to ${town}. (${cost} gold to the poor box)`, tone: 'kind', run: () => {
+        if (this.h.gold() < cost) return this.show(spec, 'Words are a start. Come back when you can put something behind them.', [{ label: 'Farewell.', run: () => this.close() }]);
+        this.h.addGold(-cost);
+        this.rep.act('atonement', { who: p.id, community: c, text: `you gave ${cost} gold to the poor of ${town}` });
+        this.show(spec, 'It will feed a good many people this winter. It won\'t undo what was done. But it\'s a beginning, and people will hear of it.', [{ label: 'Farewell.', run: () => this.close() }]);
+      },
+    };
   }
 
   private chatOpener(p: Profile) {

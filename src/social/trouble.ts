@@ -330,6 +330,17 @@ export function setupTrouble(h: TroubleHooks) {
     get warden() {
       return warden;
     },
+    /** Clear it all (tests). */
+    reset() {
+      warden?.dispose();
+      warden = null;
+      due = -1;
+      quietUntil = 0;
+      lastHit.clear();
+      for (const t of persons.values()) targets.delete(t);
+      persons.clear();
+      npcs.calm();
+    },
     /** Send the Watch now (tests, debug). */
     summon(c: string) {
       if (warden) warden.dispose();
