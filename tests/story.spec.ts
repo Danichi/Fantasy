@@ -40,7 +40,7 @@ test('the opening: you fall into the wheat, the Dark comes, Kaela and Brannoc co
     const fell = { again: S.foes.length, at: Math.hypot(g.player.pos.x - 14, g.player.pos.z - 168) < 8 };
     await h.kill();
     await h.tick(20);
-    const second = { allies: S.allies.length, foes: S.foes.length };
+    const second = { allies: S.allies.length, wave: S.flags.fallWave, foes: S.foes.length };
     await h.kill();
     await h.tick(20);
     await h.settle();
@@ -53,7 +53,8 @@ test('the opening: you fall into the wheat, the Dark comes, Kaela and Brannoc co
   expect(res.fight.at, String(res.fight.pos)).toBe(true);
   expect(res.fell).toEqual({ again: 3, at: true });
   expect(res.second.allies).toBe(2);
-  expect(res.second.foes).toBeGreaterThanOrEqual(4);
+  expect(res.second.wave).toBe(2); // (the allies may already have cut some down)
+  expect(res.second.foes).toBeGreaterThanOrEqual(1);
   expect(res.morning.stage).toBe('active@1');
   expect(res.morning.nearMaud).toBe(true);
   expect(res.morning.allies).toBe(0);
