@@ -122,6 +122,7 @@ test('gifts: a loved gift counts most, a second gift in a day hardly at all', as
       g.town.talk(baker);
       d.options.find((o: any) => /brought you something/.test(o.label)).run();
       const before = rep.dispOf('baker');
+      for (let k = 0; k < 8 && !d.options.some((o: any) => name.test(o.label)); k++) d.options.find((o: any) => /Something else/.test(o.label))?.run();
       d.options.find((o: any) => name.test(o.label)).run();
       d.close();
       return rep.dispOf('baker') - before;

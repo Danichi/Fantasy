@@ -135,7 +135,16 @@ export class Conversation {
     if (this.rep.fears(p.id) && !this.rep.refuses(p.id)) return this.line('bark.fear', p);
     if (first) return spec.intro ?? this.line('greet.first', p);
     const mood = this.rep.moodOf(p.id);
-    const parts = [this.line(greetFor(mood), p)];
+    // Written characters have their own words for the people they adore, and despise.
+    const cast = CAST[p.id];
+    const own = (mood === 'friend' || mood === 'devoted') ? cast?.fond : (mood === 'hostile' || mood === 'cold') ? cast?.scorn : undefined;
+    const ownKey = 'own:' + mood;
+    const useOwn = own && !m.said.includes(ownKey);
+    if (useOwn) {
+      m.said.push(ownKey);
+      if (m.said.length > 14) m.said.shift();
+    }
+    const parts = [useOwn ? own : this.line(greetFor(mood), p)];
     if (spec.story) parts.push(spec.story);
     else if (firstToday) {
       // One thing on their mind: you've been away, the weather, the hour, or what you did.
@@ -149,6 +158,7 @@ export class Conversation {
       else if (c.hour >= 5 && c.hour < 9) parts.push(this.line('greet.morning', p));
       else if (c.hour >= 18 && c.hour < 22) parts.push(this.line('greet.evening', p));
       else if (c.hour >= 22 || c.hour < 5) parts.push(this.line('greet.night', p));
+      else if (Math.random() < 0.6) parts.push(this.line('greet.day', p));
       // Friends bring you things now and then.
       const gift = atLeast(mood, 'friend') && today - (m.lastGiftFrom ?? -99) >= 3 ? this.keepsake(p) : null;
       if (gift) {
@@ -398,10 +408,17 @@ export class Conversation {
   }
 
   // ---- gifts and apologies ------------------------------------------------------
-  private gifts(spec: ConvoSpec, p: Profile) {
-    const items = this.h.giftables().slice(0, 8);
-    this.show(spec, 'For me?', [
+  private gifts(spec: ConvoSpec, p: Profile, page = 0) {
+    // Food and goods first, gear after; seven to a page.
+    const rank = (k: string) => (k === 'consumable' ? 0 : k === 'material' ? 1 : 2);
+    const all = [...this.h.giftables()].sort((a, b) => rank(a.kind) - rank(b.kind) || a.name.localeCompare(b.name));
+    const PER = 7;
+    const pages = Math.max(1, Math.ceil(all.length / PER));
+    const pg = page % pages;
+    const items = all.slice(pg * PER, pg * PER + PER);
+    this.show(spec, page ? 'Anything else in there?' : 'For me?', [
       ...items.map((it) => ({ label: `${it.name}${it.qty > 1 ? ` (${it.qty})` : ''}`, tone: 'gift' as Tone, run: () => this.give(spec, p, it) })),
+      ...(pages > 1 ? [{ label: 'Something else...', run: () => this.gifts(spec, p, pg + 1) }] : []),
       { label: 'Never mind.', run: () => spec.back() },
     ]);
   }

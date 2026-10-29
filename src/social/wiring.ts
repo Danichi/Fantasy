@@ -134,10 +134,13 @@ export function setupSocial(h: SocialHooks) {
       const m = rep.moodOf(g);
       return m === 'hostile' || m === 'cold' || m === 'wary' ? line(g, 'refuse.quest') : null;
     };
+    // Personal quests wait for a friend.
+    q.offerHidden = (g, d) => d.id.startsWith('pq:') && !['friend', 'devoted'].includes(rep.moodOf(g));
     q.onDone = (d) => {
       if (d.contract) return;
       const p = people.get(d.giver);
       if (p) rep.act('questDone', { who: p.id, text: `you helped ${p.first} (${d.title})`, scale: d.main ? 1.5 : 1 });
+      if (p && d.id.startsWith('pq:')) rep.act('favour', { who: p.id, scale: 2 });
     };
   };
 

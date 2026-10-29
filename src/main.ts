@@ -52,6 +52,7 @@ import { setupSocial } from './social/wiring';
 import { setupTrouble } from './social/trouble';
 import { setupRequests } from './social/requests';
 import { RepPanel } from './ui/repPanel';
+import { PERSONAL_QUESTS } from './social/personalQuests';
 import { buildPortAurelle, PORT_SPOTS } from './world/portAurelle';
 import { Fishing, type FishingSpot } from './world/fishing';
 import { Duel } from './combat/duel';
@@ -768,6 +769,7 @@ async function boot() {
     count: countItem, take: takeItem, give: giveItem, toast: (m) => hud.toast(m),
   });
   social.hookQuests(quests);
+  quests.add(...PERSONAL_QUESTS);
   // Favours: people who like you ask for a hand now and then (NPC overhaul).
   const requests = setupRequests(social, quests, () => time.day, saveData?.world?.requests);
   town.questOptions = (id, show, back) => {

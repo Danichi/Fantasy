@@ -116,6 +116,8 @@ export class QuestLog {
   rewardMult?: (giver: string) => number;
   /** NPC overhaul: a refusal line when someone won't give you this side quest yet (null: they will) */
   offerGate?: (giver: string, q: QuestDef) => string | null;
+  /** NPC overhaul: work someone keeps to themselves until they trust you (personal quests) */
+  offerHidden?: (giver: string, q: QuestDef) => boolean;
   /** NPC overhaul: a quest was finished (the giver and the town remember) */
   onDone?: (q: QuestDef) => void;
 
@@ -156,7 +158,7 @@ export class QuestLog {
 
   /** Quests this NPC can offer right now. */
   offers(npc: string) {
-    return [...this.defs.values()].filter((q) => q.giver === npc && this.canOffer(q));
+    return [...this.defs.values()].filter((q) => q.giver === npc && this.canOffer(q) && !this.offerHidden?.(npc, q));
   }
 
   /** NPCs with something to say: '!' offers, '?' objectives waiting on them. */

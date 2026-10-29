@@ -57,6 +57,7 @@ export const LINES: Record<string, Pool> = {
     { t: 'You\'re not from here.', v: B },
   ],
   'greet.hostile': [
+    'Get out of my sight.', 'I want nothing to do with you.', 'Whatever it is, the answer\'s no.',
     { t: 'You. Get away from me.', v: [...B, ...G] },
     { t: 'I\'ve nothing to say to you. Nothing.', v: [...FO, ...F] },
     { t: 'Keep your distance. I mean it.', v: [...N, ...G] },
@@ -65,6 +66,7 @@ export const LINES: Record<string, Pool> = {
     { t: 'P-please. Just go.', when: timid },
   ],
   'greet.cold': [
+    'You again.', 'Hmph.', 'If you must.', 'Say what you came to say.',
     { t: 'What do you want.', v: [...G, ...B] },
     { t: 'Make it quick.', v: [...G, ...B, ...F] },
     { t: 'I suppose you want something. People like you always do.', v: [...FO, ...FL] },
@@ -72,6 +74,7 @@ export const LINES: Record<string, Pool> = {
     { t: 'I\'m busy. Unless you\'ve come to apologise.', when: hot },
   ],
   'greet.wary': [
+    'Yes? What is it?', 'Something you need?', 'Hello. I suppose.', 'Oh. It\'s you. Well, go on.',
     { t: 'Hm. You again.', v: [...G, ...B] },
     { t: 'I\'ll hear you out. That\'s all I\'ll promise.', v: [...FO, ...F] },
     { t: 'Afternoon. If that\'s what it is.', v: [...F, ...G] },
@@ -79,6 +82,7 @@ export const LINES: Record<string, Pool> = {
     { t: 'You\'ve a way of turning up. What is it this time?', v: [...FL, ...B] },
   ],
   'greet.neutral': [
+    'Hello again.', 'Good to see a familiar face.', 'Can I help you with something?', 'Back again?', 'Ah, hello.',
     { t: 'Morning. Or is it afternoon already?', v: F },
     { t: 'What can I do for you?', v: [...F, ...B, ...FO] },
     { t: 'Aye?', v: G },
@@ -90,6 +94,7 @@ export const LINES: Record<string, Pool> = {
     { t: 'Another day in {town}. What\'s yours?', v: [...F, ...G] },
   ],
   'greet.warm': [
+    'Ah, hello again! Good to see you.', 'Welcome back.', 'You\'re a sight for sore eyes.', 'Hello, {you}. What can I do for you today?',
     { t: 'Good to see you, {you}.', v: [...F, ...B, ...FO] },
     { t: 'There you are. Was hoping you\'d come by.', v: [...F, ...C] },
     { t: 'Ah. You. Good.', v: G },
@@ -100,6 +105,7 @@ export const LINES: Record<string, Pool> = {
     { t: 'Back again. Good.', v: B },
   ],
   'greet.friend': [
+    'Hello, friend.', 'I was hoping I\'d see you today.', 'Come here, you. How are you keeping?', 'Every time you come by, my day gets better.', 'Ha! I knew that was you.',
     { t: 'My friend! Sit a moment, if you\'ve a moment.', v: [...F, ...C, ...FL] },
     { t: '{you}. Glad you\'re still in one piece.', v: [...G, ...B] },
     { t: 'There\'s the face I wanted to see today.', v: [...F, ...FO, ...C] },
@@ -107,6 +113,7 @@ export const LINES: Record<string, Pool> = {
     { t: 'You. Good. I\'ve been meaning to tell you something.', v: [...B, ...G, ...N] },
   ],
   'greet.devoted': [
+    'There\'s my favourite person in all of {town}.', 'Whatever you need, it\'s yours.', 'You look tired. Sit. Eat something. I insist.', 'I tell everyone about you, you know.',
     { t: '{you}! Whatever you need. You only have to ask.', v: [...F, ...C, ...FL] },
     { t: 'I\'d walk into the Gravewood for you, {you}. Don\'t make me, mind.', v: [...G, ...B, ...F], when: (p) => p.traits.humor > -0.2 },
     { t: 'My door\'s always open to you. You know that.', v: [...FO, ...N, ...F] },
@@ -117,6 +124,7 @@ export const LINES: Record<string, Pool> = {
     'Haven\'t seen you in an age.', 'Where have you been hiding?', 'Thought you\'d gone off and got yourself killed.', 'Back from the wilds, then.', 'It\'s been a while.',
   ],
   'greet.morning': ['Early start?', 'Sun\'s barely up.', 'Mornings. Can\'t abide them.', 'Fine morning for it.', { t: 'Light keep you this morning.', when: pious }],
+  'greet.day': ['Busy day.', 'Warm one today.', 'Nice to get a moment\'s peace.', 'The day\'s getting away from me.', 'Market\'s busy.', 'Fine weather, for once.'],
   'greet.evening': ['Long day?', 'Nearly time to put my feet up.', 'Evening\'s drawing in.'],
   'greet.night': ['It\'s late to be about.', 'Can\'t sleep either?', 'Mind the dark out there.', { t: 'Say a prayer before you sleep. The dark\'s thick tonight.', when: pious }],
   'greet.rain': ['Wretched weather.', 'You\'re soaked through.', 'Rain\'s good for the fields, bad for my knees.', 'Come in out of the wet, if you like.'],
