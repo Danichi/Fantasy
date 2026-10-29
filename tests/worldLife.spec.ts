@@ -27,7 +27,7 @@ test('Millbrook Brook runs in a carved bed under a bridge you can walk over', as
   expect(errors).toEqual([]);
 });
 
-test('waystones attune by touch and carry you once the Sunwheel is understood', async ({ game }) => {
+test('waystones are Sunwheels: they attune by touch and carry you once the wheel is awake', async ({ game }) => {
   test.setTimeout(240_000 * SLOW);
   const { page } = game;
   const errors = game.errors;
@@ -35,7 +35,7 @@ test('waystones attune by touch and carry you once the Sunwheel is understood', 
     const g = (window as any).__game;
     const T = g.THREE;
     const { WAYSTONES } = await import('/src/world/kingsRoad.ts' as string);
-    const stone = (id: string) => g.realm.overworldInteractables.find((i: any) => i.pos.distanceTo(WAYSTONES.find((w: any) => w.id === id).pos.clone().setY(i.pos.y)) < 4 && /waystone/i.test(i.label()));
+    const stone = (id: string) => g.realm.overworldInteractables.find((i: any) => i.pos.distanceTo(WAYSTONES.find((w: any) => w.id === id).pos.clone().setY(i.pos.y)) < 4 && /Sunwheel/.test(i.label()));
     const glen = stone('glen');
     const label0 = glen.label();
     glen.action();
@@ -52,9 +52,10 @@ test('waystones attune by touch and carry you once the Sunwheel is understood', 
     const rest = WAYSTONES.find((w: any) => w.id === 'rest').pos;
     return { label0, label1, attuned, opts, dist: Math.hypot(g.player.pos.x - rest.x, g.player.pos.z - rest.z) };
   });
-  expect(res.label0).toBe('Touch the waystone');
+  expect(res.label0).toBe('Touch the Sunwheel');
   expect(res.attuned).toEqual([true, true, undefined]);
-  expect(res.label1).toBe('Travel by waystone');
+  expect(res.label1).toBe('Touch the Sunwheel');
+  expect(res.opts).toContain("Travel to The Wayfarer's Rest");
   expect(res.opts.some((l: string) => /Gull/.test(l))).toBe(false);
   expect(res.dist).toBeLessThan(6);
   expect(errors).toEqual([]);
