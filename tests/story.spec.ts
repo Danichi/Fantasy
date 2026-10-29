@@ -134,6 +134,7 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
     await h.settle();
     out.siege = { raid: g.raids.state, allies: S.allies.length };
     g.raids.state = 'done';
+    S.flags.bellsT = 60; // (the night has gone on long enough)
     for (let i = 0; i < 40 && h.stage('mq-bells') !== 'active@2'; i++) await h.tick(4);
     await h.settle();
     h.talk('brannoc');
