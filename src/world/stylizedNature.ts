@@ -118,14 +118,21 @@ function bushGeometry(seed: number, hue = 0) {
 
 function rockGeometry(seed: number) {
   const rnd = mulberry32(seed);
-  // Weld corners before jittering (jittered copies of a corner split into shards).
-  let g: THREE.BufferGeometry = mergeVertices(new THREE.IcosahedronGeometry(1, 1).deleteAttribute('normal').deleteAttribute('uv'), 1e-4);
+  // A smooth, lumpy boulder (the wild look: clean forms, no hard facets): a
+  // fine sphere pushed in and out by a few broad waves, squashed and set flat
+  // on its base, with smooth normals.
+  const g: THREE.BufferGeometry = mergeVertices(new THREE.IcosahedronGeometry(1, 3).deleteAttribute('normal').deleteAttribute('uv'), 1e-4);
   const p = g.attributes.position as THREE.BufferAttribute;
+  const waves = Array.from({ length: 4 }, () => ({ d: new THREE.Vector3(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1).normalize(), f: 1.4 + rnd() * 2.2, ph: rnd() * 6.28, a: 0.06 + rnd() * 0.08 }));
+  const v = new THREE.Vector3();
   for (let i = 0; i < p.count; i++) {
-    const k = 0.78 + rnd() * 0.4;
-    p.setXYZ(i, p.getX(i) * k * 1.25, Math.max(-0.35, p.getY(i)) * k * 0.72, p.getZ(i) * k);
+    v.set(p.getX(i), p.getY(i), p.getZ(i));
+    let k = 1;
+    for (const w of waves) k += Math.sin(v.dot(w.d) * w.f + w.ph) * w.a;
+    // A broad flat face or two, as a weathered stone has.
+    k = Math.min(k, 1.02 - Math.max(0, v.dot(waves[0].d) - 0.55) * 0.5);
+    p.setXYZ(i, v.x * k * 1.25, Math.max(-0.3, v.y * k) * 0.72, v.z * k);
   }
-  g = g.toNonIndexed(); // flat faces
   g.computeBoundingBox();
   const bb = g.boundingBox!;
   g.translate(0, -bb.min.y, 0);
@@ -134,13 +141,15 @@ function rockGeometry(seed: number) {
   g.computeVertexNormals();
   const n = g.attributes.normal as THREE.BufferAttribute;
   const col = new Float32Array(n.count * 3);
-  const stone = new THREE.Color(0x8a8378), shade = new THREE.Color(0x5e5a54), moss = new THREE.Color(0x5a7a2a), c = new THREE.Color();
-  for (let i = 0; i < n.count; i += 3) {
-    // One colour per face: stone, darker underneath, moss where it faces up.
-    const ny = (n.getY(i) + n.getY(i + 1) + n.getY(i + 2)) / 3;
-    c.copy(shade).lerp(stone, Math.min(1, ny * 0.5 + 0.6)).multiplyScalar(0.92 + rnd() * 0.16);
-    if (ny > 0.72 && rnd() < 0.8) c.lerp(moss, 0.65);
-    for (let v = 0; v < 3; v++) col.set([c.r, c.g, c.b], (i + v) * 3);
+  const stone = new THREE.Color(0x9a958a), shade = new THREE.Color(0x6a655d), moss = new THREE.Color(0x6a8a34), c = new THREE.Color();
+  const mossPhase = rnd() * 6.28;
+  for (let i = 0; i < n.count; i++) {
+    // Stone, a little darker underneath, moss growing on what faces the sky.
+    const ny = n.getY(i);
+    c.copy(shade).lerp(stone, Math.min(1, ny * 0.5 + 0.65));
+    const patch = 0.5 + 0.5 * Math.sin(p.getX(i) * 5.1 + p.getZ(i) * 4.3 + mossPhase);
+    c.lerp(moss, THREE.MathUtils.smoothstep(ny, 0.55, 0.85) * (0.45 + 0.4 * patch));
+    col.set([c.r, c.g, c.b], i * 3);
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   return g;
@@ -168,7 +177,27 @@ function proceduralNature(): [AssetSpec, THREE.BufferGeometry, THREE.Material, b
         }`,
       );
   };
-  const stone = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, flatShading: true });
+  const stone = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 });
+  // Stone grain and lichen flecks in the fragment shader, in the rock's own space.
+  stone.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vRockP;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvRockP = position * 9.0;`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vRockP;`)
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        {
+          vec3 q = vRockP;
+          float grain = sin(q.x * 2.3 + sin(q.y * 1.7)) * sin(q.y * 2.9 + sin(q.z * 2.1)) * sin(q.z * 2.5 + sin(q.x * 1.9));
+          float fine = sin(q.x * 9.1 + q.z * 3.7) * sin(q.y * 8.3 - q.x * 2.9) * sin(q.z * 7.7 + q.y * 3.1);
+          diffuseColor.rgb *= 0.86 + 0.16 * smoothstep(-0.6, 0.6, grain) + 0.07 * fine;
+          float fleck = smoothstep(0.82, 0.95, fine * 0.5 + 0.5 + grain * 0.25);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.84, 0.7), fleck * 0.35);
+        }`,
+      );
+  };
   return [
     [{ file: 'bush-a', kind: 'bush', targetHeight: 1.5 }, bushGeometry(11), leaf, true],
     [{ file: 'bush-b', kind: 'bush', targetHeight: 2.2 }, bushGeometry(23, -0.025), leaf, true],
@@ -455,6 +484,7 @@ export class StylizedNature {
     this.impostorGeo = g;
     this.impostorMat = new THREE.ShaderMaterial({
       uniforms: this.impostorUniforms,
+      alphaToCoverage: true,
       vertexShader: /* glsl */ `
         attribute vec4 aImp; // width, height, atlas cell, brightness
         uniform vec3 uCam; uniform float uNear, uFade;
@@ -472,15 +502,15 @@ export class StylizedNature {
       fragmentShader: /* glsl */ `
         uniform sampler2D tAtlas; uniform vec2 uGrid;
         varying vec2 vUv; varying float vCell; varying float vFade; varying float vBright;
-        // Interleaved gradient noise (0..1) for the dithered fade.
-        float bayer(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
         void main() {
           float col = mod(vCell, uGrid.x), row = floor(vCell / uGrid.x);
           vec2 uv = vec2((col + vUv.x) / uGrid.x, (uGrid.y - row - 1.0 + vUv.y) / uGrid.y);
           vec4 c = texture2D(tAtlas, uv);
-          // Dithered cross-fade with the real meshes near the camera.
-          if (c.a < 0.5 || vFade < bayer(gl_FragCoord.xy)) discard;
-          gl_FragColor = vec4(c.rgb * vBright, 1.0);
+          if (c.a < 0.5) discard;
+          // Cross-fade with the real meshes near the camera through alpha to
+          // coverage (smooth under MSAA, no stipple); without MSAA the
+          // impostor simply stays solid in the band.
+          gl_FragColor = vec4(c.rgb * vBright, vFade);
         }`,
     });
   }

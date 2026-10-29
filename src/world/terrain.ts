@@ -72,6 +72,7 @@ function terrainMaterial(renderer: THREE.WebGLRenderer, splat: THREE.DataTexture
     tNoise: { value: worldNoise() },
     tCobble: { value: paintedTexture('cobbles', aniso, 7) },
     tDirt: { value: paintedTexture('dirt', aniso, 8) },
+    tRock: { value: rockDetail(aniso) },
     tMacro: { value: macroTexture() },
     tMap: { value: paintedMapTexture() },
     uWorld: { value: new THREE.Vector4(WORLD_X0, WORLD_Z0, WORLD_W, WORLD_H) },
@@ -100,7 +101,7 @@ vWN = normal;`);
         `#include <common>
         varying vec3 vWPos;
         varying vec3 vWN;
-        uniform sampler2D tSplat, tNoise, tCobble, tDirt, tMacro, tMap, tRoads, tRoadsW;
+        uniform sampler2D tSplat, tNoise, tCobble, tDirt, tMacro, tMap, tRoads, tRoadsW, tRock;
         uniform vec4 uRoadRect, uRoadRectW, uCityRect, uCap;
         uniform float uSize;
         uniform vec4 uWorld;
@@ -260,6 +261,15 @@ vWN = normal;`);
         float tRock = smoothstep(0.3, 0.46, 1.0 - wn.y);
         if (tRock > 0.01) {
           vec3 cR = strata(vec3(0.34, 0.32, 0.3), vec3(0.5, 0.47, 0.42), vWPos.y, fineN, patchN, dist);
+          // Detailed rock up close (the wild look): a real rock face projected on
+          // the cliff from both sides, carried as light and shade on the strata.
+          if (dist < 160.0) {
+            vec3 ax = abs(wn);
+            vec3 rx = texture2D(tRock, vWPos.zy / 5.0).rgb, rz = texture2D(tRock, vWPos.xy / 5.0).rgb;
+            vec3 rt = (rx * ax.x + rz * ax.z) / max(ax.x + ax.z, 1e-3);
+            float detail = clamp(dot(rt, vec3(0.3, 0.55, 0.15)) / 0.42, 0.45, 1.6);
+            cR *= mix(1.0, detail, 0.9 * (1.0 - smoothstep(90.0, 160.0, dist)));
+          }
           float moss = smoothstep(0.62, 0.75, wn.y + (fineN.r - 0.5) * 0.3) * (1.0 - snowW);
           cR = mix(cR, gNear * 1.1, moss);
           cR = mix(cR, vec3(0.86, 0.9, 0.96), snowW * smoothstep(0.55, 0.8, wn.y + fineN.g * 0.2));
@@ -281,6 +291,15 @@ vWN = normal;`);
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += terrainGlow;');
   };
   return { mat, uniforms };
+}
+
+/** The rock face terrain cliffs carry up close (its light and shade, not its colour). */
+function rockDetail(aniso: number) {
+  const t = new THREE.TextureLoader().load('/assets/textures/rock_face_03_diff_1k.jpg');
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = aniso;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 // ---- streamed tiles ------------------------------------------------------------

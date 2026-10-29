@@ -45,7 +45,8 @@ patch(
 	float wrapped = saturate( ( ndlRaw + 0.3 ) / 1.3 );
 	// Soft cel: one bright plateau, one shade, a narrow soft band between them,
 	// and a little of the true falloff kept so big curved forms still turn.
-	float ramp = smoothstep( 0.36, 0.5, wrapped ) * 0.86 + wrapped * 0.14;
+	// (A little light always reaches the shade side: it stays readable, never a hole.)
+	float ramp = 0.1 + smoothstep( 0.36, 0.5, wrapped ) * 0.78 + wrapped * 0.12;
 	vec3 irradiance = ramp * directLight.color;`,
 );
 // Broad, quiet specular.
