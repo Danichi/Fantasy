@@ -1948,6 +1948,7 @@ async function boot() {
   };
 
   events.on('playerDied', () => {
+    story.playerFell(); // a story fight you fell in waits for you to come back
     setTimeout(async () => {
       // Dying in the Sanctum Below puts you back up the stair.
       if (realm.interior?.kind === 'sanctum') await realm.leaveInterior();

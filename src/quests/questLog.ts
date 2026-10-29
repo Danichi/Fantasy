@@ -31,6 +31,8 @@ export interface QuestStage {
   objectives: Objective[];
   /** world script run when the stage begins (and again on load while it is current) */
   hook?: string;
+  /** its objectives can be done in any order (normally each waits on the ones before it) */
+  anyOrder?: boolean;
 }
 
 export interface QuestDef {
@@ -187,7 +189,7 @@ export class QuestLog {
     if (progress >= this.target(o)) return false;
     const q = [...this.defs.values()].find((d) => this.state[d.id] === st)!;
     const objs = q.stages[st.stage].objectives;
-    for (let k = 0; k < index; k++) if (st.progress[k] < this.target(objs[k]) && objs[k].type !== 'collect') return false;
+    if (!q.stages[st.stage].anyOrder) for (let k = 0; k < index; k++) if (st.progress[k] < this.target(objs[k]) && objs[k].type !== 'collect') return false;
     if (o.type === 'deliver') return this.ctx.count(o.item) >= o.count;
     if (o.type === 'talk' && o.take) return o.take.every(([item, n]) => this.ctx.count(item) >= n);
     return true;

@@ -65,6 +65,8 @@ export class Story {
   private darkTarget = 0;
   /** the boss on the bar */
   private barred: Champion | null = null;
+  /** what each chapter does if you fall in its fight (reset the beat so it can be tried again) */
+  fallen = new Map<string, () => void>();
   /** rites waiting at particular wheels (chapters register them) */
   rites = new Map<string, (node: WheelNode) => DialogueOption | null>();
   /** things the story lets you say to particular people (keyed by a name for each, so it can be replaced) */
@@ -251,6 +253,24 @@ export class Story {
     }
     this.allies = [];
   }
+  /** A fight you can't win, only lose: while it lasts you can't be killed (it ends in a scene). */
+  lesson(on: boolean) {
+    this.h.player.damageFloor = on ? 1 : 0;
+  }
+  /**
+   * You fell. The chapters reset whatever beat you fell in (so it plays again
+   * when you come back), and the story's fighters go away. Friends stay.
+   */
+  playerFell() {
+    for (const f of this.fallen.values()) f();
+    for (const c of this.champions) c.dispose();
+    this.champions = [];
+    for (const f of this.foes) f.dispose();
+    this.foes = [];
+    this.h.bossBar(null);
+    this.barred = null;
+    this.darkTo(0);
+  }
   /** The story's shades still on their feet. */
   get aliveFoes() {
     return this.foes.filter((f) => f.alive).length;
@@ -309,6 +329,7 @@ export class Story {
   }
   reset() {
     this.clearFight();
+    this.lesson(false);
     this.state.load(undefined);
     this.wake = false;
     this.setDarkNow(0);

@@ -244,6 +244,11 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
     quests.signal('feast-done');
   };
   const heskStep = () => {
+    // (You fell chasing her: she's still in the forecourt when you come back.)
+    if (F.feast === 'chase' && !F.heskFight && !F.feastDone && F.feastBegun && !busy() && !player.dead && player.pos.distanceTo(FEAST_AT) < 24) {
+      story.champion('hesk', FEAST_AT.clone().add(new THREE.Vector3(-6, 0, 4)), { scale: 0.75 });
+      F.heskFight = true;
+    }
     if (!F.heskFight || F.feastDone) return;
     const h = story.champions.find((x) => x.def.id === 'hesk');
     if (!h || !h.alive) {
@@ -278,6 +283,10 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
     };
     go();
   };
+  story.fallen.set('act2', () => {
+    if (F.heskFight && !F.feastDone) F.heskFight = false;
+    if (F.duelBegun && !F.malricBeaten) F.duelBegun = false;
+  });
   const beaten = () => {
     if (F.malricBeaten) return;
     F.malricBeaten = true;

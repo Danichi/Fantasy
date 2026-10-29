@@ -308,6 +308,7 @@ export function setupAct1(c: ActCtx) {
       if (busy()) return void setTimeout(go, 200);
       const ch = story.champion('malric', at, { floor: 0.55, intro: false });
       F.malricSpar = 1;
+      story.lesson(true);
       ch.onFloor = () => endSpar(true);
     };
     go();
@@ -315,6 +316,7 @@ export function setupAct1(c: ActCtx) {
   const endSpar = (hurtHim: boolean) => {
     if (F.malricSpar !== 1) return;
     F.malricSpar = 2;
+    story.lesson(false);
     player.invulnerable = true;
     const m = story.champions.find((x) => x.def.id === 'malric');
     void story.play('malric-after', async (s) => {
@@ -465,10 +467,32 @@ export function setupAct1(c: ActCtx) {
     story.note(CH[4], `On the Night of Bells the Dark came for Elder Glen from every rift at once. ${Number(F.bellsAllies) >= 3 ? 'Kaela and the Glen Wardens stood beside you.' : 'Fewer friends stood beside you than might have.'} ${F.malricRan ? 'Ser Malric came himself, and you drove him off.' : ''} ${F.bellsWon === false ? 'The Glen lost animals, but no people.' : 'The Glen held.'} At dawn the voice told you to go to the Knight's Academy in Port Aurelle and grow teeth, and to find out who killed its four champions.`);
   });
 
+  // ---- If you fall: the beat you fell in plays again when you come back ----------------------
+  story.fallen.set('act1', () => {
+    if (quests.isActive('mq-fall', 0) && F.fallStarted && !F.fallFought) {
+      delete F.fallStarted;
+      delete F.fallWave;
+      delete F.fallRift;
+      story.dismissAllies();
+    }
+    if (quests.isActive('mq-crypt', 1) && F.cryptDoor && !F.cryptHeld) F.cryptDoor = false;
+    if (F.malricSpar === 1) {
+      story.lesson(false);
+      F.malricSpar = 0;
+      F.malricMet = false;
+    }
+    if (F.mirrorFight === 1) F.mirrorFight = 0;
+    // He'll be back before the night's out.
+    if (F.bellsMalric && !F.malricRan && !F.bellsHeld) {
+      F.bellsMalric = false;
+      F.bellsT = Math.min(Number(F.bellsT ?? 0), 30);
+    }
+  });
+
   return {
     /** fixed step */
     step(dt: number) {
-      if (quests.isActive('mq-fall', 0) && !F.fallStarted && story.h.outdoors() && c.ready() && !busy()) fallNight();
+      if (quests.isActive('mq-fall', 0) && !F.fallStarted && !player.dead && story.h.outdoors() && c.ready() && !busy()) fallNight();
       fallStep();
       wardensStep();
       malricStep();

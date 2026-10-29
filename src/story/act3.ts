@@ -30,7 +30,7 @@ export const ACT3_QUESTS: QuestDef[] = [
     offer: 'The box Malric threw you: a spoke. The chronicles mention them: each of the summoned carried one, and each was lost where its champion fell. Elin\'s grave. Ser Oswald\'s tomb, under Hollow Ridge. Harrow Ford, where Ser Hallam died; Ser Corvin was there. And Ser Tobin... nobody knows. Find them. Find all four.',
     acceptLabel: 'I\'ll find the four.',
     stages: [
-      { note: 'Find where the Dawn\'s four champions fell, and the spoke each one carried.', hook: 'four:begin', objectives: [
+      { note: 'Find where the Dawn\'s four champions fell, and the spoke each one carried.', hook: 'four:begin', anyOrder: true, objectives: [
         { type: 'signal', id: 'spoke-elin', text: 'Elin: find the First Champion\'s grave (the lost champion\'s camps, in the wilds)' },
         { type: 'talk', npc: 'ingrid', text: 'Ser Oswald: ask Ingrid about the Hollow Ridge caves', reply: 'Mell says you went looking for an old knight\'s tomb under Hollow Ridge.', say: 'Ten years ago. My party. Five of us. We heard there was a knight buried in those caves with gold in his hands, and we went in after it. I came out. I went back for them. There was nothing to bring home. If you go: the tomb is past where the smugglers dig now. Deeper. Don\'t go alone.' },
         { type: 'signal', id: 'spoke-oswald', text: 'Ser Oswald: clear the Hollow Ridge caves and find his tomb (King\'s Road)' },
@@ -163,6 +163,7 @@ export function setupAct3(c: ActCtx, h: Act3Hooks) {
       const at = RING.clone().add(new THREE.Vector3(-8, 0, -6));
       const ws = story.champion('wheelShield', at, { floor: 0.999 });
       ws.onFloor = () => {};
+      story.lesson(true);
       F.turning = 2;
       F.turningT = 0;
       story.ui.subtitle('The Wheel-Shield', 'Five.');
@@ -170,6 +171,12 @@ export function setupAct3(c: ActCtx, h: Act3Hooks) {
     };
     go();
   };
+  story.fallen.set('act3', () => {
+    if (F.turning === 2) {
+      story.lesson(false);
+      F.turning = 0;
+    }
+  });
   // You cannot win this. You can only last, until someone older than the Game decides to step in.
   const turningStep = (dt: number) => {
     if (F.turning !== 2) return;
@@ -201,6 +208,7 @@ export function setupAct3(c: ActCtx, h: Act3Hooks) {
     const after = () => {
       if (busy()) return void setTimeout(after, 200);
       story.clearFight();
+      story.lesson(false);
       player.invulnerable = false;
       player.hp = Math.max(player.hp, player.maxHp * 0.5);
       story.state.meet('ysra');

@@ -7,6 +7,7 @@ import { test, expect } from './fixtures';
 
 const HELPERS = `(() => {
   const g = window.__game, q = g.quests, T = g.THREE, S = g.story;
+  g.player.invulnerable = true; // (software rendering is slow: an idle player would be cut down mid-test)
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const tick = async (n = 10) => { for (let i = 0; i < n; i++) { g.stepSim(1); g.mainStory.frame(0.05); await sleep(15); } };
   const settle = async (ms = 4000) => { const end = Date.now() + ms; while (Date.now() < end) { await tick(4); if (!S.director.active) { await tick(4); if (!S.director.active) return; } } };
@@ -30,6 +31,11 @@ test('the opening: you fall into the wheat, the Dark comes, Kaela and Brannoc co
     q.accept('mq-fall');
     await h.settle();
     const fight = { pos: [g.player.pos.x, g.player.pos.z].map(Math.round), foes: S.foes.length, at: Math.hypot(g.player.pos.x - 14, g.player.pos.z - 168) < 8, dark: S.darkness };
+    // Fall in the fight: it clears, and plays again (here, at once: the test player never died).
+    S.playerFell();
+    const fell: Record<string, unknown> = { foes: S.foes.length, started: S.flags.fallStarted ?? null };
+    await h.settle();
+    fell.again = S.foes.length;
     h.kill();
     await h.tick(20);
     const second = { allies: S.allies.length, foes: S.foes.length };
@@ -39,10 +45,11 @@ test('the opening: you fall into the wheat, the Dark comes, Kaela and Brannoc co
     const morning = { stage: h.stage('mq-fall'), nearMaud: Math.hypot(g.player.pos.x - 10, g.player.pos.z + 10) < 12, allies: S.allies.length };
     h.talk('maud');
     await h.tick(4);
-    return { fight, second, morning, after: [h.stage('mq-fall'), h.stage('mq-stranger')], log: S.state.log.length };
+    return { fight, fell, second, morning, after: [h.stage('mq-fall'), h.stage('mq-stranger')], log: S.state.log.length };
   }, HELPERS);
   expect(res.fight.foes).toBe(3);
   expect(res.fight.at, String(res.fight.pos)).toBe(true);
+  expect(res.fell).toEqual({ foes: 0, started: null, again: 3 });
   expect(res.second.allies).toBe(2);
   expect(res.second.foes).toBeGreaterThanOrEqual(4);
   expect(res.morning.stage).toBe('active@1');
@@ -61,6 +68,10 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
     g.director = S.director;
     S.director.autoChoice = 1; // ask Malric about the fourth
     const out: Record<string, unknown> = {};
+    // (A test game's reset empties the journal: start where a new game is after the fall.)
+    q.state = { 'mq-fall': { status: 'done', stage: 1, progress: [] } };
+    S.reset();
+    q.accept('mq-stranger');
     // ---- A Stranger: two of the Glen's troubles, Maud, Orren, the waystone.
     q.signal('glen-trust'); q.signal('glen-trust');
     h.talk('maud'); h.talk('magus');
