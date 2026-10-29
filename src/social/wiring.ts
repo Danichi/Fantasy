@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import type { NpcManager } from '../npc/npcManager';
+import type { QuestLog } from '../quests/questLog';
 import type { NpcSpec } from '../npc/npc';
 import type { DialogueUI } from '../ui/dialogue';
 import type { ShopUI } from '../ui/shopUI';
 import { Barks, type Speaker } from './barks';
 import { Conversation, type ConvoSpec, type GiftItem } from './conversation';
-import type { LineCtx } from './lines';
+import { pickLine, type LineCtx } from './lines';
 import { People, type PersonInfo } from './people';
 import type { SocialSave } from './reputation';
 
@@ -47,6 +48,10 @@ export function setupSocial(h: SocialHooks) {
   const rep = people.rep;
   rep.day = h.day;
   rep.notify = h.toast;
+  rep.onLeave = (id) => {
+    const p = people.get(id);
+    if (p) h.toast(`${p.name} has packed up and left ${townName(p.settlement)}. Make amends, and they may come back.`);
+  };
   rep.load(h.save);
   const townIds = new Set(h.townSpecs.map((s) => s.id));
   people.settlementOf = (id) => (townIds.has(id) ? 'elderGlen' : h.npcs.find(id)?.rec.settlement);
@@ -115,8 +120,31 @@ export function setupSocial(h: SocialHooks) {
   /** Talk to anyone: their business (services) plus everything social. */
   const talk = (spec: ConvoSpec) => convo.open(spec);
 
+  /** A line from a pool in someone's voice. */
+  const line = (id: string, cat: string, extra: Record<string, string> = {}) => {
+    const p = people.get(id);
+    return p ? pickLine(cat, p, ctx(id), rep.memOf(id), extra) : '';
+  };
+
+  /** Quests: people who dislike you keep their work to themselves; rewards follow goodwill. */
+  const hookQuests = (q: QuestLog) => {
+    q.rewardMult = (g) => (people.has(g) ? rep.rewardMult(g) : 1);
+    q.offerGate = (g) => {
+      if (!people.has(g)) return null;
+      const m = rep.moodOf(g);
+      return m === 'hostile' || m === 'cold' || m === 'wary' ? line(g, 'refuse.quest') : null;
+    };
+    q.onDone = (d) => {
+      if (d.contract) return;
+      const p = people.get(d.giver);
+      if (p) rep.act('questDone', { who: p.id, text: `you helped ${p.first} (${d.title})`, scale: d.main ? 1.5 : 1 });
+    };
+  };
+
   let lastHour = -1;
   return {
+    line,
+    hookQuests,
     people,
     rep,
     convo,

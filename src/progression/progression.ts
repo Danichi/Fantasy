@@ -16,7 +16,7 @@ export function normalizeOrigin(o: unknown): Origin {
 
 export const XP_FOR_KIND: Record<string, [xp: number, gold: number]> = {
   green: [12, 3], blue: [26, 6], magma: [30, 8], cave: [22, 5], armour: [48, 14], orc: [420, 0], dummy: [0, 0],
-  rat: [4, 1], dire: [140, 30], bandit: [34, 12], banditChief: [260, 120],
+  rat: [4, 1], dire: [140, 30], bandit: [34, 12], watchGuard: [0, 0], banditChief: [260, 120],
   zombie: [28, 5], skeleton: [32, 7], abomination: [650, 240],
   // the wilds (roaming; "Elite" = elite affixes) — a danger bonus is paid on top via the reward hook
   wildWolf: [14, 3], wildWolfElite: [60, 18], wildDireWolf: [120, 26], wildDireWolfElite: [300, 70],

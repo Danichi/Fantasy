@@ -103,12 +103,12 @@ export class Bandit implements Target {
   maxHp: number;
   name: string;
   private group = new THREE.Group();
-  private built: BuiltCharacter | null = null;
+  protected built: BuiltCharacter | null = null;
   private actions: Record<string, THREE.AnimationAction> = {};
   private clip = '';
   yaw = Math.random() * 6.28;
-  private state: State = 'idle';
-  private st = 0;
+  protected state: State = 'idle';
+  protected st = 0;
   private cooldown = 1 + Math.random();
   vel = new THREE.Vector3();
   grounded = false;
@@ -188,7 +188,7 @@ export class Bandit implements Target {
     });
   }
 
-  private play(name: string, once = false, speed = 1) {
+  protected play(name: string, once = false, speed = 1) {
     if (this.clip === name) return;
     const next = this.actions[name];
     if (!next) return;
@@ -380,7 +380,7 @@ export class Bandit implements Target {
     a.time = Math.min(t, a.getClip().duration - 0.01);
   }
 
-  private sync() {
+  protected sync() {
     this.group.position.copy(this.position);
     this.group.position.y += this.brain?.hop ?? 0;
     this.group.rotation.y = this.yaw + (this.brain?.spin ?? 0);

@@ -160,7 +160,8 @@ export class Reputation {
   dispOf(id: string) {
     if (!(id in this.disp)) {
       const c = this.communityFor(id);
-      return Math.max(-100, Math.min(100, this.firstImpression(id) + this.standingOf(c) / 25));
+      // Nobody starts out warm: that has to be earned.
+      return Math.max(-100, Math.min(100, Math.min(12, this.firstImpression(id)) + this.standingOf(c) / 25));
     }
     return this.disp[id];
   }
@@ -269,10 +270,10 @@ export class Reputation {
   // ---- what it changes ----
   /** Price multiplier at someone's stall (friends give a discount; the hated pay double). */
   priceMult(id: string) {
-    const d = this.dispOf(id);
     const t = this.tierOf(this.communityFor(id));
-    const tierK = { hated: 1.6, distrusted: 1.2, neutral: 1, liked: 0.95, respected: 0.9, honoured: 0.85 }[t];
-    return Math.max(0.7, Math.min(2, tierK * (1 - d / 400)));
+    const tierK = { hated: 1.5, distrusted: 1.2, neutral: 1, liked: 0.95, respected: 0.9, honoured: 0.85 }[t];
+    const moodK = { hostile: 1.5, cold: 1.25, wary: 1.1, neutral: 1, warm: 0.95, friend: 0.88, devoted: 0.8 }[this.moodOf(id)];
+    return Math.max(0.65, Math.min(2, tierK * moodK));
   }
   /** What they pay for what you sell, as a multiplier. */
   sellMult(id: string) {
@@ -280,10 +281,10 @@ export class Reputation {
   }
   /** Rewards from them (quests and requests). */
   rewardMult(id: string) {
-    const d = this.dispOf(id);
     const t = this.tierOf(this.communityFor(id));
-    const tierK = { hated: 0.5, distrusted: 0.8, neutral: 1, liked: 1.1, respected: 1.25, honoured: 1.4 }[t];
-    return Math.max(0.4, tierK * (1 + d / 250));
+    const tierK = { hated: 0.5, distrusted: 0.8, neutral: 1, liked: 1.1, respected: 1.2, honoured: 1.3 }[t];
+    const moodK = { hostile: 0.5, cold: 0.7, wary: 0.9, neutral: 1, warm: 1.1, friend: 1.25, devoted: 1.4 }[this.moodOf(id)];
+    return Math.max(0.4, tierK * moodK);
   }
   /** Won't deal with you at all. */
   refuses(id: string) {

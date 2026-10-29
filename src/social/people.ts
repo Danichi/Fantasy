@@ -64,7 +64,7 @@ export class People {
       if (this.map.has(p.id)) continue;
       const job = jobOf(p.job, p.title);
       let prof = rollProfile({ ...p, job });
-      if (CAST[p.id] && p.settlement === 'elderGlen') prof = authored(prof);
+      if (CAST[p.id] && p.named) prof = authored(prof);
       this.map.set(p.id, prof);
       if (p.title) this.titles.set(p.id, p.title);
       fresh.push(prof);

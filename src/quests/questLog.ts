@@ -112,6 +112,12 @@ export class QuestLog {
   /** the quest shown in the HUD tracker */
   tracked: string | null = null;
   onChange?: () => void;
+  /** NPC overhaul: how generous a giver feels (rewards scale with reputation) */
+  rewardMult?: (giver: string) => number;
+  /** NPC overhaul: a refusal line when someone won't give you this side quest yet (null: they will) */
+  offerGate?: (giver: string, q: QuestDef) => string | null;
+  /** NPC overhaul: a quest was finished (the giver and the town remember) */
+  onDone?: (q: QuestDef) => void;
 
   constructor(private ctx: QuestContext) {
     events.on('enemyDied', ({ at, kind }) => {
@@ -212,6 +218,11 @@ export class QuestLog {
       });
     });
     for (const q of this.offers(npc)) {
+      const no = q.main || q.contract ? null : this.offerGate?.(npc, q) ?? null;
+      if (no) {
+        out.push({ label: `❗ ${q.title}`, run: () => show(no, [{ label: 'Back.', run: back }]) });
+        continue;
+      }
       out.push({
         label: `❗ ${q.title}`,
         run: () => show(q.offer, [
@@ -372,11 +383,16 @@ export class QuestLog {
     const st = this.state[q.id];
     st.status = 'done';
     const r = q.rewards;
-    if (r.gold) this.ctx.gold(r.gold);
+    // Those who think well of you pay well; those who don't, less.
+    const k = q.contract ? 1 : this.rewardMult?.(q.giver) ?? 1;
+    const gold = Math.round(r.gold * k);
+    if (gold) this.ctx.gold(gold);
     if (r.xp) this.ctx.xp(r.xp);
     if (r.guildRep) this.ctx.guildRep(r.guildRep);
     for (const [item, n] of r.items ?? []) this.ctx.give(item, n);
-    this.ctx.toast(`Quest complete: ${q.title}  (+${r.gold}g, +${r.xp} xp)`);
+    const extra = gold > r.gold ? ` (${gold - r.gold}g extra, for a friend)` : gold < r.gold ? ` (${r.gold - gold}g less: they don't think much of you)` : '';
+    this.ctx.toast(`Quest complete: ${q.title}  (+${gold}g, +${r.xp} xp)${extra}`);
+    this.onDone?.(q);
     if (this.tracked === q.id) this.tracked = this.active()[0]?.id ?? null;
     this.hooks.get(q.id + ':done')?.(q);
   }

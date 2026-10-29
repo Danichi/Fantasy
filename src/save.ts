@@ -54,6 +54,7 @@ export interface WorldSave {
   arms?: import('./crafting/crafting').ArmsSave;
   /** NPC overhaul: how people feel about you, your standing, bounties, who's gone */
   social?: import('./social/reputation').SocialSave;
+  requests?: import('./social/requests').RequestSave;
 }
 
 export interface SaveData {

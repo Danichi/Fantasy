@@ -38,6 +38,8 @@ export class Barks {
   private queue: { at: number; id: string; text: string; cls?: string }[] = [];
   /** off in tests that count on a quiet screen */
   enabled = true;
+  /** other people who can speak (the Watch), beyond the townsfolk */
+  more: () => Speaker[] = () => [];
 
   constructor(
     private people: People,
@@ -49,7 +51,7 @@ export class Barks {
 
   /** Say something right now (screams, threats, the Watch). */
   say(id: string, text: string, cls = '', life = 3.2) {
-    const s = this.speakers().find((x) => x.id === id);
+    const s = this.speakers().find((x) => x.id === id) ?? this.more().find((x) => x.id === id);
     if (!s || !text) return;
     const old = this.bubbles.find((b) => b.id === id);
     if (old) this.drop(old);
