@@ -11,7 +11,7 @@ const HELPERS = `(() => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const tick = async (n = 10) => { for (let i = 0; i < n; i++) { g.stepSim(1); g.mainStory.frame(0.05); await sleep(15); } };
   const settle = async (ms = 4000) => { const end = Date.now() + ms; while (Date.now() < end) { await tick(4); if (!S.director.active) { await tick(4); if (!S.director.active) return; } } };
-  const kill = () => { for (const f of S.foes) if (f.alive) f.takeHit({ damage: 99999, poise: 0, dir: new T.Vector3(1, 0, 0), at: f.center.clone(), crit: false, source: 'melee' }); };
+  const kill = async () => { for (let i = 0; i < 60 && S.foes.some((f) => f.alive && !f.risen); i++) await tick(4); for (const f of S.foes) if (f.alive) f.takeHit({ damage: 99999, poise: 0, dir: new T.Vector3(1, 0, 0), at: f.center.clone(), crit: false, source: 'melee' }); };
   const talk = (npc) => { const o = q.options(npc, () => {}, () => {}).find((o) => !o.label.startsWith('❗')); if (o) o.run(); return !!o; };
   const tp = async (x, z) => { const { heightAt } = await import('/src/world/terrainHeight.ts'); g.player.teleport(new T.Vector3(x, heightAt(x, z) + 0.4, z)); await tick(6); };
   const wheel = (id) => g.mainStory.wheels().find((w) => w.id === id);
@@ -33,13 +33,13 @@ test('the opening: you fall into the wheat, the Dark comes, Kaela and Brannoc co
     const fight = { pos: [g.player.pos.x, g.player.pos.z].map(Math.round), foes: S.foes.length, at: Math.hypot(g.player.pos.x - 14, g.player.pos.z - 168) < 8, dark: S.darkness };
     // Fall in the fight: it clears, and plays again (here, at once: the test player never died).
     S.playerFell();
-    const fell: Record<string, unknown> = { foes: S.foes.length, started: S.flags.fallStarted ?? null };
-    await h.settle();
-    fell.again = S.foes.length;
-    h.kill();
+    await h.tick(1);
+    for (let i = 0; i < 20 && (!S.foes.length || S.director.active); i++) { await h.settle(); await h.tick(2); }
+    const fell = { again: S.foes.length, at: Math.hypot(g.player.pos.x - 14, g.player.pos.z - 168) < 8 };
+    await h.kill();
     await h.tick(20);
     const second = { allies: S.allies.length, foes: S.foes.length };
-    h.kill();
+    await h.kill();
     await h.tick(20);
     await h.settle();
     const morning = { stage: h.stage('mq-fall'), nearMaud: Math.hypot(g.player.pos.x - 10, g.player.pos.z + 10) < 12, allies: S.allies.length };
@@ -49,7 +49,7 @@ test('the opening: you fall into the wheat, the Dark comes, Kaela and Brannoc co
   }, HELPERS);
   expect(res.fight.foes).toBe(3);
   expect(res.fight.at, String(res.fight.pos)).toBe(true);
-  expect(res.fell).toEqual({ foes: 0, started: null, again: 3 });
+  expect(res.fell).toEqual({ again: 3, at: true });
   expect(res.second.allies).toBe(2);
   expect(res.second.foes).toBeGreaterThanOrEqual(4);
   expect(res.morning.stage).toBe('active@1');
@@ -93,7 +93,7 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
     await h.tick(10);
     out.wardens = S.allies.length;
     await h.settle();
-    h.kill();
+    await h.kill();
     await h.tick(10);
     out.door = h.stage('mq-crypt');
     g.realm.progress.bossDead = true;
@@ -117,7 +117,7 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
     out.mirrorRite = h.rite('gravewood');
     await h.settle();
     out.mirrorFoes = S.foes.length;
-    h.kill();
+    await h.kill();
     await h.tick(10);
     await h.settle();
     h.talk('magus');

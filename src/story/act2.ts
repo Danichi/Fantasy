@@ -227,7 +227,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
       s.remove(varro);
     });
     const go = () => {
-      if (busy() || !F.feast) return void setTimeout(go, 200);
+      if (busy() || !F.feast) return void story.whenFree(go);
       if (F.feast !== 'chase') return finishFeast();
       story.champion('hesk', at.clone().add(new THREE.Vector3(-6, 0, 4)), { scale: 0.75 });
       F.heskFight = true;
@@ -277,7 +277,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
       s.remove(m);
     });
     const go = () => {
-      if (busy()) return void setTimeout(go, 200);
+      if (busy()) return void story.whenFree(go);
       const ch = story.champion('malric', at, { floor: 0.12, scale: 1.1, intro: false });
       ch.onFloor = () => beaten();
     };

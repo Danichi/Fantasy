@@ -67,6 +67,8 @@ export class Story {
   private barred: Champion | null = null;
   /** what each chapter does if you fall in its fight (reset the beat so it can be tried again) */
   fallen = new Map<string, () => void>();
+  private fell = false;
+  private free: (() => void)[] = [];
   /** rites waiting at particular wheels (chapters register them) */
   rites = new Map<string, (node: WheelNode) => DialogueOption | null>();
   /** things the story lets you say to particular people (keyed by a name for each, so it can be replaced) */
@@ -253,6 +255,10 @@ export class Story {
     }
     this.allies = [];
   }
+  /** Do this once no scene is playing (the next fixed step that's free). */
+  whenFree(fn: () => void) {
+    this.free.push(fn);
+  }
   /** A fight you can't win, only lose: while it lasts you can't be killed (it ends in a scene). */
   lesson(on: boolean) {
     this.h.player.damageFloor = on ? 1 : 0;
@@ -262,6 +268,11 @@ export class Story {
    * when you come back), and the story's fighters go away. Friends stay.
    */
   playerFell() {
+    // (Death lands in the middle of a fighter's update: clear up at the next step.)
+    this.fell = true;
+  }
+  private clearFallen() {
+    this.fell = false;
     for (const f of this.fallen.values()) f();
     for (const c of this.champions) c.dispose();
     this.champions = [];
@@ -282,6 +293,12 @@ export class Story {
 
   /** Fixed step: the story's fighters. */
   step(dt: number) {
+    if (this.fell) this.clearFallen();
+    if (this.free.length && !this.director.active) {
+      const due = this.free;
+      this.free = [];
+      for (const f of due) f();
+    }
     const p = this.h.player;
     for (const c of this.champions) c.update(dt, p);
     for (const f of this.foes) f.update(dt, p, this.foes);
@@ -328,6 +345,8 @@ export class Story {
     return this.state.save();
   }
   reset() {
+    this.free = [];
+    this.fell = false;
     this.clearFight();
     this.lesson(false);
     this.state.load(undefined);

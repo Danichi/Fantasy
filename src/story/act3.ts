@@ -159,7 +159,7 @@ export function setupAct3(c: ActCtx, h: Act3Hooks) {
       await s.voice('...Oh. Oh no. Get away from the wheel. Get away from the wheel!', 3);
     });
     const go = () => {
-      if (busy()) return void setTimeout(go, 200);
+      if (busy()) return void story.whenFree(go);
       const at = RING.clone().add(new THREE.Vector3(-8, 0, -6));
       const ws = story.champion('wheelShield', at, { floor: 0.999 });
       ws.onFloor = () => {};
@@ -206,7 +206,7 @@ export function setupAct3(c: ActCtx, h: Act3Hooks) {
       await s.card('End of Act III, Part One', 'The Four Who Came Before', 'The story continues in the elven woods, under the mountains and across the sea.', 5);
     });
     const after = () => {
-      if (busy()) return void setTimeout(after, 200);
+      if (busy()) return void story.whenFree(after);
       story.clearFight();
       story.lesson(false);
       player.invulnerable = false;

@@ -160,7 +160,7 @@ export function setupAct1(c: ActCtx) {
     });
     // When the scene ends, the shades.
     const go = () => {
-      if (busy()) return void setTimeout(go, 200);
+      if (busy()) return void story.whenFree(go);
       story.darkTo(0.18);
       const [x, z] = String(F.fallRift ?? `${FALL_AT.x + 9},${FALL_AT.z - 6}`).split(',').map(Number);
       story.shades(3, ground(x, z), 3);
@@ -305,7 +305,7 @@ export function setupAct1(c: ActCtx) {
     });
     // A lesson, not a fight you can win: when it's gone far enough, he stops.
     const go = () => {
-      if (busy()) return void setTimeout(go, 200);
+      if (busy()) return void story.whenFree(go);
       const ch = story.champion('malric', at, { floor: 0.55, intro: false });
       F.malricSpar = 1;
       story.lesson(true);
@@ -372,7 +372,7 @@ export function setupAct1(c: ActCtx) {
       await s.voice('Do not stay long. The Dark remembers the shape of anyone who walks in it.', 3.4);
     });
     const go = () => {
-      if (busy()) return void setTimeout(go, 200);
+      if (busy()) return void story.whenFree(go);
       story.shades(6, player.pos, 8);
       F.mirrorFight = 1;
     };
