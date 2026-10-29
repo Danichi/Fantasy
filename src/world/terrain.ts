@@ -419,9 +419,13 @@ export class Terrain {
     missing.sort((a, b) => a[0] - b[0]);
     for (const [, i, j] of missing.slice(0, budget)) this.addTile(i, j);
     // Detail, collision and unloading.
+    const pi = Math.floor(player.x / TILE), pj = Math.floor(player.z / TILE);
     for (const [key, t] of this.tiles) {
       const di = t.i - ci, dj = t.j - cj;
-      if (Math.abs(di) > RING + 1 || Math.abs(dj) > RING + 1) {
+      const near = Math.abs(t.i - pi) <= 1 && Math.abs(t.j - pj) <= 1;
+      // (Never the ground under the player: after a teleport the camera can lag a frame
+      // behind, and that frame may run many fixed steps.)
+      if ((Math.abs(di) > RING + 1 || Math.abs(dj) > RING + 1) && !near) {
         this.removeTile(key, t);
         continue;
       }
@@ -433,8 +437,6 @@ export class Terrain {
         t.mesh.geometry = t.geos[lod]!;
         t.lod = lod;
       }
-      const pi = Math.floor(player.x / TILE), pj = Math.floor(player.z / TILE);
-      const near = Math.abs(t.i - pi) <= 1 && Math.abs(t.j - pj) <= 1;
       if (near && !t.collider) t.collider = this.buildCollider(t.i, t.j);
       else if (!near && t.collider && (Math.abs(t.i - pi) > 2 || Math.abs(t.j - pj) > 2)) {
         physics.removeStatic(t.collider);

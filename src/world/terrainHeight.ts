@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { fbm, smoothstep, clamp } from '../core/math';
-import { macroHeight, macroElevAt, reliefAt, RELIEF, SEA_LEVEL, sandWeight } from './worldMap';
+import { macroHeight, macroElevAt, reliefAt, RELIEF, SEA_LEVEL, sandWeight, worldMapReady } from './worldMap';
 import { shapeDesert } from './desert/desertLayout';
 import { ROAD_POLYS, CREEK } from './roadData';
 import { cityHeight } from './portCity';
@@ -331,7 +331,9 @@ export function tileData(i: number, j: number) {
   let t = tiles.get(k);
   if (!t) {
     t = computeTile(i, j); // on-the-spot fallback; the worker normally got here first
-    putTile(i, j, t);
+    // (Before the world map has loaded, the land reads flat: don't keep that tile, or the
+    // ground here would disagree with its collider and the worker's tiles for good.)
+    if (worldMapReady()) putTile(i, j, t);
   }
   return t;
 }
