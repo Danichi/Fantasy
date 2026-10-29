@@ -294,8 +294,9 @@ test('Cave Bats come out at night, circle and dive to bite; a parry knocks one o
       if (d < 2.2 && pl.act?.def.id !== 'parryShield') {
         pl.yaw = Math.atan2(b.center.x - pl.pos.x, b.center.z - pl.pos.z);
         pl.startAction('parryShield');
-        pl.act.t = pl.act.def.parry[0] + 0.01;
       }
+      // A well-timed parry: only the first frames of the window knock it down (a late one deflects).
+      if (d < 2.2 && pl.act?.def.id === 'parryShield') pl.act.t = pl.act.def.parry[0] + 0.01;
       if (b.mode === 'grounded') grounded = true;
       if (b.mode !== 'dive' && !grounded) {
         b.setMode('dive', 1.4);
