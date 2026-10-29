@@ -348,6 +348,16 @@ export function buildPortAurelle(scene: THREE.Scene, m: WorldMats, fx: FX): Port
     addMesh(new THREE.BoxGeometry(12, 8, 16), white, cx - 24, y0 + 4, cz + 4, 0, 1.2);
     addMesh(new THREE.ConeGeometry(9, 4, 4).rotateY(Math.PI / 4).scale(0.8, 1, 1.1), blueRoof, cx - 24, y0 + 10, cz + 4);
     solid(12, 8, 16, cx - 24, y0 + 4, cz + 4);
+    // The library's door, on the courtyard side: Archivist Mell keeps it and meets you inside.
+    {
+      const lx = cx - 24 + 6, lz = cz + 4, gy = heightAt(lx + 0.8, lz);
+      addMesh(new THREE.BoxGeometry(0.3, 3.1, 1.9), m.timber, lx + 0.1, gy + 1.55, lz, 0, 1);
+      addMesh(new THREE.BoxGeometry(0.5, 0.35, 2.5), white, lx + 0.2, gy + 3.25, lz, 0, 1.2);
+      const g = new THREE.Object3D();
+      g.position.set(lx + 0.8, gy, lz);
+      g.rotation.y = Math.PI / 2;
+      registerDoor(g, new THREE.Vector3(), { w: 12, d: 16, floors: 2, roof: 'slate', seed: 9210 }, { kind: 'library', name: 'The Academy Library', keeper: 'mell' });
+    }
     // Tall windows on the hall.
     for (let k = -3; k <= 3; k++) {
       const wm = new THREE.MeshStandardMaterial({ color: 0x2c3a58, emissive: 0xffc070, emissiveIntensity: 0.15 });
@@ -699,7 +709,7 @@ const NAMED: Named[] = [
     look: { body: 'male', outfit: 'ranger', hair: 'buzzed', beard: true, hairColor: 0x3a2618, skin: 0xa8744e, cloth: 0xc9d6e6, pauldron: true, height: 1.95 } },
   { id: 'sable', name: 'Master Sable Ro', title: 'Cross School Instructor', post: [2836, 76], activity: 'idle', hours: [8, 20], lines: { any: ['Two blades, one heartbeat.'] },
     look: { body: 'female', outfit: 'ranger', hair: 'long', hairColor: 0x1f1a17, skin: 0x7a4e32, cloth: 0x8a2a3a, height: 1.74 } },
-  { id: 'mell', name: 'Archivist Mell', title: 'Keeper of the Academy Library', post: [2782, 74], activity: 'sit', hours: [8, 22], lines: { any: ['Shh. The books are sleeping. Well — I am.'] },
+  { id: 'mell', name: 'Archivist Mell', title: 'Keeper of the Academy Library', post: [2790.5, 77.5], activity: 'sit', hours: [8, 22], lines: { any: ['Shh. The books are sleeping. Well — I am.'] },
     look: { body: 'male', outfit: 'peasant', hair: 'simpleparted', beard: true, hairColor: 0xe6e2da, skin: 0xfff0e6, linen: 0xd9cfe8, cloth: 0x4a3a6a, height: 1.68 } },
   { id: 'dorian', name: 'Cadet Dorian Vale', title: 'Cadet · Best Blade of the Year', post: [2824, 96], activity: 'patrol', hours: [7, 21], lines: { any: ['Out of the way, summoned hero.', 'Marrow says I\'m too proud. Marrow is right, and I\'m still the best.'] },
     look: { body: 'male', outfit: 'ranger', hair: 'simpleparted', hairColor: 0xd2b26a, skin: 0xfff0e6, cloth: 0x2f5f9a, height: 1.82 } },
