@@ -659,6 +659,19 @@ async function boot() {
     save: saveData?.world?.social,
   });
   town.converse = (spec) => social.talk(spec);
+  // Good deeds travel too: raids beaten back, beasts slain.
+  events.on('raidEnded', ({ won }) => {
+    if (!won) return;
+    const site = raids.save.lastSite ?? 'glen';
+    social.rep.act('raidDefended', { community: site === 'glen' ? 'elderGlen' : 'roads', text: site === 'glen' ? 'you stood with the Watch when the wolves came' : 'you helped drive off a night raid on the King\'s Road' });
+    social.rep.shift('watch', 30);
+  });
+  events.on('deed', ({ id, label }) => {
+    if (!id.startsWith('boss:')) return;
+    social.rep.act('bossSlain', { community: 'roads', text: 'you ' + label.charAt(0).toLowerCase() + label.slice(1) });
+    social.rep.shift('elderGlen', 25);
+    social.rep.shift('guild', 30);
+  });
   // Townsfolk: one interactable that follows whoever is nearest.
   const folkTalk = {
     pos: new THREE.Vector3(0, -999, 0),

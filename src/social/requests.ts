@@ -66,7 +66,6 @@ export function setupRequests(social: Social, quests: QuestLog, day: () => numbe
     if (p.guard || p.job === 'farmer' || p.job === 'shepherd') kinds.push('hunt');
     const kind = pick(kinds);
     const base = 30 + Math.floor(r() * 30) + Number(nStr) * 5;
-    const title = (t: string) => `${p.first}: ${t}`;
     const fill = (s: string, x: Record<string, string>) => s.replace(/\{(\w+)\}/g, (_, k) => x[k] ?? k);
     if (kind === 'fetch') {
       const pool = p.likes.flatMap((k) => FETCH[k] ?? []).filter((x) => ITEMS[x]);
@@ -74,7 +73,7 @@ export function setupRequests(social: Social, quests: QuestLog, day: () => numbe
       const n = item === 'healthPotion' || item === 'pearl' || item === 'silverOre' ? 1 + Math.floor(r() * 2) : 2 + Math.floor(r() * 4);
       const name = ITEMS[item]?.name ?? item;
       return {
-        id, giver: who, region: p.settlement, title: title(`${n} ${name}`), summary: `${p.name} needs ${n} ${name}.`,
+        id, giver: who, region: p.settlement, title: `${name} ×${n} for ${p.first}`, summary: `${p.name} needs ${n} ${name}.`,
         offer: fill(pick(WHY_FETCH), { item: name, n: String(n) }), acceptLabel: 'I\'ll find some.',
         stages: [{ note: `Bring ${p.first} ${n} ${name}.`, objectives: [{ type: 'deliver', npc: who, item, count: n, text: `Bring ${n} ${name} to ${p.first}`, say: 'Oh, that\'s perfect. Thank you. Here, for your trouble.' }] }],
         done: 'You\'re a good sort. I won\'t forget it.',
@@ -84,7 +83,7 @@ export function setupRequests(social: Social, quests: QuestLog, day: () => numbe
     if (kind === 'errand') {
       const o = people.get(pick(others).id)!;
       return {
-        id, giver: who, region: p.settlement, title: title(`a word with ${o.first}`), summary: `${p.name} asked you to see ${o.name}.`,
+        id, giver: who, region: p.settlement, title: `A word with ${o.first}, for ${p.first}`, summary: `${p.name} asked you to see ${o.name}.`,
         offer: fill(pick(WHY_ERRAND), { other: o.first }), acceptLabel: 'I\'ll go.',
         stages: [
           { note: `Find ${o.name}.`, objectives: [{ type: 'talk', npc: o.id, text: `Talk to ${o.name}`, say: `${p.first} sent you? Ha. Tell them I'm fine, and that I miss them. Don't tell them that last bit.`, reply: `${p.first} sent me.` }] },
@@ -96,7 +95,7 @@ export function setupRequests(social: Social, quests: QuestLog, day: () => numbe
     }
     const n = 3;
     return {
-      id, giver: who, region: p.settlement, title: title('wolves at the edge of town'), summary: `${p.name} wants the wolves thinned out.`,
+      id, giver: who, region: p.settlement, title: `Wolves at the edge of town (${p.first})`, summary: `${p.name} wants the wolves thinned out.`,
       offer: pick(WHY_HUNT), acceptLabel: 'Consider it done.',
       stages: [
         { note: `Kill ${n} wolves.`, objectives: [{ type: 'kill', kind: 'wildWolf', count: n, text: `Kill ${n} wolves` }] },
