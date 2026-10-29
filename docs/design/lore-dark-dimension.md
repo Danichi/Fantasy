@@ -1,6 +1,6 @@
 # Lore: the Dark Dimension and the Champions' Game
 
-Status: **ideas to keep in mind, not built yet.** Written down from the
+Status: **built into the main story (2026-10-29): see main-story.md.** The rest is still ideas. Written down from the
 user's brief (2026-10-19) so future updates (main quest, monsters, raids,
 bosses, NPCs) can build toward it. Names marked TBD are still open.
 
