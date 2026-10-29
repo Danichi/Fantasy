@@ -81,7 +81,11 @@ export function setupMainStory(d: MainStoryDeps) {
     interactables,
     wheels,
     /** a Sunwheel stone (sites) touched after it's been read */
-    touchStone: (id: string) => touchable(id)(),
+    touchStone: (id: string, quiet = false) => {
+      if (quiet) {
+        if (story.wheel.attune(id)) d.toast('The Sunwheel on the stone knows you now.');
+      } else touchable(id)();
+    },
     step(dt: number) {
       story.step(dt);
       act1.step(dt);

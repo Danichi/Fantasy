@@ -113,6 +113,8 @@ test('quest NPCs keep hours: the tracker says when they are asleep, and you are 
     const t0 = g.hud.toast.bind(g.hud);
     g.hud.toast = (m: string) => (toasts.push(m), t0(m));
     if (Q.status('mq-stranger') !== 'active') Q.accept('mq-stranger');
+    // (The stage where you go back to Maud.)
+    Q.state['mq-stranger'] = { status: 'active', stage: 1, progress: [0] };
     const day = Q.lines('mq-stranger').map((l: any) => l[0]);
     g.time.skipTo(23.5);
     await W(30);

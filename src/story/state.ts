@@ -116,7 +116,9 @@ export class StoryState {
     return { flags: this.flags, log: this.log, met: [...this.met], clues: [...this.clues], named: this.named };
   }
   load(s?: StorySave) {
-    this.flags = s?.flags ?? {};
+    // (The chapters hold on to this object: refill it rather than replace it.)
+    for (const k of Object.keys(this.flags)) delete this.flags[k];
+    Object.assign(this.flags, s?.flags ?? {});
     this.log = s?.log ?? [];
     this.met = new Set(s?.met ?? []);
     this.clues = new Set(s?.clues ?? []);

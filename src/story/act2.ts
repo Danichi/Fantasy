@@ -149,9 +149,9 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
       F.dorian = pick === 0 ? 'friend' : 'rival';
       if (pick === 0) await s.say('Cadet Dorian Vale', 'Deal. And when it\'s next year, I\'ll tell you first. That\'s more than any of the old ones will do.');
       else await s.say('Cadet Dorian Vale', 'Fine. Then I\'ll see you on the road.');
+      story.note(CH[1], `Dorian Vale is the Dragon King's champion of the Fifth Age: your own year, a different master. ${F.dorian === 'friend' ? 'You agreed not to be enemies, this year.' : 'You told him to stay out of your way.'}`);
+      quests.signal('dorian-faced');
     });
-    story.note(CH[1], `Dorian Vale is the Dragon King's champion of the Fifth Age: your own year, a different master. ${F.dorian === 'friend' ? 'You agreed not to be enemies, this year.' : 'You told him to stay out of your way.'}`);
-    quests.signal('dorian-faced');
   };
 
   // ---- The Chancellor ----------------------------------------------------------------------
@@ -175,11 +175,11 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
         await s.say('Lord Chancellor Vaun', '...Stop looking at me like that. Like the King does. The second drawer. I did it for Cresha. When the Iron Below sits in the chair, Cresha will be on the right side of the Dark.');
       }
       await s.say(null, 'The ledger. Payments, a month of them, in a careful hand, to "H." In black iron ingots.', 3.4);
+      story.state.clue('heskLedger');
+      story.state.meet('hesk');
+      story.note(CH[2], `The King's treasury was short. Twig saw a woman in black pay the Chancery's door guards in black iron. ${F.vaun === 'persuade' ? 'You talked' : F.vaun === 'threat' ? 'You frightened' : 'You stared'} Lord Chancellor Vaun into giving up his ledger: a month of payments to "H." in black iron, so that the Iron Below would remember Cresha when it sat in the chair.`);
+      quests.signal('ledger-found');
     });
-    story.state.clue('heskLedger');
-    story.state.meet('hesk');
-    story.note(CH[2], `The King's treasury was short. Twig saw a woman in black pay the Chancery's door guards in black iron. ${F.vaun === 'persuade' ? 'You talked' : F.vaun === 'threat' ? 'You frightened' : 'You stared'} Lord Chancellor Vaun into giving up his ledger: a month of payments to "H." in black iron, so that the Iron Below would remember Cresha when it sat in the chair.`);
-    quests.signal('ledger-found');
   };
 
   // ---- The Feast of the Dawn ----------------------------------------------------------------

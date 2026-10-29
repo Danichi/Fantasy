@@ -1,8 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 
-// The main story's opening act: a new game starts "A Stranger in Elder Glen",
-// each chapter hands on to the next (crypt, Gravewood, the road to Port
-// Aurelle), and the tracked objective gets a beacon and an on-screen marker.
+// The main story's opening (the chapters themselves: tests/story.spec.ts):
+// a test game starts after the fall with "A Stranger in Elder Glen", and the
+// tracked objective gets a beacon and an on-screen marker.
 
 async function boot(page: Page) {
   const errors: string[] = [];
@@ -12,63 +12,39 @@ async function boot(page: Page) {
   return errors;
 }
 
-test('the main quest chain runs from the village to the road east, with a waypoint to follow', async ({ page }) => {
+test('a test game starts after the fall, with A Stranger in Elder Glen tracked and a waypoint to follow', async ({ page }) => {
   test.setTimeout(480_000);
   const errors = await boot(page);
   const start = await page.evaluate(() => {
     const g = (window as any).__game;
-    return { tracked: g.quests.tracked, tracker: g.hud.sideQuestHtml as string };
+    return { tracked: g.quests.tracked, tracker: g.hud.sideQuestHtml as string, fall: g.quests.isDone('mq-fall') };
   });
   expect(start.tracked).toBe('mq-stranger');
+  expect(start.fall).toBe(true);
   expect(start.tracker).toContain('MAIN QUEST');
 
   const res = await page.evaluate(async () => {
     const g = (window as any).__game, q = g.quests, T = g.THREE;
     const { heightAt } = await import('/src/world/terrain.ts');
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-    const tp = async (x: number, z: number) => {
-      g.player.teleport(new T.Vector3(x, heightAt(x, z) + 0.3, z));
-      for (let i = 0; i < 20; i++) {
-        await sleep(100);
-        q.update(1, g.player.pos);
-      }
-    };
-    const talk = (npc: string) => q.options(npc, () => {}, () => {}).find((o: any) => !o.label.startsWith('❗'))?.run();
-    // The waypoint: facing away from Maud, the arrow sits at the screen edge.
-    await tp(0, 30);
+    // Two of the Glen's troubles done: the waypoint points at Maud.
+    q.signal('glen-trust');
+    q.signal('glen-trust');
+    g.player.teleport(new T.Vector3(0, heightAt(0, 30) + 0.3, 30));
+    for (let i = 0; i < 20; i++) {
+      await sleep(100);
+      q.update(1, g.player.pos);
+    }
     g.cam.yaw = 0; // looking south, Maud is north
     await sleep(600);
     const wp = document.querySelector('.waypoint') as HTMLElement;
     const arrow = { shown: wp.style.display !== 'none', off: wp.classList.contains('off') };
     const beacon = g.r.scene.getObjectByName('questBeacon')?.visible;
-    talk('maud');
-    for (const [x, z] of [[0, 6], [27, 17], [22, -6]]) await tp(x, z);
-    talk('maud');
-    const afterStranger = { done: q.isDone('mq-stranger'), tracked: q.tracked };
-    await tp(0, -306);
-    g.realm.progress.bossDead = true;
-    for (let i = 0; i < 30 && !q.isActive('mq-crypt', 2); i++) await sleep(100);
-    talk('maud');
-    const afterCrypt = { done: q.isDone('mq-crypt'), tracked: q.tracked };
-    talk('magus');
-    q.signal('stones-read');
-    await tp(-340, 306);
-    q.signal('gravewood-cleared');
-    talk('magus');
-    return {
-      arrow, beacon, afterStranger, afterCrypt,
-      gravewood: q.isDone('mq-gravewood'),
-      dawnbreaker: g.player.equip.items.some((i: any) => i.def.id === 'dawnbreaker'),
-      tracked: q.tracked,
-    };
+    return { arrow, beacon, stage: q.state['mq-stranger'].stage };
   });
   expect(res.arrow).toEqual({ shown: true, off: true });
   expect(res.beacon).toBe(true);
-  expect(res.afterStranger).toEqual({ done: true, tracked: 'mq-crypt' });
-  expect(res.afterCrypt).toEqual({ done: true, tracked: 'mq-gravewood' });
-  expect(res.gravewood).toBe(true);
-  expect(res.dawnbreaker).toBe(true);
-  expect(res.tracked).toBe('road-to-port');
+  expect(res.stage).toBe(1);
   expect(errors).toEqual([]);
 });
 

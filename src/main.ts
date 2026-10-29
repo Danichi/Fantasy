@@ -315,7 +315,7 @@ async function boot() {
     day: () => time.day,
     talk: (name, title, text, options) => dialogue.show(name, title, text, options.map((o) => ({ label: o.label, run: () => { dialogue.close(); o.run(); } }))),
     level: (x, z) => zoneLevel(x, z, () => 0.5),
-    wheel: (id) => main.touchStone(id),
+    wheel: (id, quiet) => main.touchStone(id, quiet),
     ready: (k) => creatureReady(k),
     teleport: (at) => player.teleport(at),
     count: (id) => countItem(id),

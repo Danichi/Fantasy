@@ -535,6 +535,7 @@ export const STONE: SiteType = {
           c.hooks.toast(`"${line}" (Sunwheel stone ${read} of 12)`);
           if (first) {
             c.hooks.xp(30);
+            c.hooks.wheel?.('stone:' + c.site.id, true);
             if (read === 12) {
               c.hooks.give('sunwheelCharm', 1);
               c.hooks.toast('As you read the last stone, warmth runs out of it into your hands, and a small disc of gold with the Sunwheel on it is lying at its foot. You have read all twelve.');
