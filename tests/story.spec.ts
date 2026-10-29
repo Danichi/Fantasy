@@ -7,9 +7,11 @@ import { test, expect } from './fixtures';
 
 const HELPERS = `(() => {
   const g = window.__game, q = g.quests, T = g.THREE, S = g.story;
-  g.player.invulnerable = true; // (software rendering is slow: an idle player would be cut down mid-test)
+  // (Software rendering is slow: an idle player would be cut down mid-test. Scenes lift
+  // invulnerability when they end, so tick() puts it back every step.)
+  g.player.invulnerable = true;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const tick = async (n = 10) => { for (let i = 0; i < n; i++) { g.stepSim(1); g.mainStory.frame(0.05); await sleep(15); } };
+  const tick = async (n = 10) => { for (let i = 0; i < n; i++) { g.player.invulnerable = true; g.player.hp = Math.max(g.player.hp, g.player.maxHp * 0.5); g.stepSim(1); g.mainStory.frame(0.05); await sleep(15); } };
   const settle = async (ms = 4000) => { const end = Date.now() + ms; while (Date.now() < end) { await tick(4); if (!S.director.active) { await tick(4); if (!S.director.active) return; } } };
   const kill = async () => { for (let i = 0; i < 60 && S.foes.some((f) => f.alive && !f.risen); i++) await tick(4); for (const f of S.foes) if (f.alive) f.takeHit({ damage: 99999, poise: 0, dir: new T.Vector3(1, 0, 0), at: f.center.clone(), crit: false, source: 'melee' }); };
   const talk = (npc) => { const o = q.options(npc, () => {}, () => {}).find((o) => !o.label.startsWith('❗')); if (o) o.run(); return !!o; };
