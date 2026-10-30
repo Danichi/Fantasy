@@ -41,7 +41,7 @@ export function rockGeo(rnd: () => number, sx: number, sy: number, sz: number, d
   const cp = coarse.getAttribute('position');
   const pts: { x: number; y: number; z: number; k: number }[] = [];
   for (let i = 0; i < cp.count; i++) pts.push({ x: cp.getX(i), y: cp.getY(i), z: cp.getZ(i), k: 0.82 + rnd() * 0.3 });
-  const g = mergeVertices(new THREE.IcosahedronGeometry(1, detail + 2).deleteAttribute('normal').deleteAttribute('uv'), 1e-4);
+  const g = mergeVertices(new THREE.IcosahedronGeometry(1, detail + 1).deleteAttribute('normal').deleteAttribute('uv'), 1e-4);
   const p = g.getAttribute('position');
   const s2 = detail >= 2 ? 0.08 : 0.2; // how far each corner's jitter spreads
   for (let i = 0; i < p.count; i++) {
