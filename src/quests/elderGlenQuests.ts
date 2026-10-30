@@ -25,55 +25,55 @@ const night = (h: number) => h >= 21 || h < 4;
 export const ELDER_GLEN_QUESTS: QuestDef[] = [
   {
     id: 'missing-heifer', title: 'The Missing Heifer', giver: 'hale', region: 'cresha',
-    summary: 'Tom Hale\'s heifer Clover broke through the west fence. Find her in the woods and lead her home.',
-    offer: 'One of my heifers — Clover, white blaze on her nose — broke through the west fence in the night. She\'ll have wandered into the woods west of the pasture, and there are wolves out there. Bring her home and I\'ll see you right.',
+    summary: 'Tom Hale\'s last heifer, Clover, broke through the west fence. Without her there\'s no milk for the Glen\'s children this winter. Find her before the wolves do.',
+    offer: 'Clover. White blaze on her nose. She\'s the last heifer I\'ve got: the rest went to the wolves, or to the pot, or to whatever comes out of the rifts. She broke the west fence in the night and went into the woods. If the wolves get her there\'s no milk for the little ones this winter, and I\'ll have to tell their mothers. Please.',
     stages: [
       { note: 'Find Clover in the western woods.', hook: 'heifer:lost', objectives: [{ type: 'reach', at: [HEIFER_AT.x, HEIFER_AT.z], radius: 9, text: 'Find Clover in the western woods' }] },
       { note: 'Lead Clover back to Tom\'s pasture.', hook: 'heifer:follow', objectives: [{ type: 'signal', id: 'heifer-home', text: 'Lead Clover back into the cow pasture', at: [-150, 60] }] },
       { note: 'Tell Tom that Clover is home.', hook: 'heifer:home', objectives: [{ type: 'talk', npc: 'hale', text: 'Tell Tom Hale that Clover is home', say: 'There she is! Not a scratch on her, the silly thing. You\'ve a way with animals, friend.' }] },
     ],
-    done: 'Here — fresh milk from her mother, and coin besides. If you ever want to help on the farm, the cows could use milking every morning.',
+    done: 'She\'s shaking. So am I. Here: milk from her mother, and what coin I have. It isn\'t much. The cows need milking every morning, if you want to keep earning your keep.',
     rewards: { gold: 60, xp: 80, items: [['milk', 2]], guildRep: 10 },
   },
   {
     id: 'crows-in-wheat', title: 'Crows in the Wheat', giver: 'wren', region: 'cresha',
-    summary: 'Crows are stripping Old Wren\'s wheat field. Run them off, then raise a scarecrow.',
-    offer: 'Crows! Dozens of the black thieves, stripping my wheat ear by ear. My knees won\'t let me chase them any more. Run at them, wave your arms — sprinting sends them flying. Then we\'ll put up a proper scarecrow.',
+    summary: 'Crows are stripping what the blight left of Old Wren\'s wheat. Run them off and raise a scarecrow, or the Glen loses another week of bread.',
+    offer: 'Crows. Hundreds of them, fat on the blight and bold with it, stripping what\'s left of my wheat ear by ear. Every ear they take is a loaf someone in the Glen won\'t eat this winter. My knees are done. Run at them, sprint and wave your arms and they\'ll scatter. Then we raise the scarecrow, for all the good it does.',
     stages: [
       { note: 'Scare the crows off Wren\'s wheat (sprint at them).', hook: 'crows:land', objectives: [{ type: 'signal', id: 'crow-scared', count: 12, text: 'Scare crows from the wheat', at: [WHEAT_FIELD.x, WHEAT_FIELD.z] }] },
       { note: 'Raise the scarecrow in the field.', objectives: [{ type: 'signal', id: 'scarecrow', text: 'Raise the scarecrow in the wheat', at: [SCARECROW_AT.x, SCARECROW_AT.z] }] },
       { note: 'Tell Wren the field is safe.', objectives: [{ type: 'talk', npc: 'wren', text: 'Tell Old Wren the field is safe', say: 'Ha! Look at that fellow standing guard. The crows won\'t come back while he\'s there.' }] },
     ],
-    done: 'Take these seeds — carrot and wheat from my own stock. If you plant them in that plot by the granaries, you\'ll eat well this winter.',
+    done: 'Seeds. Carrot and wheat, the last of my own stock. Plant them in the plot by the granaries. If anything still grows in this ground, you might eat this winter.',
     rewards: { gold: 50, xp: 70, items: [['wheatSeed', 4], ['carrotSeed', 4]] },
   },
   {
     id: 'mill-wheel-jam', title: 'Mill Wheel Jam', giver: 'oswin', region: 'cresha',
-    summary: 'Driftwood has jammed the watermill\'s wheel. Get oak planks from Bram the carpenter and pry it loose.',
-    offer: 'Hear that? Nothing. The wheel\'s stopped dead — the spring flood drove driftwood right through the paddles. I need oak planks to brace the housing while I pry it loose. Bram Oakhand the carpenter will have some. Would you fetch them?',
+    summary: 'Driftwood has jammed the watermill\'s wheel. No wheel means no flour, and no flour means the Glen starves. Get oak planks from Bram and pry it loose.',
+    offer: 'Hear that? Nothing. The wheel\'s stopped dead. The flood drove driftwood through the paddles, and there\'s something caught under it I don\'t like the look of. No wheel, no flour. No flour, and we\'re eating the seed corn by the new moon. I need oak planks from Bram Oakhand to brace the housing while I pry it loose. Hurry.',
     stages: [
       { note: 'Get oak planks from Bram Oakhand, the carpenter.', objectives: [{ type: 'talk', npc: 'carpenter', text: 'Ask Bram Oakhand for oak planks', reply: 'Oswin needs planks for the mill wheel.', say: 'Oswin\'s wheel again? Here — four good seasoned planks. Tell him he owes me a sack of flour.', give: [['planks', 4]] }] },
       { note: 'Brace the housing and clear the driftwood from the waterwheel.', objectives: [{ type: 'signal', id: 'wheel-cleared', text: 'Clear the driftwood from the waterwheel', at: [0, 0] }] },
       { note: 'Tell Oswin the wheel is free.', objectives: [{ type: 'talk', npc: 'oswin', text: 'Tell Oswin the wheel is turning', say: 'Listen to that! Water on the paddles, stones grinding. You\'ve saved the week\'s bread.' }] },
     ],
-    done: 'For your trouble. And there\'ll always be a loaf for you at the Sunlit Bakery — Tessa gets her flour from me.',
+    done: 'It\'s turning. Gods, it\'s turning. For your trouble. And there\'ll be a heel of bread for you at the bakery while there\'s bread at all; Tessa gets her flour from me.',
     rewards: { gold: 70, xp: 90, items: [['healthPotion', 2]] },
   },
   {
     id: 'granary-rats', title: 'Granary Rats', giver: 'dora', region: 'cresha',
-    summary: 'Rats are eating the grain meant for Port Aurelle. Clear them from the granaries.',
-    offer: 'Rats. In my granaries. Bold as brass and fat as cats, and they\'re eating the grain we owe Port Aurelle. Clear them out before the caravan comes, would you? They bite, mind.',
+    summary: 'Rats are eating the Glen\'s last grain. Clear them from the granaries before there\'s nothing left to guard.',
+    offer: 'Rats. In my granaries. Fat as cats and they don\'t run from a lamp any more. That grain is all that stands between this village and a winter of burying children, and they\'re eating it while I watch. Clear them out. They bite, and something\'s made them bold.',
     stages: [
       { note: 'Kill the rats around the granaries.', hook: 'rats:spawn', objectives: [{ type: 'kill', kind: 'rat', count: 8, text: 'Kill the granary rats', at: [0, 118], radius: 90 }] },
       { note: 'Tell Dora the granaries are clear.', objectives: [{ type: 'talk', npc: 'dora', text: 'Tell Dora Sheaf the rats are gone', say: 'Not a squeak. Every sack counted and every sack whole.' }] },
     ],
-    done: 'The Glen owes you. If you\'re ever headed to Port Aurelle, the caravan master will hear your name from me.',
+    done: 'Forty days. Maybe forty-two now. You bought us two days. Don\'t laugh; in this village, two days is a life.',
     rewards: { gold: 45, xp: 70, guildRep: 10 },
   },
   {
     id: 'herbalist-list', title: 'The Herbalist\'s List', giver: 'apothecary', region: 'cresha',
-    summary: 'Ilyra Moss needs herbs to restock the apothecary: Sungrass, Moongrass, Wild Mint and Ironleaf.',
-    offer: 'My shelves are bare and the guild wants draughts by the dozen. I need three Sungrass, two Moongrass, three Wild Mint and two Ironleaf. They grow along the roadsides and down the King\'s Road east. Moongrass likes the river and shows best at night.',
+    summary: 'Ilyra Moss\'s shelves are empty and the sickness is spreading. She needs Sungrass, Moongrass, Wild Mint and Ironleaf.',
+    offer: 'My shelves are bare and the Watch comes back cut every night. There\'s a fever in the low houses, too. I need three Sungrass, two Moongrass, three Wild Mint and two Ironleaf. They grow along the roadsides and down the King\'s Road east. Moongrass likes the river and shows best at night, which is when everything else is out there too. Be careful.',
     stages: [
       { note: 'Gather herbs for Ilyra.', objectives: [
         { type: 'collect', item: 'sungrass', count: 3, text: 'Gather Sungrass' },
@@ -83,25 +83,25 @@ export const ELDER_GLEN_QUESTS: QuestDef[] = [
       ] },
       { note: 'Bring the herbs to Ilyra Moss.', objectives: [{ type: 'talk', npc: 'apothecary', text: 'Bring the herbs to Ilyra Moss', reply: 'I have your herbs.', say: 'Oh, these are good — look at the colour on that Sungrass. I\'ll have draughts brewing by nightfall.', take: [['sungrass', 3], ['moongrass', 2], ['wildmint', 3], ['ironleaf', 2]] }] },
     ],
-    done: 'Take a few of the first batch. And if you\'ve a mind for plants, I could teach you a thing or two about herb-lore one day.',
+    done: 'Take a few of the first batch. You\'ll need them. And if you\'ve a mind for plants, I could teach you herb-lore one day. Someone should know it, after me.',
     rewards: { gold: 60, xp: 90, items: [['healthPotion', 3], ['manaPotion', 2]] },
   },
   {
     id: 'smiths-ore-run', title: 'Smith\'s Ore Run', giver: 'froest', region: 'cresha',
-    summary: 'Fröst needs iron ore from the old quarry in the northern hills. Goblins have been denning there.',
-    offer: 'The ore wagons from the port are late again, and my forge eats iron like a dragon eats sheep. The old quarry in the northern hills still has iron in its bones. Bring me five lumps of ore. Mind yourself — goblins have been using the place as a den.',
+    summary: 'Fröst can\'t mend the Watch\'s blades without iron. The old quarry in the northern hills still has ore, and goblins have taken it for a den.',
+    offer: 'The wagons from the port stopped coming. Nobody knows why, and nobody\'s gone to look. The Watch is fighting with blades I\'ve mended so many times there\'s more mend than blade. The old quarry in the northern hills still has iron in its bones. Five lumps. Goblins den there now. Bring back the ore, or don\'t come back; I\'ve no time to mourn you.',
     stages: [
       { note: 'Go to the old quarry in the northern hills.', objectives: [{ type: 'reach', at: [QUARRY.x, QUARRY.z], radius: 18, text: 'Find the old quarry in the northern hills' }] },
       { note: 'Mine five lumps of iron ore.', hook: 'quarry:goblins', objectives: [{ type: 'collect', item: 'ironOre', count: 5, text: 'Mine iron ore', at: [QUARRY.x, QUARRY.z] }] },
       { note: 'Bring the ore back to Master Fröst.', objectives: [{ type: 'deliver', npc: 'froest', item: 'ironOre', count: 5, text: 'Bring 5 iron ore to Master Fröst', say: 'Good red ore, heavy in the hand. This will make honest steel.' }] },
     ],
-    done: 'Here\'s your pay. And when you want a proper blade, you know where the forge is.',
+    done: 'Good iron. That\'s three swords the Watch didn\'t have this morning. Here\'s your pay. When you want something better than that rusted thing on your hip, you know where the forge is.',
     rewards: { gold: 110, xp: 110, items: [['healthPotion', 2]] },
   },
   {
     id: 'harvest-festival', title: 'Harvest Festival Prep', giver: 'maud', region: 'cresha',
-    summary: 'Help Elder Maud get the Harvest Festival ready: wheat for the bakery, apples for the inn, bunting for the plaza.',
-    offer: 'The Harvest Festival is upon us and nothing is ready! Tessa needs wheat for the festival loaves, Mara at the Wayfarer needs apples for cider, and the plaza needs its bunting. Help an old woman out, and you\'ll dance with the whole valley tonight.',
+    summary: 'Maud wants the Glen\'s harvest feast held anyway, thin as it is: wheat for the bakery, apples for the inn, bunting for the plaza. People need one night that isn\'t fear.',
+    offer: 'We hold the harvest feast every year. This year there\'s hardly a harvest. We\'re holding it anyway. People need one night when they\'re not listening for the bells. Tessa needs wheat for the loaves, Mara needs apples for cider, and the plaza needs its bunting. Help an old woman pretend for an evening.',
     stages: [
       { note: 'Bring in wheat from the fields and pick apples in the orchard.', objectives: [
         { type: 'collect', item: 'wheat', count: 10, text: 'Help bring in wheat (south fields)', at: [WHEAT_FIELD.x, WHEAT_FIELD.z - 20] },
@@ -119,7 +119,7 @@ export const ELDER_GLEN_QUESTS: QuestDef[] = [
       ] },
       { note: 'Speak with Elder Maud.', objectives: [{ type: 'talk', npc: 'maud', text: 'Speak with Elder Maud', say: 'Look at them all — every farmer, every child, even Captain Brannoc tapping his foot. This is what Elder Glen is.' }] },
     ],
-    done: 'You\'re one of us now, summoned hero or not. Whatever road takes you from here, the Glen will remember.',
+    done: 'Look at them. Dancing. Half of them won\'t see the spring, and look at them dancing. You\'re one of us now, sky-person or not. Whatever road takes you from here, the Glen will remember.',
     rewards: { gold: 120, xp: 160, items: [['pear', 4]], guildRep: 20 },
   },
   {
@@ -139,8 +139,8 @@ export const ELDER_GLEN_QUESTS: QuestDef[] = [
   },
   {
     id: 'night-watch', title: 'The Night Watch', giver: 'brannoc', region: 'cresha',
-    summary: 'Goblins raid the south fields after dark. Stand watch with the town guard and drive them off.',
-    offer: 'Goblins have been raiding the south fields after dark — trampling the wheat, stealing tools, spooking the livestock. My watch is stretched thin. Stand guard at the south fields tonight and drive them off when they come.',
+    summary: 'Things raid the south fields after dark: goblins, and worse. The Watch is too thin to hold them. Stand guard with it through the night.',
+    offer: 'Something comes into the south fields every night. Goblins, mostly. Trampling the wheat, taking tools, taking sheep. Last week they took the Penney boy, and we never found enough of him to bury. My Watch is nine men, two of them under sixteen. Stand with them at the south fields tonight, and drive off whatever comes.',
     stages: [
       { note: 'Take position at the south fields after nightfall.', objectives: [
         { type: 'hour', from: 21, to: 3.5, text: 'Wait for nightfall (21:00)' },
@@ -149,7 +149,7 @@ export const ELDER_GLEN_QUESTS: QuestDef[] = [
       { note: 'Drive off the goblin raiders.', hook: 'goblins:raid', objectives: [{ type: 'kill', kind: 'cave', count: 6, text: 'Drive off the goblin raiders', at: [WHEAT_FIELD.x, WHEAT_FIELD.z], radius: 160 }] },
       { note: 'Report to Captain Brannoc.', objectives: [{ type: 'talk', npc: 'brannoc', text: 'Report to Captain Brannoc', say: 'Six of them? And not a stalk of wheat lost. You fight like one of the Academy knights.' }] },
     ],
-    done: 'The Watch pays its debts. If you\'re bound for Port Aurelle, tell them at the Knight\'s Academy that Brannoc of Elder Glen vouches for you.',
+    done: 'Everyone\'s alive. You don\'t know how rarely I get to say that. The Watch pays what it can. If you ever reach Port Aurelle, tell the Knight\'s Academy that Brannoc of Elder Glen vouches for you. It used to mean something.',
     rewards: { gold: 110, xp: 150, guildRep: 40 },
   },
   {

@@ -58,6 +58,8 @@
   text-shadow: 0 0 14px rgba(255, 190, 80, .75), 0 0 2px rgba(0, 0, 0, .9), 0 2px 6px rgba(0, 0, 0, .8);
 }
 #ui .story-voice.on { opacity: 1; letter-spacing: .06em; }
+#ui .story-voice.void { top: 40vh; z-index: 48; font-size: 26px; transition: opacity 1.6s, letter-spacing 4s; }
+#ui .story-voice.void::before { font-size: 28px; margin-bottom: 14px; }
 #ui .story-voice::before {
   content: '\2738'; display: block; margin-bottom: 6px; font-style: normal; font-size: 22px; color: #ffcf6a;
   animation: storySpin 9s linear infinite;

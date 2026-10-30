@@ -3,7 +3,7 @@ import { HERO } from '../npc/cast';
 import type { Look } from '../npc/charBuilder';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Character } from './character';
-import { RigLayer, blendPose, overlayPose, type ProcPose } from './rigLayer';
+import { RigLayer, blendPose, overlayPose, type ProcPose, type HandPose } from './rigLayer';
 import { Animator } from './animator';
 import { ThirdPersonCamera } from './camera';
 import { Input } from '../core/input';
@@ -1119,6 +1119,10 @@ export class Player {
     this.pos.copy(p);
     this.prevPos.copy(p);
     this.vel.set(0, 0, 0);
+    // (Arrive standing: the next step finds out if there's really ground under you.)
+    this.grounded = true;
+    this.airTime = 0;
+    this.landT = 1;
     this.onTeleport?.(p);
   }
   /** Moved by what you stand on (a ship's deck): keeps your velocity, unlike teleport. */
@@ -1172,7 +1176,7 @@ export class Player {
     // Local velocity for directional locomotion.
     const c = Math.cos(-yawR), s = Math.sin(-yawR);
     const local = { x: this.vel.x * c + this.vel.z * s, z: -this.vel.x * s + this.vel.z * c };
-    if (a || this.mounted || this.vehicle) local.x = local.z = 0;
+    if (a || this.mounted || this.vehicle || this.flying) local.x = local.z = 0;
 
     // ---- clip layers ------------------------------------------------------
     const anim = this.anim;
@@ -1180,7 +1184,7 @@ export class Player {
     if (this.dead && anim.has('death')) anim.setFull('death', this.deadT, 0.15);
     else if (a?.usingClip) anim.setFull(a.def.clip!, at, a.t < 0.05 ? 0.1 : 0.12, 0.2);
     else if (rolling && anim.has('jump_air')) anim.setFull('jump_air', 0.42, 0.06, 0.18); // tucked ball for the roll
-    else if (!a && (!this.grounded || this.landT < 0.34) && anim.has('jump_air')) {
+    else if (!a && !this.flying && (!this.grounded || this.landT < 0.34) && anim.has('jump_air')) {
       // Jump clip time follows the physical arc: rise, apex, fall, land.
       const vy = this.vel.y;
       const t = !this.grounded ? (vy > 0 ? 0.27 + (1 - vy / JUMP_V) * 0.2 : 0.47 + Math.min(1, -vy / JUMP_V) * 0.15) : 0.62 + this.landT;
@@ -1234,7 +1238,24 @@ export class Player {
     } else if (rolling && !anim.has('jump_air')) {
       pose = { ...base, legTuck: smoothstep(0.02, 0.2, at) * (1 - smoothstep(0.5, 0.7, at)), spinePitch: 0.8 * smoothstep(0.02, 0.15, at) * (1 - smoothstep(0.5, 0.72, at)) };
     } else if (a?.usingClip) pose = {};
-    if (!this.grounded && !a && !anim.has('jump_air')) pose = { ...pose, legTuck: 0.35 };
+    if (!this.grounded && !a && !this.flying && !anim.has('jump_air')) pose = { ...pose, legTuck: 0.35 };
+    // On the wing (dragonkin flight): legs long, arms out wide to hover and swept
+    // back along the body at speed, the head up to look where you're going.
+    if (this.flying && !a) {
+      const k = smoothstep(2, 10, speed);
+      const unit = (v: [number, number, number]): [number, number, number] => {
+        const l = Math.hypot(...v) || 1;
+        return [v[0] / l, v[1] / l, v[2] / l];
+      };
+      const arm = (x: number): HandPose => ({
+        grip: [x * (0.5 - 0.22 * k), 1.28 - 0.36 * k, 0.05 - 0.36 * k],
+        dir: unit([x * (0.7 - 0.5 * k), -0.2 * k, 0.2 - 0.7 * k]),
+        normal: unit([0, 1 - k, -0.3 * k]),
+        w: 0.85,
+        pole: [x * 0.6, 1.0, -0.4],
+      });
+      pose = { spinePitch: -0.05, headPitch: -0.35 - 0.25 * k, legTuck: 0, right: arm(-1), left: arm(1) };
+    }
     // Skill flourishes over the clip: leans and crouches go into the pose, spins,
     // hops and banks turn and lift the whole body (below).
     const fl = a && !this.dead ? flairAt(a.def.flair, at) : null;

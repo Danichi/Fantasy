@@ -1588,9 +1588,10 @@ async function boot() {
   // Kaela Voss's drill yard (combat rework): a drill for each part of the fighting.
   const kaelaSpec = NPCS.find((n) => n.id === 'kaela');
   const yard = new TrainingYard(r.scene, encounters.bolts, player, new THREE.Vector3(kaelaSpec?.pos[0] ?? -13.5, 0, kaelaSpec?.pos[1] ?? 0.5), worldFlags, (m) => hud.toast(m), (n) => player.prog.addXp(n));
+  yard.close = () => dialogue.close();
   const baseServices = town.serviceOptions;
   town.serviceOptions = (id, show, back) => [
-    ...(id === 'kaela' ? [{ label: 'Drill me in the fighting arts.', run: () => yard.menu(show, back) }] : []),
+    ...(id === 'kaela' ? [{ label: 'Teach me to fight.', run: () => yard.menu(show, back) }] : []),
     ...(baseServices?.(id, show, back) ?? []),
   ];
   microDiscoveries = new MicroDiscoveries(

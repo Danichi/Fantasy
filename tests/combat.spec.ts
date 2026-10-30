@@ -275,6 +275,43 @@ test('the drill yard: Kaela sets a drill with a sparring partner, and a perfect 
   expect(game.errors).toEqual([]);
 });
 
+test('the basics: Kaela walks you through each step, moving on by herself, and you arrive standing', async ({ game }) => {
+  const { page } = game;
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, yard = g.yard, E = g.events, W = (window as any).waitSteps;
+    const dummy = { kind: 'dummy', id: -7, alive: true, radius: 0.5, position: g.player.pos.clone(), center: g.player.center.clone() };
+    const seen: (string | null)[] = [];
+    yard.startBasics();
+    const coach = !!document.querySelector('.yard-coach');
+    seen.push(yard.basicsStep);
+    for (let i = 0; i < 3; i++) E.emit('meleeHit', { target: dummy, amount: 1, crit: false, action: 'slash1' });
+    seen.push(yard.basicsStep);
+    for (let i = 0; i < 6; i++) E.emit('meleeHit', { target: dummy, amount: 1, crit: false, action: 'slash1' });
+    seen.push(yard.basicsStep);
+    for (let i = 0; i < 2; i++) E.emit('strike', { target: dummy, at: g.player.center.clone(), damage: 1, crit: false, react: 'none', broke: false, armour: 'wood', type: 'slash', heavy: true, typeMult: 1, killed: false });
+    seen.push(yard.basicsStep);
+    const partner = yard['partner'];
+    await W(10);
+    const standing = g.player.grounded;
+    g.player.lock = partner;
+    yard.update(1 / 60);
+    seen.push(yard.basicsStep);
+    for (let i = 0; i < 2; i++) E.emit('blockImpact', { at: g.player.center, guardBroken: false });
+    seen.push(yard.basicsStep);
+    E.emit('parrySuccess', { at: g.player.center, perfect: true });
+    seen.push(yard.basicsStep);
+    g.player.lock = null;
+    yard.stop('Drill stopped.');
+    return { coach, seen, standing, gone: !document.querySelector('.yard-coach'), active: !!yard.active };
+  });
+  expect(res.coach).toBe(true);
+  expect(res.seen).toEqual(['cut', 'string', 'heavy', 'lock', 'block', 'parry', 'dodge']);
+  expect(res.standing).toBe(true);
+  expect(res.gone).toBe(true);
+  expect(res.active).toBe(false);
+  expect(game.errors).toEqual([]);
+});
+
 test('balance: every weapon family kills every armour within reason (light strings, time to kill)', async ({ game }) => {
   const { page } = game;
   const res = await page.evaluate(async () => {

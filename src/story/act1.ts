@@ -60,19 +60,19 @@ export const ACT1_QUESTS: QuestDef[] = [
     offer: '',
     stages: [
       { note: 'Survive.', hook: 'fall:night', objectives: [{ type: 'signal', id: 'fall-survived', text: 'Survive the things that came for you', at: [FALL_AT.x, FALL_AT.z] }] },
-      { note: 'Kaela and Brannoc have brought you in. The village elder wants to see you.', hook: 'fall:morning', objectives: [{ type: 'talk', npc: 'maud', text: 'Speak with Elder Maud on the plaza', reply: 'Where am I?', say: 'Elder Glen, in the Kingdom of Cresha. And you came down out of the night sky in a flash of light, over Wren\'s wheat, with things out of the Dark already waiting for you. Kaela swears she saw it. Brannoc won\'t say what he saw. Sit down, dear. You\'ve frightened half my village and I\'d like to know whether I ought to be frightened too.' }] },
+      { note: 'Kaela and Brannoc have brought you in. The village elder wants to see you.', hook: 'fall:morning', objectives: [{ type: 'talk', npc: 'maud', text: 'Speak with Elder Maud on the plaza', reply: 'Where am I?', say: 'Elder Glen, in Cresha. What\'s left of it. You came down out of the night over Wren\'s wheat, and the Dark was already standing there waiting for you. Kaela swears she saw it. Brannoc won\'t say what he saw. Sit. I have buried eleven people since the thaw, and I would like to know whether you are going to be the twelfth, or the reason for the next ten.' }] },
     ],
-    done: 'There\'s an old song about people who fall out of the sky. It doesn\'t end well for them. Let\'s see if we can write you a better one.',
-    rewards: { gold: 25, xp: 60, items: [['healthPotion', 3]] },
+    done: 'There\'s an old song about people who fall out of the sky. It doesn\'t end well for them, or for the village they fall on. Here. It\'s what the Watch can spare, which is almost nothing. Don\'t make me sorry.',
+    rewards: { gold: 5, xp: 60, items: [['healthPotion', 1]] },
   },
   {
     id: 'mq-stranger', title: 'A Stranger in Elder Glen', giver: 'maud', region: 'cresha', main: true, requires: ['mq-fall'],
-    summary: 'The Glen is frightened of you. Maud says the way to stop that is to be useful: help its people, and let them see who you are.',
-    offer: 'The village is frightened of you. I can\'t blame them. So: be useful. Tom Hale has lost a heifer, Wren has crows in her wheat, Oswin\'s wheel keeps jamming, Dora has rats, Fröst needs ore. Help them. Let them see your face doing something ordinary.',
-    acceptLabel: 'I\'ll make myself useful.',
+    summary: 'Elder Glen is starving. The blight took half the wheat, the Dark takes someone most nights, and there is no bread to spare for a stranger. Maud will let you stay only if you help the Glen live through the season.',
+    offer: 'I\'ll be plain, because there\'s no time left to be kind. The blight took half the wheat. The rifts took the rest of the summer. We have bread for forty days and two hundred mouths, and now one more. The village won\'t keep a sky-person who brings the Dark down on it and gives nothing back, and I won\'t ask them to. Tom Hale\'s last heifer is out past the fence. Crows are stripping what\'s left of Wren\'s field. Oswin\'s wheel jams, and no wheel means no flour. Rats are in the granary, in our forty days. Fröst can\'t mend a blade without ore. Help us live. Then we\'ll talk about trusting you.',
+    acceptLabel: 'I\'ll help keep the Glen alive.',
     stages: [
-      { note: 'Help the people of Elder Glen (any of their troubles).', objectives: [{ type: 'signal', id: 'glen-trust', count: 2, text: 'Help the people of Elder Glen: the farms, the mill, the granary, the forge, the Watch' }] },
-      { note: 'Go back to Elder Maud.', objectives: [{ type: 'talk', npc: 'maud', text: 'Go back to Elder Maud', reply: 'I\'ve been making myself useful.', say: 'So I hear. Tom Hale was in here an hour ago telling me you\'re "all right, for a sky-person." From Tom that\'s a knighthood. Now: Magus Orren wants to see you. He\'s been reading about people like you, and he looks worse every day. Go and see him at his tower, by the forge.' }] },
+      { note: 'Help Elder Glen survive the season (any of its troubles).', objectives: [{ type: 'signal', id: 'glen-trust', count: 2, text: 'Help Elder Glen survive: the herd, the last of the wheat, the mill, the granary, the forge, the walls' }] },
+      { note: 'Go back to Elder Maud.', objectives: [{ type: 'talk', npc: 'maud', text: 'Go back to Elder Maud', reply: 'The Glen\'s a little further from the edge.', say: 'A little. The granary\'s a little fuller and last night we only lost the dog, and Tom Hale says you\'re "all right, for a sky-person." From Tom that\'s a knighthood. It isn\'t enough. Nothing is enough, this year. But it\'s more than yesterday. Magus Orren wants you. He\'s been reading about people like you, and he hasn\'t slept in a week. His tower, by the forge.' }] },
       { note: 'See Magus Orren.', objectives: [{ type: 'talk', npc: 'magus', text: 'See Magus Orren', reply: 'Maud sent me.', say: 'Give me your hand. ...Yes. Warm. Warmer than it should be. There is a waystone at the east gate, older than the road, with a wheel cut into it: the Sunwheel. Every one of them in Cresha is the same wheel, I think. Go and put your hand on it, and tell me what it says to you. I suspect it has been waiting for you.' }] },
       { note: 'Lay your hand on the waystone at the east gate.', hook: 'wheel:wake', objectives: [{ type: 'signal', id: 'wheel-woken', text: 'Touch the Sunwheel waystone at the east gate', at: [128, -10] }] },
     ],
@@ -123,6 +123,18 @@ export const ACT1_QUESTS: QuestDef[] = [
   },
 ];
 
+/** What the Dawn says to you in the dark, before you open your eyes (line, seconds). */
+const PROLOGUE: [string, number][] = [
+  ['Listen.', 2.6],
+  ['Before the first morning there was only the Dark. Then there was me.', 4.6],
+  ['I have kept this world lit for longer than your kind has had a word for time. The night is long, and it is hungry, and I am so very tired.', 6.4],
+  ['Four times I have reached into the other places and pulled a soul across. I will not tell you yet what became of them.', 5.8],
+  ['You are the fifth.', 3.2],
+  ['You will wake with nothing. No name they know. No blade. No friend. Only a little of my light in you, and it is very small.', 6],
+  ['Things are already moving toward where you will fall. They can smell it on you.', 4.6],
+  ['Keep it lit.', 3.4],
+];
+
 // ---------------------------------------------------------------------------------------------
 
 /** A spot on the ground near a point. */
@@ -143,15 +155,26 @@ export function setupAct1(c: ActCtx) {
     story.h.teleport(ground(FALL_AT.x, FALL_AT.z).add(new THREE.Vector3(0, 0.6, 0)));
     player.yaw = Math.PI; // facing the village
     void story.play('fall', async (s) => {
+      // Before anything: the dark, and a voice in it.
       await s.fade(1, 0);
       s.bars(true);
+      await s.wait(1.2);
+      for (const [line, sec] of PROLOGUE) await s.voice(line, sec);
+      await s.wait(0.8);
       await s.card('Act I', 'The Fifth Summon', '', 3);
       const me = player.pos.clone();
       await s.cam(me.clone().add(new THREE.Vector3(0, 9, 3)), me, 0);
-      await s.fade(0, 2.2);
+      await s.fade(0, 2.6);
+      await s.say(null, 'Cold. Wet wheat against your face. You have nothing: no coat, no coin, no name anyone here would know.', 3.6);
       await s.voice('Five.', 2.2);
       await s.cam(me.clone().add(new THREE.Vector3(3, 2.2, 5)), me.clone().setY(me.y + 0.8), 3);
       await s.voice('Get up. Quickly now. They felt you arrive.', 3.4);
+      // Something in the wheat under your hand: the only thing you'll own tonight.
+      if (!player.equip.mainWeapon) {
+        const blade = player.equip.add('rustedBlade');
+        player.equip.equip(blade.uid, 'main');
+      }
+      await s.say(null, 'Your hand closes on something in the furrow. Most of a sword, rusted half through. Someone else died here once.', 3.6);
       // A rift tears open in the wheat.
       const rift = around(me, 11, -0.6);
       for (let k = 0; k < 6; k++) story.h.fx.add.spawn({ pos: rift.clone().setY(rift.y + 1.2), spread: 1.6, count: 30, life: [0.4, 1.2], size: [0.3, 0.06], color: 0x7a2aaa, color2: 0x050008, upBias: 1.6 });
@@ -235,7 +258,7 @@ export function setupAct1(c: ActCtx) {
       await s.card('', 'The Sunwheel Wakes', 'Touch any wheel to travel to another you have touched, or to rest.', 3.6);
     });
     story.awakenWheel();
-    story.note(CH[1], 'Elder Glen was afraid of you, so you made yourself useful, and the village began to trust you. Magus Orren sent you to the waystone at the east gate. When you touched it the voice spoke again: it called you here, out of your own world, as it called four before you. Six other champions were summoned the same night, it said, and their masters carried them home to train; you will not meet them for a while. The Sunwheels answer you now.');
+    story.note(CH[1], 'Elder Glen is starving, and it was afraid of you. You helped it through a few more days, and it began to tolerate you. Magus Orren sent you to the waystone at the east gate. When you touched it the voice spoke again: it called you here, out of your own world, as it called four before you. Six other champions were summoned the same night, it said, and their masters carried them home to train; you will not meet them for a while. The Sunwheels answer you now.');
     quests.signal('wheel-woken');
     c.save();
   };

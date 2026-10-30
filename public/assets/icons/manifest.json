@@ -572,7 +572,8 @@
   "yarrow",
   "yewStaff",
   "yewWarbow",
-  "yewWood"
+  "yewWood",
+  "rustedBlade"
  ],
  "wide": [
   "armingSword",
@@ -635,6 +636,7 @@
   "warhammer",
   "wolfMotherFang",
   "yewStaff",
-  "yewWarbow"
+  "yewWarbow",
+  "rustedBlade"
  ]
 }

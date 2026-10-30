@@ -34,6 +34,8 @@ export class StoryUI {
   fade(a: number, sec = 0.6) {
     this.fadeEl.style.transition = `opacity ${sec}s`;
     this.fadeEl.style.opacity = String(a);
+    // (Over a black screen the patron's voice moves to the middle, above the dark.)
+    this.voiceEl.classList.toggle('void', a >= 0.9);
   }
   subtitle(who: string | null, text: string | null) {
     if (!text) return void this.sub.classList.remove('on');
