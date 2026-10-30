@@ -165,10 +165,11 @@ test('dual wield: off-hand attack and equip armour', async ({ game }) => {
     for (const id of ['ironHelm', 'breastplate', 'pauldrons', 'gauntlets', 'greaves', 'sabatons']) {
       eq.equip(eq.items.find((i: any) => i.def.id === id).uid);
     }
+    // (Simulation steps, not wall-clock time: a slow renderer can run a whole swing in 100 ms.)
     g.input.press('Mouse2');
-    await new Promise((r) => setTimeout(r, 60));
+    g.stepSim(3);
     g.input.release('Mouse2');
-    await new Promise((r) => setTimeout(r, 100));
+    g.stepSim(3);
     return { dual: eq.dualWield, act: g.player.act?.def.id, armor: eq.armorValue };
   });
   expect(res.dual).toBe(true);

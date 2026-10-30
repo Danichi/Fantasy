@@ -112,7 +112,7 @@ export const GHAGRABBA_SIDE_QUESTS: QuestDef[] = [
   },
   // ---- the gates ----
   {
-    id: 'night-watch', title: 'The West Wall Watch', giver: 'gateguard-3', region: R, requires: ARRIVED,
+    id: 'west-wall-watch', title: 'The West Wall Watch', giver: 'gateguard-3', region: R, requires: ARRIVED,
     summary: 'Gate Guard Rahotep is short of men for the night watch at the west gate, and raiders have been testing it.',
     offer: 'Half my watch has the sand fever and the other half has excuses. Raiders tried the west gate last moon and they will try it again in the dark. Stand the watch with me tonight: light the four watch braziers outside the gate after the twenty-first hour, and when they come — and they will come — help me send them back to the sand.',
     stages: [
@@ -257,7 +257,7 @@ export const NOTICES: Record<string, string> = {
   'paneb-ring': 'Has anyone ever beaten Ubaid at knucklebones? Paneb the jeweller would like a word.',
   'ipuwer-stelae': 'The Scroll House seeks rubbings of the old stelae in the dunes. Charcoal provided.',
   'baket-feast': 'Dates and shark fin wanted for the Queen\'s name-day feast. The Date Palm Kitchen.',
-  'night-watch': 'The west gate watch is short of hands. Report to Gate Guard Rahotep.',
+  'west-wall-watch': 'The west gate watch is short of hands. Report to Gate Guard Rahotep.',
   'lost-patrol': 'MISSING: Sun Guards Ib and Seneb, the Caravan Way. Word to Gate Guard Isis, east gate.',
   'caravan-ledger': 'Courier wanted, Caravan Way, discreet, armed. Bazaar Master Hassun.',
   'sethi-falcon': 'LOST: a falcon, jesses of royal teal. Answers to "Khepri" (and bites). The palace.',

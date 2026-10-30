@@ -122,8 +122,8 @@ test('small talk goes deeper with trust: secrets for friends, personal topics un
     }
     return { strangerTopics, guarded, guardedOpts, friendTopics, secret, greets };
   });
-  expect(res.strangerTopics.some((l: string) => /Kaela/.test(l))).toBe(false);
-  expect(res.friendTopics.some((l: string) => /Kaela/.test(l))).toBe(true);
+  expect(res.strangerTopics.some((l: string) => /fought Kaela/.test(l))).toBe(false); // (the trust-gated topic; "What do you make of Kaela?" is open to anyone)
+  expect(res.friendTopics.some((l: string) => /fought Kaela/.test(l))).toBe(true);
   expect(res.guardedOpts).toEqual(expect.arrayContaining(['persuade', 'threat']));
   expect(res.secret).toContain('eye');
   expect(new Set(res.greets).size).toBe(res.greets.length);

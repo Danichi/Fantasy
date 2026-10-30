@@ -272,7 +272,7 @@ export class GhagrabbaSideHooks {
     const add = (pack: Pack<SandCreature | Bandit>, want: () => number) => this.packs.push({ pack, want });
     // Raiders out of the dark at the west gate.
     add(new Pack<SandCreature | Bandit>(() => v3([WEST_GATE_OUT[0] - 30, WEST_GATE_OUT[1]]), (k, at) => banditAt(d.scene, this.bolts, at, k, 6, { role: k % 3 === 2 ? 'crossbow' : 'sword', kind: 'scavenger', name: 'Night Raider', look: RAIDER, radius: 8 }), (m, dt) => bandit(m as Bandit, dt), 120),
-      () => (q.isActive('night-watch', 2) ? Math.max(need(q, 'night-watch', 2), 1) + 1 : 0));
+      () => (q.isActive('west-wall-watch', 2) ? Math.max(need(q, 'west-wall-watch', 2), 1) + 1 : 0));
     // The riders who killed the patrol.
     const rider = (at: THREE.Vector3, k: number) => {
       const r = new RaySkimmer(ring(at, k, 2, 30), d.scene, d.fx, this.bolts, RAIDER);
