@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { pbr } from '../props';
 import { col, rockGeo, sunwheelMat } from './kit';
 import { SINKHOLE, DROWNED_MERE, heightAt } from '../terrainHeight';
 import type { SiteCtx, SiteType } from './types';
@@ -178,7 +179,10 @@ export const SINKHOLE_SITE: SiteType = {
         p.setXYZ(i, x * j, y, z * j);
       }
       wall.computeVertexNormals();
-      const earth = new THREE.Mesh(wall, new THREE.MeshStandardMaterial({ color: 0x4a3a2c, roughness: 1, side: THREE.DoubleSide }));
+      // Raw earth and rock: a real rock face, tinted to warm earth, tiled to the wall's size.
+      const wallMat = pbr(new THREE.TextureLoader(), 'rock_face_03', { color: new THREE.Color(1.15, 0.95, 0.78), roughness: 1, side: THREE.DoubleSide }, 8, 0.25);
+      for (const t of [wallMat.map, wallMat.normalMap, wallMat.roughnessMap, wallMat.aoMap]) t?.repeat.set(Math.round((2 * Math.PI * R) / 7), Math.max(1, Math.round(depth / 7)));
+      const earth = new THREE.Mesh(wall, wallMat);
       earth.position.set(SINKHOLE.x, floor + (depth + 0.4) / 2 - 0.2, SINKHOLE.z);
       earth.receiveShadow = true;
       k.live(earth);
