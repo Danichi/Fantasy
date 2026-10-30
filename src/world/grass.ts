@@ -14,38 +14,53 @@ import { MEADOW_FIELD_GLSL } from '../render/palette';
 // far field of wider blades that carries the texture out to the haze.
 
 // Three rings, each fading into the next: dense thin blades near the camera,
-// a medium field of wider blades out to ~66 m, and a sparse far field to ~115 m
-// (inside the ground window, which may sit 40 m off-centre).
+// a medium field out to ~66 m and a far field to ~118 m (inside the ground
+// window, which may sit 40 m off-centre). The outer rings plant tufts of
+// several blades per instance, so the field reads as full as the near one all
+// the way out (the view grazes the field further away, so fewer blades cover
+// it), instead of a dense circle around the player.
 const NEAR_TILE = 44;
 const MID_TILE = 132;
-const FAR_TILE = 232;
+const FAR_TILE = 236;
 
 /**
  * A single tapered, curved blade, height 1, width 1: 3 segments + tip close
  * up (7 triangles). Distant layers use fewer rows, where the curve can't be
  * seen: 3 triangles in the middle distance, 1 far away.
  */
-function bladeGeometry(rows = [0, 0.3, 0.6, 0.85]) {
+function bladeGeometry(rows = [0, 0.3, 0.6, 0.85], blades = 1, spread = 0, seed = 7) {
   const pos: number[] = [];
   const t: number[] = [];
-  for (const y of rows) {
-    const w = 0.5 * (1 - y * 0.82);
-    const lean = y * y * 0.35; // natural forward curve
-    pos.push(-w, y, lean, w, y, lean);
-    t.push(y, y);
-  }
-  pos.push(0, 1, 0.42);
-  t.push(1);
+  const tuft: number[] = [];
   const idx: number[] = [];
-  for (let r = 0; r < rows.length - 1; r++) {
-    const a = r * 2;
-    idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+  const rnd = mulberry32(seed);
+  for (let b = 0; b < blades; b++) {
+    // Each blade of a tuft stands a little apart, turned its own way.
+    const a = rnd() * Math.PI * 2, r = b === 0 ? 0 : spread * (0.45 + 0.55 * rnd());
+    const ox = Math.cos(a) * r, oz = Math.sin(a) * r, rot = rnd() * Math.PI * 2, hk = 0.8 + rnd() * 0.35;
+    const base = pos.length / 3;
+    for (const y of rows) {
+      const w = 0.5 * (1 - y * 0.82);
+      const lean = y * y * 0.35; // natural forward curve
+      pos.push(-w, y * hk, lean, w, y * hk, lean);
+      t.push(y, y);
+      tuft.push(ox, oz, rot, ox, oz, rot);
+    }
+    pos.push(0, hk, 0.42);
+    t.push(1);
+    tuft.push(ox, oz, rot);
+    for (let r = 0; r < rows.length - 1; r++) {
+      const q = base + r * 2;
+      idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2);
+    }
+    const last = base + (rows.length - 1) * 2;
+    idx.push(last, last + 1, last + 2);
   }
-  const last = (rows.length - 1) * 2;
-  idx.push(last, last + 1, last + 2);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('aT', new THREE.Float32BufferAttribute(t, 1));
+  // where each blade stands in its tuft (x, z metres) and how it is turned
+  g.setAttribute('aTuft', new THREE.Float32BufferAttribute(tuft, 3));
   // Normals lean up so a field lights evenly, like one soft surface.
   g.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(pos.length / 3).fill([0, 0.9, 0.44]).flat(), 3));
   g.setIndex(idx);
@@ -71,8 +86,8 @@ class GrassLayer {
   readonly mesh: THREE.InstancedMesh;
   private center = { value: new THREE.Vector2() };
 
-  constructor(scene: THREE.Scene, count: number, tile: number, width: number, fadeIn: number, seed: number, rows?: number[]) {
-    const geo = bladeGeometry(rows);
+  constructor(scene: THREE.Scene, count: number, tile: number, width: number, fadeIn: number, seed: number, rows?: number[], blades = 1, spread = 0) {
+    const geo = bladeGeometry(rows, blades, spread, seed);
     const offs = new Float32Array(count * 4);
     const rnd = mulberry32(seed);
     // Jittered grid keeps coverage even (no clumps of empty ground).
@@ -93,7 +108,7 @@ class GrassLayer {
         .replace(
           '#include <common>',
           `#include <common>
-          attribute vec4 aOff; attribute float aT;
+          attribute vec4 aOff; attribute float aT; attribute vec3 aTuft;
           uniform vec2 uCenter, uWindDir, uGroundOrigin; uniform float uTime, uGroundSize, uTile, uWidth, uFadeIn, uWindStrength; uniform vec3 uPlayer;
           uniform sampler2D uGround, uNoise;
           varying float vT; varying vec3 vCol; varying float vGust;
@@ -128,6 +143,9 @@ class GrassLayer {
           p.x *= width;
           p.z *= height * 0.55;
           p.y *= height;
+          // The blade turns within its tuft and stands at its place in it; then the whole tuft turns.
+          float cb = cos(aTuft.z), sb = sin(aTuft.z);
+          p.xz = mat2(cb, -sb, sb, cb) * p.xz + aTuft.xy;
           float c = cos(aOff.z), s = sin(aOff.z);
           p.xz = mat2(c, -s, s, c) * p.xz;
           vec2 bend = uWindDir * (0.12 + gust * 0.7 + flutter * 0.06) * uWindStrength;
@@ -156,7 +174,7 @@ class GrassLayer {
           vCol *= mix(0.9, 1.08, fract(aOff.w * 3.1));
           vec3 transformed = vec3(world.x + p.x, h + p.y - 0.02, world.y + p.z);`,
         )
-        .replace('#include <beginnormal_vertex>', `vec3 objectNormal = normal;\n{ float c0 = cos(aOff.z), s0 = sin(aOff.z); objectNormal.xz = mat2(c0, -s0, s0, c0) * objectNormal.xz; }`)
+        .replace('#include <beginnormal_vertex>', `vec3 objectNormal = normal;\n{ float c0 = cos(aOff.z + aTuft.z), s0 = sin(aOff.z + aTuft.z); objectNormal.xz = mat2(c0, -s0, s0, c0) * objectNormal.xz; }`)
         .replace('#include <project_vertex>', `vec4 mvPosition = viewMatrix * vec4(transformed, 1.0);\ngl_Position = projectionMatrix * mvPosition;`)
         .replace('#include <worldpos_vertex>', `vec4 worldPosition = vec4(transformed, 1.0);`);
       sh.fragmentShader = sh.fragmentShader
@@ -208,8 +226,9 @@ export class Grass {
     shared.uGroundSize = ground.size;
     scene.add(this.mesh);
     this.near = new GrassLayer(this.mesh as unknown as THREE.Scene, Q.grassBlades, NEAR_TILE, 0.055, 0, 1234);
-    this.mid = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.5), MID_TILE, 0.11, NEAR_TILE * 0.36, 555, [0, 0.5]);
-    this.far = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.22), FAR_TILE, 0.2, MID_TILE * 0.36, 987, [0]);
+    // Tufts of 4 (middle distance) and 3 (far) blades: the field stays full out to the haze.
+    this.mid = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.5), MID_TILE, 0.1, NEAR_TILE * 0.36, 555, [0, 0.5], 4, 0.28);
+    this.far = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.3), FAR_TILE, 0.2, MID_TILE * 0.36, 987, [0], 3, 0.5);
   }
 
   /** Follow a (mutable) sun direction by reference. */
