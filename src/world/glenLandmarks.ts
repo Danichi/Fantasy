@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { pbr } from './props';
 import { heightAt } from './terrainHeight';
 import { physics } from '../physics/physics';
 import { mulberry32 } from '../core/math';
@@ -61,12 +63,25 @@ function rock(rnd: () => number, r: number, detail = 1) {
 }
 
 /** The kit's stone, warmed and darkened into weathered hill rock. */
-function quarryRock(m: WorldMats) {
-  const src = (m.bridgeStone ?? m.stone) as THREE.MeshStandardMaterial;
-  const r = src.clone();
-  r.color = new THREE.Color(0xe2d8c4);
-  r.roughness = 1;
+/** Weathered quarry stone: a real rock face (not the bridge's bricks), warm grey. */
+function quarryRock(_m: WorldMats) {
+  // (The rock face photo is dark: the tint lifts it to pale weathered stone.)
+  const r = pbr(new THREE.TextureLoader(), 'rock_face_03', { color: new THREE.Color(1.9, 1.84, 1.72), roughness: 1 }, 8, 0.7);
+  r.normalScale.set(0.8, 0.8);
   return r;
+}
+
+/** A standing stone: a rounded, slightly tapered monolith (no sharp box edges). */
+function monolith(w: number, h: number, d: number) {
+  const g = new RoundedBoxGeometry(w, h, d, 3, Math.min(w, d) * 0.28);
+  const p = g.getAttribute('position');
+  for (let i = 0; i < p.count; i++) {
+    const t = (p.getY(i) + h / 2) / h; // 0 at the foot, 1 at the top
+    const k = 1 - t * 0.18;
+    p.setXYZ(i, p.getX(i) * k, p.getY(i), p.getZ(i) * k);
+  }
+  g.computeVertexNormals();
+  return g;
 }
 
 export interface GlenLandmarks {
@@ -86,8 +101,10 @@ export function buildGlenLandmarks(scene: THREE.Scene, m: WorldMats, give: (id: 
   const glyphMats: THREE.MeshStandardMaterial[] = [];
   const addStone = (g: THREE.BufferGeometry, x: number, y: number, z: number, ry = 0, sx = 1, sy = 1, sz = 1) => {
     g.scale(sx, sy, sz).rotateY(ry).translate(x, y, z);
+    // (Smooth normals stay smooth: they're computed before the faces are split.)
+    if (g.index) g.computeVertexNormals();
     const n = g.index ? g.toNonIndexed() : g;
-    n.computeVertexNormals();
+    if (!g.index && !n.attributes.normal) n.computeVertexNormals();
     worldUV(n, 0.2);
     stoneParts.push(n);
   };
@@ -215,15 +232,15 @@ export function buildGlenLandmarks(scene: THREE.Scene, m: WorldMats, give: (id: 
       const h = 3.2 + rnd() * 1.6;
       const y = heightAt(x, z);
       const lean = (rnd() - 0.5) * 0.18;
-      const g = new THREE.BoxGeometry(1.2, h, 0.8);
+      const g = monolith(1.2, h, 0.8);
       g.rotateZ(lean);
       addStone(g, x, y + h / 2 - 0.3, z, -a + Math.PI / 2);
       physics.addCylinder(new THREE.Vector3(x, y + h / 2, z), h / 2, 0.6);
     }
     // One fallen stone and the altar stone in the middle, carrying the Sunwheel.
-    addStone(new THREE.BoxGeometry(3.6, 0.9, 1.2), c.x + 5, c.y + 0.3, c.z + 2, 0.7);
-    addStone(new THREE.BoxGeometry(2, 0.9, 1.4), c.x, c.y + 0.4, c.z);
-    addStone(new THREE.BoxGeometry(1.4, 3.8, 0.7), c.x, c.y + 2.6, c.z - 0.4);
+    addStone(monolith(3.6, 0.9, 1.2), c.x + 5, c.y + 0.3, c.z + 2, 0.7);
+    addStone(monolith(2, 0.9, 1.4), c.x, c.y + 0.4, c.z);
+    addStone(monolith(1.4, 3.8, 0.7), c.x, c.y + 2.6, c.z - 0.4);
     plaque(c.x, c.y + 2.9, c.z - 0.04, 0, 1.2);
     physics.addBox(new THREE.Vector3(c.x, c.y + 2, c.z - 0.2), new THREE.Vector3(1, 2, 0.7));
   }
