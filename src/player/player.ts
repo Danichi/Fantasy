@@ -908,7 +908,7 @@ export class Player {
     let targetSpeed = 0;
     if (!a && intent.lengthSq() > 0) {
       const ms = this.mountStats ?? { canter: 11.5, gallop: 15, accel: 8 };
-      targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking || this.aiming ? 1.6 : this.sprinting ? 6.2 : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
+      targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking || this.aiming ? 1.6 : this.sprinting ? 8.4 : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
       if (this.webbed > 0 && !this.mounted) targetSpeed = Math.min(targetSpeed, 1.3);
       // Wading slows you down; deep water means swimming.

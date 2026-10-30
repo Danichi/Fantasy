@@ -104,8 +104,14 @@ export class Conversation {
   /** Open (or return to) a conversation. */
   open(spec: ConvoSpec) {
     const p = this.h.people.get(spec.id);
-    if (!p) return void this.h.dialogue.show(spec.name, spec.title, spec.intro ?? 'Hello.', [...spec.services, { label: 'Farewell.', run: () => this.close() }]);
     const continuing = this.h.dialogue.open && this.cur?.id === spec.id;
+    // Someone waiting on a quest step: walking up to them goes straight into it.
+    const due = continuing ? undefined : spec.services.find((o) => o.auto);
+    if (due) {
+      this.cur = { id: spec.id, text: '' };
+      return due.run();
+    }
+    if (!p) return void this.h.dialogue.show(spec.name, spec.title, spec.intro ?? 'Hello.', [...spec.services, { label: 'Farewell.', run: () => this.close() }]);
     if (!continuing) this.served.delete(spec.id);
     const text = spec.say ?? (continuing ? this.follow(p) : this.greet(spec, p));
     this.cur = { id: spec.id, text };
@@ -212,19 +218,19 @@ export class Conversation {
     this.show(spec, text, opts);
   }
 
-  /** The top of the conversation: their business, then the social side. */
+  /**
+   * The top of the conversation, kept short: their business (quests, trade,
+   * the story), an apology only while they're actually upset with you, then
+   * "Let's talk" (small talk, saying something, gifts, amends) and farewell.
+   */
   private menu(spec: ConvoSpec, p: Profile): DialogueOption[] {
     const m = this.rep.memOf(p.id);
     const mood = this.rep.moodOf(p.id);
     const opts: DialogueOption[] = [...spec.services];
-    opts.push({ label: 'Let\'s talk.', run: () => this.talk(spec, p, this.chatOpener(p)) });
-    opts.push({ label: 'Say something...', run: () => this.say(spec, p) });
-    if (this.h.giftables().length) opts.push({ label: 'I brought you something.', tone: 'gift', run: () => this.gifts(spec, p) });
     if ((m.insults > 0 || m.threats > 0 || MOODS.indexOf(mood) <= MOODS.indexOf('wary')) && m.apologyDay !== this.h.day()) {
       opts.push({ label: 'About before... I\'m sorry.', tone: 'kind', run: () => this.apologise(spec, p) });
     }
-    const amends = this.amends(spec, p);
-    if (amends) opts.push(amends);
+    opts.push({ label: 'Let\'s talk.', run: () => this.talk(spec, p, this.chatOpener(p)) });
     opts.push({ label: 'Farewell.', run: () => this.close() });
     return opts;
   }
@@ -265,9 +271,8 @@ export class Conversation {
       },
     });
     fixed.push({ label: 'Is there anything you\'d not tell just anyone?', run: () => this.secret(spec, p) });
-    // Then their own topics (some only once they trust you), the old ones, the news, the people in their life.
+    // Then their own topics (some only once they trust you), the old ones, the people in their life.
     const extra: DialogueOption[] = [];
-    if (spec.news) extra.push({ label: 'Heard any news?', run: () => again(spec.news!()) });
     const personal: PersonalTopic[] = CAST[p.id]?.topics ?? [];
     for (const t of personal) if (!t.min || atLeast(mood, t.min)) extra.push({ label: t.q, run: () => again(t.a) });
     for (const t of spec.topics ?? []) extra.push({ label: t.q, run: () => again(t.a) });
@@ -277,13 +282,21 @@ export class Conversation {
     }
     extra.push({ label: `How are things in ${this.h.ctx(p.id).town}?`, run: () => again(this.line('small.town', p)) });
     extra.push({ label: 'What do people say about me?', run: () => again(this.aboutYou(p)) });
-    // Nine replies at most (one per number key): the rest go on a second page.
-    const PAGE = 5;
-    const pages = Math.max(1, Math.ceil(extra.length / (PAGE - 1)));
-    const pg = Math.min(page, pages - 1);
-    const shown = extra.length <= PAGE ? extra : extra.slice(pg * (PAGE - 1), pg * (PAGE - 1) + PAGE - 1);
-    const more: DialogueOption[] = extra.length > PAGE ? [{ label: 'Something else...', run: () => this.talk(spec, p, text, (pg + 1) % pages) }] : [];
-    this.show(spec, text, [...(pg === 0 ? fixed : []), ...shown, ...more, { label: 'Back.', run: () => spec.back() }]);
+    // Three questions at a time; "Something else..." turns the page.
+    // (The news first, then who they are and what they keep to themselves, then the rest.)
+    const news: DialogueOption[] = spec.news ? [{ label: 'Heard any news?', run: () => again(spec.news!()) }] : [];
+    const all = [...news, fixed[0], fixed[2], fixed[1], ...extra];
+    const PAGE = 3;
+    const pages = Math.max(1, Math.ceil(all.length / PAGE));
+    const pg = page % pages;
+    const shown = all.slice(pg * PAGE, pg * PAGE + PAGE);
+    const more: DialogueOption[] = pages > 1 ? [{ label: 'Something else...', run: () => this.talk(spec, p, text, pg + 1) }] : [];
+    // Then the social side, under one roof: a tone, a gift, amends.
+    const social: DialogueOption[] = [{ label: 'Say something...', run: () => this.say(spec, p) }];
+    if (this.h.giftables().length) social.push({ label: 'I brought you something.', tone: 'gift', run: () => this.gifts(spec, p) });
+    const amends = this.amends(spec, p);
+    if (amends) social.push(amends);
+    this.show(spec, text, [...shown, ...more, ...social, { label: 'Back.', run: () => spec.back() }]);
   }
 
   /** What the town says about you, as they'd put it. */

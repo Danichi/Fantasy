@@ -210,6 +210,8 @@ export class QuestLog {
       }
       out.push({
         label: o.type === 'deliver' ? `Hand over ${o.count} ${o.text.replace(/^(Bring|Deliver|Give) /, '')}` : (o.reply ?? `About "${q.title}"…`),
+        // They're waiting on this: talking to them goes straight into it.
+        auto: true,
         run: () => {
           if (o.type === 'deliver') this.ctx.take(o.item, o.count);
           if (o.type === 'talk') {

@@ -241,7 +241,7 @@ async function boot() {
   const saveData = TEST_MODE && !location.search.includes('save') ? null : loadSave();
   if (saveData) applySave(player, saveData);
   else {
-    setupLoadout(player.equip);
+    setupLoadout(player.equip, TEST_MODE); // (a new game starts with nothing; tests start armed)
     // A new character starts full (max health depends on level and attributes).
     player.hp = player.maxHp;
     player.stamina = player.maxStamina;

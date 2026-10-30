@@ -226,7 +226,7 @@ export class Animator {
       let rate = 0;
       this.loco.forEach((l, i) => {
         const w = sum > 0 ? weights[i] / sum : 0;
-        rate += (w * Math.min(1.7, speed / l.speed)) / l.dur;
+        rate += (w * Math.min(2.1, speed / l.speed)) / l.dur; // (sprint plays the run up to 2.1x, so feet keep up)
       });
       if (sum <= 0) rate = 0;
       this.phase = (this.phase + rate * dt) % 1;

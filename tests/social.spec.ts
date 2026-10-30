@@ -41,15 +41,18 @@ test('a conversation remembers you: first meeting, a mood badge, tone chips, kin
     g.town.talk(kaela);
     const first = snap();
     const d0 = rep.dispOf('kaela');
+    pick(/Let's talk/);
     const say = pick(/Say something/);
     const kind = d.options.find((o: any) => o.tone === 'kind');
     kind.run();
     const d1 = rep.dispOf('kaela');
     pick(/^Back/);
+    pick(/Let's talk/);
     pick(/Say something/);
     d.options.find((o: any) => o.tone === 'kind').run();
     const d2 = rep.dispOf('kaela');
     pick(/^Back/);
+    pick(/Let's talk/);
     pick(/Say something/);
     d.options.find((o: any) => o.tone === 'threat').run();
     const d3 = rep.dispOf('kaela');
@@ -77,11 +80,25 @@ test('small talk goes deeper with trust: secrets for friends, personal topics un
   const res = await page.evaluate(() => {
     const g = (window as any).__game, d = g.dialogue, rep = g.social.rep;
     const veyr = g.town.npcs.find((n: any) => n.spec.id === 'veyr').spec;
-    const labels = () => d.options.map((o: any) => o.label);
+    // Every topic, across the pages ("Something else..." turns them).
+    const labels = () => {
+      const all = new Set<string>();
+      for (let k = 0; k < 8; k++) {
+        for (const o of d.options) all.add(o.label);
+        const more = d.options.find((o: any) => /Something else/.test(o.label));
+        if (!more) break;
+        more.run();
+        d.skip?.();
+      }
+      return [...all];
+    };
     const pick = (re: RegExp) => { d.skip?.(); d.options.find((x: any) => re.test(x.label)).run(); d.skip?.(); return document.querySelector('.dialogue .say')!.textContent; };
     g.town.talk(veyr);
     pick(/Let's talk/);
     const strangerTopics = labels();
+    d.close();
+    g.town.talk(veyr);
+    pick(/Let's talk/);
     const guarded = pick(/not tell just anyone/);
     const guardedOpts = d.options.map((o: any) => o.tone ?? '');
     d.close();
@@ -89,6 +106,9 @@ test('small talk goes deeper with trust: secrets for friends, personal topics un
     g.town.talk(veyr);
     pick(/Let's talk/);
     const friendTopics = labels();
+    d.close();
+    g.town.talk(veyr);
+    pick(/Let's talk/);
     const secret = pick(/not tell just anyone/);
     d.close();
     // Greetings over several days don't repeat.
@@ -120,6 +140,7 @@ test('gifts: a loved gift counts most, a second gift in a day hardly at all', as
     const baker = g.town.npcs.find((n: any) => n.spec.id === 'baker').spec;
     const give = (name: RegExp) => {
       g.town.talk(baker);
+      d.options.find((o: any) => /Let's talk/.test(o.label)).run();
       d.options.find((o: any) => /brought you something/.test(o.label)).run();
       const before = rep.dispOf('baker');
       for (let k = 0; k < 8 && !d.options.some((o: any) => name.test(o.label)); k++) d.options.find((o: any) => /Something else/.test(o.label))?.run();

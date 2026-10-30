@@ -140,6 +140,11 @@ export const ITEMS: Record<string, ItemDef> = {
     desc: 'A broad blade with a brass-fitted hilt. Heavier strikes, slower recovery.',
     stats: { damage: 30, speed: 0.88, poise: 5 }, build: () => buildSword(knight),
   },
+  rustedBlade: {
+    id: 'rustedBlade', name: 'Rusted Blade', kind: 'sword', slot: 'main', rarity: 'common',
+    desc: 'Most of a sword, pulled out of the wheat where you fell. Pitted, notched, and older than the farm it was buried under. Someone died holding it, once. It still cuts. Barely.',
+    stats: { damage: 11, speed: 1.15 }, build: () => buildSword({ ...arming, bladeLen: 0.6, bladeWidth: 0.026, fullerLen: 0.4, tint: 0x8a6a52 }),
+  },
   shortsword: {
     id: 'shortsword', name: 'Iron Shortsword', kind: 'sword', slot: 'main', rarity: 'common',
     desc: 'A stubby soldier\'s blade. No reach to speak of, but it never stops moving.',

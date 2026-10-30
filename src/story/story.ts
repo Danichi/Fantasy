@@ -167,7 +167,8 @@ export class Story {
     for (const s of this.says.values()) {
       if (s.npc !== npc) continue;
       const o = s.option();
-      if (o) out.push(o);
+      // (A story beat with this person is a quest step: it opens as soon as you talk to them.)
+      if (o) out.push({ auto: true, ...o });
     }
     return out;
   }

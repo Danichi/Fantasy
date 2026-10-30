@@ -1,7 +1,15 @@
 import { Equipment } from './equipment';
 
-/** Starting inventory, equipment, quick items and moves for a new character. */
-export function setupLoadout(eq: Equipment) {
+/**
+ * What a new character starts with: nothing. You fall out of the sky with the
+ * clothes you're wearing; the first thing you hold is a rusted blade pulled out
+ * of the wheat (story/act1.ts). The test harness starts armed and armoured
+ * instead (`testKit`), since most tests are about using the kit.
+ */
+export function setupLoadout(eq: Equipment, testKit = false) {
+  eq.quick = [null, null, null, null];
+  eq.moves = [null, null, null, null, null, null];
+  if (!testKit) return;
   const longsword = eq.add('longsword');
   eq.add('armingSword');
   eq.add('armingSword');

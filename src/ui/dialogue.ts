@@ -10,6 +10,8 @@ export interface DialogueOption {
   label: string;
   run: () => void; // usually says something else, or closes
   tone?: Tone;
+  /** a quest step this person is waiting on: talking to them goes straight into it */
+  auto?: boolean;
 }
 
 export class DialogueUI {
