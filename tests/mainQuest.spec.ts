@@ -38,7 +38,11 @@ test('a test game starts after the fall, with A Stranger in Elder Glen tracked a
       await sleep(100);
       q.update(1, g.player.pos);
     }
-    g.cam.yaw = 0; // looking south, Maud is north
+    // Turn the camera fully away from her (check where it really looks, then flip if needed).
+    g.cam.yaw = 0;
+    await sleep(400);
+    const fwd = g.r.camera.getWorldDirection(new T.Vector3());
+    if (fwd.x * (m.x - g.player.pos.x) + fwd.z * (m.z - g.player.pos.z) > 0) g.cam.yaw = Math.PI;
     await sleep(600);
     const wp = document.querySelector('.waypoint') as HTMLElement;
     const arrow = { shown: wp.style.display !== 'none', off: wp.classList.contains('off') };
