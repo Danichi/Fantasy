@@ -130,11 +130,14 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
     out.bells = h.stage('mq-bells');
     // ---- The Night of Bells.
     h.talk('brannoc');
+    // A day of preparation: spears for the militia, fire for the walls.
+    q.setFlag('mq-bells', 'bells:spears');
+    q.setFlag('mq-bells', 'bells:fire');
     g.time.hour = 22;
     for (let i = 0; i < 10 && h.stage('mq-bells') !== 'active@1'; i++) { q.update(1, g.player.pos); await h.tick(2); }
     await h.tp(10, 40);
     await h.settle();
-    out.siege = { raid: g.raids.state, allies: S.allies.length };
+    out.siege = { raid: g.raids.state, allies: S.allies.length, prep: { ...g.raids.prep }, militia: S.allies.filter((x) => /with a Spear/.test(x.name)).length };
     g.raids.state = 'done';
     S.flags.bellsT = 60; // (the night has gone on long enough)
     for (let i = 0; i < 40 && h.stage('mq-bells') !== 'active@2'; i++) await h.tick(4);
@@ -161,6 +164,8 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
   expect(res.gravewood).toBe('done@3');
   expect(res.bells).toBe('active@0');
   expect(res.siege.allies).toBeGreaterThanOrEqual(2);
+  expect(res.siege.militia).toBe(2);
+  expect(res.siege.prep).toEqual({ fewer: 0.25, watchHp: 1, watchPower: 1.35 });
   expect(res.after).toEqual({ bells: 'done@2', road: 'active@0' });
   expect(res.log).toBeGreaterThanOrEqual(5);
   expect(errors).toEqual([]);
