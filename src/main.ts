@@ -385,6 +385,7 @@ async function boot() {
     // Quest givers and the guild's adventurers keep posts by day.
     const named = glenNamedFolk(farm.spots.mill[0]);
     for (const place of named.places) pl.set(place.id, place);
+    npcs.ray = (from, dir, max) => physics.castRay(from, dir, max);
     npcs.addSettlement(folk.settlement);
     for (const rec of folk.records) npcs.add(rec);
     for (const rec of named.records) npcs.add(rec);

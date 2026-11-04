@@ -4,6 +4,7 @@ import { buildCharacter, type Look, type BuiltCharacter } from './charBuilder';
 import { heightAt } from '../world/terrainHeight';
 import type { WorldTime } from '../world/worldTime';
 import { damp, dampAngle } from '../core/math';
+import { isRole, personName, rerollAlways, townName } from './names';
 
 // Living-world NPCs (prompt §§30, 36, 37, 73, 74).
 //
@@ -175,6 +176,13 @@ export class NpcManager {
   private live = new Set<string>();
   /** the NPC the player is talking to (held still, facing them) */
   engaged: NpcState | null = null;
+  /**
+   * The world's solid shapes (main.ts: a static-geometry ray cast): distance to the
+   * first wall along a ray, null if clear. Lets people walk round stalls and walls
+   * and not stand inside them. (Colliders only exist near the player: far away
+   * nobody can see a person clip, so nobody checks.)
+   */
+  ray?: (from: THREE.Vector3, dir: THREE.Vector3, max: number) => number | null;
   /** NPC overhaul: people who aren't here any more (dead, or left town) */
   absent?: (id: string) => boolean;
   /** NPC overhaul: what trouble does to people (hurt, fleeing, knocked out, killed) */
@@ -337,9 +345,33 @@ export class NpcManager {
     }
   }
 
+  /** names already used in each settlement (no two people share one) */
+  private names = new Map<string, Set<string>>();
+
   add(rec: NpcRecord) {
     const s = this.settlements.get(rec.settlement);
     if (!s) throw new Error('unknown settlement ' + rec.settlement);
+    // A name of their own (see names.ts): a job for a name becomes the title,
+    // and nobody shares a name with a neighbour. Named residents keep theirs.
+    const used = this.names.get(rec.settlement) ?? new Set<string>();
+    this.names.set(rec.settlement, used);
+    if (!rec.named) {
+      const town = townName(rec.settlement);
+      const role = isRole(rec.name, rec.title);
+      if (role && (!rec.title || rec.title === rec.name)) rec.title = rec.name;
+      if (!rec.title) rec.title = rec.job.charAt(0).toUpperCase() + rec.job.slice(1) + ' of ' + town;
+      const placeName = /^(.+?) of /.exec(rec.title)?.[0] ? rec.title.replace(/^.+? of /, '') : town;
+      if (role || rerollAlways(rec.settlement, rec.job) || used.has(rec.name)) {
+        for (let k = 0; k < 40; k++) {
+          const n = personName(rec.id, rec.settlement, placeName, k);
+          if (!used.has(n)) {
+            rec.name = n;
+            break;
+          }
+        }
+      }
+    }
+    used.add(rec.name);
     const seed = hash(rec.id);
     const r = (k: number) => ((hash(rec.id + ':' + k) % 10000) / 10000);
     // Each person their own lane and pace: elders slower, children quicker, nobody in lockstep.
@@ -648,10 +680,11 @@ export class NpcManager {
             if (!st.path.length) this.arrive(st);
           } else {
             const push = this.avoid(st, player, dx / d, dz / d);
-            const mx = dx / d + push.x, mz = dz / d + push.z;
+            let mx = dx / d + push.x, mz = dz / d + push.z;
             const ml = Math.hypot(mx, mz) || 1;
-            st.pos.x += (mx / ml) * step;
-            st.pos.z += (mz / ml) * step;
+            [mx, mz] = this.steer(st, mx / ml, mz / ml);
+            st.pos.x += mx * step;
+            st.pos.z += mz * step;
             st.yaw = dampAngle(st.yaw, Math.atan2(mx, mz), 7, dt);
           }
           st.pos.y = heightAt(st.pos.x, st.pos.z);
@@ -768,6 +801,47 @@ export class NpcManager {
     return WALK_SPEED * ((st.rec.look.height ?? 1.75) / 1.8) * st.pace * sway * (st.strolling ? (st.rec.job === 'child' ? 1.5 : 0.62) : 1);
   }
 
+  /** Is this point inside something solid (at chest height)? */
+  private inside(p: THREE.Vector3) {
+    if (!this.ray) return false;
+    const o = new THREE.Vector3(p.x, p.y + 1, p.z);
+    let n = 0;
+    for (const [x, z] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (this.ray(o, new THREE.Vector3(x, 0, z), 0.05) === 0) n++;
+    return n >= 3;
+  }
+
+  /** The nearest open ground to a point (rings out to 6 m), or null. */
+  private freeNear(p: THREE.Vector3) {
+    for (let r = 0.8; r <= 6; r += 0.8) {
+      for (let k = 0; k < 10; k++) {
+        const a = (k / 10) * Math.PI * 2 + r;
+        const q = new THREE.Vector3(p.x + Math.cos(a) * r, 0, p.z + Math.sin(a) * r);
+        q.y = heightAt(q.x, q.z);
+        if (!this.inside(q)) return q;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Walk round what's in the way: a wall, a stall, a fence a step ahead turns the
+   * walker along it (whichever way is clear, nearest to where they're headed).
+   * Someone already inside something just walks on out.
+   */
+  private steer(st: NpcState, fx: number, fz: number): [number, number] {
+    if (!this.ray || (st.dist ?? 1e9) > ACTIVE_R + 10) return [fx, fz];
+    const o = new THREE.Vector3(st.pos.x, st.pos.y + 0.9, st.pos.z);
+    const look = (x: number, z: number) => this.ray!(o, new THREE.Vector3(x, 0, z), 0.9);
+    const ahead = look(fx, fz);
+    if (ahead === null || ahead === 0) return [fx, fz];
+    for (const t of [0.5, -0.5, 1.0, -1.0, 1.5, -1.5]) {
+      const c = Math.cos(t), s = Math.sin(t);
+      const x = fx * c - fz * s, z = fx * s + fz * c;
+      if (look(x, z) === null) return [x, z];
+    }
+    return [fx, fz];
+  }
+
   /** At the end of the road (or of a stroll). */
   private arrive(st: NpcState) {
     st.moving = false;
@@ -816,6 +890,17 @@ export class NpcManager {
     if ((st.dist ?? 1e9) > ACTIVE_R + 10) return;
     const e = this.effective(st);
     const place = this.settlements.get(st.rec.settlement)!.places.get(e.place);
+    // Standing inside a wall or a stall (a spot laid out over a building): step out to open ground.
+    if (this.tick === 0 && !place?.seated && this.inside(st.pos)) {
+      const free = this.freeNear(st.pos);
+      if (free) {
+        st.spot.copy(free);
+        st.path = [free];
+        st.moving = true;
+        st.strolling = true;
+        return;
+      }
+    }
     // Out of the way of the player.
     const px = st.pos.x - player.x, pz = st.pos.z - player.z;
     const pd = Math.hypot(px, pz);
@@ -849,6 +934,7 @@ export class NpcManager {
     const a = Math.random() * Math.PI * 2;
     const to = new THREE.Vector3(st.spot.x + Math.cos(a) * r, 0, st.spot.z + Math.sin(a) * r);
     to.y = heightAt(to.x, to.z);
+    if (this.ray && (this.inside(to) || this.ray(new THREE.Vector3(st.pos.x, st.pos.y + 1, st.pos.z), new THREE.Vector3(to.x - st.pos.x, 0, to.z - st.pos.z).normalize(), Math.hypot(to.x - st.pos.x, to.z - st.pos.z)) !== null)) return; // a wall in the way: stay put
     st.path = [to];
     st.moving = true;
     st.strolling = true;
