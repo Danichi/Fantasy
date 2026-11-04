@@ -32,36 +32,36 @@ const JOBS: [Job, number][] = [['farmer', 27], ['merchant', 9], ['guard', 7], ['
 
 const LINES: Record<Job, NpcRecord['lines']> = {
   farmer: {
-    morning: ['Up with the sun or the crows get the seed.', 'Dew’s still on the wheat. Good day for it.'],
-    any: ['Half of Cresha eats what this valley grows.', 'The river’s been kind this year. Knock on wood.', 'If you see crows in the east field, run ’em off, would you?'],
-    evening: ['My back’s telling me it’s time for a pint.'],
-    night: ['Should be abed. Harvest won’t bring itself in.'],
+    morning: ['Up before the crows, or the crows get what the blight left.', 'Dew on the wheat. Black under it. Every morning I check, every morning it’s black.'],
+    any: ['Half of Cresha used to eat what this valley grew. This year it can’t feed itself.', 'Don’t walk the south rows after dark. I mean it.', 'If you see crows in the east field, run ’em off, would you? It’s all we’ve got left.'],
+    evening: ['Back’s done in. Inn, then bed, then do it all again.'],
+    night: ['Should be abed. Should be. Can’t sleep with the bells.'],
   },
   merchant: {
-    morning: ['Fresh bread, fresh greens, fresh from the valley!'],
-    any: ['Caravans from Port Aurelle pay double for our grain this season.', 'You’ve the look of someone who needs supplies.', 'Prices? Blame the salt tax, not me.'],
-    evening: ['Closing up soon. Come back at first light.'],
+    morning: ['Bread, greens, salt! Not much of any, so don’t dawdle!'],
+    any: ['The caravans from Port Aurelle stopped coming. Nobody says why.', 'You’ve the look of someone who needs supplies. So does everyone.', 'Prices? Blame the blight, not me. I’d sell it cheaper if I had more of it.'],
+    evening: ['Closing up. Get home before the lamps go out.'],
   },
   guard: {
-    any: ['Keep your blade sheathed inside the walls.', 'Wolves have been bold near the south fields.', 'The guild handles the monsters. We handle the drunks.'],
-    night: ['Stay near the lanterns after dark.', 'Something’s been moving up by the old crypt at night.'],
+    any: ['Keep your blade sheathed inside the walls. Out there, keep it drawn.', 'Something’s been walking the south fields at night. No tracks. Just the wheat bent flat.', 'The guild handles the monsters. We handle the funerals.'],
+    night: ['Stay near the lanterns. Whatever you hear, stay near the lanterns.', 'Lights by the old crypt again. Brannoc says leave it till morning. Morning doesn’t help.'],
   },
   child: {
-    any: ['Are you the hero? You don’t look like a hero.', 'Tag! You’re it!', 'My da says the crypt is haunted. I’m not scared.'],
-    evening: ['Mum’s calling. Bye!'],
+    any: ['Are you the sky-person? You don’t look like you fell.', 'Tag! You’re it! No, wait, I don’t want to play by the wheat.', 'My da says the crypt is haunted. I’m not scared. I’m not.'],
+    evening: ['Mum’s calling. She always calls early now. Bye!'],
   },
   elder: {
-    any: ['When I was young the crypt door was sealed with iron.', 'The standing stone on the north hill hums at midsummer. Nobody believes me.', 'Heroes come and go. The fields remain.'],
-    evening: ['A seat by the inn fire is worth more than gold at my age.'],
+    any: ['When I was young the crypt door was sealed with iron. Somebody took the iron.', 'The standing stone on the north hill hums. It never used to hum in winter.', 'Heroes come and go. The fields remain. I used to believe that.'],
+    evening: ['A seat by the inn fire is worth more than gold at my age. Especially this year.'],
   },
-  miller: { any: ['The wheel turns, the stones grind, the town eats.', 'Mind the millrace; it’s deeper than it looks.'] },
-  smith: { any: ['Fröst runs the forge; I just sweat in it.', 'Iron comes up the King’s Road from the port these days.'] },
+  miller: { any: ['The wheel turns, the stones grind, the town eats. When there’s grain.', 'Mind the millrace. Something’s been fouling it at night.'] },
+  smith: { any: ['Fröst runs the forge; I just sweat in it. And mend what the Watch brings back.', 'No iron up the King’s Road for a month. We’re melting down hinges.'] },
   innfolk: {
-    any: ['The Wayfarer never runs dry.', 'Rooms upstairs, stew by the fire.'],
-    evening: ['Busy tonight. Grab a seat if you can find one.'],
+    any: ['The Wayfarer’s never empty. Nobody wants to be alone at night now.', 'Stew by the fire. Don’t ask what’s in it.'],
+    evening: ['Full tonight. Grab a seat if you can find one, and keep your back to the wall.'],
   },
-  shepherd: { any: ['The flock grazes the north slopes by day.', 'Lost a lamb to a wolf last week. The guild posted a bounty.'] },
-  weaver: { any: ['Our wool goes all the way to the capital.', 'Blue dye costs a fortune since the port raised tariffs.'] },
+  shepherd: { any: ['The flock grazes the north slopes by day. By night I count them twice.', 'Lost three lambs last week. Not to wolves. Wolves leave something behind.'] },
+  weaver: { any: ['Our wool used to go all the way to the capital. Now it goes into shrouds.', 'Blue dye costs a fortune since the port raised its tariffs. Grey’s cheap. Grey’s the colour of the year.'] },
 };
 
 /** Named places in Elder Glen (spots spread around each). */

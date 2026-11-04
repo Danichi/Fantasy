@@ -8,17 +8,15 @@ import { Barks, type Speaker } from './barks';
 import { Conversation, type ConvoSpec, type GiftItem } from './conversation';
 import { pickLine, type LineCtx } from './lines';
 import { People, type PersonInfo } from './people';
+import { townName } from '../npc/names';
+import { regionOf } from './voices';
 import type { SocialSave } from './reputation';
 
 // Hooks the NPC overhaul into the game: profiles for every resident, the
 // conversation engine behind every "Talk to", speech bubbles, reputation on
 // shop prices, and the save.
 
-const TOWN_NAME: Record<string, string> = {
-  elderGlen: 'Elder Glen', royalCapital: 'the Capital', portAurelle: 'Port Aurelle', sunspire: 'Sunspire', herbCamp: 'the herb camp',
-  waystation: 'the Wayfarer\'s Rest', kingsmile: 'the Kingsmile',
-};
-const townName = (sid: string) => TOWN_NAME[sid] ?? sid.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
+// (Every settlement's name as people say it: npc/names.ts.)
 
 export interface SocialHooks {
   npcs: NpcManager;
@@ -41,6 +39,10 @@ export interface SocialHooks {
   weaponOut: () => boolean;
   playerPos: () => THREE.Vector3;
   save?: SocialSave;
+  /** Elder Glen's hard year (Act I): the Glen talks like a starving village */
+  hard?: () => boolean;
+  /** what a resident is doing right now (work, shop, drink, patrol...) */
+  activityOf?: (id: string) => string | undefined;
 }
 
 export function setupSocial(h: SocialHooks) {
@@ -68,7 +70,9 @@ export function setupSocial(h: SocialHooks) {
     const mood = rep.moodOf(id);
     const you = mood === 'friend' || mood === 'devoted' ? 'friend' : mood === 'hostile' || mood === 'cold' ? 'you' : (m?.met ?? 0) > 2 ? 'traveller' : 'stranger';
     const told = rep.told.find((t) => t.community === people.communityFor(id));
+    const region = regionOf(p?.settlement ?? 'elderGlen');
     return {
+      region, job: p?.job, hard: region === 'glen' && !!h.hard?.(),
       hour: h.hour(), rain: h.rain(), you,
       town: townName(p?.settlement ?? 'elderGlen'),
       deed: told?.text, deedGood: told?.good,
@@ -98,6 +102,7 @@ export function setupSocial(h: SocialHooks) {
     return out;
   };
   const barks = new Barks(people, h.camera, speakers, ctx, h.weaponOut);
+  barks.activityOf = (id) => h.activityOf?.(id);
 
   // Shop prices follow how the shopkeeper feels about you.
   const show = h.shopUI.show.bind(h.shopUI);

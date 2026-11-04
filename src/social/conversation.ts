@@ -281,6 +281,7 @@ export class Conversation {
       if (o) extra.push({ label: `What do you make of ${o.first}?`, run: () => again(this.line('tie.' + t.bond, p, { other: o.first, bond: t.bond })) });
     }
     extra.push({ label: `How are things in ${this.h.ctx(p.id).town}?`, run: () => again(this.line('small.town', p)) });
+    extra.push({ label: p.child ? 'What do you do all day?' : 'How\'s the work?', run: () => again(this.line('small.work', p)) });
     extra.push({ label: 'What do people say about me?', run: () => again(this.aboutYou(p)) });
     // Three questions at a time; "Something else..." turns the page.
     // (The news first, then who they are and what they keep to themselves, then the rest.)

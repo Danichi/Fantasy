@@ -1,5 +1,6 @@
 import { authored, CAST } from './cast';
 import { rollProfile, weaveTies, type PersonSeed, type Profile } from './profile';
+import { varyLives } from './lives';
 import { communityOf, Reputation } from './reputation';
 
 // Everyone in the world who can be spoken to (NPC overhaul): a profile per
@@ -9,7 +10,9 @@ import { communityOf, Reputation } from './reputation';
 
 /** A plain job word from whatever a record calls itself. */
 export function jobOf(job: string, title = '') {
-  const known = ['farmer', 'merchant', 'guard', 'child', 'elder', 'miller', 'smith', 'innfolk', 'shepherd', 'weaver', 'sailor', 'fisher', 'noble', 'priest', 'scholar', 'dockhand', 'herbalist'];
+  const known = ['farmer', 'merchant', 'guard', 'child', 'elder', 'miller', 'smith', 'innfolk', 'shepherd', 'weaver', 'sailor', 'fisher', 'noble', 'priest', 'scholar', 'dockhand', 'herbalist',
+    // (their own voices and lives: voices.ts, lives.ts)
+    'scavenger', 'traveller', 'teamster', 'adventurer', 'hawker', 'refugee', 'villager', 'townsfolk', 'citizen'];
   if (known.includes(job)) return job;
   const s = `${job} ${title}`.toLowerCase();
   const rules: [RegExp, string][] = [
@@ -73,7 +76,11 @@ export class People {
       bySettlement.set(p.settlement, list);
     }
     // Ties among the people of each place (the Glen's are joined with its townsfolk).
-    for (const list of bySettlement.values()) weaveTies(list);
+    for (const list of bySettlement.values()) {
+      weaveTies(list);
+      // Each their own life story (lives.ts); the authored cast keep theirs.
+      varyLives(list, (p) => !!CAST[p.id] && p.essential);
+    }
     // A tie is mutual: if Kaela calls Veyr her rival, Veyr knows it.
     for (const p of fresh) for (const t of p.ties) {
       const o = this.map.get(t.id);

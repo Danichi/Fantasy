@@ -55,10 +55,14 @@ export const isRole = (name: string, title?: string) => name === title || ROLE.t
 /** Settlements' names as people say them. */
 const TOWN_NAMES: Record<string, string> = {
   elderGlen: 'Elder Glen', portAurelle: 'Port Aurelle', royalCapital: 'the Capital', wayfarersRest: 'the Wayfarer’s Rest', lanternCamp: 'the Lantern Camp',
-  crownOutpost: 'the Crown Outpost', gateMarket: 'the Gate Market', wreckersRest: 'Wrecker’s Rest', herbCamp: 'the herb camp',
+  crownOutpost: 'the Crown Outpost', gateMarket: 'the Gate Market', wreckersRest: 'Wrecker’s Rest', herbCamp: 'the herb camp', kingsmile: 'the Kingsmile',
+  sunspire: 'Sunspire', 'rl-wayfork': 'the Wayfork', 'rl-toll': 'Halfpenny Bridge', 'rl-hedge': 'Ser Tobin’s camp', 'rl-pilgrims': 'the Pilgrims’ Rest',
+  'rl-hermit': 'the South Wood', 'rl-drovers': 'the Drover’s Well', 'rl-refugee': 'the Ashby camp', waystation: 'the Wayfarer’s Rest',
 };
+/** Settlements that know their own name (desert villages, scrap towns) register it here. */
+export const knownNames = new Map<string, string>();
 export function townName(id: string) {
-  return TOWN_NAMES[id] ?? id.replace(/^rl-/, '').replace(/\d+$/, '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
+  return knownNames.get(id) ?? TOWN_NAMES[id] ?? id.replace(/^rl-/, '').replace(/\d+$/, '').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
 }
 
 /** Sunspire's villages draw from the desert pool afresh: they shared one list of nine scavengers. */

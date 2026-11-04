@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { pickLine, type LineCtx } from './lines';
+import { pickLine, poolFor, type LineCtx } from './lines';
+import { CONVOS } from './voices';
 import type { People } from './people';
 
 // What people say out loud (NPC overhaul, phase 1): a word as you pass,
@@ -40,6 +41,9 @@ export class Barks {
   enabled = true;
   /** other people who can speak (the Watch), beyond the townsfolk */
   more: () => Speaker[] = () => [];
+  /** what a resident is doing (wiring.ts): hawkers call their wares, drinkers toast */
+  activityOf: (id: string) => string | undefined = () => undefined;
+  private nextCall = 6;
 
   constructor(
     private people: People,
@@ -84,6 +88,7 @@ export class Barks {
     }
     if (this.enabled && this.t > this.nextAny) this.passBy(player);
     if (this.enabled && this.t > this.nextChat) this.chatter(player);
+    if (this.enabled && this.t > this.nextCall) this.callOut(player);
     // Bubbles follow their speaker's head and fade out.
     for (const b of [...this.bubbles]) {
       b.t += dt;
@@ -132,6 +137,11 @@ export class Barks {
     else if (p.guard && Math.random() < 0.5) cat = 'bark.guard';
     else if (c.rain && Math.random() < 0.4) cat = 'bark.rain';
     else if ((c.hour >= 21 || c.hour < 5) && Math.random() < 0.4) cat = 'bark.night';
+    else if (!cold && Math.random() < 0.5) {
+      // What they're in the middle of: a smith mid-swing, a farmer at the rows.
+      const act = this.activityOf(p.id);
+      if (act && poolFor('bark.at.' + act, c).length) cat = 'bark.at.' + act;
+    }
     this.sayLine(p.id, cat, cold ? 'hostile' : warm ? 'friend' : '');
     this.nextAny = this.t + GLOBAL_CD;
   }
@@ -154,6 +164,18 @@ export class Barks {
         const told = this.people.rep.told.find((t) => t.community === this.people.communityFor(a.id));
         // They talk about you in the third person (you're only overhearing).
         const deed = told ? told.text.replace(/\byou\b/g, 'that adventurer').replace(/\byour\b/g, 'their') : undefined;
+        // Most of the time, a little conversation of their own (voices.ts).
+        const convo = this.convoFor(ctx);
+        if (convo && !(deed && Math.random() < 0.35)) {
+          convo.forEach((text, k) => {
+            const who = k % 2 ? b.id : a.id;
+            if (k === 0) this.say(who, text, '', 3.4);
+            else this.queue.push({ at: this.t + k * 2.9, id: who, text });
+          });
+          this.cd.set(b.id, this.t);
+          this.nextChat = this.t + CHAT_CD + convo.length * 2;
+          return;
+        }
         const lineA = deed && Math.random() < 0.5
           ? `Did you hear? ${cap(deed)}.`
           : pickLine('chat.a', pa, { ...ctx, deed: deed ?? 'the wolves were at the pens again' }, this.people.rep.memOf(a.id), other ? { other } : {});
@@ -164,6 +186,33 @@ export class Barks {
         return;
       }
     }
+  }
+
+  /** A little exchange two people from here might have (the hard year's ones in the Glen). */
+  private heard: string[] = [];
+  private convoFor(c: LineCtx) {
+    const pool = [...(CONVOS[c.region ?? ''] ?? []), ...(c.hard ? CONVOS.hard : [])];
+    const fresh = pool.filter((x) => !this.heard.includes(x[0]));
+    if (!fresh.length) return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+    const pick = fresh[Math.floor(Math.random() * fresh.length)];
+    this.heard.push(pick[0]);
+    if (this.heard.length > 12) this.heard.shift();
+    return pick;
+  }
+
+  /** Hawkers cry their wares and a guard calls the hour, whether or not you walk right by. */
+  private callOut(player: THREE.Vector3) {
+    this.nextCall = this.t + 7 + Math.random() * 6;
+    const near = this.speakers().filter((s) => {
+      if (s.busy || !this.people.present(s.id)) return false;
+      const act = this.activityOf(s.id);
+      return (act === 'shop' || act === 'patrol' || act === 'drink') && Math.hypot(s.head.x - player.x, s.head.z - player.z) < 18 && this.t - (this.cd.get(s.id) ?? -999) > 25;
+    });
+    if (!near.length) return;
+    const s = near[Math.floor(Math.random() * near.length)];
+    const act = this.activityOf(s.id)!;
+    if (act !== 'shop' && Math.random() < 0.6) return; // the hawkers are the loud ones
+    this.sayLine(s.id, 'bark.at.' + act);
   }
 
   clear() {

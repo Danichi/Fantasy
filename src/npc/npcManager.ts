@@ -4,7 +4,7 @@ import { buildCharacter, type Look, type BuiltCharacter } from './charBuilder';
 import { heightAt } from '../world/terrainHeight';
 import type { WorldTime } from '../world/worldTime';
 import { damp, dampAngle } from '../core/math';
-import { isRole, personName, rerollAlways, townName } from './names';
+import { isRole, knownNames, personName, rerollAlways, townName } from './names';
 
 // Living-world NPCs (prompt §§30, 36, 37, 73, 74).
 //
@@ -78,6 +78,8 @@ export interface Place {
 
 export interface Settlement {
   id: string;
+  /** what people call it ("Waystop", "the Wayfork"); see npc/names.ts for the rest */
+  name?: string;
   center: THREE.Vector3;
   /** simulation radius: records beyond this from the player stay at level 3 */
   radius: number;
@@ -300,6 +302,7 @@ export class NpcManager {
   }
 
   addSettlement(s: Settlement) {
+    if (s.name) knownNames.set(s.id, s.name);
     NpcManager.connect(s);
     this.settlements.set(s.id, s);
   }
@@ -404,6 +407,13 @@ export class NpcManager {
   festivalDay = -1;
   /** A night raid: everyone in this settlement bars their door (the watch fight as raid/watchman.ts). */
   raidOn: string | null = null;
+
+  /** What a resident is doing right now (barks: hawkers call, drinkers toast). */
+  activityOf(id: string) {
+    const st = this.find(id);
+    if (!st || st.hidden) return undefined;
+    return st.moving ? 'walk' : this.effective(st).activity;
+  }
 
   /** A resident by id (quest markers, scripted scenes). */
   find(id: string) {
@@ -746,6 +756,8 @@ export class NpcManager {
       if (e.activity === 'play' && alt) clip = 'cheer';
       // 'sit' is a chair sit: without a seat it sank people into the ground.
       if (e.activity === 'sit' && !this.settlements.get(st.rec.settlement)!.places.get(e.place)?.seated) clip = st.seed % 3 === 0 ? 'talk' : 'idle';
+      // Shopkeepers mind the stall: mostly standing, now and then calling out (not talking at nobody all day).
+      if (e.activity === 'shop' && st.faceYaw === null && Math.floor(this.clock / 4 + (st.seed % 7)) % 3 !== 0) clip = 'idle';
       // In a little group, people take turns: one talks while the others listen.
       if (st.faceYaw !== null && (clip === 'idle' || clip === 'drink') && Math.floor(this.clock / 3.5 + (st.seed % 5)) % 3 === 0) clip = 'talk';
       if (clip === 'idle' && (this.time.hour >= 21 || this.time.hour < 5 || st.rec.job === 'elder') && st.seed % 2 === 0) clip = 'idle_tired';

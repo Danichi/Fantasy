@@ -68,7 +68,7 @@ export function scrapTownFolk(): { settlements: Settlement[]; records: NpcRecord
       edges.push([0]);
       edges[0].push(nodes.length - 1);
     }
-    settlements.push({ id: sid, center: v(t.x, t.z), radius: t.r + 40, places: sp, nodes, edges });
+    settlements.push({ id: sid, name: t.name, center: v(t.x, t.z), radius: t.r + 40, places: sp, nodes, edges });
   });
   return { settlements, records };
 }

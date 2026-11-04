@@ -1,5 +1,6 @@
 import type { Profile, Voice } from './profile';
 import type { Memory, Mood } from './reputation';
+import { MORE_LINES } from './voices';
 
 // The line library (NPC overhaul, phases 1-2). Every situation has a pool of
 // lines, many written per way of speaking (a gruff guard and a cheery baker
@@ -21,6 +22,10 @@ export interface LineCtx {
   other?: string;
   /** days since you last spoke (-1: never) */
   away: number;
+  /** where they live (voices.ts), what they do, and whether it's Elder Glen's hard year */
+  region?: string;
+  job?: string;
+  hard?: boolean;
 }
 
 type Cond = (p: Profile) => boolean;
@@ -342,20 +347,38 @@ let roll = 0;
  * (remembered in `mem.said`), varies per person and per moment.
  */
 export function pickLine(cat: string, p: Profile, c: LineCtx, mem?: Memory, extra: Record<string, string> = {}): string {
-  const pool = LINES[cat];
-  if (!pool?.length) return '';
+  const pool = poolFor(cat, c);
+  if (!pool.length) return '';
   const opts = eligible(pool, p);
   const said = mem?.said ?? [];
-  const fresh = opts.filter((o) => !said.includes(cat + ':' + o.k));
+  // (Remembered by what was said, not where it sat in the pool: the same line can be in a pool twice.)
+  const key = (o: { t: string }) => cat + ':' + o.t.slice(0, 28);
+  const fresh = opts.filter((o) => !said.includes(key(o)));
   const from = fresh.length ? fresh : opts;
   roll = (roll + 1) >>> 0;
   const h = (p.id.length * 7 + roll * 31 + Math.floor(c.hour * 3)) >>> 0;
   const o = from[h % from.length];
   if (mem) {
-    mem.said.push(cat + ':' + o.k);
+    mem.said.push(key(o));
     if (mem.said.length > 14) mem.said.shift();
   }
   return fill(o.t, p, c, extra);
+}
+
+/**
+ * A category's lines for this moment: the general pool, plus the ones for
+ * their region, their job and a hard year (voices.ts). The specific ones count
+ * twice, so a Glen farmer in a bad year mostly sounds like one.
+ */
+let ALL: Record<string, Pool> | null = null;
+export function poolFor(cat: string, c: LineCtx): Pool {
+  const all = (ALL ??= { ...LINES, ...(MORE_LINES as Record<string, Pool>) });
+  const out: Pool = [...(all[cat] ?? [])];
+  // (A child doesn't talk about the year's work like a grown-up does.)
+  const hard = c.hard && !(c.job === 'child' && cat === 'small.work');
+  const extra = [c.region && `${cat}.${c.region}`, c.job && `${cat}.${c.job}`, hard && `${cat}.hard`];
+  for (const k of extra) if (k && all[k]) out.push(...all[k], ...all[k]);
+  return out;
 }
 
 /** The greeting pool for a mood. */

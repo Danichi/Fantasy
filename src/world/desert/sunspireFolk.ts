@@ -268,6 +268,8 @@ const JOBS: [string, number, ScheduleEntry['activity'], string][] = [
 const FIRST = ['Amun', 'Bastet', 'Djedi', 'Hathor', 'Imhet', 'Khaf', 'Meri', 'Nebet', 'Omari', 'Paser', 'Renni', 'Sahure', 'Tiye', 'Userkaf', 'Wadjet', 'Ahmose', 'Isis', 'Kemsit', 'Nubia', 'Seti', 'Huya', 'Mutem', 'Peshet', 'Qenna'];
 const FAM = ['of the Third Gate', 'Sandborn', 'of the Furnace', 'Goldhand', 'of the Wells', 'Sunward', 'Duneglass', 'of the Long Shadow', 'of the Bazaar', 'Palmreed'];
 
+/** One trader per village (the list used to wrap, and Haggler Ib kept two stalls a day's ride apart). */
+const VILLAGE_TRADERS = ['Haggler Ib', 'Swapper Nenet', 'Trader Wenu', 'Barterwife Meryt', 'Dealer Pa-Ankh', 'Scrapmonger Iti', 'Old Hand Sebek', 'Tallyman Ruiu', 'Glass-Weigher Tey', 'Broker Hatiay', 'Saltwife Mutnofret', 'Pedlar Nebamun', 'Coin-Biter Kha', 'Dealer Ipuy', 'Swapwife Tuya', 'Haggler Penre', 'Trader Amenmose', 'Barterman Djehuty'];
 const VILLAGE_ELDERS = ['Old Mother Huy', 'Elder Kenamun', 'Wise Ta-Nedjem', 'Elder Ramose', 'Grandmother Sheri', 'Elder Djeser'];
 
 export function sunspireResidents(): { settlements: Settlement[]; records: NpcRecord[] } {
@@ -329,7 +331,7 @@ export function sunspireResidents(): { settlements: Settlement[]; records: NpcRe
       named('elder-' + c, VILLAGE_ELDERS[elder++ % VILLAGE_ELDERS.length], 'Elder of ' + info.name.replace(/^The /, ''), scavLook(elder + 1),
         { any: [`${info.name} was a well once. Now it is a few huts, a fire and whoever is still breathing.`, 'The raider camps hit us every few weeks. Every one you break buys us a month.', 'When the sky turns brown, get under a roof. The storms strip skin.'] }, cx + 3, cz - 2, 'talk');
     }
-    named('vtrader-' + c, ['Haggler Ib', 'Swapper Nenet', 'Trader Wenu', 'Barterwife Meryt', 'Dealer Pa-Ankh', 'Scrapmonger Iti'][c % 6], 'Trader of ' + info.name.replace(/^The /, ''), scavLook(c % 5),
+    named('vtrader-' + c, VILLAGE_TRADERS[c % VILLAGE_TRADERS.length], 'Trader of ' + info.name.replace(/^The /, ''), scavLook(c % 5),
       { any: ['Scrap for water, water for scrap. Simple trade.'] }, cx - 4, cz - 3, 'shop');
     for (let i = 0; i < 9; i++) {
       const jj = (h: number) => h + ((i * 37) % 10) / 10 - 0.5;
@@ -346,7 +348,7 @@ export function sunspireResidents(): { settlements: Settlement[]; records: NpcRe
       edges.push([0]);
       edges[0].push(nodes.length - 1);
     }
-    settlements.push({ id: sid, center: v(cx, cz), radius: cr + 30, places: sp, nodes, edges });
+    settlements.push({ id: sid, name: info.name, center: v(cx, cz), radius: cr + 30, places: sp, nodes, edges });
   });
   return { settlements, records };
 }

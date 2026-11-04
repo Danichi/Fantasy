@@ -660,6 +660,9 @@ async function boot() {
     weaponOut: () => !!player.act || player.blocking || !!player.lock,
     playerPos: () => player.pos,
     save: saveData?.world?.social,
+    // Elder Glen's hard year lasts until the Night of Bells is won.
+    hard: () => quests.status('mq-bells') !== 'done',
+    activityOf: (id) => npcs.activityOf(id),
   });
   town.converse = (spec) => social.talk(spec);
   // Good deeds travel too: raids beaten back, beasts slain.
