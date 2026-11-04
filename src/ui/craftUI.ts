@@ -345,7 +345,8 @@ export class CraftUI {
     let body = '';
     if (this.tab === 'make') {
       const all = c.at(this.station);
-      const known = all.filter((r) => c.knows(r));
+      // With eight tiers of recipes, show what you can make or nearly can: up to a few levels above your own.
+      const known = all.filter((r) => c.knows(r) && (c.status(r) === 'ok' || c.status(r) === 'missing' || r.level <= lv + 4));
       const order = (r: Recipe) => ({ ok: 0, missing: 1, level: 2, unknown: 3 })[c.status(r)];
       known.sort((a, b) => order(a) - order(b) || a.level - b.level);
       body = known.length ? known.map((r) => this.recipeCard(r)).join('') : '<p class="sc-empty">You don’t know anything you can make here yet.</p>';
@@ -354,9 +355,14 @@ export class CraftUI {
       if ((this.station === 'forge' || this.station === 'workbench') && c.hasNode('smithing', 'Sharpen')) tech.push('<button data-act="technique" data-kind="sharpen">Sharpen your weapon</button>');
       if ((this.station === 'forge' || this.station === 'loom') && c.hasNode('smithing', 'Patch Armour')) tech.push('<button data-act="technique" data-kind="patch">Patch your armour</button>');
       if (tech.length) body = `<div class="sc-chips">${tech.join('')}</div>` + body;
-      const later = all.filter((r) => !c.knows(r) && r.learn !== 'discover');
+      const later = all.filter((r) => !c.knows(r) && r.learn !== 'discover').sort((a, b) => a.level - b.level);
       if (later.length) {
-        body += `<div class="sc-locked-h">Not learned yet</div>` + later.map((r) => `<div class="sc-locked r-${ITEMS[r.out].rarity}"><b>${esc(ITEMS[r.out].name)}</b><span>${esc(this.howToLearn(r))}</span></div>`).join('');
+        // The next dozen, then the rest counted by how you learn them (a book, a node).
+        const shown = later.slice(0, 12), rest = later.slice(12);
+        const ways = new Map<string, number>();
+        for (const r of rest) ways.set(this.howToLearn(r), (ways.get(this.howToLearn(r)) ?? 0) + 1);
+        body += `<div class="sc-locked-h">Not learned yet</div>` + shown.map((r) => `<div class="sc-locked r-${ITEMS[r.out].rarity}"><b>${esc(ITEMS[r.out].name)}</b><span>${esc(this.howToLearn(r))}</span></div>`).join('')
+          + [...ways].map(([how, n]) => `<div class="sc-locked"><b>${n} more</b><span>${esc(how)}</span></div>`).join('');
       }
     } else if (this.tab === 'salvage') {
       const list = eq.items.filter((it) => c.canSalvage(it));

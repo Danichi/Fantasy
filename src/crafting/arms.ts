@@ -1,3 +1,4 @@
+import { GEAR } from '../items/catalog/hooks';
 import * as THREE from 'three';
 import type { Player } from '../player/player';
 import type { ThirdPersonCamera } from '../player/camera';
@@ -106,7 +107,7 @@ export function setupArms(ctx: ArmsContext) {
     player.equip.items.some((it) => (tool === 'pick' ? it.def.tool === 'pick' : it.def.tool === 'hatchet' || it.def.kind === 'axe'));
   const gathering = new GatheringNodes(ctx.scene, {
     give, hours: ctx.hours, hasTool, toast: ctx.toast,
-    bonus: (k) => crafter.total(k),
+    bonus: (k) => crafter.total(k) + (GEAR.gather?.(k) ?? 0),
   });
   gathering.onGather = (_kind, item, n, rare, gem) => {
     ctx.toast(`+${n} ${ITEMS[item].name}${rare ? ` · and ${ITEMS[rare].name}!` : ''}${gem ? ` · a ${ITEMS[gem].name}!` : ''}`);

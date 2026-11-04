@@ -1,3 +1,5 @@
+import { CAT_RECIPES } from '../items/catalog/kit';
+import '../items/catalog';
 // Every recipe in the game (docs/design/arms-and-crafting.md §5): what it
 // makes, at which station, for which Calling and level, from what, and how
 // you come to know it. Tiers 1 to 3 (iron, steel, silversteel; oak, ash, yew;
@@ -175,6 +177,9 @@ export const RECIPES: Recipe[] = [
   sew('silkMantle', 10, [['silk', 3], ['linen', 1]]),
   sew('drakeleatherJerkin', 12, [['drakeLeather', 3], ['linen', 1]]),
 ];
+
+// The item catalog's recipes (items/catalog), for its tiers 1 to 8.
+for (const r of CAT_RECIPES) if (!RECIPES.some((x) => x.id === r.id)) RECIPES.push(r);
 
 export const RECIPE: Record<string, Recipe> = Object.fromEntries(RECIPES.map((x) => [x.id, x]));
 

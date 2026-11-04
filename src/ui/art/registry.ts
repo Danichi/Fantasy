@@ -7,6 +7,7 @@ import { paintTrinket, TRINKETS } from './trinkets';
 import { paintPart, PARTS } from './parts';
 import { paintEmblem, emblemFor, EMBLEMS } from './emblems';
 import { paintArmour, ARMOURS } from './armour';
+import { ART as CATALOG_ART } from '../../items/catalog/kit';
 
 // Which items get painted art instead of a render of their 3D model, and how.
 // Painters live beside this file; each entry here is the item's look.
@@ -105,6 +106,15 @@ export function artFor(id: string): Painter | null {
   if (TRINKETS[id]) return (g) => paintTrinket(g, TRINKETS[id], id);
   if (PARTS[id]) return (g) => paintPart(g, PARTS[id], id);
   if (ARMOURS[id]) return (g) => paintArmour(g, ARMOURS[id], id);
+  // The item catalog's painted icons (items/catalog).
+  const c = CATALOG_ART[id];
+  if (c) {
+    if (c.k === 'potion') return potion(c.s, id);
+    if (c.k === 'part') return (g) => paintPart(g, c.s, id);
+    if (c.k === 'trinket') return (g) => paintTrinket(g, c.s, id);
+    if (c.k === 'paper') return (g) => paintPaper(g, c.s, id);
+    if (c.k === 'food') return (g) => paintFood(g, c.s, id);
+  }
   return null;
 }
 

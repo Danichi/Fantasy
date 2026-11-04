@@ -67,7 +67,9 @@ export const FX_TEXT: Record<string, (v: number) => string> = {
   potionPower: (v) => `Draughts and tonics heal ${pct(v)} more.`,
   wildsSpell: (v) => `Spells cost ${pct(v)} less mana outside towns and roads.`,
   lightRoom: () => `Lights the dark around you.`,
-  allyCall: () => `Once a day, using it calls the Glen to your side (see its item).`,
+  allyCall: () => `Once a day, when you fall below a third of your health, the bell rings: +15% damage and 10% less damage taken for a minute.`,
+  wheelSurge: (v) => `You arrive from Sunwheel travel hitting hard: +${pct(v)} damage for a minute.`,
+  fishLuck: (v) => `Rare fish bite ${pct(v)} more often.`,
   xpGain: (v) => `+${pct(v)} experience from foes.`,
 };
 for (const f of Object.keys(FAMILY_NAMES)) {

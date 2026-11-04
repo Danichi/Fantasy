@@ -15,7 +15,7 @@ export const PIECE: Record<ArmourSlot, ArmorPieceId> = { head: 'helm', shoulders
 /** a piece's share of a whole set's armour */
 export const SHARE: Record<ArmourSlot, number> = { head: 0.15, shoulders: 0.14, chest: 0.33, hands: 0.1, legs: 0.18, feet: 0.1 };
 export const PIECE_NAMES: Record<ArmorWeight, Record<ArmourSlot, string>> = {
-  robe: { head: 'Hood', shoulders: 'Mantle', chest: 'Robe', hands: 'Gloves', legs: 'Trousers', feet: 'Slippers' },
+  robe: { head: 'Hood', shoulders: 'Shawl', chest: 'Robe', hands: 'Gloves', legs: 'Trousers', feet: 'Slippers' },
   leather: { head: 'Cap', shoulders: 'Spaulders', chest: 'Jerkin', hands: 'Bracers', legs: 'Leggings', feet: 'Boots' },
   mail: { head: 'Coif', shoulders: 'Mail Pauldrons', chest: 'Hauberk', hands: 'Mail Gauntlets', legs: 'Chausses', feet: 'Mail Boots' },
   plate: { head: 'Helm', shoulders: 'Pauldrons', chest: 'Breastplate', hands: 'Gauntlets', legs: 'Greaves', feet: 'Sabatons' },
@@ -63,7 +63,7 @@ const LOOKS: Record<ArmorWeight, (t: Tier) => string> = {
 
 /** Older items that already are a tier's piece. */
 const FOLD: Partial<Record<string, string>> = {
-  'plate:1:head': 'ironHelm', 'plate:1:shoulders': 'pauldrons', 'plate:1:chest': 'breastplate', 'plate:1:hands': 'gauntlets', 'plate:1:legs': 'greaves', 'plate:1:feet': 'sabatons',
+  'plate:1:head': 'ironHelm', 'plate:2:shoulders': 'pauldrons', 'plate:1:chest': 'breastplate', 'plate:1:hands': 'gauntlets', 'plate:1:legs': 'greaves', 'plate:1:feet': 'sabatons',
   'leather:1:chest': 'leatherJerkin', 'leather:1:hands': 'leatherBracers', 'leather:1:feet': 'leatherBoots',
 };
 

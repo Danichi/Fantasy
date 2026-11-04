@@ -466,7 +466,7 @@ export class OriginAbilities {
     for (const [t, v] of this.marked) (v - dt <= 0 || !t.alive ? this.marked.delete(t) : this.marked.set(t, v - dt));
     for (const [t, v] of fearful) (v - dt <= 0 || !t.alive ? fearful.delete(t) : fearful.set(t, v - dt));
     this.resolveCd = Math.max(0, this.resolveCd - dt);
-    stealth.veiled = this.buff('veil');
+    stealth.veiled = this.buff('veil') || stealth.gearVeil > 0;
     p.veiled = stealth.veiled;
 
     // Buffs into the combat modifiers.

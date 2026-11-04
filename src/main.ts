@@ -68,7 +68,10 @@ import { Boats } from './world/boats';
 import { RiverLife } from './world/riverLife';
 import { PORT_QUESTS } from './quests/portQuests';
 import { SEA_QUESTS } from './quests/seaQuests';
-import { RIVER_LEVEL, DROWNED_MERE, SINKHOLE } from './world/terrainHeight';
+import { RIVER_LEVEL, DROWNED_MERE, SINKHOLE, roadDist, TOWN_R } from './world/terrainHeight';
+import { GearRuntime } from './items/catalog/gearRuntime';
+import { CatalogSources } from './items/catalog/sources';
+import { ORE_SENSE } from './world/gatheringNodes';
 import { road, distanceAlong, roadLength } from './world/roadNetwork';
 import { buildGlenLandmarks, LANDMARK_CLEARINGS } from './world/glenLandmarks';
 import { QuestLog } from './quests/questLog';
@@ -1776,6 +1779,80 @@ async function boot() {
   repPanel.onName = (id, power) => story.state.nameAs(id, power as never);
   const baseSiteMarks = worldMap.siteMarkers;
   worldMap.siteMarkers = () => [...baseSiteMarks(), ...story.wheel.markers()];
+
+  // ---- the item catalog (items/catalog): gear effects, set bonuses, one-use items, and where it all comes from ----
+  const hereRegion = () => (realm.mode === 'dungeon' ? 'cresha' : realm.interior ? regionAt(realm.interior.door.pos.x, realm.interior.door.pos.z) : regionAt(player.pos.x, player.pos.z));
+  const gearRt = new GearRuntime({
+    scene: r.scene, player, rt: skillRt, arms: arms.runtime, toast: (m) => hud.toast(m),
+    region: hereRegion, rain: () => weather.p.rain, hour: () => time.hour, day: () => time.day,
+    gold: (n) => player.prog.addGold(n), xp: (n) => player.prog.addXp(n),
+    give: (id, n) => {
+      player.equip.add(id, n);
+      events.emit('equipmentChanged', {});
+    },
+    inDark: () => hereRegion() === 'demonContinent' || gravewood.trapped || sites.sites.some((s) => (s.kind === 'darkScar' || s.kind === 'wrongCircle') && Math.hypot(s.x - player.pos.x, s.z - player.pos.z) < 80),
+    inTown: () => realm.mode !== 'overworld' || !!realm.interior || roadDist(player.pos.x, player.pos.z) < 25 || Math.hypot(player.pos.x, player.pos.z) < TOWN_R + 40,
+    recall: () => {
+      const at = story.wheel.respawn;
+      if (!at || realm.mode !== 'overworld') return false;
+      player.teleport(at);
+      events.emit('wheelTravel', { to: 'the Sunwheel' });
+      return true;
+    },
+    returnHome: () => {
+      const at = realm.respawnPoint;
+      if (!at || realm.mode !== 'overworld') return false;
+      player.teleport(at);
+      return true;
+    },
+    detect: () => {
+      let best: (typeof sites.sites)[number] | null = null, bd = Infinity;
+      for (const s of sites.sites) {
+        if (sites.state[s.id]?.seen) continue;
+        const dd = Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
+        if (dd < bd) (bd = dd), (best = s);
+      }
+      if (!best) return null;
+      sites.st(best.id).seen = true;
+      return sites.name(best);
+    },
+    orePing: (radius) => {
+      const veins = ORE_SENSE.near?.(player.pos, radius) ?? [];
+      for (const v of veins) skillRt.vfx.pillar(v.clone(), 'light', 0.6, 6);
+      return veins.length;
+    },
+  });
+  skillRt.extra = () => {
+    const a = mastery.effects();
+    return { m: a.m, x: { ...a.x, ...Object.fromEntries(Object.entries(gearRt.x()).map(([k, v]) => [k, (a.x[k] ?? 0) + v])) } };
+  };
+  skillRt.recompute();
+  const catalogSources = new CatalogSources({
+    give: (id, n) => {
+      player.equip.add(id, n);
+      events.emit('equipmentChanged', {});
+    },
+    toast: (m) => hud.toast(m), region: hereRegion, day: () => time.day, playerLevel: () => player.prog.level,
+    playerPos: () => player.pos as unknown as { distanceTo(v: unknown): number }, flags: worldFlags, gear: gearRt,
+    owns: (id) => player.equip.items.some((it) => it.def.id === id),
+  });
+  // Shops of every kind carry the catalog's stock for their region and faction.
+  const baseShop = town.showShop.bind(town);
+  town.showShop = (who, title, intro, stock, extra = {}) => baseShop(who, title, intro, catalogSources.stockFor(who, title, intro, stock), extra);
+  // One-use items, after the arms runtime's buffs and the recipe books.
+  const prevConsume = player.onConsume;
+  player.onConsume = (def) => {
+    prevConsume?.(def);
+    gearRt.consume(def);
+  };
+  // Mastery: gear that speeds it, and the Grandmaster pieces at rank 10.
+  const baseGain = mastery.gain.bind(mastery);
+  mastery.gain = (id, n) => baseGain(id, n * (1 + (gearRt.fx.masteryGain ?? 0)));
+  const baseRank = mastery.onRank;
+  mastery.onRank = (dd, rank, perks) => {
+    baseRank?.(dd, rank, perks);
+    if (rank >= 10) catalogSources.reward(`master:${dd.id}`, 'all');
+  };
   // Restore quests only now: every quest (Elder Glen, the road, the port) is registered
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
   migrateMainQuest(saveData?.world?.quests, !!saveData?.world?.story);
@@ -2038,6 +2115,7 @@ async function boot() {
     combat.tick(STEP); // posture, poise and wind-ups of everything that fights (combat/core.ts)
     director.tick(STEP, player); // attack turns (combat/ai.ts)
     skillRt.update(STEP);
+    gearRt.update(STEP); // the item catalog's gear effects (items/catalog)
     arms.update(STEP, input); // Arms and Crafting (feat/arms)
     herbalism.update(STEP);
     if (input.pressedKey('KeyO')) (herbalism.isOpen ? herbalism.ui.close() : herbalism.openCodex());
@@ -2375,7 +2453,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons,
+      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       yard, combatDebug, // combat rework: the drill yard and the F9 overlay

@@ -32,7 +32,7 @@ const DRAUGHT: [string, string, keyof ItemStats, number[], PotionArt, [string, n
 for (const [word, what, key, amounts, art, base] of DRAUGHT) {
   STRENGTHS.forEach(([grade, rarity, t], i) => {
     const id = `draught${word}${t}`;
-    one(id, `${grade} ${word} Draught`, rarity, `Restores ${amounts[i]} ${what}.`, { [key]: amounts[i] }, [`shop:alchemist:${Math.min(6, t)}`, 'shop:trader:' + Math.min(6, t), `chest:${t}`, `drop:any:${t}`], potionArt({ ...art, tier: t }), { lvl: t * 6 - 5 });
+    one(id, `${grade} ${word} Phial`, rarity, `Restores ${amounts[i]} ${what}.`, { [key]: amounts[i] }, [`shop:alchemist:${Math.min(6, t)}`, 'shop:trader:' + Math.min(6, t), `chest:${t}`, `drop:any:${t}`], potionArt({ ...art, tier: t }), { lvl: t * 6 - 5 });
     recipe(id, 'alchemy', 'herbalism', [1, 4, 9, 15, 22][i], [...base.map(([b, n]) => [b, n + i] as [string, number]), ...(i >= 2 ? [['honeycomb', 1] as [string, number]] : []), ...(i >= 3 ? [['starmoss', 1] as [string, number]] : [])], 'basic', { step: 'stir' });
   });
 }
@@ -79,7 +79,7 @@ const ELIXIRS: E[] = [
   ['phoenixTear', 'Phoenix Tear', 'epic', 'A single burning drop. For ten minutes, the first blow that would kill you leaves you standing with half your health instead.', b('phoenix', 'Phoenix Tear', 600, {}), { vessel: 'heart', liquid: ['#ffb040', '#c02a0a'], fx: ['embers', 'glow'], stopper: 'gold' }, [['phoenixFeather', 1], ['lifebloomTonic', 1]], 28, { kind: 'phoenix' }],
   ['liquidCourage', 'Liquid Courage', 'common', 'It is mostly brandy.', b('courage', 'Liquid Courage', 120, { melee: 0.1, dmgTaken: -0.05 }), { vessel: 'bottle', liquid: ['#d08a3a', '#5a2a0a'], glyph: 'fist' }, [['grainSpirit', 1], ['honeycomb', 1]], 3],
   ['tearsOfDawn', 'Tears of the Dawn', 'epic', 'Holy water wept by a statue in the Temple. Rarer than it should be.', b('tearsOfDawn', 'Tears of the Dawn', 300, { heal: 0.3, holyDmg: 0.1 }), { vessel: 'heart', liquid: ['#fff6c8', '#e0b040'], glyph: 'dawn', fx: ['glow', 'sparkle'], stopper: 'gold' }, [['essenceLight', 1], ['springWater', 2]], 20],
-  ['giantsDraught', 'Giant\'s Draught', 'rare', 'You feel taller. You are not.', b('giants', 'Giant\'s Draught', 180, { hp: 80, poise: 0.2, moveSpeed: -0.05 }), { vessel: 'jar', liquid: ['#a07a4a', '#4a2a0a'], glyph: 'mountain' }, [['trollsBlood', 1], ['rawMeat', 2]], 16],
+  ['giantsDraught', 'Giant\'s Draught', 'rare', 'You feel taller. You are not.', b('giants', 'Giant\'s Draught', 180, { hp: 80, poise: 0.2, moveSpeed: -0.05 }), { vessel: 'jar', liquid: ['#a07a4a', '#4a2a0a'], glyph: 'mountain' }, [['brew_trollsBlood_1', 1], ['rawMeat', 2]], 16],
   ['sirensSong', 'Siren\'s Song', 'rare', 'You hear singing. So does the sea.', b('sirensSong', 'Siren\'s Song', 300, { bane_sea: 0.2, seaDmg: 0.1 }), { vessel: 'gourd', liquid: ['#e0d0ff', '#4a3a8a'], glyph: 'fish', fx: ['sparkle'] }, [['sirenFeather', 1], ['pearl', 1]], 22],
   ['golemOil', 'Golem Oil', 'rare', 'Drink it and your skin goes to stone. Slow stone.', b('golemOil', 'Golem Oil', 120, { dmgTaken: -0.2, attackSpeed: -0.1 }), { vessel: 'oil', liquid: ['#c8a050', '#5a4010'], glyph: 'mountain' }, [['golemCore', 1], ['pressedOil', 1]], 20],
   ['wyrmsBlood', 'Wyrm\'s Blood', 'epic', 'Hot as a forge, and it stays hot inside you.', b('wyrmsBlood', 'Wyrm\'s Blood', 300, { fireResist: 0.4, fireDmg: 0.15 }), { vessel: 'heart', liquid: ['#ff5a2a', '#6a0a0a'], fx: ['embers'], stopper: 'gold' }, [['drakeHeart', 1], ['dragonsBlood', 1]], 24],
@@ -298,7 +298,7 @@ const SCROLLS: Scroll[] = [
 for (const [id, name, rarity, desc, use, col, glyph, lvl] of SCROLLS) {
   const t = Math.max(1, Math.min(6, Math.ceil(lvl / 4)));
   one(id, name, rarity, `${desc} One use: anyone can read it.`, {}, [`shop:arcane:${t}`, `chest:${t}`, `drop:caster:${t}`], paper({ kind: 'scroll', color: col, glyph, ...(rarity === 'epic' ? { glow: col } : {}) }), { use, lvl });
-  recipe(id, 'runestone', 'runecraft', Math.max(1, lvl), [['linen', 1], ['copperIngot', 1], [lvl >= 10 ? 'essence' + (use.style === 'fire' ? 'Fire' : use.style === 'frost' ? 'Frost' : use.style === 'wind' ? 'Wind' : use.style === 'light' ? 'Light' : 'Shadow') : 'emberroot', 1]], lvl >= 10 ? 'node' : 'basic', { node: 'Scribe' });
+  recipe(id, 'runestone', 'runecraft', Math.max(1, lvl), [['linen', 1], ['copperIngot', 1], [lvl >= 10 ? 'essence' + (use.style === 'fire' ? 'Fire' : use.style === 'frost' ? 'Frost' : use.style === 'wind' ? 'Wind' : use.style === 'light' ? 'Light' : 'Shadow') : 'emberroot', 1]], lvl >= 10 ? 'node' : 'basic', { node: 'Ink Lore' });
 }
 
 // ---- wards and runestones (12) ---------------------------------------------------------------

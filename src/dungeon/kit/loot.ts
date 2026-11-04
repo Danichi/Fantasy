@@ -1,4 +1,14 @@
 import { ITEMS } from '../../items/itemDefs';
+import { SOURCES } from '../../items/catalog/kit';
+
+/** Catalog items found in chests of these tiers (items/catalog: chest:<tier>). */
+function catalogChest(tiers: number[]): [string, number][] {
+  const out: [string, number][] = [];
+  for (const [id, src] of Object.entries(SOURCES)) {
+    if (src.some((s) => tiers.some((t) => s === `chest:${t}`))) out.push([id, ITEMS[id]?.stack ? 0.35 : 0.2]);
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // Chests by tier (docs/design/dungeons.md §6): wooden, iron, gilded and the
@@ -40,6 +50,12 @@ export function baseTable(extra: [string, number][][] = []): LootTable {
     { gold: [110, 220], items: [['knightSword', 1], ['kiteShield', 1], ['ringSage', 1], ['silverOre', 2], ['silversteelIngot', 1], ['silk', 1], ['dungeonRubbing', 2], ['greaterHealthPotion', 2]] },
     { gold: [220, 380], items: [['ringSage', 1], ['ringVigor', 1], ['silversteelIngot', 2], ['dungeonRubbing', 2], ['greaterHealthPotion', 2], ['luckyCharm', 1]] },
   ];
+  // The item catalog's chest finds, by chest tier.
+  // (all of them together weigh a little less than the chest's own finds)
+  [[1, 2], [2, 3], [3, 4, 5], [5, 6, 7, 8]].forEach((ts, k) => {
+    const c = catalogChest(ts), sum = c.reduce((a, [, w]) => a + w, 0), own = tiers[k].items.reduce((a, [, w]) => a + w, 0);
+    if (sum > 0) tiers[k].items.push(...c.map(([id, w]) => [id, (w * own * 0.8) / sum] as [string, number]));
+  });
   extra.forEach((list, k) => tiers[k]?.items.push(...list));
   return tiers;
 }

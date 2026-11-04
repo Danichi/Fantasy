@@ -40,8 +40,8 @@ export const METAL_GLOW: Partial<Record<keyof typeof METAL, [number, number]>> =
   deepsteel: [0x2a4aa8, 0.12],
   sunbrass: [0xa0661a, 0.1],
   tideglass: [0x2aa8a0, 0.32],
-  starmetal: [0x9ab8ff, 0.42],
-  duskiron: [0x7a3aff, 0.5],
+  starmetal: [0x9ab8ff, 0.08],
+  duskiron: [0x7a3aff, 0.07],
 };
 export type Metal = keyof typeof METAL;
 export type Wood = keyof typeof WOOD;

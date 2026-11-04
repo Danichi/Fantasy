@@ -1,5 +1,6 @@
 import { named, namedShield, type Named } from './templates';
 import { FACTIONS } from './factions';
+import { source } from './kit';
 
 // Faction and regional weapons (the item plan, §2b): 113 named weapons and
 // six faction shields. Each faction's gear is sold by its quartermasters and
@@ -102,7 +103,6 @@ F('wrecker', [
   { id: 'sirenLureTrident', name: 'Siren-Lure Trident', t: 'partisan', tier: 7, desc: 'Pearls hang from its tines; they hum when the sea is calm.', fx: { seaDmg: 0.1 } },
 ]);
 F('orc', [
-  { id: 'tuskCleaverOrc', name: 'Tusk Cleaver', t: 'falchion', tier: 3, desc: 'A great cleaver with a boar tusk set in the pommel.', s: { bleed: 3 } },
   { id: 'warBoarGoad', name: 'War-Boar Goad Spear', t: 'spear', tier: 3, desc: 'The goad the orcs use to drive their war-boars.', s: { stagger: 1.2 } },
   { id: 'skullsplitterAxe', name: 'Skullsplitter Axe', t: 'greataxe', tier: 4, desc: 'Ulgra\'s camp\'s axe. They name their weapons for what they do.' },
   { id: 'blackIronBludgeon', name: 'Black-Iron Bludgeon', t: 'club', tier: 3, desc: 'Cast from the black iron Grukk took in payment. Heavy and ugly.', o: { metal: 'duskiron' } },
@@ -184,3 +184,6 @@ namedShield({ id: 'dwarvenDoorshield', name: 'Dwarven Doorshield', tier: 4, desc
 namedShield({ id: 'wreckersHatchLid', name: 'Wrecker\'s Hatch-Lid', tier: 5, desc: 'A ship\'s hatch with a handle bolted on.', look: { shape: 'hatch', face: 0x6a5a44, accent: 0x6a5a44, rim: 0x3a3a3a, device: 'none' }, s: { block: 125, stability: 0.74, poise: 6 } }, ['fshop:wrecker', 'quest:wrecker']);
 namedShield({ id: 'legionScutum', name: 'Legion Scutum', tier: 4, desc: 'The Legion\'s curved oblong shield, red with a gold eagle.', look: { shape: 'scutum', face: 0x9a2a1a, accent: 0xd8b04a, rim: 0xb08a3a, device: 'sun' }, s: { block: 130, stability: 0.8, poise: 8 } }, ['fshop:valorian', 'quest:valorian']);
 namedShield({ id: 'duneTargeShield', name: 'Sun Guard Targe', tier: 5, desc: 'The Sun Guard\'s round shield, a sun-disc boss on white enamel. It leads the desert line.', look: { shape: 'targe', face: 0xe8e0c8, accent: 0xd8a84a, rim: 0xd8a84a, device: 'sun', metalFace: true, spikes: 1 }, s: { block: 115, stability: 0.7 }, fx: { desertWard: 0.05 } }, ['fshop:desert', 'quest:desert']);
+
+// The orcs' tusk cleaver is the one the wilds already drop.
+source('tuskCleaver', 'fshop:orc', 'quest:orc', 'drop:orc:3');

@@ -5,7 +5,7 @@ import type { Target } from '../combat/targets';
 // running. Enemy AIs ask `ignoresPlayer(this)` where they decide they're aware.
 
 export const fearful = new Map<Target, number>();
-export const stealth = { veiled: false };
+export const stealth = { veiled: false, /** seconds of gear-given cover (items/catalog: a kill with the Gloam set, a smoke bomb) */ gearVeil: 0 };
 
 /** Should this enemy ignore the player right now? */
 export function ignoresPlayer(t: unknown) {

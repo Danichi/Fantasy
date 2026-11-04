@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { events } from '../core/events';
 import type { DialogueOption } from '../ui/dialogue';
 import type { MapMarker } from '../ui/worldMap';
 
@@ -79,6 +80,7 @@ export class SunwheelNetwork {
       run: () => {
         this.h.close();
         this.h.travel(o.pos, o.name);
+        events.emit('wheelTravel', { to: o.name });
         this.h.save();
       },
     })));

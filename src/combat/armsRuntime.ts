@@ -1,3 +1,4 @@
+import { GEAR } from '../items/catalog/hooks';
 import * as THREE from 'three';
 import type { Player } from '../player/player';
 import type { SkillRuntime } from '../paths/skills';
@@ -358,6 +359,8 @@ export class ArmsRuntime {
   private applyMods() {
     const p = this.player, m = p.mods as unknown as Record<string, number>;
     for (const b of this.buffs.values()) for (const [k, v] of Object.entries(b.m)) if (typeof m[k] === 'number') m[k] += v;
+    // Gear effects (items/catalog/gearRuntime.ts) and set bonuses.
+    for (const [k, v] of Object.entries(GEAR.mods)) if (typeof m[k] === 'number') m[k] += v;
     const d = this.main, f = this.family;
     let cast = 1 + (d?.stats.focus ?? 0);
     if (f && this.school === 'gale' && f.schools.gale.castPerFlow) cast *= 1 + f.schools.gale.castPerFlow * this.rt.flow;

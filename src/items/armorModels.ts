@@ -97,21 +97,23 @@ function M(): LookMats {
   let m = lookCache.get(key);
   if (m) return m;
   const shine = L.shine ?? 0.6;
-  const glow = (mat: THREE.MeshStandardMaterial) => {
-    if (L.glow) {
+  // The glow lives in the seams and trim; the plates themselves only catch a little of it.
+  const glow = (mat: THREE.MeshStandardMaterial, k = 1) => {
+    if (L.glow && k > 0) {
       mat.emissive.set(L.glow);
-      mat.emissiveIntensity = L.glowStrength ?? 0.25;
+      mat.emissiveIntensity = (L.glowStrength ?? 0.25) * k;
     }
     return mat;
   };
-  const metal = (c: number, k = 1) => glow(new THREE.MeshStandardMaterial({ color: c, metalness: 0.55 + 0.35 * shine * k, roughness: 0.75 - 0.5 * shine * k }));
+  const metal = (c: number, k = 1, g = 1) => glow(new THREE.MeshStandardMaterial({ color: c, metalness: 0.55 + 0.35 * shine * k, roughness: 0.75 - 0.5 * shine * k }), g);
   const cloth = new THREE.MeshStandardMaterial({ map: weave(L.cloth, false), roughness: 0.95, side: THREE.DoubleSide });
   const leather = new THREE.MeshStandardMaterial({ color: L.strap ?? 0x5a3a22, roughness: 0.7 });
-  const mail = glow(new THREE.MeshStandardMaterial({ map: weave(L.base, true), color: 0xffffff, metalness: 0.8, roughness: 0.5, side: THREE.DoubleSide }));
+  const mail = glow(new THREE.MeshStandardMaterial({ map: weave(L.base, true), color: 0xffffff, metalness: 0.8, roughness: 0.5, side: THREE.DoubleSide }), 0);
   const armor = L.weight === 'robe' ? new THREE.MeshStandardMaterial({ map: weave(L.base, false), roughness: 0.95, side: THREE.DoubleSide })
     : L.weight === 'leather' ? new THREE.MeshStandardMaterial({ color: L.base, roughness: 0.62, metalness: 0.05, side: THREE.DoubleSide })
-      : L.weight === 'mail' ? mail : metal(L.base);
-  m = { armor, darkSteel: L.weight === 'robe' ? new THREE.MeshStandardMaterial({ color: L.trim, roughness: 0.6, metalness: 0.4 }) : metal(L.trim, 0.8), brass: metal(L.trim, 1), leather, cloth, mail };
+      : L.weight === 'mail' ? mail : metal(L.base, 1, 0);
+  const trimGlow = Math.max(1, 0.6 / Math.max(0.05, L.glowStrength ?? 0.6));
+  m = { armor, darkSteel: L.weight === 'robe' ? glow(new THREE.MeshStandardMaterial({ color: L.trim, roughness: 0.6, metalness: 0.4 }), trimGlow) : metal(L.trim, 0.8, trimGlow), brass: metal(L.trim, 1, trimGlow), leather, cloth, mail };
   lookCache.set(key, m);
   return m;
 }

@@ -76,13 +76,13 @@ export const TIERS: Tier[] = [
   },
   {
     n: 7, metal: 'Starmetal', metalKey: 'starmetal', wood: 'Starwood', woodKey: 'starwood', leather: 'Starhide', cloth: 'Moonweave', lvl: [30, 35], regions: [],
-    col: { metal: 0x34343f, trim: 0xc8d4ff, leather: 0x2a2a38, cloth: 0x1a1a3a, robe: 0x22224a, glow: 0x9ab8ff, glowStrength: 0.35, shine: 0.7 },
+    col: { metal: 0x34343f, trim: 0xc8d4ff, leather: 0x2a2a38, cloth: 0x1a1a3a, robe: 0x22224a, glow: 0x9ab8ff, glowStrength: 0.1, shine: 0.3 },
     ingot: 'starmetalIngot', timber: 'starwood', hide: 'starhide', fabric: 'moonweave', book: 'bookStarfall', craft: 30, mult: 3.0,
     where: 'made only: star-metal from fallen-star sites, worked from the Starfall Script', helms: { robe: 'hood', leather: 'cap', mail: 'coif', plate: 'great' },
   },
   {
     n: 8, metal: 'Duskiron', metalKey: 'duskiron', wood: 'Gloamwood', woodKey: 'gloamwood', leather: 'Gloamhide', cloth: 'Gloamweave', lvl: [35, 60], regions: [],
-    col: { metal: 0x1e1b24, trim: 0x7a3aff, leather: 0x1a141e, cloth: 0x2a1a3a, robe: 0x1e1428, glow: 0x7a3aff, glowStrength: 0.45, shine: 0.25 },
+    col: { metal: 0x1e1b24, trim: 0x7a3aff, leather: 0x1a141e, cloth: 0x2a1a3a, robe: 0x1e1428, glow: 0x7a3aff, glowStrength: 0.12, shine: 0.25 },
     ingot: 'duskironIngot', timber: 'gloamwood', hide: 'gloamhide', fabric: 'gloamweave', book: 'bookIronBelow', craft: 35, mult: 3.4,
     where: 'made only: dusk-iron from the Dark scars and rifts, worked from the Codex of the Iron Below', helms: { robe: 'hood', leather: 'mask', mail: 'coif', plate: 'mask' },
   },

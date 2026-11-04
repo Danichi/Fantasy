@@ -1,3 +1,4 @@
+import { GEAR } from '../items/catalog/hooks';
 import * as THREE from 'three';
 import type { ItemDef } from '../items/itemDefs';
 import type { Player } from '../player/player';
@@ -207,10 +208,12 @@ export class Fishing {
     const pool = FISH.filter((f) => f.rarity > 0 && f.water.includes(kind)
       && (!f.hours || (f.hours[0] <= f.hours[1] ? h >= f.hours[0] && h < f.hours[1] : h >= f.hours[0] || h < f.hours[1]))
       && (!f.weather || f.weather.includes(sky as 'clear')));
+    // Lures (items/catalog) make the rare ones bite more often.
+    const w8 = (f: (typeof pool)[number]) => (f.rarity <= 3 ? f.rarity * (1 + GEAR.fishLuck) : f.rarity);
     let total = 0;
-    for (const f of pool) total += f.rarity;
+    for (const f of pool) total += w8(f);
     let r = Math.random() * total;
-    for (const f of pool) if ((r -= f.rarity) <= 0) return f;
+    for (const f of pool) if ((r -= w8(f)) <= 0) return f;
     return pool[0] ?? FISH[0];
   }
 

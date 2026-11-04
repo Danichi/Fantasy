@@ -15,6 +15,7 @@ import { GRAVEWOOD_KEY_ITEMS } from '../world/gravewoodKey';
 import { STORY_ITEMS } from '../story/items';
 import { GHAGRABBA_ITEMS } from '../world/desert/ghagrabbaItems';
 import { DUNGEON_ITEMS } from './dungeonItems';
+import { CATALOG_ITEMS } from './catalog';
 
 export type Slot =
   | 'main' | 'off'
@@ -543,6 +544,13 @@ export const ITEMS: Record<string, ItemDef> = {
   ...GHAGRABBA_ITEMS,
   ...DUNGEON_ITEMS,
 };
+// The item catalog (items/catalog): gear, one-use items and materials in eight
+// tiers. An older item with the same id keeps its own definition.
+export const CATALOG_CLASHES: string[] = [];
+for (const [id, d] of Object.entries(CATALOG_ITEMS)) {
+  if (ITEMS[id]) CATALOG_CLASHES.push(id);
+  else ITEMS[id] = d;
+}
 
 // The four original herbs use the foraging models for their icons too.
 for (const id of ['sungrass', 'moongrass', 'wildmint', 'ironleaf']) ITEMS[id].build = HERB_MODELS[id];

@@ -123,7 +123,7 @@ for (const [id, name, quest, desc, s, fx, art] of KEEP) trinket(id, name, 'rare'
 const TROPHIES: [string, string, string, string, Record<string, number>, TrinketSpec][] = [
   ['wolfFangNecklace', 'Wolf Fang Necklace', 'beast', 'Wolf fangs on a thong.', { ward_wolf: 0.06, bane_beast: 0.05 }, { kind: 'charm', metal: 'bone', color: '#efe6cc', hang: 'fang' }],
   ['boarTuskCharm', 'Boar Tusk Charm', 'beast', 'A curved tusk, bound in copper wire.', { bane_beast: 0.06, poiseDmg: 0.04 }, { kind: 'charm', metal: 'copper', color: '#e8d8a8', hang: 'tusk' }],
-  ['bearClawCharm', 'Bear Claw', 'beast', 'A claw as long as a finger, on a cord.', { bane_beast: 0.08 }, { kind: 'charm', metal: 'bronze', color: '#3a3028', hang: 'fang' }],
+  ['bearClawCharm', 'Bear Claw Charm', 'beast', 'A claw as long as a finger, on a cord.', { bane_beast: 0.08 }, { kind: 'charm', metal: 'bronze', color: '#3a3028', hang: 'fang' }],
   ['stagTine', 'Stag Antler Tine', 'beast', 'A tine from a great stag.', { bane_beast: 0.05, moveSpeed: 0.02 }, { kind: 'charm', metal: 'bone', color: '#c8a87a', hang: 'tusk' }],
   ['crabClawBracelet', 'Crab Claw Bracelet', 'sea', 'Crab-claw tips threaded on a band.', { bane_sea: 0.08 }, { kind: 'ring', metal: 'bronze', color: '#c8643a' }],
   ['batWingCharm', 'Bat-Wing Charm', 'insect', 'A dried bat wing in a little frame.', { bane_insect: 0.08 }, { kind: 'charm', metal: 'pewter', color: '#3a2a2a', hang: 'feather' }],

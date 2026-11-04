@@ -61,6 +61,8 @@ export interface GameEvents {
   pickup: { kind: 'xp' | 'gold' };
   bossSlam: { at: Vector3 };
   equipmentChanged: {};
+  /** carried by the Sunwheel (story/sunwheel.ts) */
+  wheelTravel: { to: string };
   originAbility: { origin: string; ability: string; };
   slimeLand: { at: Vector3; size: number };
   mapRevealed: { cells: number };

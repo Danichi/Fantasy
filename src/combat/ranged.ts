@@ -1,3 +1,4 @@
+import { GEAR } from '../items/catalog/hooks';
 import * as THREE from 'three';
 import type { Player } from '../player/player';
 import type { ThirdPersonCamera } from '../player/camera';
@@ -355,7 +356,7 @@ export class Ranged {
     const dir = s.vel.clone().setY(0).normalize();
     const at = t.center.clone().addScaledVector(dir, -t.radius * 0.8);
     // Through the combat core: arrows pierce, crits come from play (a stunned, broken or unaware target).
-    const r = strike(t, { base: s.dmg, type: 'pierce', poise: s.poise * p.paths.poisePower * p.mods.poise, from: at.clone().addScaledVector(dir, -2), at, source: 'melee', keen: s.crit });
+    const r = strike(t, { base: s.dmg * (GEAR.shotMult?.(t) ?? 1), type: 'pierce', poise: s.poise * p.paths.poisePower * p.mods.poise, from: at.clone().addScaledVector(dir, -2), at, source: 'melee', keen: s.crit });
     const dmg = r.damage, crit = r.crit;
     const as = ITEMS[s.ammo]?.stats ?? {};
     if (as.burn && t.alive) afflictions.burn(t, as.burn);
