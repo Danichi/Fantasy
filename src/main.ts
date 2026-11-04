@@ -1056,7 +1056,11 @@ async function boot() {
   folkServices.set('ragna', () => [{ label: 'Browse Port steel', run: () => shop('ragna', 'Aurelle-folded steel. Heavier purse, lighter grave.', withArms('ragna', [['knightSword', 110], ['kiteShield', 90], ['armingSword', 55], ['roundShield', 50]])) }]);
   folkServices.set('quill', () => [{ label: 'Browse fine draughts', run: () => shop('quill', 'Twice the strength of a village draught. Half the taste.', withArms('quill', [['healthPotion', 18], ['manaPotion', 22], ['greaterHealthPotion', 55], ['greaterManaPotion', 60]])) }]);
   folkServices.set('sabeth', () => [{ label: 'Browse rings and charms', run: () => shop('sabeth', 'Every ring is a promise. Choose yours.', [['ringSage', 200]]) }]);
-  folkServices.set('bruni', () => [{ label: "Buy a miner's lantern — 35g", run: () => { if (player.prog.gold >= 35) { player.prog.addGold(-35); giveItem('minersLantern', 1); } dialogue.close(); } }]);
+  folkServices.set('bruni', (show, back) => [
+    { label: "Buy a miner's lantern — 35g", run: () => { if (player.prog.gold >= 35) { player.prog.addGold(-35); giveItem('minersLantern', 1); } dialogue.close(); } },
+    // Bruni teaches Jewelcrafting: the stones her people find in every seam.
+    ...mentorOptions(player.paths, { id: 'bruni' }, (t) => show(t, [{ label: 'Go on.', run: back }]), (m) => hud.toast(m), trials),
+  ]);
   folkServices.set('bess', (show, back) => [{
     label: 'A room for the night — 15g',
     run: () => {

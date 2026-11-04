@@ -42,6 +42,8 @@ export const ICONS: Record<string, string> = {
   runecraft: 'M12 3l7 9-7 9-7-9zM12 3v18M8 9l8 6',
   beastbinding: 'M6 14c0-4 3-7 6-7s6 3 6 7-3 6-6 6-6-2-6-6zM8 7L6 3M16 7l2-4M10 13h.01M14 13h.01',
   tailoring: 'M18 3L6 15M17 2a2 2 0 1 1 3 3M6 15c-3 1-3 5 0 6s5-2 3-5M14 9c4 0 7 2 7 6',
+  jewelcrafting: 'M7 4h10l4 5-9 12L3 9zM3 9h18M9 4l3 5 3-5M12 9v12',
+  prospecting: 'M3 21l9-9M14 4l6 6M11 7l6-3 3 3-3 6-6-6zM15 15l5 5',
   legendaryHero: 'M3 18h18M4 18l-1-10 5 4 4-8 4 8 5-4-1 10M12 13v2',
 };
 

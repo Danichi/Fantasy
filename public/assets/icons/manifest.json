@@ -573,7 +573,22 @@
   "yewStaff",
   "yewWarbow",
   "yewWood",
-  "rustedBlade"
+  "rustedBlade",
+  "banquet",
+  "roughGarnet",
+  "roughAmethyst",
+  "roughSapphire",
+  "cutGarnet",
+  "cutAmethyst",
+  "cutSapphire",
+  "silverIngot",
+  "copperBand",
+  "garnetRing",
+  "garnetPendant",
+  "amethystRing",
+  "amethystPendant",
+  "sapphireRing",
+  "sapphireAmulet"
  ],
  "wide": [
   "armingSword",

@@ -92,7 +92,9 @@ export class Crafter {
     const d = ITEMS[r.out];
     if (!d) return [];
     const out = ['qAll'];
-    if (r.station === 'kitchen') out.push('qMeal');
+    if (r.calling === 'jewelcrafting') {
+      if (d.kind === 'accessory') out.push('qJewel');
+    } else if (r.station === 'kitchen') out.push('qMeal');
     else if (r.station === 'loom') {
       if (/satchel|belt|bag|pack/i.test(d.id)) out.push('qPack');
       else if (r.inputs.some((i) => CLOTH.has(i.id)) && !r.inputs.some((i) => /leather/i.test(i.id))) out.push('qCloth');

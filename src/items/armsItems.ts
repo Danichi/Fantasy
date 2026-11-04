@@ -261,6 +261,19 @@ function book(color: number) {
 }
 
 // ---- builders ------------------------------------------------------------------------------
+/** A cut gem: a bright little octahedron. */
+function gem(color: number) {
+  return () => {
+    const g = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), std(color, 0.15, 0.2, 0.4));
+    m.scale.set(1, 1.3, 1);
+    g.add(m);
+    return g;
+  };
+}
+/** Jewellery (Jewelcrafting): rings and amulets, worn in the accessory slots. */
+const jewel = (id: string, name: string, slot: 'ring1' | 'amulet', rarity: Rarity, desc: string, stats: ItemDef['stats']): ItemDef =>
+  ({ id, name, kind: 'accessory', slot, rarity, desc, stats, ...(slot === 'amulet' ? { armor: 'amulet' as const } : {}) });
 const mat = (id: string, name: string, desc: string, tier: number, build: () => THREE.Object3D, rarity: Rarity = 'common'): ItemDef =>
   ({ id, name, kind: 'material', rarity, stack: true, desc, stats: {}, tier, build });
 const weapon = (id: string, name: string, kind: ItemDef['kind'], rarity: Rarity, desc: string, stats: ItemDef['stats'], build: () => THREE.Object3D, extra: Partial<ItemDef> = {}): ItemDef =>
@@ -347,6 +360,20 @@ export const ARMS_ITEMS: Record<string, ItemDef> = {
   hatchet: { id: 'hatchet', name: "Woodcutter's Hatchet", kind: 'tool', tool: 'hatchet', rarity: 'common', desc: 'A felling hatchet. With it (or any axe) in your pack you can cut marked trees (E at the tree).', stats: {}, build: buildHatchet },
 
   // ---- tier 1-3 materials (contract ids) ----
+  roughGarnet: mat('roughGarnet', 'Rough Garnet', 'A dull red knuckle of stone from an iron or coal vein. A jewelcrafter sees the gem inside it.', 1, ore(0x5a4a4a, 0xa01a2a), 'fine'),
+  roughAmethyst: mat('roughAmethyst', 'Rough Amethyst', 'Violet crystal grown in a copper vein, clouded on the outside.', 2, ore(0x5a5a62, 0x9a5ad8, 0x2a1050), 'fine'),
+  roughSapphire: mat('roughSapphire', 'Rough Sapphire', 'A blue stone from the deep silver seams. Rare, and harder than steel.', 3, ore(0x4a5a6a, 0x2a5ad8, 0x10205a), 'rare'),
+  cutGarnet: mat('cutGarnet', 'Garnet', 'A cut garnet, red as a coal.', 1, gem(0xb01a2a), 'fine'),
+  cutAmethyst: mat('cutAmethyst', 'Amethyst', 'A cut amethyst. It holds the light like a held breath.', 2, gem(0x9a4ae0), 'rare'),
+  cutSapphire: mat('cutSapphire', 'Sapphire', 'A cut sapphire, deep as the sea past the reef.', 3, gem(0x2a4ae8), 'rare'),
+  silverIngot: mat('silverIngot', 'Silver Bar', 'Melted silver, poured into a small bar for settings and chains.', 2, ingot(0xe4e8ee)),
+  copperBand: jewel('copperBand', 'Copper Band', 'ring1', 'common', 'A plain copper ring, hammered round on a mandrel. +10 stamina.', { maxStamina: 10 }),
+  garnetRing: jewel('garnetRing', 'Garnet Ring', 'ring1', 'fine', 'A copper ring with a garnet set in it. Warm on the finger. +20 health.', { maxHp: 20 }),
+  garnetPendant: jewel('garnetPendant', 'Garnet Pendant', 'amulet', 'fine', 'Two garnets on a silver chain. +35 health and a little more poise.', { maxHp: 35, poise: 4 }),
+  amethystRing: jewel('amethystRing', 'Amethyst Ring', 'ring1', 'rare', 'Silver and amethyst. Your thoughts come clearer. +20 mana, faster mana.', { maxMana: 20, manaRegen: 0.3 }),
+  amethystPendant: jewel('amethystPendant', 'Amethyst Pendant', 'amulet', 'rare', 'Two amethysts on a silver chain. +30 mana, faster mana.', { maxMana: 30, manaRegen: 0.5 }),
+  sapphireRing: jewel('sapphireRing', 'Sapphire Ring', 'ring1', 'rare', 'A sapphire in a silver claw. +25 health, +15 stamina, faster stamina.', { maxHp: 25, maxStamina: 15, staminaRegen: 0.3 }),
+  sapphireAmulet: jewel('sapphireAmulet', 'Sapphire Amulet', 'amulet', 'epic', 'Sapphires and an amethyst in silversteel: a jewel fit for a queen. +40 health, +25 mana, faster mana.', { maxHp: 40, maxMana: 25, manaRegen: 0.4 }),
   coal: mat('coal', 'Coal', 'Black, dusty and hot-burning. Smiths need it to make steel.', 1, lumps(0x202024)),
   copperOre: mat('copperOre', 'Copper Ore', 'Green-streaked rock from the hills. Runesmiths draw it into wire.', 1, ore(0x7a6a5a, 0x3aa080)),
   silverOre: mat('silverOre', 'Silver Ore', 'Pale, heavy ore from deep veins. With steel it makes silversteel.', 3, ore(0x6a6a72, 0xe8eef8, 0x5a6a80), 'fine'),

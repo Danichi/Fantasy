@@ -4,7 +4,7 @@
 // leather, hardened leather, drake leather; wool, linen, silk).
 
 export type StationKind = 'forge' | 'workbench' | 'alchemy' | 'kitchen' | 'runestone' | 'loom';
-export type CallingId = 'smithing' | 'herbalism' | 'cooking' | 'runecraft' | 'tailoring';
+export type CallingId = 'smithing' | 'herbalism' | 'cooking' | 'runecraft' | 'tailoring' | 'jewelcrafting';
 /** The short timing step: three hammer beats, a stir, or taking it off the heat. */
 export type Step = 'hammer' | 'stir' | 'heat' | 'none';
 
@@ -60,6 +60,7 @@ const brew = (id: string, level: number, inputs: [string, number][], learn: Reci
 const cook = (id: string, level: number, inputs: [string, number][], learn: Recipe['learn'] = 'node', o: Partial<Recipe> = {}) => r(id, 'kitchen', 'cooking', level, inputs, learn, { step: 'heat', ...o });
 const rune = (id: string, level: number, inputs: [string, number][], learn: Recipe['learn'] = 'node') => r(id, 'runestone', 'runecraft', level, inputs, learn, { quality: false, step: 'none' });
 const sew = (id: string, level: number, inputs: [string, number][], learn: Recipe['learn'] = 'basic') => r(id, 'loom', 'tailoring', level, inputs, learn, { step: 'none' });
+const gemwork = (id: string, level: number, inputs: [string, number][], learn: Recipe['learn'] = 'basic', o: Partial<Recipe> = {}) => r(id, 'workbench', 'jewelcrafting', level, inputs, learn, { step: 'hammer', ...o });
 const refine = (id: string, station: StationKind, calling: CallingId | undefined, level: number, inputs: [string, number][], n = 1) => r(id, station, calling, level, inputs, 'basic', { quality: false, n });
 
 export const RECIPES: Recipe[] = [
@@ -113,6 +114,18 @@ export const RECIPES: Recipe[] = [
   bench('arrowBroadhead', 5, [['planks', 1], ['steelIngot', 1]], 'basic', { n: 10, quality: false, step: 'none' }),
   bench('arrowFire', 4, [['arrowIron', 10], ['emberroot', 1]], 'discover', { n: 10, quality: false, step: 'none' }),
   bench('arrowFrost', 4, [['arrowIron', 10], ['silverthistle', 1]], 'discover', { n: 10, quality: false, step: 'none' }),
+  // ---- the bench and the forge: Jewelcrafting (gems from the ore veins) ----
+  r('silverIngot', 'forge', 'jewelcrafting', 2, [['silverOre', 2]], 'basic', { quality: false, step: 'none' }),
+  gemwork('cutGarnet', 1, [['roughGarnet', 1]], 'basic', { quality: false, step: 'none' }),
+  gemwork('cutAmethyst', 5, [['roughAmethyst', 1]], 'node', { node: 'Cut Amethyst', quality: false, step: 'none' }),
+  gemwork('cutSapphire', 10, [['roughSapphire', 1]], 'node', { node: 'Cut Sapphire', quality: false, step: 'none' }),
+  gemwork('copperBand', 1, [['copperIngot', 2]]),
+  gemwork('garnetRing', 2, [['copperIngot', 1], ['cutGarnet', 1]]),
+  gemwork('garnetPendant', 5, [['silverIngot', 1], ['cutGarnet', 2]], 'node', { node: 'Garnet Pendant' }),
+  gemwork('amethystRing', 6, [['silverIngot', 1], ['cutAmethyst', 1]], 'node', { node: 'Amethyst Ring' }),
+  gemwork('amethystPendant', 10, [['silverIngot', 2], ['cutAmethyst', 2]], 'node', { node: 'Amethyst Pendant' }),
+  gemwork('sapphireRing', 15, [['silverIngot', 1], ['cutSapphire', 1]], 'node', { node: 'Sapphire Ring' }),
+  gemwork('sapphireAmulet', 20, [['silversteelIngot', 1], ['cutSapphire', 2], ['cutAmethyst', 1]], 'node', { node: 'Crown Jewels' }),
   // ---- the alchemy table (Herbalism) ----
   brew('healthPotion', 1, [['sungrass', 2], ['riverReed', 1]], 'basic'),
   brew('manaPotion', 1, [['moongrass', 2], ['riverReed', 1]], 'basic'),

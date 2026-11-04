@@ -108,7 +108,11 @@ export function setupArms(ctx: ArmsContext) {
     give, hours: ctx.hours, hasTool, toast: ctx.toast,
     bonus: (k) => crafter.total(k),
   });
-  gathering.onGather = (_kind, item, n, rare) => ctx.toast(`+${n} ${ITEMS[item].name}${rare ? ` · and ${ITEMS[rare].name}!` : ''}`);
+  gathering.onGather = (_kind, item, n, rare, gem) => {
+    ctx.toast(`+${n} ${ITEMS[item].name}${rare ? ` · and ${ITEMS[rare].name}!` : ''}${gem ? ` · a ${ITEMS[gem].name}!` : ''}`);
+    // Gathering is Prospecting practice.
+    practice.add('prospecting', 5 * n + (rare ? 10 : 0) + (gem ? 15 : 0));
+  };
   gathering.onStrike = (at, tool) =>
     ctx.fx.add.spawn({ pos: at.clone().setY(at.y + 0.6), spread: 0.5, count: tool === 'pick' ? 10 : 7, life: [0.25, 0.6], size: [0.07, 0.02], color: tool === 'pick' ? 0xfff0c0 : 0xd8b07a, color2: tool === 'pick' ? 0xff9a3a : 0x8a5a2a, gravity: 9, upBias: 1.2, jitter: 0.4 });
   events.on('enemyDied', (e) => {
@@ -119,6 +123,7 @@ export function setupArms(ctx: ArmsContext) {
     const meat = g.meat + (Math.random() < crafter.total('meat') ? 1 : 0);
     give('rawHide', hide);
     give('rawMeat', meat);
+    practice.add('prospecting', 6);
     ctx.toast(`Skinned: ${hide} ${ITEMS.rawHide.name}, ${meat} ${ITEMS.rawMeat.name}`);
   });
 

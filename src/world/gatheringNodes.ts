@@ -35,6 +35,8 @@ export const NODE_KINDS = {
   yew: { item: 'yewWood', label: 'Fallen yew', tool: 'axe', regrow: 48, n: [1, 1] },
 } satisfies Record<string, NodeKind>;
 export type NodeKindId = keyof typeof NODE_KINDS;
+/** The rough gem each kind of vein can hold. */
+const GEMS: Partial<Record<NodeKindId, string>> = { iron: 'roughGarnet', coal: 'roughGarnet', copper: 'roughAmethyst', silver: 'roughSapphire' };
 
 interface Node {
   id: string;
@@ -132,7 +134,7 @@ export class GatheringNodes {
   readonly interactable: Interactable;
   /** a strike landed while working (for sparks, chips and sound) */
   onStrike?: (pos: THREE.Vector3, tool: 'pick' | 'axe') => void;
-  onGather?: (kind: NodeKindId, item: string, n: number, rare?: string) => void;
+  onGather?: (kind: NodeKindId, item: string, n: number, rare?: string, gem?: string) => void;
 
   constructor(
     scene: THREE.Scene,
@@ -140,8 +142,8 @@ export class GatheringNodes {
       give: (id: string, n: number) => void;
       hours: () => number;
       hasTool: (tool: 'pick' | 'axe') => boolean;
-      /** Smithing's gathering bonuses: yield, gather speed, rare finds */
-      bonus: (key: 'yield' | 'gather' | 'rare') => number;
+      /** gathering bonuses from the Callings: yield, gather, rare, gem, and per tool (oreYield, woodGather...) */
+      bonus: (key: string) => number;
       toast: (msg: string) => void;
       rnd?: () => number;
     },
@@ -193,7 +195,8 @@ export class GatheringNodes {
       this.deps.toast(k.tool === 'pick' ? 'You need a pick to work ore (Fröst sells them).' : 'You need a hatchet or an axe to cut timber.');
       return false;
     }
-    this.work = { node: n, t: 0, dur: WORK[k.tool] * Math.max(0.4, 1 - this.deps.bonus('gather')), at: new THREE.Vector3() };
+    const speed = this.deps.bonus('gather') + this.deps.bonus(k.tool === 'pick' ? 'oreGather' : 'woodGather');
+    this.work = { node: n, t: 0, dur: WORK[k.tool] * Math.max(0.4, 1 - speed), at: new THREE.Vector3() };
     return true;
   }
 
@@ -201,12 +204,18 @@ export class GatheringNodes {
     const k: NodeKind = NODE_KINDS[n.kind];
     const rnd = this.deps.rnd ?? Math.random;
     let got = k.n[0] + Math.floor(rnd() * (k.n[1] - k.n[0] + 1));
-    if (rnd() < this.deps.bonus('yield')) got++;
+    // Yield bonuses past 100% are whole extra pieces, the rest a chance of one more.
+    const y = this.deps.bonus('yield') + this.deps.bonus(k.tool === 'pick' ? 'oreYield' : 'woodYield');
+    got += Math.floor(Math.max(0, y)) + (rnd() < y % 1 ? 1 : 0);
     const rare = k.rare && rnd() < 0.04 + this.deps.bonus('rare') ? k.rare : undefined;
+    // A rough gem in the rock, now and then (Jewelcrafting cuts them).
+    const g = GEMS[n.kind];
+    const gem = g && rnd() < 0.03 + this.deps.bonus('gem') ? g : undefined;
     this.worked.set(n.id, this.deps.hours());
     this.deps.give(k.item, got);
     if (rare) this.deps.give(rare, 1);
-    this.onGather?.(n.kind, k.item, got, rare);
+    if (gem) this.deps.give(gem, 1);
+    this.onGather?.(n.kind, k.item, got, rare, gem);
     this.dirty = true;
   }
 

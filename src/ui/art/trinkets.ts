@@ -811,8 +811,17 @@ export const TRINKETS: Record<string, TrinketSpec> = {
   oldKingsSignet: { kind: 'ring', metal: 'greenBronze', glyph: 'crown' },
   dentedSignet: { kind: 'ring', metal: 'gold', glyph: 'shield', color: '#b0802a' },
   hallamsSeal: { kind: 'ring', metal: 'gold', glyph: 'sun', color: '#e0ac34', glow: '#ffd76a' },
+  // Jewelcrafting's rings
+  copperBand: { kind: 'ring', metal: 'copper' },
+  garnetRing: { kind: 'ring', metal: 'copper', color: '#b01a2a' },
+  amethystRing: { kind: 'ring', metal: 'silver', color: '#9a4ae0', glow: '#c08aff' },
+  sapphireRing: { kind: 'ring', metal: 'silver', color: '#2a4ae8', glow: '#6a8aff' },
   // amulets
   garnetAmulet: { kind: 'amulet', metal: 'silver', color: '#b01a2a' },
+  // Jewelcrafting's pendants
+  garnetPendant: { kind: 'amulet', metal: 'silver', color: '#c0202a', shape: 'drop' },
+  amethystPendant: { kind: 'amulet', metal: 'silver', color: '#9a4ae0', shape: 'drop', glow: '#c08aff' },
+  sapphireAmulet: { kind: 'amulet', metal: 'gold', color: '#2a4ae8', glow: '#8aa4ff' },
   scarabAmulet: { kind: 'amulet', metal: 'gold', color: '#2a9a8a', shape: 'scarab' },
   scarabCharm: { kind: 'amulet', metal: 'copper', color: '#3a7ad8', shape: 'scarab' },
   rootwardenHeart: { kind: 'amulet', metal: 'brass', shape: 'heartwood', glow: '#7aff6a' },

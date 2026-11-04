@@ -79,7 +79,7 @@ export function runeOf(id?: string): { def: RuneDef; k: number } | null {
 /** The plain rune id (without its strength). */
 export const runeBase = (id?: string) => id?.split('*')[0];
 
-const STAT_SCALED: (keyof ItemStats)[] = ['damage', 'armor', 'block', 'heal', 'restoreMana', 'restoreStamina', 'poise', 'bleed', 'burn'];
+const STAT_SCALED: (keyof ItemStats)[] = ['damage', 'armor', 'block', 'heal', 'restoreMana', 'restoreStamina', 'poise', 'bleed', 'burn', 'maxHp', 'maxMana', 'maxStamina', 'manaRegen', 'staminaRegen'];
 
 const derived = new Map<string, ItemDef>();
 

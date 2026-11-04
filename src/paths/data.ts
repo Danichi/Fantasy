@@ -197,6 +197,26 @@ export const DISCIPLINES: DisciplineDef[] = [
     ],
   },
   {
+    // Gems turn up in ore veins (Prospecting finds more); cut at a workbench, set in rings and amulets.
+    id: 'jewelcrafting', fam: 'calling', name: 'Jewelcrafting', color: '--c-shadow', mentor: 'Bruni Stonevein, Port Aurelle', mentorNpc: 'bruni', res: 'Gems',
+    flavour: 'Every stone in the mountain is waiting for someone to find the face it was hiding.', how: 'Cut rough gems from the ore veins at a workbench and set them in rings and amulets. Working the gems raises Jewelcrafting by itself.',
+    branches: [
+      { name: 'Cutting', sub: 'Rough stone to bright gem', tiers: [['Steady Loupe', 'Gem Lore'], ['*Cut Garnet', 'Facets', 'Polish'], ['*Cut Amethyst', '?Brilliant|Cabochon', 'Clean Cleave'], ['*Cut Sapphire', '!Gemwright', 'Flawless Eye'], ['Star Cut', 'Heart of the Stone']], cap: 'The Perfect Facet' },
+      { name: 'Settings', sub: 'Rings and pendants', tiers: [['Wire Bending', 'Soft Solder'], ['*Garnet Pendant', 'Prongs', 'Filigree'], ['*Amethyst Ring', '?Signet|Band', 'Bezel'], ['*Amethyst Pendant', '!Goldsmith', 'Engraving'], ['Sapphire Ring', 'Royal Setting']], cap: 'Crown Jewels' },
+      { name: 'Lore', sub: 'Finding and knowing stones', tiers: [['Appraiser', 'Stone Sense'], ['Gem Sense', 'Old Settings', "Prospector's Friend"], ['Charmwork', '?Ward Charm|Luck Charm', 'Steady Fingers'], ['Resonance', '!Gem Singer', 'Hidden Facets'], ['Starstone', 'Echoing Gems']], cap: "Lapidary's Legend" },
+    ],
+  },
+  {
+    // The land's raw stuff: ore, timber and what a hunt leaves. Read by gathering and skinning.
+    id: 'prospecting', fam: 'calling', name: 'Prospecting', color: '--c-gold', mentor: 'Bram Oakhand, the carpenter', mentorNpc: 'carpenter', res: 'Finds',
+    flavour: 'The hills pay whoever learns where to knock.', how: 'Mine veins, fell timber and skin your kills. Gathering raises Prospecting by itself.',
+    branches: [
+      { name: 'Veins', sub: 'Ore and stone', tiers: [['Keen Pick', 'Rockreader'], ['Deep Swing', 'Seam Finder', 'Steady Arms'], ['Vein Sense', '?Miner|Gemhunter', 'Quick Hands'], ['Motherlode', '!Deep Delver', 'Sure Strike'], ['Geode', 'Heart of the Mountain']], cap: 'The Old Veins' },
+      { name: 'Timber', sub: 'Felling and wood', tiers: [['Sharp Axe', 'Woodwise'], ['Clean Fell', 'Heartwood', 'Steady Swing'], ['Grain Reader', '?Logger|Forester', 'Light Step'], ['Old Growth', '!Timberwright', 'Quick Fell'], ['Yew Lore', 'Ironwood']], cap: 'The Old Forest' },
+      { name: 'Hunt', sub: 'Hide and meat', tiers: [['Skinning Knife', 'Field Dressing'], ['Clean Skin', 'Butcher', 'Tracker'], ['Hide Lore', '?Trapper|Hunter', 'Patient'], ['Drake Lore', '!Huntsman', 'Quick Knife'], ['Trophy', 'Prime Cuts']], cap: 'Lord of the Hunt' },
+    ],
+  },
+  {
     id: 'beastbinding', fam: 'calling', name: 'Beastbinding', color: '--c-herb', mentor: 'Unknown', secret: true,
     flavour: 'Every slime remembers what it ate.', how: 'Capture monster essences.',
   },
