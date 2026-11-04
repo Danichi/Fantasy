@@ -265,7 +265,8 @@ export class QuestLog {
     const objs = stage.objectives;
     const me = objs[index];
     if (me.group && this.groupDone(q, st, me.group) && st.progress[index] < this.target(me)) return false; // another way was taken
-    if (stage.anyOrder) return true;
+    // Side goals never wait their turn.
+    if (stage.anyOrder || me.optional) return true;
     for (let k = 0; k < index; k++) {
       const o = objs[k];
       if (o.optional || o.type === 'collect') continue;
@@ -632,8 +633,12 @@ export class QuestLog {
       if (st.status !== 'active') continue;
       const q = this.defs.get(id);
       if (!q) continue;
-      const objs = q.stages[st.stage]?.objectives ?? [];
-      objs.forEach((o, i) => fn(q, o, i, st));
+      const stage = st.stage;
+      const objs = q.stages[stage]?.objectives ?? [];
+      // (Once an objective moves the quest on, the rest of the old stage's objectives are past.)
+      objs.forEach((o, i) => {
+        if (st.stage === stage && st.status === 'active') fn(q, o, i, st);
+      });
     }
   }
 
