@@ -325,7 +325,10 @@ export class GearRuntime {
   // ---- one-use items -------------------------------------------------------------------------
   /** Something from the catalog was used (after its stats and buff). */
   consume(def: ItemDef) {
-    const d = this.d, p = d.player, rt = d.rt, f = this.fx;
+    const d = this.d, p = d.player, rt = d.rt;
+    // A buff it brought (a lure, a lamp, a ward) counts at once.
+    if (def.buff) this.refresh();
+    const f = this.fx;
     if (f.potionPower && def.stats.heal) p.heal(def.stats.heal * f.potionPower);
     const u = def.use;
     if (!u) return;
@@ -550,5 +553,6 @@ export class GearRuntime {
     }
     // Lenses and spyglasses are kept.
     if (u.n === 0) p.equip.add(def.id, 1);
+    this.refresh();
   }
 }
