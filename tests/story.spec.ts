@@ -19,8 +19,10 @@ const HELPERS = `(() => {
   const wheel = (id) => g.mainStory.wheels().find((w) => w.id === id);
   const rite = (id) => { const n = wheel(id) ?? { id, name: id, pos: g.player.pos.clone(), kind: 'ruin' }; for (const r of S.rites.values()) { const o = r(n); if (o) { o.run(); return o.label; } } return null; };
   const say = (npc) => { const o = S.optionsFor(npc)[0]; if (o) o.run(); return o?.label ?? null; };
+  /** A decision in conversation (a 'choose' objective): open it, then take answer \`pick\`. */
+  const choose = (npc, pick) => { let opts = []; const o = q.options(npc, (_t, os) => { opts = os; }, () => {}).find((o) => !o.label.startsWith('❗')); if (!o) return false; o.run(); const c = opts[pick]; if (c) c.run(); return !!c; };
   const stage = (id) => (q.state[id] ? q.state[id].status + '@' + q.state[id].stage : 'none');
-  return { g, q, T, S, sleep, tick, settle, kill, talk, tp, wheel, rite, say, stage };
+  return { g, q, T, S, sleep, tick, settle, kill, talk, tp, wheel, rite, say, stage, choose };
 })()`;
 
 test('the opening: you fall into the wheat, the Dark comes, Kaela and Brannoc come over the wall, and Maud takes you in', async ({ game }) => {
@@ -251,7 +253,8 @@ test('Act II and Act III part one: the index, Dorian, the ledger, the Feast, the
     S.director.autoChoice = 1;
     h.say('chancellor');
     await h.settle();
-    h.talk('king');
+    // Tell the King, and spare the Chancellor (the story remembers).
+    out.vaun = h.choose('king', 0) && q.flag('mq-ledger', 'vaun');
     out.ledger = { stage: h.stage('mq-ledger'), feast: h.stage('mq-feast'), clue: S.state.clues.has('heskLedger') };
     // The Feast: shield the King.
     g.time.hour = 20;
@@ -311,6 +314,7 @@ test('Act II and Act III part one: the index, Dorian, the ledger, the Feast, the
   expect(res.dorian).toEqual({ stage: 'done@3', flag: 'friend' });
   expect(res.ledger0).toBe('active@0');
   expect(res.ledger).toEqual({ stage: 'done@2', feast: 'active@0', clue: true });
+  expect(res.vaun).toBe('mercy');
   expect(res.feast).toEqual({ stage: 'done@1', choice: 'shield', varro: true, clue: true, slain: true });
   expect(res.duel).toEqual({ stage: 'done@1', box: true, four: 'active@0' });
   expect(res.spokes).toBe(4);

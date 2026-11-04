@@ -31,7 +31,9 @@ export class Watchman implements Foe {
   readonly pos = new THREE.Vector3();
   readonly center = new THREE.Vector3();
   hp: number;
-  readonly maxHp: number;
+  maxHp: number;
+  /** how hard their blows land (a prepared town's spears) */
+  power = 1;
   /** where to stand when nothing is close (the raid's front) */
   post: THREE.Vector3;
   private group = new THREE.Group();
@@ -49,6 +51,13 @@ export class Watchman implements Foe {
   private col: RAPIER.Collider;
   private kcc: RAPIER.KinematicCharacterController;
   private disposed = false;
+
+  /** Better armed and better fed: more health and harder blows. */
+  strengthen(hp: number, power: number) {
+    this.maxHp = Math.round(this.maxHp * hp);
+    this.hp = this.maxHp;
+    this.power = power;
+  }
 
   constructor(
     readonly name: string,
@@ -216,7 +225,7 @@ export class Watchman implements Foe {
           this.st = 0;
           if (foe && foe.position.distanceTo(this.pos) < 2.4 + foe.radius) {
             const dir = foe.position.clone().sub(this.pos).setY(0).normalize();
-            foe.takeHit({ damage: this.captain ? 22 : 13, poise: this.captain ? 45 : 22, dir, at: foe.center.clone(), crit: false, source: 'melee' });
+            foe.takeHit({ damage: (this.captain ? 22 : 13) * this.power, poise: this.captain ? 45 : 22, dir, at: foe.center.clone(), crit: false, source: 'melee' });
           }
         }
         break;

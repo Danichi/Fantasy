@@ -76,7 +76,7 @@ export interface GameEvents {
   /** mastery earned by doing (paths/mastery.ts) */
   masteryGained: { id: string; n: number };
   /** something made at a station (crafting/crafter.ts); temper: a piece raised a quality step */
-  crafted: { recipe: string; item: string; calling: string; station: string; q: number; n: number; level: number; temper?: boolean };
+  crafted: { recipe: string; item: string; calling: string; station: string; q: number; n: number; level: number; temper?: boolean; gear?: string };
 }
 
 type Handler<T> = (payload: T) => void;

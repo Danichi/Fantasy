@@ -151,6 +151,15 @@ class Stock implements Foe {
   }
 }
 
+/** How ready a place is for a raid (raids.ts: smaller waves, a hardier, harder-hitting watch). */
+export interface RaidPrep {
+  /** fraction off each wave (leaders still come) */
+  fewer: number;
+  /** the watch's health and blows, as multipliers */
+  watchHp: number;
+  watchPower: number;
+}
+
 export class Raids {
   state: 'idle' | 'warning' | 'waves' | 'done' = 'idle';
   kind: RaidKind = 'wolves';
@@ -160,6 +169,11 @@ export class Raids {
   waves: { n: number; leader: boolean }[] = [];
   raiders: Raider[] = [];
   watch: Watchman[] = [];
+  /**
+   * How well the place got ready (the Night of Bells: spears, fire on the walls,
+   * fed and clothed defenders). Cleared when the raid ends.
+   */
+  prep: RaidPrep = { fewer: 0, watchHp: 1, watchPower: 1 };
   stock: Stock[] = [];
   lost = 0;
   killed = 0;
@@ -316,7 +330,9 @@ export class Raids {
       const at = post.clone().addScaledVector(sideStep, (i - mid) * 2.2).addScaledVector(away, -8);
       at.y = heightAt(at.x, at.z);
       const p = post.clone().addScaledVector(sideStep, (i - mid) * 2.5);
-      this.watch.push(new Watchman(d.name, at, p, this.h.scene, d.look, () => this.living, i === 0));
+      const w = new Watchman(d.name, at, p, this.h.scene, d.look, () => this.living, i === 0);
+      w.strengthen(this.prep.watchHp, this.prep.watchPower);
+      this.watch.push(w);
     });
     for (const w of this.watch) extraFoes.add(w);
     // The animals in the pen.
@@ -342,7 +358,9 @@ export class Raids {
     const w = this.waves[this.wave++];
     this.waveT = 0;
     const f = this.front!;
-    for (let i = 0; i < w.n; i++) {
+    // A prepared town meets smaller waves (fire on the walls, a warded gate).
+    const n = w.leader ? w.n : Math.max(1, Math.round(w.n * (1 - Math.min(0.6, this.prep.fewer))));
+    for (let i = 0; i < n; i++) {
       const leader = w.leader && i === 0;
       const a = Math.random() * Math.PI * 2, r = leader ? 0 : 2 + Math.random() * 5;
       const at = this.spawnAt.clone().add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
@@ -370,6 +388,7 @@ export class Raids {
   private finish(won: boolean) {
     const f = this.front!;
     this.state = 'done';
+    this.prep = { fewer: 0, watchHp: 1, watchPower: 1 };
     this.h.bossBar(null);
     this.h.mark(null);
     this.save.last = this.startDay;

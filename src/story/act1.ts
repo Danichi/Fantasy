@@ -11,6 +11,7 @@ import { events } from '../core/events';
 import type { Story } from './story';
 import { CHAMPIONS } from './champions';
 import type { SceneApi } from './scene';
+import type { RaidPrep } from '../raid/raids';
 
 // Act I: The Fifth Summon (Elder Glen). You fall out of the sky into the
 // south field at night, the Dark's shades already hunting you; the Glen
@@ -26,13 +27,15 @@ export interface ActCtx {
   player: Player;
   rep: Reputation;
   time: { hour: number; day: number; skipTo(h: number): void };
-  raids: { start(kind: 'wolves' | 'gloam', front?: string): void; state: string };
+  raids: { start(kind: 'wolves' | 'gloam', front?: string): void; state: string; prep: RaidPrep };
   toast(m: string): void;
   give(id: string, n: number): void;
   count(id: string): number;
   save(): void;
   /** the game has started (past the title and the character creator) */
   ready(): boolean;
+  /** a timed buff on the player */
+  buff(id: string, label: string, sec: number, m: Record<string, number>): void;
 }
 
 const CH = ['Act I · The Fall', 'Act I · A Stranger in Elder Glen', 'Act I · Lights on the Hill', 'Act I · The Dead Wood', 'Act I · The Night of Bells'];
@@ -53,6 +56,12 @@ const WARDENS = [
   { name: 'Garrick', look: { body: 'male', outfit: 'ranger', hair: 'buzzed', beard: true, hairColor: 0x3a2618, skin: 0xfff0e6, cloth: 0x5a5a6a, pauldron: true, height: 1.9 } },
 ] as const;
 
+/** The Glen's farmers, with the spears you forged them (the Night of Bells). */
+const MILITIA_LOOK = [
+  { body: 'male', outfit: 'peasant', hair: 'simpleparted', beard: true, hairColor: 0x6a4428, skin: 0xe0b894, linen: 0xd8c29a, height: 1.8 },
+  { body: 'male', outfit: 'peasant', hair: 'buzzed', beard: false, hairColor: 0xb0562a, skin: 0xfff0e6, linen: 0xc9dbe8, height: 1.72 },
+] as const;
+
 export const ACT1_QUESTS: QuestDef[] = [
   {
     id: 'mq-fall', title: 'The Fall', giver: 'maud', region: 'cresha', main: true,
@@ -71,8 +80,18 @@ export const ACT1_QUESTS: QuestDef[] = [
     offer: 'I\'ll be plain, because there\'s no time left to be kind. The blight took half the wheat. The rifts took the rest of the summer. We have bread for forty days and two hundred mouths, and now one more. The village won\'t keep a sky-person who brings the Dark down on it and gives nothing back, and I won\'t ask them to. Tom Hale\'s last heifer is out past the fence. Crows are stripping what\'s left of Wren\'s field. Oswin\'s wheel jams, and no wheel means no flour. Rats are in the granary, in our forty days. Fröst can\'t mend a blade without ore. Help us live. Then we\'ll talk about trusting you.',
     acceptLabel: 'I\'ll help keep the Glen alive.',
     stages: [
-      { note: 'Help Elder Glen survive the season (any of its troubles).', objectives: [{ type: 'signal', id: 'glen-trust', count: 2, text: 'Help Elder Glen survive: the herd, the last of the wheat, the mill, the granary, the forge, the walls' }] },
-      { note: 'Go back to Elder Maud.', objectives: [{ type: 'talk', npc: 'maud', text: 'Go back to Elder Maud', reply: 'The Glen\'s a little further from the edge.', say: 'A little. The granary\'s a little fuller and last night we only lost the dog, and Tom Hale says you\'re "all right, for a sky-person." From Tom that\'s a knighthood. It isn\'t enough. Nothing is enough, this year. But it\'s more than yesterday. Magus Orren wants you. He\'s been reading about people like you, and he hasn\'t slept in a week. His tower, by the forge.' }] },
+      { note: 'Help Elder Glen survive the season, whichever way you can.', objectives: [
+        { type: 'signal', id: 'glen-trust', count: 2, group: 'keep', flag: 'keep:favours', text: 'Help the Glen with two of its troubles: the herd, the wheat, the mill, the granary, the walls' },
+        { type: 'craft', calling: 'smithing', gear: 'weapon', count: 2, group: 'keep', flag: 'keep:blades', text: 'Forge two weapons for the Watch (Smithing: Fröst teaches it)', at: [27, 19] },
+        { type: 'craft', calling: 'herbalism', count: 3, group: 'keep', flag: 'keep:remedies', text: 'Brew three remedies for the fever in the low houses (Herbalism)' },
+        { type: 'craft', calling: 'cooking', count: 3, group: 'keep', flag: 'keep:meals', text: 'Cook three meals for the night watch (Cooking: Mara Bell at the Wayfarer)' },
+        { type: 'craft', item: 'leather', count: 2, optional: true, flag: 'keep:leather', bonus: { xp: 40, gold: 10 }, text: 'Tan two hides into leather for winter jerkins (any loom)' },
+      ] },
+      { note: 'Go back to Elder Maud.', objectives: [{ type: 'talk', npc: 'maud', text: 'Go back to Elder Maud', reply: 'The Glen\'s a little further from the edge.', sayIf: [
+        ['keep:blades', 'Fröst says you\'ve been at his anvil, and that the two blades you made for the Watch will hold an edge. From Fröst that\'s a hymn. Brannoc\'s boys went out last night with steel that won\'t snap. That\'s two more of them coming back. Now: Magus Orren wants you. He\'s been reading about people like you, and he hasn\'t slept in a week. His tower, by the forge.'],
+        ['keep:remedies', 'Ilyra says the fever broke in two of the low houses, and she says it was your brewing that did it, not hers. She hates saying that. The Penney girl sat up and asked for bread this morning. There wasn\'t much, but she asked. Now: Magus Orren wants you. He hasn\'t slept in a week. His tower, by the forge.'],
+        ['keep:meals', 'The Watch ate hot three nights running, and the Watch notices that sort of thing. Brannoc says his boys stayed awake on the wall for once. Fed men see further. Now: Magus Orren wants you. He\'s been reading about people like you, and he hasn\'t slept in a week. His tower, by the forge.'],
+      ], say: 'A little. The granary\'s a little fuller and last night we only lost the dog, and Tom Hale says you\'re "all right, for a sky-person." From Tom that\'s a knighthood. It isn\'t enough. Nothing is enough, this year. But it\'s more than yesterday. Magus Orren wants you. He\'s been reading about people like you, and he hasn\'t slept in a week. His tower, by the forge.' }] },
       { note: 'See Magus Orren.', objectives: [{ type: 'talk', npc: 'magus', text: 'See Magus Orren', reply: 'Maud sent me.', say: 'Give me your hand. ...Yes. Warm. Warmer than it should be. There is a waystone at the east gate, older than the road, with a wheel cut into it: the Sunwheel. Every one of them in Cresha is the same wheel, I think. Go and put your hand on it, and tell me what it says to you. I suspect it has been waiting for you.' }] },
       { note: 'Lay your hand on the waystone at the east gate.', hook: 'wheel:wake', objectives: [{ type: 'signal', id: 'wheel-woken', text: 'Touch the Sunwheel waystone at the east gate', at: [128, -10] }] },
     ],
@@ -85,7 +104,11 @@ export const ACT1_QUESTS: QuestDef[] = [
     offer: 'For a week there have been lights in the old crypt on the hill, and the shepherds have seen orcs. An orc warlord called Grukk has made his den under our dead, and Dora swears his lot pay for bread in iron. Black iron. Who pays an orc in iron? The Glen Wardens are going up. Go with them.',
     acceptLabel: 'I\'ll go with the Wardens.',
     stages: [
-      { note: 'Meet the Glen Wardens at the guild hall.', objectives: [{ type: 'talk', npc: 'rook', text: 'Find Rook and the Glen Wardens', reply: 'Maud says I\'m coming with you.', say: 'The sky-person! Brilliant. Lyssa, Garrick, we\'ve got a sky-person. Right. Crypt\'s up the north road. You lead. No, I lead. We\'ll argue on the way.' }] },
+      { note: 'Meet the Glen Wardens at the guild hall (and get ready for the hill, if you can).', anyOrder: true, objectives: [
+        { type: 'craft', gear: 'weapon', minQ: 2, count: 1, optional: true, flag: 'crypt:blade', bonus: { xp: 80 }, text: 'Forge a Fine weapon or better to take into the crypt' },
+        { type: 'craft', calling: 'herbalism', count: 2, optional: true, flag: 'crypt:draughts', bonus: { xp: 50, items: [['healthPotion', 1]] }, text: 'Brew two draughts for the climb' },
+        { type: 'talk', npc: 'rook', text: 'Find Rook and the Glen Wardens', reply: 'Maud says I\'m coming with you.', say: 'The sky-person! Brilliant. Lyssa, Garrick, we\'ve got a sky-person. Right. Crypt\'s up the north road. You lead. No, I lead. We\'ll argue on the way.', sayIf: [['crypt:blade', 'The sky-person, and carrying something that isn\'t rust for once! Let\'s see. ...Gods, that\'s good steel. Lyssa, look at this. Right. Crypt\'s up the north road. You lead. No, I lead. We\'ll argue on the way.']] },
+      ] },
       { note: 'Climb to the crypt with the Wardens.', hook: 'crypt:wardens', objectives: [{ type: 'signal', id: 'crypt-door', text: 'Climb to the crypt on the hill with the Wardens (north)', at: [CRYPT_DOOR.x, CRYPT_DOOR.z] }] },
       { note: 'Go down into the crypt and kill Grukk. The Wardens hold the door.', objectives: [{ type: 'signal', id: 'grukk-dead', text: 'Defeat Grukk in the crypt\'s depths', at: [CRYPT.x, CRYPT.y] }] },
       { note: 'Come back up into the light.', hook: 'crypt:malric', objectives: [{ type: 'signal', id: 'crypt-malric', text: 'Leave the crypt', at: [CRYPT_DOOR.x, CRYPT_DOOR.z] }] },
@@ -101,12 +124,36 @@ export const ACT1_QUESTS: QuestDef[] = [
     acceptLabel: 'I\'ll look through the wheel.',
     stages: [
       { note: 'Look through the Sunwheel at the standing stones (north-west hills).', objectives: [{ type: 'signal', id: 'ring-rite', text: 'Do the rite at the standing stones: look through the wheel', at: [STANDING_STONES.x, STANDING_STONES.z] }] },
-      { note: 'Go into the Gravewood (south-west) and break the curse.', objectives: [{ type: 'signal', id: 'gravewood-cleared', text: 'Break the curse on the Gravewood', at: [GRAVEWOOD.x, GRAVEWOOD.y] }] },
+      { note: 'Go into the Gravewood (south-west) and break the curse. Go warded, if you can.', anyOrder: true, objectives: [
+        { type: 'signal', id: 'gravewood-cleared', text: 'Break the curse on the Gravewood', at: [GRAVEWOOD.x, GRAVEWOOD.y] },
+        { type: 'craft', item: 'runeWarding', count: 1, optional: true, flag: 'ward:rune', bonus: { xp: 60 }, text: 'Cut a Rune of Warding to carry into the dead wood (Runecraft)' },
+        { type: 'craft', calling: 'herbalism', count: 2, optional: true, flag: 'ward:brew', bonus: { xp: 50 }, text: 'Brew two draughts against the dead (Herbalism)' },
+        { type: 'deliver', npc: 'magus', item: 'silverOre', count: 2, optional: true, flag: 'ward:silver', bonus: { xp: 50 }, text: 'Bring Orren two silver ore to bless', say: 'Silver, from the deep seams. Hold still. ...There. It will not stop them. It will make them hesitate, and sometimes that is all a person needs.' },
+      ] },
       { note: 'Step through the pedestal\'s wheel into the Dark.', hook: 'gravewood:mirror', objectives: [{ type: 'signal', id: 'mirror-walked', text: 'Do the rite at the Gravewood pedestal and step into the Dark', at: [GRAVEWOOD.x, GRAVEWOOD.y] }] },
-      { note: 'Tell Magus Orren what you saw.', objectives: [{ type: 'talk', npc: 'magus', text: 'Tell Magus Orren what you saw in the Dark', reply: 'I was in the Dark. Something there is dying.', say: 'Dying. My book says only that something old rules over there, and that nothing has ever seen it die. If it is dying... no. I don\'t know what that means, and I don\'t like that I don\'t. Whatever brought you here knows. Ask it, not me. And be careful what it asks of you in return.' }] },
+      { note: 'Tell Magus Orren what you saw.', objectives: [{ type: 'talk', npc: 'magus', text: 'Tell Magus Orren what you saw in the Dark', reply: 'I was in the Dark. Something there is dying.', say: 'Dying. My book says only that something old rules over there, and that nothing has ever seen it die. If it is dying... no. I don\'t know what that means, and I don\'t like that I don\'t. Whatever brought you here knows. Ask it, not me. And be careful what it asks of you in return.', sayIf: [
+        ['ward:rune', 'Dying. And you walked in there with a ward cut in your own hand, and walked out. That rune will never be clean again, you know; keep it anyway. My book says something old rules over there, and that nothing has ever seen it die. If it is dying... I don\'t know what that means. Whatever brought you here knows. Ask it. And be careful what it asks in return.'],
+        ['ward:silver', 'Dying. And the silver held, did it? Good. My book says only that something old rules over there, and nothing has ever seen it die. If it is dying... I don\'t know what that means. Whatever brought you here knows. Ask it, not me. And be careful what it asks of you in return.'],
+      ] }] },
     ],
     done: 'This was left with the Order when the ward was raised: Dawnbreaker. It burns clean. Take it. You\'ll need it more than any of us.',
     rewards: { gold: 250, xp: 450, items: [['dawnbreaker', 1]], guildRep: 30 },
+  },
+  {
+    id: 'mq-dawnbreaker', title: 'Dawnbreaker', giver: 'froest', region: 'cresha', main: true, requires: ['mq-gravewood'],
+    summary: 'Fröst has seen the Order\'s old blade on your hip and wants it in his fire.',
+    offer: 'Let me see that. ...Old work. Good work, once. The Order forged it for a taller hand than yours and a slower age. I could reforge it to fit you: heat it, fold fresh steel into the edge, rebalance the hilt. Or leave it be. Some people want a relic. Some people want a sword.',
+    acceptLabel: 'Tell me what it would take.',
+    stages: [
+      { note: 'Decide what Dawnbreaker should be.', objectives: [{ type: 'choose', npc: 'froest', key: 'dawnbreaker', reply: 'About Dawnbreaker.', text: 'Tell Fröst what to do with Dawnbreaker', prompt: 'Well? A relic or a sword?', options: [
+        { id: 'reforge', label: 'Reforge it. I need a sword, not a relic.', say: 'Good answer. Three bars of steel, and I want them from your own forge or a fair merchant, not off a dead man. Bring them and leave the blade with me overnight.' },
+        { id: 'keep', label: 'Leave it as the Order made it.', say: 'Fair. Some things should stay what they were. Keep it oiled, at least, and don\'t let me catch you using it to open crates.' },
+      ] }] },
+      { note: 'Bring Fröst three steel ingots for the reforging.', when: 'dawnbreaker=reforge', objectives: [{ type: 'deliver', npc: 'froest', item: 'steelIngot', count: 3, text: 'Bring Fröst 3 steel ingots', say: 'Good steel. Leave it with me. ...Here. Feel the balance now.' }] },
+    ],
+    done: 'That\'s your sword now, not theirs. Masterwork, if I say so myself, and I do.',
+    doneIf: [['dawnbreaker=keep', 'Then go on. It has killed worse than what\'s coming, in its day.']],
+    rewards: { gold: 0, xp: 150 },
   },
   {
     id: 'mq-bells', title: 'The Night of Bells', giver: 'brannoc', region: 'cresha', main: true, requires: ['mq-gravewood'],
@@ -114,9 +161,20 @@ export const ACT1_QUESTS: QuestDef[] = [
     offer: 'Kaela saw rifts at all four corners of the fields last night. Small ones. Feeling for the walls. It\'s coming tonight, and it\'s coming for you. Will you stand with us?',
     acceptLabel: 'I\'ll stand with the Watch.',
     stages: [
-      { note: 'Wait for nightfall with the Watch.', objectives: [{ type: 'hour', from: 21, to: 4, text: 'Wait for nightfall (the Watch is at the walls)' }] },
+      { note: 'Prepare the Glen with whatever you can make, and wait for nightfall with the Watch.', anyOrder: true, objectives: [
+        { type: 'hour', from: 21, to: 4, text: 'Wait for nightfall (the Watch is at the walls)' },
+        { type: 'craft', item: 'ironSpear', count: 3, optional: true, flag: 'bells:spears', bonus: { xp: 80 }, text: 'Forge three spears for the militia (Smithing)' },
+        { type: 'craft', calling: 'herbalism', count: 3, optional: true, flag: 'bells:fire', bonus: { xp: 80 }, text: 'Brew three flasks for the walls (Herbalism)' },
+        { type: 'craft', item: 'runeWarding', count: 1, optional: true, flag: 'bells:ward', bonus: { xp: 60 }, text: 'Cut a Rune of Warding for the gate (Runecraft)' },
+        { type: 'craft', calling: 'cooking', count: 4, optional: true, flag: 'bells:fed', bonus: { xp: 60 }, text: 'Cook four meals for the Watch (Cooking)' },
+        { type: 'deliver', npc: 'brannoc', item: 'leather', count: 4, optional: true, flag: 'bells:leather', bonus: { xp: 60 }, text: 'Bring Brannoc four leather for the Watch\'s jerkins', say: 'Leather. Good. The lads have been going out in their shirts.' },
+      ] },
       { note: 'Hold the Glen.', hook: 'bells:siege', objectives: [{ type: 'signal', id: 'bells-held', text: 'Hold Elder Glen through the night' }] },
-      { note: 'Dawn. Find Brannoc.', hook: 'bells:dawn', objectives: [{ type: 'talk', npc: 'brannoc', text: 'Find Captain Brannoc at dawn', reply: 'It\'s over.', say: 'It\'s over. For tonight. You were everywhere. Maud\'s ringing the bell for the dead and the bell for the living, and for once the second one\'s louder. And that champion. He ran. From you. Remember that.' }] },
+      { note: 'Dawn. Find Brannoc.', hook: 'bells:dawn', objectives: [{ type: 'talk', npc: 'brannoc', text: 'Find Captain Brannoc at dawn', reply: 'It\'s over.', sayIf: [
+        ['bells:spears', 'It\'s over. For tonight. The militia held the east pens with your spears, farmers, every one of them, and not one of them ran. Maud\'s ringing the bell for the dead and the bell for the living, and for once the second one\'s louder. And that champion. He ran. From you. Remember that.'],
+        ['bells:fire', 'It\'s over. For tonight. Your flasks went off the wall like the end of the world, and half of what came out of those rifts never reached the pens. Maud\'s ringing the bell for the dead and the bell for the living, and for once the second one\'s louder. And that champion. He ran. From you.'],
+        ['bells:fed', 'It\'s over. For tonight. Nobody on my wall fell asleep and nobody\'s hands shook, and I know whose stew that was. Maud\'s ringing the bell for the dead and the bell for the living, and for once the second one\'s louder. And that champion. He ran. From you. Remember that.'],
+      ], say: 'It\'s over. For tonight. You were everywhere. Maud\'s ringing the bell for the dead and the bell for the living, and for once the second one\'s louder. And that champion. He ran. From you. Remember that.' }] },
     ],
     done: 'The Glen owes you. Maud has something to say about where you go next.',
     rewards: { gold: 220, xp: 520, guildRep: 40, items: [['healthPotion', 4]] },
@@ -420,16 +478,58 @@ export function setupAct1(c: ActCtx) {
     quests.signal('mirror-walked');
   };
 
+  // ---- Going into the Gravewood warded (mq-gravewood's optional wards) -------------------------
+  const wardStep = () => {
+    if (F.wardBuffed || !quests.isActive('mq-gravewood', 1)) return;
+    const how = ['ward:rune', 'ward:brew', 'ward:silver'].find((k) => quests.flag('mq-gravewood', k));
+    if (!how || Math.hypot(player.pos.x - GRAVEWOOD.x, player.pos.z - GRAVEWOOD.y) > 140) return;
+    F.wardBuffed = true;
+    c.buff('warded', 'Warded against the dead', 1200, { dmgTaken: -0.15, heal: 0.1 });
+    story.voice(how === 'ward:rune' ? 'The rune in your pocket goes cold. Good. It knows where it is.' : how === 'ward:silver' ? 'The blessed silver hums. They will hesitate. Use it.' : 'The draught sits warm in your chest against the cold of this place.');
+  };
+
+  // ---- Dawnbreaker, reforged (or not) ------------------------------------------------------
+  quests.hooks.set('mq-dawnbreaker:done', () => {
+    if (F.dawnbreakerForged || quests.flag('mq-dawnbreaker', 'dawnbreaker') !== 'reforge') return;
+    F.dawnbreakerForged = true;
+    const eq = player.equip;
+    const it = eq.items.find((i) => i.def.id === 'dawnbreaker');
+    if (!it) return;
+    const slot = eq.slotOf(it.uid);
+    if (slot) eq.unequip(slot);
+    eq.items = eq.items.filter((x) => x !== it);
+    const made = eq.add('dawnbreaker', 1, Math.max(4, it.q ?? 1), it.rune);
+    if (slot) eq.equip(made.uid, slot);
+  });
+
   // ---- 5. The Night of Bells --------------------------------------------------------------
   quests.hooks.set('bells:siege', () => {
     if (F.bellsStarted || !story.h.outdoors()) return;
     F.bellsStarted = true;
+    // What the Glen made ready that day changes the night (the preparations in mq-bells' first stage).
+    const did = (k: string) => !!quests.flag('mq-bells', k);
+    const ready = ['bells:spears', 'bells:fire', 'bells:ward', 'bells:fed', 'bells:leather'].filter(did);
+    F.bellsPrep = ready.join(',');
+    c.raids.prep = {
+      fewer: (did('bells:fire') ? 0.25 : 0) + (did('bells:ward') ? 0.15 : 0),
+      watchHp: (did('bells:fed') ? 1.5 : 1) * (did('bells:leather') ? 1.25 : 1),
+      watchPower: did('bells:spears') ? 1.35 : 1,
+    };
     void story.play('bells', async (s) => {
       s.bars(true);
       await s.card('Act I', 'The Night of Bells', '', 2.6);
-      await s.say('Captain Brannoc', 'Here they come. Every rift at once. Watch! To the pens!');
+      await s.say('Captain Brannoc', ready.length >= 3
+        ? 'Here they come. Every rift at once. And for once we\'re ready for them. Watch! To the pens!'
+        : ready.length
+          ? 'Here they come. Every rift at once. We\'ve more than we had yesterday, thanks to you. Watch! To the pens!'
+          : 'Here they come. Every rift at once. Watch! To the pens!');
+      if (did('bells:fire')) await s.say(null, 'Your flasks go over the wall in a long arc, and the first of them burst in the wheat. Things scream out there that do not have mouths.', 3.4);
     }, { holdWorld: false });
     c.raids.start('gloam', 'cows');
+    // Spears in farmers' hands: the militia turns out too.
+    if (did('bells:spears')) {
+      for (let k = 0; k < 2; k++) story.ally(k ? 'Wren\'s Boy, with a Spear' : 'Tom Hale, with a Spear', MILITIA_LOOK[k] as never, around(player.pos, 5, 3 + k * 1.4));
+    }
     // Who stands with you depends on who you've stood with.
     const friends: { name: string; look: unknown; id: string }[] = [
       { name: 'Kaela Voss', look: LOOKS.kaela, id: 'kaela' },
@@ -441,7 +541,8 @@ export function setupAct1(c: ActCtx) {
     for (const f of friends) {
       const m = c.rep.moodOf(f.id);
       if (m === 'hostile' || m === 'cold') continue;
-      story.ally(f.name, f.look as never, around(player.pos, 4, n * 1.6), n === 0);
+      const a = story.ally(f.name, f.look as never, around(player.pos, 4, n * 1.6), n === 0);
+      a.strengthen(c.raids.prep.watchHp, c.raids.prep.watchPower);
       n++;
     }
     F.bellsAllies = n;
@@ -491,7 +592,9 @@ export function setupAct1(c: ActCtx) {
       await s.voice('And find out who killed my four. I would very much like to know.', 3.4);
       await s.card('End of Act I', 'The Fifth Summon', '', 3.6);
     });
-    story.note(CH[4], `On the Night of Bells the Dark came for Elder Glen from every rift at once. ${Number(F.bellsAllies) >= 3 ? 'Kaela and the Glen Wardens stood beside you.' : 'Fewer friends stood beside you than might have.'} ${F.malricRan ? 'Ser Malric came himself, and you drove him off.' : ''} ${F.bellsWon === false ? 'The Glen lost animals, but no people.' : 'The Glen held.'} At dawn the voice told you to go to the Knight's Academy in Port Aurelle and grow teeth, and to find out who killed its four champions.`);
+    const prep = String(F.bellsPrep ?? '').split(',').filter(Boolean);
+    const made = prep.map((k) => ({ 'bells:spears': 'spears for the militia', 'bells:fire': 'fire for the walls', 'bells:ward': 'a ward for the gate', 'bells:fed': 'food for the Watch', 'bells:leather': 'leather for their jerkins' })[k]).filter(Boolean);
+    story.note(CH[4], `On the Night of Bells the Dark came for Elder Glen from every rift at once. ${made.length ? `You had made ${made.join(', ')} that day, and it showed. ` : ''}${Number(F.bellsAllies) >= 3 ? 'Kaela and the Glen Wardens stood beside you.' : 'Fewer friends stood beside you than might have.'} ${F.malricRan ? 'Ser Malric came himself, and you drove him off.' : ''} ${F.bellsWon === false ? 'The Glen lost animals, but no people.' : 'The Glen held.'} At dawn the voice told you to go to the Knight's Academy in Port Aurelle and grow teeth, and to find out who killed its four champions.`);
   });
 
   // ---- If you fall: the beat you fell in plays again when you come back ----------------------
@@ -524,6 +627,7 @@ export function setupAct1(c: ActCtx) {
       wardensStep();
       malricStep();
       mirrorStep();
+      wardStep();
       bellsStep(dt);
       // The lesson at the crypt door: stop before it kills you.
       if (F.malricSpar === 1 && player.hp < player.maxHp * 0.3) endSpar(false);

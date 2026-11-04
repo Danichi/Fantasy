@@ -59,9 +59,13 @@ export const ACT2_QUESTS: QuestDef[] = [
     stages: [
       { note: 'Ask Twig what she has seen at the Chancery.', objectives: [{ type: 'talk', npc: 'twig', text: 'Ask Twig about the Chancery', reply: 'The King says you see everything.', say: 'Course I do. A lady in black goes in the Chancery back door, every night for a month. Quiet as a cat. She pays the door guards in iron. Black iron, cold, I touched one. Then she\'s gone, like she was never. That worth a hot meal?' }] },
       { note: 'Confront the Lord Chancellor.', hook: 'ledger:vaun', objectives: [{ type: 'signal', id: 'ledger-found', text: 'Confront Lord Chancellor Vaun at the Chancery' }] },
-      { note: 'Tell the King.', objectives: [{ type: 'talk', npc: 'king', text: 'Tell King Aldric what you found', reply: 'Your Chancellor has been paying a champion.', say: '"H." Paid in black iron. For a month. And the Feast of the Dawn is in three days, with every envoy in the world at my table. Thorne will double the guard. You will be at my right hand, Champion. If she comes, I want her to meet you.' }] },
+      { note: 'Tell the King, and say what should become of his Chancellor.', objectives: [{ type: 'choose', npc: 'king', key: 'vaun', reply: 'Your Chancellor has been paying a champion.', text: 'Tell King Aldric what you found, and what you think should be done with Vaun', prompt: '"H." Paid in black iron. For a month. And the Feast of the Dawn is in three days, with every envoy in the world at my table. ...Vaun. Thirty years he has stood at my left hand. You found him out. You tell me, Champion: what do I do with him?', options: [
+        { id: 'mercy', label: 'Spare him. Find out who he really answers to.', tone: 'kind', say: 'Mercy, then, and a long talk in a cold room. He will tell us who "H" serves, or he will tell us nothing and we will know that too. Thorne will double the guard for the Feast. You will be at my right hand. If she comes, I want her to meet you.' },
+        { id: 'justice', label: 'Make an example of him, before the envoys.', tone: 'threat', say: 'The envoys will see a king who does not forgive. Good. Some of them need to. Thorne will double the guard for the Feast. You will be at my right hand, Champion. If she comes, I want her to meet you.' },
+      ] }] },
     ],
     done: 'Vaun is in the cells. I have known him thirty years. I will think about that later.',
+    doneIf: [['vaun=justice', 'Vaun hangs at dawn the day after the Feast, in front of every envoy in the world. I have known him thirty years. I will think about that later.']],
     rewards: { gold: 300, xp: 500, guildRep: 30 },
   },
   {
@@ -70,7 +74,11 @@ export const ACT2_QUESTS: QuestDef[] = [
     offer: 'The Feast is tonight. Stay close.',
     acceptLabel: 'I\'ll be at your right hand.',
     stages: [
-      { note: 'Come to the palace for the Feast of the Dawn, after dark.', objectives: [{ type: 'hour', from: 19, to: 2, text: 'Wait for the Feast (after dark)' }] },
+      { note: 'Come to the palace for the Feast of the Dawn, after dark. A knife will come; be ready for it.', anyOrder: true, objectives: [
+        { type: 'hour', from: 19, to: 2, text: 'Wait for the Feast (after dark)' },
+        { type: 'craft', gear: 'meal', minQ: 2, count: 1, optional: true, flag: 'feast:dish', bonus: { gold: 80, xp: 80 }, text: 'Cook a dish fit for the King\'s table (Fine or better)' },
+        { type: 'craft', calling: 'herbalism', count: 2, optional: true, flag: 'feast:antidote', bonus: { xp: 120 }, text: 'Brew two draughts against poison, in case (Herbalism)' },
+      ] },
       { note: 'Go to the palace forecourt.', hook: 'feast:hall', objectives: [{ type: 'signal', id: 'feast-done', text: 'Attend the Feast of the Dawn (the palace)', at: [FEAST_XZ[0], FEAST_XZ[1]] }] },
     ],
     done: 'Cresha owes you a king. I will not forget it, and neither will Valoria, I suspect.',
@@ -81,7 +89,11 @@ export const ACT2_QUESTS: QuestDef[] = [
     summary: 'A letter nailed to the palace door, sealed in black iron: "Plaza of Crowns. Dawn. Come alone. M."',
     offer: '',
     stages: [
-      { note: 'Meet Ser Malric on the Plaza of Crowns at dawn.', objectives: [{ type: 'hour', from: 5, to: 8, text: 'Be on the Plaza of Crowns at dawn (5:00 to 8:00)' }] },
+      { note: 'Meet Ser Malric on the Plaza of Crowns at dawn. Come ready.', anyOrder: true, objectives: [
+        { type: 'hour', from: 5, to: 8, text: 'Be on the Plaza of Crowns at dawn (5:00 to 8:00)' },
+        { type: 'craft', gear: 'weapon', temper: true, minQ: 3, count: 1, optional: true, flag: 'duel:tempered', bonus: { xp: 150 }, text: 'Temper your blade to Superior or better before dawn (a forge)' },
+        { type: 'craft', gear: 'armor', minQ: 2, count: 1, optional: true, flag: 'duel:armour', bonus: { xp: 100 }, text: 'Make yourself Fine armour or better for the duel' },
+      ] },
       { note: 'Face Ser Malric Dane.', hook: 'wheelbreaker:duel', objectives: [{ type: 'signal', id: 'malric-beaten', text: 'Face Ser Malric on the Plaza of Crowns', at: [PLAZA_XZ[0], PLAZA_XZ[1]] }] },
     ],
     done: 'You beat a Fourth Age champion in front of half the city. They\'ll be singing it in the Gilded Stag by tonight.',
@@ -219,6 +231,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
       await s.say('Legate Cassius Varro', 'So you are the Dawn\'s new one. Sit, sit. I have had dinner with your second, and your third. Your second had better manners.');
       await s.say('Legate Cassius Varro', 'Sixty years, little Fifth. I have killed champions with a cup in my hand. Tonight I am only here for the wine. Probably.');
       await s.say('Legate Cassius Varro', 'Ashfang\'s own Fifth is still in the Ember Temples, learning which fork to stab with. Pray you meet that one late.');
+      if (quests.flag('mq-feast', 'feast:dish')) await s.say('Legate Cassius Varro', 'And somebody in this kitchen can actually cook. ...Yours? Hm. The Dawn has started choosing better.', 3.2);
       story.state.meet('varro');
       await s.say(null, 'Behind the King, a serving woman sets down a jug, and her hand comes up with a knife in it, black as a hole.', 3.2);
       const pick = await s.choose('The Feast of the Dawn', 'The King\'s right hand', 'The knife is already moving.', [
@@ -229,7 +242,9 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
       story.ui.dread(0, false);
       if (pick === 0) {
         await s.say(null, 'The knife goes into your shoulder instead of his heart. It is cold, colder than ice, and the cold spreads.', 3.4);
-        player.hp = Math.max(1, Math.round(player.hp * 0.5));
+        const antidote = !!quests.flag('mq-feast', 'feast:antidote');
+        if (antidote) await s.say(null, 'You get the stopper out of your draught with your teeth and swallow. The cold stops at your elbow.', 3);
+        player.hp = Math.max(1, Math.round(player.hp * (antidote ? 0.8 : 0.5)));
         await s.say('Hesk the Quiet', 'Shh.', 1.6);
         await s.say(null, 'She draws back for the second blow, and a hand closes round her wrist. Varro has crossed the hall without anyone seeing him do it.', 3.6);
         await s.say('Legate Cassius Varro', 'Not at dinner, child.', 2.2);
@@ -240,6 +255,10 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
       } else {
         await s.say('Hesk the Quiet', 'Shh.', 1.6);
         await s.say(null, 'The knife goes into the King\'s side as you reach her. She is already through the window and down into the forecourt.', 3.4);
+        if (quests.flag('mq-feast', 'feast:antidote')) {
+          F.feastAntidote = true;
+          await s.say(null, 'You press your draught into the Queen\'s hands on your way past. "Make him drink it. All of it." Behind you the King coughs, and keeps breathing.', 3.8);
+        }
       }
       s.remove(varro);
     });
@@ -257,7 +276,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
     story.state.slay('hesk');
     story.note(CH[3], F.feast === 'shield'
       ? 'At the Feast of the Dawn you took Hesk the Quiet\'s black-iron knife meant for the King. Legate Cassius Varro, a champion of the Second Age who serves the Dragon God, crossed the hall faster than anyone could see and burned her to ash with one hand. "Not at dinner, child."'
-      : 'At the Feast of the Dawn, under the eyes of Legate Cassius Varro of the Second Age, Hesk the Quiet put her knife into the King\'s side. You ran her down in the palace forecourt and killed her. The King lives.');
+      : `At the Feast of the Dawn, under the eyes of Legate Cassius Varro of the Second Age, Hesk the Quiet put her knife into the King's side. You ran her down in the palace forecourt and killed her. The King lives${F.feastAntidote ? ': the draught you had brewed against poison kept the black iron\'s cold out of his heart' : ''}.`);
     story.clearFight();
     quests.signal('feast-done');
   };
@@ -283,6 +302,9 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
     if (!F.duelReady || F.duelBegun || busy() || !quests.wants('malric-beaten')) return;
     if (flatDist(player.pos, plazaAt()) > 30) return;
     F.duelBegun = true;
+    // Ready or not: a tempered edge bites harder, armour that fits turns more.
+    if (quests.flag('mq-wheelbreaker', 'duel:tempered')) c.buff('duelEdge', 'A tempered edge', 600, { melee: 0.1 });
+    if (quests.flag('mq-wheelbreaker', 'duel:armour')) c.buff('duelGuard', 'Armour that fits', 600, { dmgTaken: -0.1 });
     const at = plazaAt().clone().add(new THREE.Vector3(0, 0, -8));
     void story.play('duel', async (s) => {
       s.bars(true);
@@ -291,6 +313,8 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
       await s.cam(at.clone().add(new THREE.Vector3(5, 2.4, 6)), at.clone().setY(at.y + 1.6), 0);
       await s.say('Ser Malric Dane', 'Hesk was my friend. Did you know that? No. Why would you.');
       await s.say('Ser Malric Dane', 'Twenty years I\'ve hunted the Dawn\'s champions. Your fourth begged. Your fourth begged, and I left him for the Dark.');
+      if (quests.flag('mq-wheelbreaker', 'duel:tempered')) await s.say('Ser Malric Dane', 'You took that blade to a forge last night. I can see it. Good. I hate killing someone with a bad sword.', 3.2);
+      if (quests.flag('mq-wheelbreaker', 'duel:armour')) await s.say(null, 'Your armour sits right on you, the way only something you made yourself does.', 2.8);
       await s.say('Ser Malric Dane', 'In the open, then. In front of all of them. Let\'s see what it means.');
       s.remove(m);
     });

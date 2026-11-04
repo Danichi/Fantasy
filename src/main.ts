@@ -1766,6 +1766,7 @@ async function boot() {
     hollowCleared: () => !!realm.progress.kit?.hollowRidge?.boss,
     rustKnightDown: () => (bosses.state.rustKnight?.kills ?? 0) > 0,
     ready: () => started,
+    buff: (id, label, sec, m) => arms.runtime.buffs.set(id, { id, label, left: sec, m }),
     saved: saveData?.world?.story,
   });
   const story = main.story;

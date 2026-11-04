@@ -53,7 +53,7 @@ export type Objective = ObjectiveExtra & (
    * minQ: at least this quality (2 Fine, 3 Superior...). Brewing at the
    * herbalist's table counts for Herbalism.
    */
-  | { type: 'craft'; item?: string; calling?: string; count: number; minQ?: number; text: string; at?: [number, number] }
+  | { type: 'craft'; item?: string; calling?: string; gear?: 'weapon' | 'armor' | 'meal' | 'jewel'; temper?: boolean; count: number; minQ?: number; text: string; at?: [number, number] }
   /** a decision, made in conversation with an NPC: sets `key` on the quest to the option's id */
   | { type: 'choose'; npc: string; key: string; text: string; prompt: string; reply?: string; options: ChoiceOption[] }
 );
@@ -86,6 +86,8 @@ export interface QuestDef {
   stages: QuestStage[];
   /** final line, said on completion */
   done: string;
+  /** the final line instead, when a flag holds (first match wins) */
+  doneIf?: [string, string][];
   rewards: { gold: number; xp: number; items?: [string, number][]; guildRep?: number };
   /** quests that must be finished first */
   requires?: string[];
@@ -164,18 +166,19 @@ export class QuestLog {
 
   constructor(private ctx: QuestContext) {
     // Made at a station: craft objectives count it.
-    const made = (item: string, calling: string, q: number, n: number) => {
+    const made = (item: string, calling: string, q: number, n: number, gear = '', temper = false) => {
       this.forEachObjective((qd, o, i, st) => {
         if (o.type !== 'craft' || !this.unlocked(qd, st, i)) return;
+        // Tempering counts only where it's asked for (and then only tempering).
+        if (!!o.temper !== temper) return;
         if (o.item && o.item !== item) return;
+        if (o.gear && o.gear !== gear) return;
         if (o.calling && o.calling !== calling) return;
         if (o.minQ && q < o.minQ) return;
         if (st.progress[i] < o.count) this.bump(qd, i, Math.max(1, n));
       });
     };
-    events.on('crafted', (e) => {
-      if (!e.temper) made(e.item, e.calling, e.q, e.n);
-    });
+    events.on('crafted', (e) => made(e.item, e.calling, e.q, e.n, e.gear, !!e.temper));
     events.on('brewMade', (e) => made(e.id, 'herbalism', e.quality, e.qty));
     events.on('enemyDied', ({ at, kind }) => {
       this.forEachObjective((q, o, i, st) => {
@@ -307,6 +310,10 @@ export class QuestLog {
   private sayFor(q: QuestDef, o: Extract<Objective, { type: 'talk' }>) {
     return o.sayIf?.find(([c]) => this.test(q.id, c))?.[1] ?? o.say;
   }
+  /** The quest's last words, given what's happened. */
+  doneFor(q: QuestDef) {
+    return q.doneIf?.find(([c]) => this.test(q.id, c))?.[1] ?? q.done;
+  }
   /** A stage's journal line, given what's happened. */
   note(q: QuestDef, stage: number) {
     const s = q.stages[stage];
@@ -329,7 +336,7 @@ export class QuestLog {
               run: () => {
                 this.setFlag(q.id, o.key, c.id);
                 const finishing = this.bump(q, i, 1);
-                show(finishing ? `${c.say}\n\n${q.done}` : c.say, [{ label: finishing ? 'Glad to help.' : 'On it.', run: back }]);
+                show(finishing ? `${c.say}\n\n${this.doneFor(q)}` : c.say, [{ label: finishing ? 'Glad to help.' : 'On it.', run: back }]);
               },
             })),
             { label: 'Let me think about it.', run: back },
@@ -354,7 +361,7 @@ export class QuestLog {
           }
           const said = o.type === 'talk' ? this.sayFor(q, o) : o.say;
           const finishing = this.bump(q, i, this.target(o));
-          show(finishing ? `${said}\n\n${q.done}` : said, [{ label: finishing ? 'Glad to help.' : 'On it.', run: back }]);
+          show(finishing ? `${said}\n\n${this.doneFor(q)}` : said, [{ label: finishing ? 'Glad to help.' : 'On it.', run: back }]);
         },
       });
     });

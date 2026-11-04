@@ -36,6 +36,17 @@ export interface TemperPlan {
   crack?: number;
 }
 
+/** What kind of thing a recipe makes, for quests that ask for one ("forge a weapon", "cook a meal"). */
+function gearOf(r: Recipe) {
+  const d = ITEMS[r.out];
+  if (!d) return 'other';
+  if (r.station === 'kitchen') return 'meal';
+  if (isWeapon(d)) return 'weapon';
+  if (d.kind === 'armor' || d.kind === 'shield') return 'armor';
+  if (d.kind === 'accessory') return 'jewel';
+  return 'other';
+}
+
 const HEAVY_KINDS = new Set(['greatsword', 'axe', 'mace', 'hammer', 'warhammer', 'greataxe']);
 const CLOTH = new Set(['woolCloth', 'linen', 'silk']);
 const CALLINGS = ['smithing', 'cooking', 'tailoring', 'runecraft', 'herbalism', 'jewelcrafting', 'prospecting'];
@@ -210,7 +221,7 @@ export class Crafter {
     const inst = p.equip.add(r.out, n, q === COMMON ? undefined : q);
     p.prog.addXp(3 + r.level * 2);
     this.onCrafted?.(r, q, n);
-    events.emit('crafted', { recipe: r.id, item: r.out, calling: r.calling ?? '', station: r.station, q: q ?? COMMON, n, level: r.level });
+    events.emit('crafted', { recipe: r.id, item: r.out, calling: r.calling ?? '', station: r.station, q: q ?? COMMON, n, level: r.level, gear: gearOf(r) });
     events.emit('equipmentChanged', {});
     events.emit('progressChanged', {});
     return { inst, n, q };
@@ -270,7 +281,7 @@ export class Crafter {
     else eq.items = eq.items.filter((x) => x !== it);
     const made = eq.add(it.def.id.replace(/\|.*/, ''), 1, plan.to, rune);
     if (slot) eq.equip(made.uid, slot);
-    events.emit('crafted', { recipe: 'temper:' + r.id, item: r.out, calling: r.station === 'loom' ? 'tailoring' : 'smithing', station, q: plan.to!, n: 1, level: r.level, temper: true });
+    events.emit('crafted', { recipe: 'temper:' + r.id, item: r.out, calling: r.station === 'loom' ? 'tailoring' : 'smithing', station, q: plan.to!, n: 1, level: r.level, temper: true, gear: gearOf(r) });
     events.emit('equipmentChanged', {});
     return { inst: made };
   }

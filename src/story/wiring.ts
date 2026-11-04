@@ -14,13 +14,14 @@ import { setupAct2 } from './act2';
 import { setupAct3, HARROW_FORD } from './act3';
 import type { WheelNode } from './sunwheel';
 import type { StorySave } from './state';
+import type { RaidPrep } from '../raid/raids';
 
 // Hooks the main story into the game (main.ts calls this once the world, the
 // quests and the people exist, and before the journal loads).
 
 export interface MainStoryDeps extends Omit<StoryHooks, 'wheels'> {
   time: { hour: number; day: number; skipTo(h: number): void };
-  raids: { start(kind: 'wolves' | 'gloam', front?: string): void; state: string };
+  raids: { start(kind: 'wolves' | 'gloam', front?: string): void; state: string; prep: RaidPrep };
   rep: Reputation;
   /** the twelve Sunwheel stones in the wilds (sites) */
   stoneSites(): { id: string; x: number; z: number; n: number; read: boolean }[];
@@ -30,6 +31,8 @@ export interface MainStoryDeps extends Omit<StoryHooks, 'wheels'> {
   hollowCleared(): boolean;
   rustKnightDown(): boolean;
   ready(): boolean;
+  /** a timed buff on the player (the Gravewood ward) */
+  buff(id: string, label: string, sec: number, m: Record<string, number>): void;
   saved?: StorySave;
 }
 
@@ -52,7 +55,7 @@ export function setupMainStory(d: MainStoryDeps) {
   const story = new Story({ ...d, wheels }, d.saved);
   const ctx = {
     story, quests: d.quests as QuestLog, player: d.player, rep: d.rep, time: d.time, raids: d.raids,
-    toast: d.toast, give: d.give, count: d.count, save: d.save, ready: d.ready,
+    toast: d.toast, give: d.give, count: d.count, save: d.save, ready: d.ready, buff: d.buff,
   };
   const act1 = setupAct1(ctx);
   const act2 = setupAct2({ ...ctx, lookOf: () => null });
