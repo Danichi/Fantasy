@@ -675,3 +675,7 @@ body.book-open #ui .npc-tag { display: none !important; }
 #ui .rep-person .mood-hostile { color: #8e1b12; } #ui .rep-person .mood-cold { color: #9a3a1c; } #ui .rep-person .mood-wary { color: #8a6418; }
 #ui .rep-person .mood-neutral { color: #6b5a40; } #ui .rep-person .mood-warm { color: #4f7a2a; } #ui .rep-person .mood-friend { color: #2f7a4a; }
 #ui .rep-person .mood-devoted { color: #1f6a7a; } #ui .rep-person .mood-afraid { color: #6a3a8a; }
+
+/* The decisions you made and the extra things you did (the dynamic main quest). */
+#ui .journal .j-choices { margin: 10px 0 4px; padding: 8px 12px; border: 1px solid rgba(122, 31, 18, .25); border-radius: 4px; background: rgba(122, 90, 46, .06); }
+#ui .journal .j-choices div { color: rgba(46, 33, 18, .85); font: 400 14px/1.5 var(--fell); }

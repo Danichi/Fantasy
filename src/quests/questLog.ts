@@ -9,9 +9,33 @@ import type { DialogueOption } from '../ui/dialogue';
 // never assume a region is loaded: objectives resolve through NPC ids,
 // inventory counts, events and signals.
 
-export type Objective =
-  /** speak to an NPC (service id like 'froest' or a townsfolk record id) */
-  | { type: 'talk'; npc: string; text: string; say: string; reply?: string; take?: [string, number][]; give?: [string, number][] }
+/**
+ * What any objective can carry (the dynamic main quest):
+ *   optional  it doesn't hold the stage up; doing it anyway pays its bonus and sets its flag
+ *   group     alternatives: the stage needs only one objective of each group
+ *   flag      set (true) on the quest when it's done: later stages, lines and scenes read it
+ *   bonus     paid the moment it's done
+ */
+export interface ObjectiveExtra {
+  optional?: boolean;
+  group?: string;
+  flag?: string;
+  bonus?: { gold?: number; xp?: number; items?: [string, number][] };
+}
+
+/** One answer to a choice: its line, what they say back, and the flags it sets. */
+export interface ChoiceOption {
+  id: string;
+  label: string;
+  say: string;
+  tone?: DialogueOption['tone'];
+  /** only offered when this holds (see QuestLog.test) */
+  when?: string;
+}
+
+export type Objective = ObjectiveExtra & (
+  /** speak to an NPC (service id like 'froest' or a townsfolk record id). sayIf: their words if a flag is set (first match wins) */
+  | { type: 'talk'; npc: string; text: string; say: string; reply?: string; take?: [string, number][]; give?: [string, number][]; sayIf?: [string, string][] }
   /** stand within `radius` of a point */
   | { type: 'reach'; at: [number, number]; radius: number; text: string }
   /** hold `count` of an item (not consumed) */
@@ -23,7 +47,16 @@ export type Objective =
   /** world triggers: quests.signal(id) from gameplay code */
   | { type: 'signal'; id: string; count?: number; text: string; at?: [number, number] }
   /** wait until the clock is inside [from, to) (wraps past midnight) */
-  | { type: 'hour'; from: number; to: number; text: string };
+  | { type: 'hour'; from: number; to: number; text: string }
+  /**
+   * make something at a station: a particular item, or anything in a Calling;
+   * minQ: at least this quality (2 Fine, 3 Superior...). Brewing at the
+   * herbalist's table counts for Herbalism.
+   */
+  | { type: 'craft'; item?: string; calling?: string; count: number; minQ?: number; text: string; at?: [number, number] }
+  /** a decision, made in conversation with an NPC: sets `key` on the quest to the option's id */
+  | { type: 'choose'; npc: string; key: string; text: string; prompt: string; reply?: string; options: ChoiceOption[] }
+);
 
 export interface QuestStage {
   /** journal line for this stage */
@@ -33,6 +66,10 @@ export interface QuestStage {
   hook?: string;
   /** its objectives can be done in any order (normally each waits on the ones before it) */
   anyOrder?: boolean;
+  /** only played when this holds (a flag, "key=value", or "!flag"); otherwise skipped */
+  when?: string;
+  /** the journal line instead, when a flag holds (first match wins) */
+  noteIf?: [string, string][];
 }
 
 export interface QuestDef {
@@ -64,6 +101,8 @@ export interface QuestState {
   status: 'active' | 'done';
   stage: number;
   progress: number[];
+  /** choices made and flags set along the way (the dynamic main quest) */
+  flags?: Record<string, string | boolean>;
 }
 
 export type QuestSave = Record<string, QuestState>;
@@ -124,6 +163,20 @@ export class QuestLog {
   onDone?: (q: QuestDef) => void;
 
   constructor(private ctx: QuestContext) {
+    // Made at a station: craft objectives count it.
+    const made = (item: string, calling: string, q: number, n: number) => {
+      this.forEachObjective((qd, o, i, st) => {
+        if (o.type !== 'craft' || !this.unlocked(qd, st, i)) return;
+        if (o.item && o.item !== item) return;
+        if (o.calling && o.calling !== calling) return;
+        if (o.minQ && q < o.minQ) return;
+        if (st.progress[i] < o.count) this.bump(qd, i, Math.max(1, n));
+      });
+    };
+    events.on('crafted', (e) => {
+      if (!e.temper) made(e.item, e.calling, e.q, e.n);
+    });
+    events.on('brewMade', (e) => made(e.id, 'herbalism', e.quality, e.qty));
     events.on('enemyDied', ({ at, kind }) => {
       this.forEachObjective((q, o, i, st) => {
         if (o.type !== 'kill') return;
@@ -167,7 +220,7 @@ export class QuestLog {
   indicator(npc: string): '!' | '?' | null {
     let turnIn = false;
     this.forEachObjective((_q, o, i, st) => {
-      if ((o.type === 'talk' || o.type === 'deliver') && o.npc === npc && this.objectiveReady(o, st.progress[i], i, st)) turnIn = true;
+      if ((o.type === 'talk' || o.type === 'deliver' || o.type === 'choose') && o.npc === npc && this.objectiveReady(o, st.progress[i], i, st)) turnIn = true;
     });
     if (turnIn) return '?';
     return this.offers(npc).length ? '!' : null;
@@ -189,20 +242,101 @@ export class QuestLog {
     if (progress >= this.target(o)) return false;
     const q = [...this.defs.values()].find((d) => this.state[d.id] === st)!;
     const objs = q.stages[st.stage].objectives;
-    if (!q.stages[st.stage].anyOrder) for (let k = 0; k < index; k++) if (st.progress[k] < this.target(objs[k]) && objs[k].type !== 'collect') return false;
+    if (!this.unlocked(q, st, index)) return false;
+    void objs;
     if (o.type === 'deliver') return this.ctx.count(o.item) >= o.count;
     if (o.type === 'talk' && o.take) return o.take.every(([item, n]) => this.ctx.count(item) >= n);
     return true;
   }
 
   private target(o: Objective) {
-    return o.type === 'collect' || o.type === 'deliver' || o.type === 'kill' ? o.count : o.type === 'signal' ? (o.count ?? 1) : 1;
+    return o.type === 'collect' || o.type === 'deliver' || o.type === 'kill' || o.type === 'craft' ? o.count : o.type === 'signal' ? (o.count ?? 1) : 1;
+  }
+
+  /**
+   * Has everything this objective waits on been done? In order, unless the stage
+   * is anyOrder; optional objectives and alternatives (groups) never hold anything up.
+   */
+  private unlocked(q: QuestDef, st: QuestState, index: number) {
+    const stage = q.stages[st.stage];
+    const objs = stage.objectives;
+    const me = objs[index];
+    if (me.group && this.groupDone(q, st, me.group) && st.progress[index] < this.target(me)) return false; // another way was taken
+    if (stage.anyOrder) return true;
+    for (let k = 0; k < index; k++) {
+      const o = objs[k];
+      if (o.optional || o.type === 'collect') continue;
+      if (o.group && (o.group === me.group || this.groupDone(q, st, o.group))) continue;
+      if (st.progress[k] < this.target(o)) return false;
+    }
+    return true;
+  }
+  private groupDone(q: QuestDef, st: QuestState, group: string) {
+    return q.stages[st.stage].objectives.some((o, k) => o.group === group && st.progress[k] >= this.target(o));
+  }
+
+  // ---- flags and choices ------------------------------------------------------------------------
+  /** A quest's flag (or choice). */
+  flag(id: string, key: string) {
+    return this.state[id]?.flags?.[key];
+  }
+  setFlag(id: string, key: string, v: string | boolean = true) {
+    const st = this.state[id];
+    if (!st) return;
+    (st.flags ??= {})[key] = v;
+    events.emit('questChanged', { id, status: st.status });
+  }
+  /**
+   * Does a condition hold for this quest? "flag", "!flag", "key=value",
+   * "quest.key=value" (another quest's), several joined with "&".
+   */
+  test(id: string, cond?: string): boolean {
+    if (!cond) return true;
+    return cond.split('&').every((c0) => {
+      const c = c0.trim();
+      const neg = c.startsWith('!');
+      const body = neg ? c.slice(1) : c;
+      const [lhs, want] = body.split('=');
+      const [qid, key] = lhs.includes('.') ? lhs.split('.') : [id, lhs];
+      const v = this.flag(qid, key);
+      const ok = want === undefined ? !!v : String(v) === want;
+      return neg ? !ok : ok;
+    });
+  }
+  /** What a talk objective's NPC says, given what's happened. */
+  private sayFor(q: QuestDef, o: Extract<Objective, { type: 'talk' }>) {
+    return o.sayIf?.find(([c]) => this.test(q.id, c))?.[1] ?? o.say;
+  }
+  /** A stage's journal line, given what's happened. */
+  note(q: QuestDef, stage: number) {
+    const s = q.stages[stage];
+    return s.noteIf?.find(([c]) => this.test(q.id, c))?.[1] ?? s.note;
   }
 
   /** Dialogue options this NPC adds: turn-ins first, then offers. */
   options(npc: string, show: (text: string, opts: DialogueOption[]) => void, back: () => void): DialogueOption[] {
     const out: DialogueOption[] = [];
     this.forEachObjective((q, o, i, st) => {
+      if (o.type === 'choose' && o.npc === npc && this.objectiveReady(o, st.progress[i], i, st)) {
+        // A decision: their question, then your answers (each sets the choice and moves the story).
+        out.push({
+          label: o.reply ?? `About "${q.title}"…`,
+          auto: true,
+          run: () => show(o.prompt, [
+            ...o.options.filter((c) => this.test(q.id, c.when)).map((c) => ({
+              label: c.label,
+              tone: c.tone,
+              run: () => {
+                this.setFlag(q.id, o.key, c.id);
+                const finishing = this.bump(q, i, 1);
+                show(finishing ? `${c.say}\n\n${q.done}` : c.say, [{ label: finishing ? 'Glad to help.' : 'On it.', run: back }]);
+              },
+            })),
+            { label: 'Let me think about it.', run: back },
+          ]),
+        });
+        return;
+      }
       if ((o.type !== 'talk' && o.type !== 'deliver') || o.npc !== npc) return;
       if (!this.objectiveReady(o, st.progress[i], i, st)) {
         if (o.type === 'deliver' && st.progress[i] < o.count) out.push({ label: `(${q.title}) ${o.text} — ${this.ctx.count(o.item)}/${o.count}`, run: () => show('Bring me ' + o.count + ' and we\'ll talk.', [{ label: 'Back.', run: back }]) });
@@ -218,8 +352,9 @@ export class QuestLog {
             for (const [item, n] of o.take ?? []) this.ctx.take(item, n);
             for (const [item, n] of o.give ?? []) this.ctx.give(item, n);
           }
+          const said = o.type === 'talk' ? this.sayFor(q, o) : o.say;
           const finishing = this.bump(q, i, this.target(o));
-          show(finishing ? `${o.say}\n\n${q.done}` : o.say, [{ label: finishing ? 'Glad to help.' : 'On it.', run: back }]);
+          show(finishing ? `${said}\n\n${q.done}` : said, [{ label: finishing ? 'Glad to help.' : 'On it.', run: back }]);
         },
       });
     });
@@ -367,13 +502,27 @@ export class QuestLog {
   private bump(q: QuestDef, i: number, n: number) {
     const st = this.state[q.id];
     const o = q.stages[st.stage].objectives[i];
+    const was = st.progress[i];
     st.progress[i] = Math.max(0, Math.min(this.target(o), st.progress[i] + n));
+    // Just done: its flag, and any bonus it pays.
+    if (was < this.target(o) && st.progress[i] >= this.target(o)) {
+      if (o.flag) (st.flags ??= {})[o.flag] = true;
+      if (o.bonus) {
+        if (o.bonus.gold) this.ctx.gold(o.bonus.gold);
+        if (o.bonus.xp) this.ctx.xp(o.bonus.xp);
+        for (const [item, k] of o.bonus.items ?? []) this.ctx.give(item, k);
+        if (o.optional) this.ctx.toast(`${q.title}: ${o.text} (done)${o.bonus.xp ? ` +${o.bonus.xp} xp` : ''}${o.bonus.gold ? ` +${o.bonus.gold}g` : ''}`);
+      } else if (o.optional) this.ctx.toast(`${q.title}: ${o.text} (done)`);
+    }
     let finished = false;
-    if (q.stages[st.stage].objectives.every((ob, k) => st.progress[k] >= this.target(ob))) {
-      if (st.stage + 1 < q.stages.length) {
-        st.stage++;
+    if (this.stageDone(q, st)) {
+      // On to the next stage that applies (stages can wait on a choice or a flag).
+      let next = st.stage + 1;
+      while (next < q.stages.length && !this.test(q.id, q.stages[next].when)) next++;
+      if (next < q.stages.length) {
+        st.stage = next;
         st.progress = q.stages[st.stage].objectives.map(() => 0);
-        this.ctx.toast(q.title + ': ' + q.stages[st.stage].note);
+        this.ctx.toast(q.title + ': ' + this.note(q, st.stage));
         this.enterStage(q);
       } else {
         finished = true;
@@ -383,6 +532,12 @@ export class QuestLog {
     events.emit('questChanged', { id: q.id, status: st.status });
     this.changed();
     return finished;
+  }
+
+  /** Every required objective done (optional ones aside; one of each group of alternatives). */
+  private stageDone(q: QuestDef, st: QuestState) {
+    const objs = q.stages[st.stage].objectives;
+    return objs.every((o, k) => o.optional || st.progress[k] >= this.target(o) || (!!o.group && this.groupDone(q, st, o.group)));
   }
 
   private complete(q: QuestDef) {
@@ -426,7 +581,12 @@ export class QuestLog {
     return q.stages[st.stage].objectives.map((o, i) => {
       // Someone you need is asleep or indoors: say so, and when they're back.
       const a = (o.type === 'talk' || o.type === 'deliver') && st.progress[i] < this.target(o) ? this.ctx.npcAway?.(o.npc) : null;
-      return [a ? `${o.text} (${awayNote(a, true)})` : o.text, st.progress[i], this.target(o)];
+      const done = st.progress[i] >= this.target(o);
+      // Alternatives read "Either...", "or..."; an unneeded alternative says so.
+      const g = o.group ? q.stages[st.stage].objectives.filter((x) => x.group === o.group) : [];
+      const pre = o.optional ? 'Optional: ' : g.length > 1 ? (g[0] === o ? 'Either: ' : 'Or: ') : '';
+      const skip = !done && o.group && this.groupDone(q, st, o.group) ? ' (another way was taken)' : '';
+      return [`${pre}${a ? `${o.text} (${awayNote(a, true)})` : o.text}${skip}`, st.progress[i], this.target(o)];
     });
   }
 
@@ -449,7 +609,8 @@ export class QuestLog {
     this.forEachObjective((q, o, i, st) => {
       if (st.progress[i] >= this.target(o)) return;
       let p: [number, number] | null = null;
-      if ((o.type === 'talk' || o.type === 'deliver')) {
+      if (o.group && this.groupDone(q, st, o.group)) return;
+      if ((o.type === 'talk' || o.type === 'deliver' || o.type === 'choose')) {
         const v = this.ctx.npcPos(o.npc);
         if (v) p = [v.x, v.z];
       } else if (o.type === 'reach') p = o.at;
@@ -485,7 +646,7 @@ export class QuestLog {
       if (!q) continue;
       const stage = Math.min(st.stage, q.stages.length - 1);
       const n = q.stages[stage].objectives.length;
-      this.state[id] = { status: st.status, stage, progress: Array.from({ length: n }, (_, k) => st.progress?.[k] ?? 0) };
+      this.state[id] = { status: st.status, stage, progress: Array.from({ length: n }, (_, k) => st.progress?.[k] ?? 0), ...(st.flags ? { flags: { ...st.flags } } : {}) };
     }
     this.tracked = this.active()[0]?.id ?? null;
     // Re-run the current stage hooks so the world matches the saved quest state.

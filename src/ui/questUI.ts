@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { QuestLog } from '../quests/questLog';
+import type { QuestDef, QuestLog } from '../quests/questLog';
 import type { HUD } from './hud';
 import { heightAt } from '../world/terrainHeight';
 
@@ -152,7 +152,7 @@ export class QuestUI {
     const list =
       (this.storyRecap ? `<button class="j-item ${this.selected === '__story' ? 'sel' : ''}" data-quest="__story"><b>The Story So Far</b><small>Everything that has happened to you</small></button>` : '') +
       `<div class="j-group">ACTIVE · ${active.length}</div>` +
-      (active.length ? active.map((q) => item(q.id, q.title, q.stages[this.quests.state[q.id].stage].note, this.quests.tracked === q.id ? 'tracked' : '')).join('') : '<p class="j-empty">No active quests. Townsfolk with a gold ❗ over their heads have work for you.</p>') +
+      (active.length ? active.map((q) => item(q.id, q.title, this.quests.note(q, this.quests.state[q.id].stage), this.quests.tracked === q.id ? 'tracked' : '')).join('') : '<p class="j-empty">No active quests. Townsfolk with a gold ❗ over their heads have work for you.</p>') +
       `<div class="j-group">COMPLETED · ${done.length}</div>` +
       done.map((q) => item(q.id, q.title, 'Complete', 'done')).join('');
     let detail = '<p class="j-empty">Select a quest.</p>';
@@ -167,11 +167,26 @@ export class QuestUI {
         `<p class="j-summary">${esc(q.summary)}</p>` +
         this.quests.awayNotes(q.id).map((n) => `<p class="j-away">☾ ${esc(n)}</p>`).join('') +
         (lines.length ? `<div class="j-objs">${lines.map(([t, p, n]) => `<div class="${p >= n ? 'ok' : ''}"><i>${p >= n ? '✔' : '◇'}</i>${esc(t)}${n > 1 ? ` <span>${p}/${n}</span>` : ''}</div>`).join('')}</div>` : '') +
-        `<div class="j-log">${stages.map((s, i) => `<div class="${st && (st.status === 'done' || i < st.stage) ? 'past' : ''}">${esc(s.note)}</div>`).join('')}</div>` +
+        `<div class="j-log">${stages.map((_s, i) => ({ i, when: q.stages[i].when })).filter((x) => !x.when || this.quests.test(q.id, x.when) || (st && x.i === st.stage)).map(({ i }) => `<div class="${st && (st.status === 'done' || i < st.stage) ? 'past' : ''}">${esc(this.quests.note(q, i))}</div>`).join('')}</div>` +
+        this.choices(q) +
         `<div class="j-rewards">Rewards · ${q.rewards.gold} gold · ${q.rewards.xp} XP${q.rewards.guildRep ? ` · ${q.rewards.guildRep} guild rep` : ''}${q.rewards.items?.length ? ' · items' : ''}</div>` +
         (st?.status === 'active' ? `<div class="j-actions">${this.quests.tracked !== q.id ? `<button class="j-track" data-track="${q.id}">Track this quest</button>` : ''}${this.quests.markers().some((m) => m.quest === q.id) ? `<button class="j-track" data-map="${q.id}">Show on map</button>` : ''}</div>` : '');
     }
     this.journal.innerHTML = `<header><span>JOURNAL</span><button data-close>✕</button></header><div class="j-body"><nav>${list}</nav><section>${detail}</section></div><footer>J · close</footer>`;
+  }
+
+  /** The decisions you made and the extra things you did, in this quest. */
+  private choices(q: QuestDef) {
+    const flags = this.quests.state[q.id]?.flags;
+    if (!flags) return '';
+    const out: string[] = [];
+    for (const stg of q.stages) for (const o of stg.objectives) {
+      if (o.type === 'choose' && flags[o.key]) {
+        const pick = o.options.find((c) => c.id === flags[o.key]);
+        if (pick) out.push(`You chose: ${pick.label.replace(/^\(|\)$/g, '')}`);
+      } else if (o.flag && flags[o.flag] && (o.optional || o.group)) out.push(`You did: ${o.text}`);
+    }
+    return out.length ? `<div class="j-choices">${out.map((t) => `<div>✦ ${esc(t)}</div>`).join('')}</div>` : '';
   }
 
   /** Per frame: tracker text, the compass and NPC head markers. */
