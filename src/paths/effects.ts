@@ -4,6 +4,7 @@ import { DUNGEONEERING_PASSIVES } from '../dungeon/kit/delving';
 import { FIRE_PASSIVES } from './classes/fire.passives';
 import { GALE_PASSIVES, BOUNDARY_PASSIVES, CROSS_PASSIVES } from './classes/sword.passives';
 import { LIGHT_PASSIVES } from './classes/light.passives';
+import { CALLING_PASSIVES } from '../crafting/callingPassives';
 
 // What every passive node does. `m` adds to the player's combat modifiers
 // (multipliers are written as fractions: 0.05 = +5%; flat maxima as numbers).
@@ -106,6 +107,8 @@ export const PASSIVES: Record<string, NodeEffect> = {
   ...BOUNDARY_PASSIVES,
   ...CROSS_PASSIVES,
   ...FIRE_PASSIVES,
+  // Smithing, Cooking, Tailoring, Runecraft: written in crafting/callingPassives.ts
+  ...CALLING_PASSIVES,
   // Windcaller: Gust
   'windcaller:Breeze': { text: '+5% wind damage', x: { windDmg: 0.05 } },
   'windcaller:Pressure': { text: '+10% poise damage', m: { poise: 0.1 } },

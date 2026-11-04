@@ -73,6 +73,10 @@ export interface GameEvents {
   herbGathered: { id: string; qty: number; at: Vector3; source: 'forage' | 'drop' | 'harvest' };
   /** a herbal brew was made (herbalism crafting) */
   brewMade: { id: string; quality: number; qty: number };
+  /** mastery earned by doing (paths/mastery.ts) */
+  masteryGained: { id: string; n: number };
+  /** something made at a station (crafting/crafter.ts); temper: a piece raised a quality step */
+  crafted: { recipe: string; item: string; calling: string; station: string; q: number; n: number; level: number; temper?: boolean };
 }
 
 type Handler<T> = (payload: T) => void;

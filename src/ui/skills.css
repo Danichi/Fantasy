@@ -202,3 +202,10 @@
 .sk-slot { width: 30px; height: 30px; border: 1px solid var(--sk-line-2); background: rgba(0, 0, 0, 0.4); color: var(--sk-bone) !important; cursor: pointer; border-radius: 2px; font: 600 12px/1 var(--sk-mono) !important; }
 .sk-slot:hover { border-color: var(--c, var(--sk-gold)); }
 .sk-slot.on { background: var(--c, var(--sk-gold)); color: var(--sk-ink) !important; border-color: var(--c, var(--sk-gold)); box-shadow: 0 0 10px color-mix(in srgb, var(--c) 60%, transparent); }
+
+/* Mastery perks (paths/mastery.ts): what each rank unlocks; lit once reached. */
+.sk-perks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 6px 0 2px; }
+.sk-perk { font-size: 12px; line-height: 1.35; padding: 2px 8px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12); color: rgba(236, 226, 204, 0.45); }
+.sk-perk b { color: rgba(236, 226, 204, 0.6); margin-right: 3px; }
+.sk-perk.on { color: #f3e7c8; border-color: color-mix(in srgb, var(--c, #e8c47a) 60%, transparent); background: color-mix(in srgb, var(--c, #e8c47a) 14%, transparent); }
+.sk-perk.on b { color: #e8c47a; }

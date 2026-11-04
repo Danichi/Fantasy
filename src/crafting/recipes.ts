@@ -137,6 +137,7 @@ export const RECIPES: Recipe[] = [
   cook('battleBread', 6, [['wheat', 2], ['wildGarlic', 1]]),
   cook('huntersFeast', 6, [['rawMeat', 2], ['pumpkin', 1], ['brambleBerries', 1]]),
   cook('ironRation', 12, [['rawMeat', 2], ['wheat', 1], ['honeycomb', 1]]),
+  cook('banquet', 14, [['rawMeat', 3], ['wheat', 2], ['honeycomb', 1], ['apple', 2]]),
   // ---- the runestone (Runecraft) ----
   rune('runeEmber', 1, [['copperIngot', 1], ['emberroot', 1]], 'basic'),
   rune('runeRime', 1, [['copperIngot', 1], ['silverthistle', 1]], 'basic'),

@@ -8,6 +8,7 @@ import { targets, type Target, type IncomingAttack, type DefenceResult } from '.
 import { events } from '../core/events';
 import { combat } from './core';
 import { clamp } from '../core/math';
+import { MADE_BY } from '../crafting/recipes';
 import { familyOf, FAMILIES, type FamilyDef } from '../items/weapons';
 import { twoHanded } from '../items/weapons/kinds';
 import { crossGuard } from '../items/weapons/spear';
@@ -322,15 +323,23 @@ export class ArmsRuntime {
 
   // ---- buffs from meals and elixirs -----------------------------------------------------------------
   /** Something was eaten or drunk (player.onConsume). */
+  /** Cooking's hold on what you eat: mealPower, mealTime, mealHeal (crafting/callingPassives.ts) */
+  mealBonus?: (key: 'mealPower' | 'mealTime' | 'mealHeal') => number;
+
   consume(def: ItemDef) {
     const b = def.buff;
+    const meal = MADE_BY[def.id]?.station === 'kitchen';
     if (b) {
-      const k = this.potency(def);
+      const k = this.potency(def) * (meal ? Math.max(0.3, 1 + (this.mealBonus?.('mealPower') ?? 0)) : 1);
       const m: Record<string, number> = {};
       for (const [key, v] of Object.entries(b.m ?? {})) m[key] = v * k;
-      this.buffs.set(b.id, { id: b.id, label: b.label, left: b.sec * (this.player.mods.duration ?? 1), m });
-      this.toast(`${b.label} for ${Math.round(b.sec / 60) >= 1 ? Math.round(b.sec / 60) + ' min' : b.sec + ' s'}`);
+      const sec = b.sec * (meal ? Math.max(0.3, 1 + (this.mealBonus?.('mealTime') ?? 0)) : 1);
+      this.buffs.set(b.id, { id: b.id, label: b.label, left: sec * (this.player.mods.duration ?? 1), m });
+      this.toast(`${b.label} for ${Math.round(sec / 60) >= 1 ? Math.round(sec / 60) + ' min' : Math.round(sec) + ' s'}`);
     }
+    // A cook's meal heals more on top of what it already does.
+    const heal = meal ? (def.stats.heal ?? 0) * (this.mealBonus?.('mealHeal') ?? 0) : 0;
+    if (heal > 0) this.player.hp = Math.min(this.player.maxHp, this.player.hp + heal);
     if (def.id === 'emberBomb') {
       const p = this.player;
       const at = p.pos.clone().addScaledVector(p.forward, 4);

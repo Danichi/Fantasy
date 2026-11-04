@@ -204,6 +204,9 @@ export class SkillRuntime {
     return SKILLS[`${discId}:${name}`];
   }
 
+  /** effects from outside the trees (mastery perks), summed in with them */
+  extra?: () => { m: Partial<Record<NumMod, number>>; x: Record<string, number> };
+
   /** Sum every learned passive (combat classes only while active). */
   recompute() {
     const P = this.paths;
@@ -223,6 +226,12 @@ export class SkillRuntime {
         for (const [k, val] of Object.entries(e.m ?? {})) m[k as NumMod] = (m[k as NumMod] ?? 0) + val;
         for (const [k, val] of Object.entries(e.x ?? {})) x[k] = (x[k] ?? 0) + val;
       }
+    }
+    // Mastery perks (paths/mastery.ts) ride on top of the trees.
+    const ex = this.extra?.();
+    if (ex) {
+      for (const [k, val] of Object.entries(ex.m)) m[k as NumMod] = (m[k as NumMod] ?? 0) + (val ?? 0);
+      for (const [k, val] of Object.entries(ex.x)) x[k] = (x[k] ?? 0) + val;
     }
     this.passive = { m, x };
     if (this.flow > this.flowMax) this.flow = this.flowMax;

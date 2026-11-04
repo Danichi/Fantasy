@@ -15,6 +15,7 @@ import { forgeAt } from '../world/portAurelle';
 import { GatheringNodes } from '../world/gatheringNodes';
 import { CraftUI } from '../ui/craftUI';
 import { Crafter } from './crafter';
+import { CraftPractice } from './practice';
 import { STATION_NAMES, type StationKind } from './recipes';
 import type { ArmsSave } from './crafting';
 import './arms.css';
@@ -68,6 +69,19 @@ export function setupArms(ctx: ArmsContext) {
   // ---- crafting ----------------------------------------------------------------------------------
   const crafter = new Crafter(player);
   const craft = new CraftUI(player, crafter);
+  // Working at a station is practice: the Calling rises by doing, and so does its mastery.
+  const practice = new CraftPractice(player.paths, ctx.toast, () => player.prog.level, (L) => (player.prog.level = L));
+  practice.bonus = (c) => crafter.x(c, 'practice') + crafter.total('practiceAll');
+  crafter.onCrafted = (r, q, n) => practice.add(r.calling, CraftPractice.worth(r, q, n));
+  // Meals you eat follow your Cooking (and anything else that feeds you better).
+  runtime.mealBonus = (k) => crafter.total(k);
+  // Sharpen a blade, patch your armour: Smithing's techniques, as timed buffs.
+  craft.onTechnique = (kind) => {
+    const b = crafter.technique(kind);
+    if (!b) return null;
+    runtime.buffs.set(b.id, { id: b.id, label: b.label, left: b.sec, m: b.m });
+    return b;
+  };
   crafter.onLearn = (rs, how) => ctx.toast(`${how === 'book' ? 'Learned to make' : 'Discovered'}: ${rs.map((r) => ITEMS[r.out].name).join(', ')}`);
   stationHook.label = (kind) => `${VERB[kind as StationKind]} · ${STATION_NAMES[kind as StationKind]}`;
   stationHook.use = (kind, where, bonus) => craft.show(kind as StationKind, where, bonus);
@@ -92,7 +106,7 @@ export function setupArms(ctx: ArmsContext) {
     player.equip.items.some((it) => (tool === 'pick' ? it.def.tool === 'pick' : it.def.tool === 'hatchet' || it.def.kind === 'axe'));
   const gathering = new GatheringNodes(ctx.scene, {
     give, hours: ctx.hours, hasTool, toast: ctx.toast,
-    bonus: (k) => crafter.x('smithing', k),
+    bonus: (k) => crafter.total(k),
   });
   gathering.onGather = (_kind, item, n, rare) => ctx.toast(`+${n} ${ITEMS[item].name}${rare ? ` · and ${ITEMS[rare].name}!` : ''}`);
   gathering.onStrike = (at, tool) =>
@@ -100,9 +114,12 @@ export function setupArms(ctx: ArmsContext) {
   events.on('enemyDied', (e) => {
     const g = GAME[e.kind];
     if (!g || e.at.distanceTo(player.pos) > 30) return;
-    give('rawHide', g.hide);
-    give('rawMeat', g.meat);
-    ctx.toast(`Skinned: ${g.hide} ${ITEMS.rawHide.name}, ${g.meat} ${ITEMS.rawMeat.name}`);
+    // A practised hand gets more from a kill (Tailoring's Hide Lore, Cooking's Jerky).
+    const hide = g.hide + (Math.random() < crafter.total('hide') ? 1 : 0);
+    const meat = g.meat + (Math.random() < crafter.total('meat') ? 1 : 0);
+    give('rawHide', hide);
+    give('rawMeat', meat);
+    ctx.toast(`Skinned: ${hide} ${ITEMS.rawHide.name}, ${meat} ${ITEMS.rawMeat.name}`);
   });
 
   // Bow and crossbow events ride the player's skill-event channel.
@@ -118,6 +135,7 @@ export function setupArms(ctx: ArmsContext) {
     ranged,
     crafter,
     craft,
+    practice,
     gathering,
     /** interactables out in the world (the port's forge, the gathering prompt) */
     interactables: [portForge, gathering.interactable] as Interactable[],
@@ -138,19 +156,21 @@ export function setupArms(ctx: ArmsContext) {
       gathering.setVisible(v);
     },
     toJSON(): ArmsSave {
-      return { buffs: runtime.toJSON(), loaded: ranged.loaded, ...crafter.toJSON(), nodes: gathering.toJSON() };
+      return { buffs: runtime.toJSON(), loaded: ranged.loaded, ...crafter.toJSON(), nodes: gathering.toJSON(), practice: practice.toJSON() };
     },
     fromJSON(d?: ArmsSave) {
       runtime.fromJSON(d?.buffs);
       if (d?.loaded !== undefined) ranged.loaded = d.loaded;
       crafter.fromJSON(d);
       gathering.fromJSON(d?.nodes);
+      practice.fromJSON(d?.practice);
     },
     reset() {
       runtime.reset();
       ranged.clear();
       crafter.fromJSON();
       gathering.fromJSON();
+      practice.fromJSON();
       craft.close();
     },
   };

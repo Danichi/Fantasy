@@ -4,5 +4,7 @@ export interface ArmsSave {
   nodes?: Record<string, number>;
   buffs?: { id: string; label: string; left: number; m: Record<string, number> }[];
   quick?: boolean;
+  /** practice toward each Calling's next level (crafting/practice.ts) */
+  practice?: Record<string, number>;
   loaded?: boolean;
 }

@@ -6,7 +6,7 @@ import { events } from '../core/events';
 import { iconFor, wideIconFor } from './icons';
 import type { CharPreview } from './charPreview';
 import { DISC } from '../paths/data';
-import { qualityLine, RUNES } from '../crafting/quality';
+import { qualityLine, runeOf } from '../crafting/quality';
 
 const SLOT_LABEL: Record<Slot, string> = {
   main: 'Main hand', off: 'Off hand', head: 'Head', shoulders: 'Shoulders', chest: 'Chest', cloak: 'Cloak',
@@ -355,7 +355,7 @@ export class InventoryUI {
       <p>${esc(d.desc)}</p>
       ${rows.length ? `<div class="stats">${rows.join('')}</div>` : ''}
       ${traitLines(d.stats).map((t) => `<div class="trait">✦ ${t}</div>`).join('')}
-      ${it.q !== undefined ? `<div class="trait">⚒ ${qualityLine(it.q)}</div>` : ''}${it.rune && RUNES[it.rune] ? `<div class="trait">ᚱ ${RUNES[it.rune].line}</div>` : ''}
+      ${it.q !== undefined ? `<div class="trait">⚒ ${qualityLine(it.q)}</div>` : ''}${runeOf(it.rune) ? `<div class="trait">ᚱ ${runeOf(it.rune)!.def.line}${runeOf(it.rune)!.k > 1.001 ? ` (cut ${Math.round((runeOf(it.rune)!.k - 1) * 100)}% stronger)` : ''}</div>` : ''}
       ${worn ? `<div class="cmp">Compared with your <b>${esc(worn.def.name)}</b></div>` : slot ? `<div class="cmp">Worn: ${SLOT_LABEL[slot]}</div>` : ''}
       <div class="dact">${actions.join('')}</div>`;
     box.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((b) =>

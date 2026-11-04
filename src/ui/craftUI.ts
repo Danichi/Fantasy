@@ -5,7 +5,7 @@ import { events } from '../core/events';
 import { DISC } from '../paths/data';
 import type { Player } from '../player/player';
 import { Crafter } from '../crafting/crafter';
-import { QUALITY_NAMES, qualityLine, RUNES } from '../crafting/quality';
+import { QUALITY_NAMES, qualityLine, RUNES, runeOf } from '../crafting/quality';
 import { GROUPS, STATION_NAMES, RUNE_ITEMS, type Recipe, type StationKind } from '../crafting/recipes';
 
 // The craft page (docs/design/arms-and-crafting.md §5): a page of the same
@@ -18,7 +18,7 @@ import { GROUPS, STATION_NAMES, RUNE_ITEMS, type Recipe, type StationKind } from
 // off the heat at the fire.
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-type Tab = 'make' | 'salvage' | 'inscribe' | 'experiment';
+type Tab = 'make' | 'salvage' | 'inscribe' | 'experiment' | 'temper';
 
 /** The timing step's feel per kind: beats, sweeps a second, and the size of the sweet spot. */
 const STEPS = {
@@ -52,6 +52,8 @@ export class CraftUI {
   private pickedRune: string | null = null;
   private tried = new Set<string>();
   private timing: Timing | null = null;
+  /** Smithing's Sharpen and Patch Armour (arms.ts applies the buff; null: not learned) */
+  onTechnique?: (kind: 'sharpen' | 'patch') => { label: string; sec: number } | null;
 
   constructor(private player: Player, crafter?: Crafter) {
     this.crafter = crafter ?? new Crafter(player);
@@ -89,6 +91,12 @@ export class CraftUI {
         return this.render(false);
       }
       if (act === 'try') return this.experiment();
+      if (act === 'temper') return this.temper(Number(t.dataset.uid));
+      if (act === 'technique') {
+        const b = this.onTechnique?.(t.dataset.kind as 'sharpen' | 'patch');
+        this.say(b ? `${b.label} for ${Math.round(b.sec / 60)} minutes.` : 'You haven’t learned how.', !b);
+        return this.render(false);
+      }
     });
     window.addEventListener('keydown', (e) => {
       if (!this.open) return;
@@ -186,12 +194,13 @@ export class CraftUI {
     if (!tm) return;
     const s = STEPS[tm.kind];
     const off = Math.abs(this.markAt(tm) - 0.5);
-    const good = off <= s.zone / 2;
+    const zone = this.zone(tm.kind);
+    const good = off <= zone / 2;
     tm.marks.push(good);
     tm.beats++;
     if (s.beats === 1) {
       // One press stands for all three beats: in the gold is perfect, near it is decent.
-      tm.hits = good ? 3 : off <= s.zone ? 2 : 0;
+      tm.hits = good ? 3 : off <= zone ? 2 : 0;
       return this.finish(false);
     }
     if (good) tm.hits++;
@@ -205,6 +214,21 @@ export class CraftUI {
     this.stopTiming();
     // Skipping counts as good timing, a notch below perfect (as when the step is switched off).
     this.make(tm.r, skipped ? 2 : tm.hits);
+  }
+
+  /** The sweet spot's width: a practised hand gets a wider one (Hammer Arm, Warm Hands, Heat Sense). */
+  private zone(kind: keyof typeof STEPS) {
+    const calling = this.timing?.r.calling;
+    return Math.min(0.5, STEPS[kind].zone * (1 + (calling ? this.crafter.x(calling, 'window') : 0)));
+  }
+
+  private temper(uid: number) {
+    const it = this.player.equip.get(uid);
+    const res = this.crafter.temper(uid, this.station);
+    if (res.why) this.say(res.why, true);
+    else if (res.cracked) this.say(`The ${it?.def.name ?? 'piece'} cracked in the heat. The materials are spent; the piece is as it was.`, true);
+    else if (res.inst) this.say(`Tempered: ${res.inst.def.name}.`);
+    this.render(false);
   }
 
   private stopTiming() {
@@ -305,7 +329,7 @@ export class CraftUI {
       <div class="ct ct-${tm.kind}">
         <div class="ct-title">${esc(def.name)}</div>
         <div class="ct-hint">${esc(s.hint)}</div>
-        <div class="ct-bar" data-act="strike">${tm.kind === 'hammer' ? '' : '<div class="ct-brew"></div>'}<div class="ct-zone" style="width:${s.zone * 100}%"></div><div class="ct-mark"></div></div>
+        <div class="ct-bar" data-act="strike">${tm.kind === 'hammer' ? '' : '<div class="ct-brew"></div>'}<div class="ct-zone" style="width:${this.zone(tm.kind) * 100}%"></div><div class="ct-mark"></div></div>
         ${s.beats > 1 ? `<div class="ct-pips">${pips}</div>` : ''}
         <div class="ct-btns"><button data-act="strike">${s.verb} <small>Space</small></button><button data-act="skip" class="alt">Skip <small>good timing, one notch lower</small></button></div>
       </div>`;
@@ -325,6 +349,11 @@ export class CraftUI {
       const order = (r: Recipe) => ({ ok: 0, missing: 1, level: 2, unknown: 3 })[c.status(r)];
       known.sort((a, b) => order(a) - order(b) || a.level - b.level);
       body = known.length ? known.map((r) => this.recipeCard(r)).join('') : '<p class="sc-empty">You don’t know anything you can make here yet.</p>';
+      // Smithing's techniques: a whetstone at the forge or bench, needle and rivets at the forge or loom.
+      const tech: string[] = [];
+      if ((this.station === 'forge' || this.station === 'workbench') && c.hasNode('smithing', 'Sharpen')) tech.push('<button data-act="technique" data-kind="sharpen">Sharpen your weapon</button>');
+      if ((this.station === 'forge' || this.station === 'loom') && c.hasNode('smithing', 'Patch Armour')) tech.push('<button data-act="technique" data-kind="patch">Patch your armour</button>');
+      if (tech.length) body = `<div class="sc-chips">${tech.join('')}</div>` + body;
       const later = all.filter((r) => !c.knows(r) && r.learn !== 'discover');
       if (later.length) {
         body += `<div class="sc-locked-h">Not learned yet</div>` + later.map((r) => `<div class="sc-locked r-${ITEMS[r.out].rarity}"><b>${esc(ITEMS[r.out].name)}</b><span>${esc(this.howToLearn(r))}</span></div>`).join('');
@@ -338,6 +367,18 @@ export class CraftUI {
           return `<div class="sc r-${it.def.rarity}"><div class="sc-ic">${icon ? `<img src="${icon}" alt="">` : ''}</div><div class="sc-main"><div class="sc-head"><div class="sc-name">${esc(it.def.name)}</div>${it.qty > 1 ? `<span class="sc-tag">×${it.qty}</span>` : ''}</div><div class="cr-ings">${back.map((b) => `<span class="ci ok"><b>${b.n}</b> ${esc(ITEMS[b.id].name)}</span>`).join('')}</div><div class="sc-desc">Breaks it down into about half of what it took to make.</div></div><div class="sc-buy"><button data-act="salvage" data-uid="${it.uid}">Salvage</button></div></div>`;
         }).join('')
         : '<p class="sc-empty">Nothing to salvage. (Gear you wear, and things no one could make, stay whole.)</p>';
+    } else if (this.tab === 'temper') {
+      // Gear that could ever be tempered here (made at a forge or bench for the forge, at a loom for the loom).
+      const list = eq.items.filter((it) => !/^Nobody could temper/.test(c.temperPlan(it, this.station).why ?? ''));
+      const rows = list.map((it) => {
+        const plan = c.temperPlan(it, this.station);
+        if (plan.why && /Metal is tempered|Leather and cloth/.test(plan.why)) return '';
+        const icon = iconFor(it.def.id);
+        const cost = plan.ok ? plan.cost!.map((x) => this.ing(x.id, x.n)).join('') : '';
+        const risk = plan.ok && plan.crack ? ` · ${Math.round(plan.crack * 100)}% chance it cracks` : '';
+        return `<div class="sc r-${it.def.rarity}"><div class="sc-ic">${icon ? `<img src="${icon}" alt="">` : ''}</div><div class="sc-main"><div class="sc-head"><div class="sc-name">${esc(it.def.name)}</div>${eq.slotOf(it.uid) ? '<span class="sc-tag">equipped</span>' : ''}</div>${plan.ok ? `<div class="cr-q">To ${esc(QUALITY_NAMES[plan.to!])}${esc(risk)}</div><div class="cr-ings">${cost}</div>` : `<div class="sc-desc">${esc(plan.why ?? '')}</div>`}</div><div class="sc-buy">${plan.ok ? `<button data-act="temper" data-uid="${it.uid}">Temper</button>` : ''}</div></div>`;
+      }).join('');
+      body = rows || `<p class="sc-empty">Nothing here to temper. ${this.station === 'loom' ? 'Leather and cloth gear is tempered at a loom once you know Double Stitch (Tailoring).' : 'Gear from a forge or bench is tempered here once you know Temper (Smithing).'}</p>`;
     } else if (this.tab === 'inscribe') {
       const runes = Object.keys(RUNE_ITEMS).filter((id) => c.count(id) > 0);
       const chips = runes.map((id) => `<button data-act="rune" data-id="${id}" class="${this.pickedRune === id ? 'on' : ''}">${esc(ITEMS[id].name)} ×${c.count(id)}</button>`).join('');
@@ -347,7 +388,7 @@ export class CraftUI {
         const rune = RUNES[RUNE_ITEMS[this.pickedRune]];
         body += `<p class="cr-rune">${esc(rune.line)}.${fit.length ? '' : ' Nothing you carry will take it.'}</p>` + fit.map((it) => {
           const icon = iconFor(it.def.id);
-          const now = it.rune ? `Already carries ${RUNES[it.rune].name}; this replaces it.` : 'No rune yet.';
+          const now = it.rune ? `Already carries ${runeOf(it.rune)?.def.name ?? 'a rune'}; this replaces it.` : 'No rune yet.';
           return `<div class="sc r-${it.def.rarity}"><div class="sc-ic">${icon ? `<img src="${icon}" alt="">` : ''}</div><div class="sc-main"><div class="sc-head"><div class="sc-name">${esc(it.def.name)}</div>${eq.slotOf(it.uid) ? '<span class="sc-tag">equipped</span>' : ''}</div><div class="sc-desc">${esc(now)}</div></div><div class="sc-buy"><button data-act="inscribe" data-uid="${it.uid}">Inscribe</button></div></div>`;
         }).join('');
       }
@@ -359,7 +400,7 @@ export class CraftUI {
         <div class="ct-btns"><button data-act="try" class="${this.tried.size ? '' : 'poor'}">Try them together</button></div>`;
     }
     const tab = (t: Tab, label: string) => `<button data-act="tab" data-tab="${t}" class="${this.tab === t ? 'on' : ''}">${label}</button>`;
-    const tabs = tab('make', 'Make') + tab('salvage', 'Salvage') + (this.station === 'runestone' ? tab('inscribe', 'Inscribe') : '') + tab('experiment', 'Experiment');
+    const tabs = tab('make', 'Make') + tab('salvage', 'Salvage') + (this.station === 'forge' || this.station === 'loom' ? tab('temper', 'Temper') : '') + (this.station === 'runestone' ? tab('inscribe', 'Inscribe') : '') + tab('experiment', 'Experiment');
     const sub = calling ? (this.player.paths.learned(calling.id) ? `${calling.name} level ${lv}` : `${calling.name} not learned`) : '';
     this.el.innerHTML = `
       <header><div><b>${esc(STATION_NAMES[this.station])}</b><small>${esc(this.where)}${sub ? ` · ${esc(sub)}` : ''}${this.bonus ? ' · a master’s station: better quality' : ''}</small></div><button data-act="close" title="Leave (E or Esc)">✕</button></header>

@@ -208,7 +208,7 @@ export class Ranged {
     shot.crit = p.mods.crit + (ws.crit ?? 0) + (as.crit ?? 0) + (power >= 0.98 ? 0.08 : 0);
     shot.poise = (L.kind === 'crossbow' ? 45 : 14 + 30 * power) * (opening > 1 ? 2.5 : 1);
     shot.pierce = (ws.pierce ?? 0) + (as.pierce ?? 0);
-    shot.returning = p.equip.mainWeapon?.rune === 'returning';
+    shot.returning = p.equip.mainWeapon?.rune?.split('*')[0] === 'returning';
     shot.obj.visible = true;
     shot.obj.lookAt(from.clone().add(dir));
     if (L.kind === 'crossbow') this.loaded = false;

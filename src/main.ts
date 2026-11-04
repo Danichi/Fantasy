@@ -3,6 +3,7 @@ import { combat } from './combat/core';
 import { director } from './combat/ai';
 import { combatFeedback } from './combat/feedback';
 import { TrainingYard } from './combat/trainingYard';
+import { Mastery, wireMastery } from './paths/mastery';
 import { CombatDebug } from './combat/debugOverlay';
 import { WeaponTrail } from './fx/weaponTrail';
 import './render/stylize';
@@ -261,6 +262,11 @@ async function boot() {
   creatureView.fur = !LEAN_TEST && Q.msaa;
   const spells = new Spells(r.scene, fx, player);
   const skillRt = new SkillRuntime(r.scene, player, fx, spells);
+  // Mastery: earned by doing, with perks at every rank (paths/mastery.ts).
+  const mastery = new Mastery(player.paths);
+  wireMastery(mastery, player.paths);
+  skillRt.extra = () => mastery.effects();
+  skillRt.recompute();
   // The village leaves NPC spots, the guild and the stables open.
   const keepClear = [...NPCS.map((n) => new THREE.Vector2(n.pos[0], n.pos[1])), new THREE.Vector2(22, -12), new THREE.Vector2(48, -39)];
   const world = await buildWorld(r.scene, r.renderer, fx, keepClear);
@@ -511,6 +517,12 @@ async function boot() {
   skills.runtime = skillRt;
   // ---- Arms and Crafting (feat/arms): weapon families, bows, crafting ----
   const arms = setupArms({ scene: r.scene, player, cam, skillRt, fx, toast: (m) => hud.toast(m), hours: () => gameHours(), overworld: () => realm.mode === 'overworld' && !realm.interior });
+  // A Calling's mastery perks feed its crafting; every new rank is announced.
+  arms.crafter.extra = (c, k) => mastery.craftX(c, k);
+  mastery.onRank = (d, rank, perks) => {
+    hud.toast(`${d.name} mastery: ${Mastery.title(rank)} (rank ${rank})${perks.length ? ' · ' + perks.map((p) => p.text).join(' · ') : ''}`);
+    if (rank === 5 || rank === 10) hud.showBanner(`${d.name} · ${Mastery.title(rank)}`);
+  };
   arms.fromJSON(saveData?.world?.arms);
   const mapUI = new DungeonMapUI();
   let frontier!: FrontierRegion;
@@ -814,6 +826,8 @@ async function boot() {
     else if (!dialogue.open && !shopUI.open && !inv.open && !skills.open) input.requestLock();
   };
   setupHerbalismQuests(quests, herbalism);
+  // Brewing at a crafting station is Herbalism practice too.
+  arms.practice.herbalism = (n) => herbalism.addPractice(n);
   realm.overworldInteractables.push(...herbalism.interactables);
   hideHooks.push((h) => herbalism.setVisible(!h));
   // What townsfolk know: the hour, the weather, the story so far, your classes.
@@ -2340,6 +2354,7 @@ async function boot() {
       town.guild.fromJSON(fresh.guild);
       guildContracts.restore();
       applySave(player, structuredClone(fresh));
+      mastery.sync();
       herbalism.ui.close();
       herbalism.flasks.clear();
       herbalism.fromJSON(undefined);

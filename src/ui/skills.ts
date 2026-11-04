@@ -2,6 +2,7 @@ import './skills.css';
 import type { Player } from '../player/player';
 import { events } from '../core/events';
 import { DISC, DISCIPLINES, FAMILIES, NODE_TEXT, type DisciplineDef, type Family } from '../paths/data';
+import { perksOf, EARN_TEXT } from '../paths/mastery';
 import {
   ATTRS, GATE_NODES, MASTERY_DISCOUNT, MASTERY_NAMES, MASTERY_XP, MAX_LEVEL, MAX_RANK, NODE_COST, levelCost, masteryRank, treeOf,
   type TreeNode,
@@ -251,10 +252,11 @@ export class SkillsUI {
         <div class="sk-mbar"><i style="width:${Math.min(1, x / top) * 100}%"></i>${MASTERY_XP.slice(1, 10).map((t) => `<em style="left:${(t / top) * 100}%"></em>`).join('')}</div>
         <span class="rk">${r} · ${MASTERY_NAMES[r]}${r < 10 ? ` <span>(${fmt(x)}/${fmt(nx)})</span>` : ''}</span>
         <span class="dc">-${Math.round(r * MASTERY_DISCOUNT * 100)}% XP</span>
-        <span class="how">${esc(d.how)}</span></div>`;
+        <span class="how">${esc(EARN_TEXT[d.fam])}</span>
+        <div class="sk-perks">${perksOf(d).map((p) => `<span class="sk-perk ${p.rank <= r ? 'on' : ''}"><b>${p.rank}</b> ${esc(p.text)}</span>`).join('')}</div></div>`;
     }).join('');
     this.body.innerHTML = `<div class="sk-view">
-      <p class="sk-help"><b>Mastery</b> is separate from level. It grows only by doing the thing: fighting with a class, casting its spells, brewing, exploring. Every rank makes that discipline's future levels <b>${Math.round(MASTERY_DISCOUNT * 1000) / 10}% cheaper</b>, up to <b>${Math.round(MASTERY_DISCOUNT * 1000)}%</b> at Grandmaster. Respeccing keeps your mastery.</p>
+      <p class="sk-help"><b>Mastery</b> is separate from level. It grows only by doing the thing: fighting with a style while it's your active one, casting a school's spells, working at a Calling's stations, brewing, exploring. Every rank makes that discipline's future levels <b>${Math.round(MASTERY_DISCOUNT * 1000) / 10}% cheaper</b>, up to <b>${Math.round(MASTERY_DISCOUNT * 1000)}%</b> at Grandmaster, and unlocks <b>perks</b>: the family's own at Novice, Apprentice, Adept, Expert and Master, and two of the discipline's own at Adept and Grandmaster. Respeccing keeps your mastery.</p>
       <div class="sk-ladder">${MASTERY_NAMES.map((n, i) => `<span><b>${i}</b> ${n}</span>`).join('')}</div>
       <div>${rows}</div></div>`;
   }
@@ -321,6 +323,7 @@ export class SkillsUI {
         ${d.res ? `<span>Resource</span><span>${esc(d.res)}</span>` : ''}
         <span>Next level</span><span>${L >= MAX_LEVEL ? 'Max' : `${nc < base ? `<s style="opacity:.5">${fmt(base)}</s> ` : ''}${fmt(nc)} XP`}</span></div>
       <div class="sk-meter"><div class="top"><span>MASTERY ${mr} · ${MASTERY_NAMES[mr].toUpperCase()}</span><span>-${Math.round(mr * MASTERY_DISCOUNT * 100)}% cost</span></div><div class="bar"><i style="width:${mpct}%"></i></div></div>
+      ${perksOf(d).length ? `<div class="sk-perks">${perksOf(d).map((p) => `<span class="sk-perk ${p.rank <= mr ? 'on' : ''}"><b>${p.rank}</b> ${esc(p.text)}</span>`).join('')}</div>` : ''}
       <div class="sk-actions"><button class="sk-btn primary" type="button" data-invest="${d.id}" ${P.canInvest(d.id) ? '' : 'disabled'}>${L >= MAX_LEVEL ? 'Max level' : `Invest ${fmt(nc)} XP`}</button></div>`;
       if (d.fam === 'combat' && P.active !== d.id) h += `<div class="sk-note">This class is <b>inactive</b>. None of its nodes or skills do anything until you switch to it at ${esc(d.mentor.split(',')[0])}.</div>`;
       h += `<div class="sk-note">Respec at ${esc(d.mentor.split(',')[0])}: back to level 1, tree cleared, ${fmt(P.respecRefund(d.id))} XP returned (75%).</div>`;

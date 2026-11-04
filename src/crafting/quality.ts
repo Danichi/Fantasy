@@ -66,6 +66,19 @@ export const RUNES: Record<string, RuneDef> = {
   returning: { id: 'returning', name: 'Rune of Returning', stats: {}, line: 'Rune of Returning: arrows from this bow come back to the quiver', on: 'weapon' },
 };
 
+/**
+ * A rune on an item, and how strongly it was cut: rune ids can carry a
+ * strength after a star ("fire*1.30"), written by a runecrafter's passives.
+ */
+export function runeOf(id?: string): { def: RuneDef; k: number } | null {
+  if (!id) return null;
+  const [base, k] = id.split('*');
+  const def = RUNES[base];
+  return def ? { def, k: k ? Number(k) || 1 : 1 } : null;
+}
+/** The plain rune id (without its strength). */
+export const runeBase = (id?: string) => id?.split('*')[0];
+
 const STAT_SCALED: (keyof ItemStats)[] = ['damage', 'armor', 'block', 'heal', 'restoreMana', 'restoreStamina', 'poise', 'bleed', 'burn'];
 
 const derived = new Map<string, ItemDef>();
@@ -89,9 +102,12 @@ export function qualityDef(base: ItemDef, q?: number, rune?: string): ItemDef {
       stats[s] = s === 'damage' || s === 'heal' || s === 'restoreMana' || s === 'restoreStamina' || s === 'block' ? Math.round(v * k) : Math.round(v * k * 10) / 10;
     }
   }
-  const r = rune ? RUNES[rune] : undefined;
-  if (r) {
-    for (const [s, v] of Object.entries(r.stats) as [keyof ItemStats, number][]) {
+  const ro = runeOf(rune);
+  const r = ro?.def;
+  if (ro && r) {
+    for (const [s, v0] of Object.entries(r.stats) as [keyof ItemStats, number][]) {
+      // A stronger cut: the rune's own numbers scale (stagger's is a multiplier, so its excess does).
+      const v = s === 'stagger' ? 1 + (v0 - 1) * ro.k : Math.round(v0 * ro.k * 100) / 100;
       const cur = stats[s] ?? 0;
       stats[s] = s === 'stagger' ? Math.max(cur || 1, 1) * v : s === 'speed' ? (cur || 1) + v : cur + v;
     }
@@ -99,7 +115,7 @@ export function qualityDef(base: ItemDef, q?: number, rune?: string): ItemDef {
   const prefix = q !== undefined && q !== COMMON ? QUALITY_NAMES[q] + ' ' : '';
   const def: ItemDef = {
     ...base,
-    name: prefix + base.name + (r ? ` (${r.name.replace('Rune of ', '')})` : ''),
+    name: prefix + base.name + (r ? ` (${r.name.replace('Rune of ', '')}${ro && ro.k > 1.001 ? ' +' + Math.round((ro.k - 1) * 100) + '%' : ''})` : ''),
     rarity: q === undefined ? base.rarity : q >= 5 ? 'epic' : q >= 4 ? 'rare' : q >= 2 && base.rarity === 'common' ? 'fine' : base.rarity,
     stats,
   };
