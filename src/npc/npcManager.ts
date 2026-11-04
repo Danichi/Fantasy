@@ -118,6 +118,8 @@ interface NpcState {
   faceYaw: number | null;
   /** seconds left of waiting before they set off (people don't all leave at once) */
   waitT: number;
+  /** off on an errand in their free time: the spot to come back to */
+  errand: THREE.Vector3 | null;
 }
 
 interface Actor {
@@ -381,7 +383,7 @@ export class NpcManager {
     const base = rec.job === 'elder' ? 0.78 : rec.job === 'child' ? 1.18 : rec.job === 'guard' ? 1.05 : 1;
     const st: NpcState = {
       rec, seed, pos: s.center.clone(), yaw: 0, entry: -1, placeKey: '', spot: s.center.clone(), path: [], moving: false, actor: null, talkT: 0, hidden: false,
-      lane: (r(1) - 0.5) * 3.0, pace: base * (0.86 + r(2) * 0.3), strolling: false, millT: 4 + r(3) * 20, faceYaw: null, waitT: 0,
+      lane: (r(1) - 0.5) * 3.0, pace: base * (0.86 + r(2) * 0.3), strolling: false, millT: 4 + r(3) * 20, faceYaw: null, waitT: 0, errand: null,
     };
     this.npcs.push(st);
     this.placeBySchedule(st, true);
@@ -504,6 +506,7 @@ export class NpcManager {
       st.waitT = 0;
       st.faceYaw = null;
     }
+    st.errand = null;
   }
 
   /** Waypoint path from a position to a spot (Dijkstra on the settlement graph). */
@@ -810,7 +813,8 @@ export class NpcManager {
   /** How fast someone walks right now (m/s): their pace, their height, an amble when strolling. */
   private speedOf(st: NpcState) {
     const sway = 1 + 0.07 * Math.sin(this.clock * 0.6 + (st.seed % 100));
-    return WALK_SPEED * ((st.rec.look.height ?? 1.75) / 1.8) * st.pace * sway * (st.strolling ? (st.rec.job === 'child' ? 1.5 : 0.62) : 1);
+    const amble = st.rec.job === 'child' ? 1.5 : st.rec.job === 'guard' ? 0.8 : 0.62;
+    return WALK_SPEED * ((st.rec.look.height ?? 1.75) / 1.8) * st.pace * sway * (st.strolling ? amble : 1);
   }
 
   /** Is this point inside something solid (at chest height)? */
@@ -922,11 +926,12 @@ export class NpcManager {
       st.pos.y = heightAt(st.pos.x, st.pos.z);
     }
     const leisure = e.activity === 'idle' || e.activity === 'talk' || e.activity === 'drink' || e.activity === 'play' || e.activity === 'shop';
-    const free = leisure && !place?.seated && !place?.indoors && !(st.rec.named && e.place.startsWith('post:'));
+    const onBeat = e.activity === 'patrol' && !st.rec.named && !place?.indoors;
+    const free = (leisure || onBeat) && !place?.seated && !place?.indoors && !(st.rec.named && e.place.startsWith('post:'));
     // Whom to face: the nearest person standing within a few steps.
     if (this.tick === 0) {
       let best: NpcState | null = null, bd = 3.6;
-      if (free && e.activity !== 'shop') {
+      if (free && e.activity !== 'shop' && !onBeat) {
         for (const o of this.nearby) {
           if (o === st || o.moving || o.hidden) continue;
           const d = Math.hypot(o.pos.x - st.pos.x, o.pos.z - st.pos.z);
@@ -940,9 +945,39 @@ export class NpcManager {
     st.millT -= dt;
     if (st.millT > 0) return;
     const child = st.rec.job === 'child' && e.activity === 'play';
-    st.millT = child ? 2 + Math.random() * 4 : 9 + Math.random() * 22;
-    // Mostly a step or two from their own spot; children run further.
-    const r = child ? 1.5 + Math.random() * 3 : 0.6 + Math.random() * 1.8;
+    // Free time isn't spent on one spot: now and then an errand across town (the
+    // market, the plaza, the inn), a while there, and back again.
+    if (st.errand || (!child && !st.rec.named && (e.activity === 'idle' || e.activity === 'talk') && Math.random() < 0.14)) {
+      const s = this.settlements.get(st.rec.settlement)!;
+      let to: THREE.Vector3 | null = null;
+      if (st.errand) {
+        to = st.errand;
+        st.errand = null;
+      } else {
+        const options = ['market', 'plaza', 'lanes', 'tavern', 'square', 'harbour', 'docks', 'well', 'fire'].filter((k) => k !== e.place && s.places.get(k)?.spots.length && !s.places.get(k)!.indoors);
+        if (options.length) {
+          const pl = s.places.get(options[Math.floor(Math.random() * options.length)])!;
+          to = pl.spots[Math.floor(Math.random() * pl.spots.length)].clone();
+          to.x += (Math.random() - 0.5) * 3;
+          to.z += (Math.random() - 0.5) * 3;
+          to.y = heightAt(to.x, to.z);
+          if (to.distanceTo(st.pos) > 140) to = null; // not a day's walk
+          else st.errand = st.spot.clone();
+        }
+      }
+      if (to) {
+        st.spot.copy(to);
+        st.path = this.route(s, st.pos, to, st);
+        st.moving = true;
+        st.strolling = false;
+        st.faceYaw = null;
+        st.millT = 40 + Math.random() * 80;
+        return;
+      }
+    }
+    st.millT = child ? 2 + Math.random() * 4 : onBeat ? 14 + Math.random() * 20 : 9 + Math.random() * 22;
+    // Mostly a step or two from their own spot; children run further; the Watch walks a beat.
+    const r = child ? 1.5 + Math.random() * 3 : onBeat ? 3 + Math.random() * 6 : 0.6 + Math.random() * 1.8;
     const a = Math.random() * Math.PI * 2;
     const to = new THREE.Vector3(st.spot.x + Math.cos(a) * r, 0, st.spot.z + Math.sin(a) * r);
     to.y = heightAt(to.x, to.z);
