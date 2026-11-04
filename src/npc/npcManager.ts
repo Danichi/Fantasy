@@ -103,6 +103,18 @@ interface NpcState {
   actor: Actor | null;
   talkT: number;
   hidden: boolean;
+  /** their own side of the street (metres off the centre line) */
+  lane: number;
+  /** their own walking pace (1 = average) */
+  pace: number;
+  /** a short stroll about the place they're at (not a schedule move) */
+  strolling: boolean;
+  /** seconds until they next shift about where they stand */
+  millT: number;
+  /** who they've turned to (a little group at the inn, the plaza...) */
+  faceYaw: number | null;
+  /** seconds left of waiting before they set off (people don't all leave at once) */
+  waitT: number;
 }
 
 interface Actor {
@@ -280,14 +292,62 @@ export class NpcManager {
   }
 
   addSettlement(s: Settlement) {
+    NpcManager.connect(s);
     this.settlements.set(s.id, s);
+  }
+
+  /**
+   * Stitch a walking graph into one piece: every island of streets gets a link
+   * from its nearest node to the rest. (A route into an island used to give up
+   * and walk straight there, through houses and walls.)
+   */
+  static connect(s: Settlement) {
+    const n = s.nodes.length;
+    if (n < 2) return;
+    for (let guard = 0; guard < 64; guard++) {
+      const comp = new Array<number>(n).fill(-1);
+      let c = 0;
+      for (let i = 0; i < n; i++) {
+        if (comp[i] >= 0) continue;
+        const stack = [i];
+        comp[i] = c;
+        while (stack.length) {
+          const u = stack.pop()!;
+          for (const v of s.edges[u]) if (comp[v] < 0) (comp[v] = c), stack.push(v);
+        }
+        c++;
+      }
+      if (c <= 1) return;
+      // The biggest piece takes in whichever island lies nearest to it.
+      const size = new Array<number>(c).fill(0);
+      for (const k of comp) size[k]++;
+      const main = size.indexOf(Math.max(...size));
+      let best = Infinity, bi = -1, bj = -1;
+      for (let i = 0; i < n; i++) {
+        if (comp[i] === main) continue;
+        for (let j = 0; j < n; j++) {
+          if (comp[j] !== main) continue;
+          const d = s.nodes[i].distanceToSquared(s.nodes[j]);
+          if (d < best) (best = d), (bi = i), (bj = j);
+        }
+      }
+      if (bi < 0) return;
+      s.edges[bi].push(bj);
+      s.edges[bj].push(bi);
+    }
   }
 
   add(rec: NpcRecord) {
     const s = this.settlements.get(rec.settlement);
     if (!s) throw new Error('unknown settlement ' + rec.settlement);
     const seed = hash(rec.id);
-    const st: NpcState = { rec, seed, pos: s.center.clone(), yaw: 0, entry: -1, placeKey: '', spot: s.center.clone(), path: [], moving: false, actor: null, talkT: 0, hidden: false };
+    const r = (k: number) => ((hash(rec.id + ':' + k) % 10000) / 10000);
+    // Each person their own lane and pace: elders slower, children quicker, nobody in lockstep.
+    const base = rec.job === 'elder' ? 0.78 : rec.job === 'child' ? 1.18 : rec.job === 'guard' ? 1.05 : 1;
+    const st: NpcState = {
+      rec, seed, pos: s.center.clone(), yaw: 0, entry: -1, placeKey: '', spot: s.center.clone(), path: [], moving: false, actor: null, talkT: 0, hidden: false,
+      lane: (r(1) - 0.5) * 3.0, pace: base * (0.86 + r(2) * 0.3), strolling: false, millT: 4 + r(3) * 20, faceYaw: null, waitT: 0,
+    };
     this.npcs.push(st);
     this.placeBySchedule(st, true);
   }
@@ -295,7 +355,11 @@ export class NpcManager {
   // ---- schedules ---------------------------------------------------------------
 
   private entryIndex(rec: NpcRecord) {
-    const h = this.time.hour;
+    // Townsfolk set off when they're ready, not on the stroke of the hour: up to
+    // forty minutes late, so a schedule change isn't a column marching out of town.
+    // (Named residents keep exact hours: players and quests look for them.)
+    const late = rec.named ? 0 : ((hash(rec.id + ':late') % 1000) / 1000) * 0.66;
+    const h = (this.time.hour - late + 24) % 24;
     let idx = rec.schedule.length - 1; // before the first entry: still on the last one (overnight)
     for (let i = 0; i < rec.schedule.length; i++) if (rec.schedule[i].from <= h) idx = i;
     return idx;
@@ -394,11 +458,30 @@ export class NpcManager {
       st.yaw = yaw;
       st.path = [];
       st.moving = false;
+      st.strolling = false;
+      st.waitT = 0;
+      st.faceYaw = null;
     }
   }
 
   /** Waypoint path from a position to a spot (Dijkstra on the settlement graph). */
-  private route(s: Settlement, from: THREE.Vector3, to: THREE.Vector3) {
+  private route(s: Settlement, from: THREE.Vector3, to: THREE.Vector3, st?: NpcState) {
+    const path = this.graphRoute(s, from, to);
+    if (!st || path.length < 2) return path;
+    // Walk your own side of the street: each waypoint shifted off the centre line
+    // by this person's lane (and a little wobble), so a crowd heading the same way
+    // spreads across the road instead of filing down its middle.
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = i === 0 ? from : path[i - 1], b = path[i + 1];
+      const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
+      const off = st.lane + (((hash(st.rec.id + ':' + i + ':' + this.time.day) % 1000) / 1000) - 0.5) * 1.2;
+      path[i].x += (-dz / l) * off;
+      path[i].z += (dx / l) * off;
+    }
+    return path;
+  }
+
+  private graphRoute(s: Settlement, from: THREE.Vector3, to: THREE.Vector3) {
     if (!s.nodes.length || from.distanceTo(to) < 18) return [to.clone()];
     const nearest = (p: THREE.Vector3) => {
       let best = 0, bd = Infinity;
@@ -491,6 +574,8 @@ export class NpcManager {
 
   update(dt: number, player: THREE.Vector3, camera?: THREE.Vector3, night = 0) {
     this.tick += dt;
+    this.clock += dt;
+    this.nearby = this.npcs.filter((n) => !n.hidden && (n.dist ?? 1e9) < ACTIVE_R + 10);
     const slow = this.tick >= 0.25;
     if (slow) this.tick = 0;
     let nSprites = 0;
@@ -534,39 +619,44 @@ export class NpcManager {
       const stay = st.rec.named && !st.moving && st.pos.distanceTo(player) < 12;
       if (!stay && (idx !== st.entry || this.effective(st).place !== st.placeKey)) {
         this.placeBySchedule(st, false);
-        st.path = this.route(s, st.pos, st.spot);
+        st.path = this.route(s, st.pos, st.spot, st);
         st.moving = true;
+        st.strolling = false;
+        st.faceYaw = null;
+        // A moment to finish what they were doing before they go.
+        st.waitT = st.rec.named ? 0 : ((hash(st.rec.id + ':wait:' + idx) % 1000) / 1000) * 6;
         st.hidden = false; // visible while walking there
       }
       // Someone talking with the player stops and turns to face them.
       const held = st === this.engaged || st.talkT > 0;
       if (held) st.yaw = dampAngle(st.yaw, Math.atan2(player.x - st.pos.x, player.z - st.pos.z), 6, dt);
       // Walk along the path (level 1 and 2 alike, so positions stay consistent).
-      if (st.moving && !held) {
+      if (st.moving && !held && st.waitT > 0) st.waitT -= dt;
+      else if (st.moving && !held) {
         const target = st.path[0];
-        if (!target) st.moving = false;
+        if (!target) st.moving = st.strolling = false;
         else {
           const dx = target.x - st.pos.x, dz = target.z - st.pos.z;
           const d = Math.hypot(dx, dz);
-          const step = WALK_SPEED * ((st.rec.look.height ?? 1.75) / 1.8) * dt;
-          if (d <= step) {
-            st.pos.set(target.x, 0, target.z);
+          const speed = this.speedOf(st);
+          const step = speed * dt;
+          // Turn the corner a little early instead of touching every waypoint.
+          const cut = st.path.length > 1 ? 1.4 : 0;
+          if (d <= Math.max(step, cut)) {
+            if (st.path.length === 1) st.pos.set(target.x, 0, target.z);
             st.path.shift();
-            if (!st.path.length) {
-              st.moving = false;
-              const e = this.effective(st);
-              const place = this.settlements.get(st.rec.settlement)!.places.get(e.place);
-              st.hidden = !!place?.indoors || e.activity === 'sleep';
-              if (place?.yaw !== undefined) st.yaw = place.yaw;
-            }
+            if (!st.path.length) this.arrive(st);
           } else {
-            st.pos.x += (dx / d) * step;
-            st.pos.z += (dz / d) * step;
-            st.yaw = dampAngle(st.yaw, Math.atan2(dx, dz), 8, dt);
+            const push = this.avoid(st, player, dx / d, dz / d);
+            const mx = dx / d + push.x, mz = dz / d + push.z;
+            const ml = Math.hypot(mx, mz) || 1;
+            st.pos.x += (mx / ml) * step;
+            st.pos.z += (mz / ml) * step;
+            st.yaw = dampAngle(st.yaw, Math.atan2(mx, mz), 7, dt);
           }
           st.pos.y = heightAt(st.pos.x, st.pos.z);
         }
-      }
+      } else if (!st.moving && !held && !st.hidden) this.idleLife(st, dt, player);
       const dist = st.pos.distanceTo(player);
       st.dist = dist;
       const wantActor = !st.hidden && dist < ACTIVE_R;
@@ -598,7 +688,7 @@ export class NpcManager {
           if (cell !== undefined) {
             m.makeTranslation(st.pos.x, st.pos.y, st.pos.z);
             this.sprites.setMatrixAt(nSprites, m);
-            const walk = st.moving ? (performance.now() / 1000) * 6.5 + (st.seed % 13) : -1;
+            const walk = st.moving && st.waitT <= 0 ? (performance.now() / 1000) * 6.5 * st.pace + (st.seed % 13) : -1;
             this.spriteData.setXYZW(nSprites, cell, st.rec.look.height ?? 1.75, walk, Math.min(1, (FAR_R - dist) / 30));
             nSprites++;
           }
@@ -623,12 +713,15 @@ export class NpcManager {
       if (e.activity === 'play' && alt) clip = 'cheer';
       // 'sit' is a chair sit: without a seat it sank people into the ground.
       if (e.activity === 'sit' && !this.settlements.get(st.rec.settlement)!.places.get(e.place)?.seated) clip = st.seed % 3 === 0 ? 'talk' : 'idle';
+      // In a little group, people take turns: one talks while the others listen.
+      if (st.faceYaw !== null && (clip === 'idle' || clip === 'drink') && Math.floor(this.clock / 3.5 + (st.seed % 5)) % 3 === 0) clip = 'talk';
+      if (clip === 'idle' && (this.time.hour >= 21 || this.time.hour < 5 || st.rec.job === 'elder') && st.seed % 2 === 0) clip = 'idle_tired';
       if (st === this.engaged || st.talkT > 0) clip = 'talk';
-      else if (st.moving) clip = 'walk';
+      else if (st.moving && st.waitT <= 0) clip = 'walk';
       this.play(a, clip);
       // Legs keep pace with the ground: the walk plays fast enough that planted feet don't slide.
       const walkAct = a.actions.walk;
-      if (walkAct) walkAct.timeScale = WALK_SPEED / WALK_CLIP_SPEED;
+      if (walkAct) walkAct.timeScale = (this.speedOf(st) / ((st.rec.look.height ?? 1.75) / 1.8)) / WALK_CLIP_SPEED;
       // Far actors animate at a lower rate.
       a.built.mixer.update(dist > 45 ? (slow ? 0.25 : 0) : dt);
       // Turn the head toward the player when close and idle.
@@ -663,6 +756,104 @@ export class NpcManager {
       this.lastBuild = performance.now();
       void this.buildActor(lookKey(farLook), farLook);
     }
+  }
+
+  private clock = 0;
+  /** residents near the player last frame (for keeping out of each other's way) */
+  private nearby: NpcState[] = [];
+
+  /** How fast someone walks right now (m/s): their pace, their height, an amble when strolling. */
+  private speedOf(st: NpcState) {
+    const sway = 1 + 0.07 * Math.sin(this.clock * 0.6 + (st.seed % 100));
+    return WALK_SPEED * ((st.rec.look.height ?? 1.75) / 1.8) * st.pace * sway * (st.strolling ? (st.rec.job === 'child' ? 1.5 : 0.62) : 1);
+  }
+
+  /** At the end of the road (or of a stroll). */
+  private arrive(st: NpcState) {
+    st.moving = false;
+    const stroll = st.strolling;
+    st.strolling = false;
+    if (stroll) return;
+    const e = this.effective(st);
+    const place = this.settlements.get(st.rec.settlement)!.places.get(e.place);
+    st.hidden = !!place?.indoors || e.activity === 'sleep';
+    if (place?.yaw !== undefined) st.yaw = place.yaw;
+  }
+
+  /** A sidestep: away from people in the way (walkers pass on the right) and from the player. */
+  private avoid(st: NpcState, player: THREE.Vector3, fx: number, fz: number) {
+    const out = { x: 0, z: 0 };
+    if ((st.dist ?? 1e9) > ACTIVE_R + 10) return out; // nobody to see it
+    for (const o of this.nearby) {
+      if (o === st || o.hidden) continue;
+      const dx = st.pos.x - o.pos.x, dz = st.pos.z - o.pos.z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > 2.6 || d2 < 1e-6) continue;
+      const d = Math.sqrt(d2);
+      // Only what's ahead matters; and someone coming the other way: both keep right.
+      const ahead = -(dx * fx + dz * fz) / d;
+      if (ahead < -0.2) continue;
+      const k = (1.6 - d) * 0.9;
+      out.x += (dx / d) * k + fz * 0.35 * k;
+      out.z += (dz / d) * k - fx * 0.35 * k;
+    }
+    const px = st.pos.x - player.x, pz = st.pos.z - player.z;
+    const pd = Math.hypot(px, pz);
+    if (pd < 2.2 && pd > 1e-4) {
+      const k = (2.2 - pd) * 1.1;
+      out.x += (px / pd) * k + fz * 0.4 * k;
+      out.z += (pz / pd) * k - fx * 0.4 * k;
+    }
+    return out;
+  }
+
+  /**
+   * Standing about: shuffle to a new spot now and then (children chase about),
+   * turn toward whoever is standing nearby so people gather in little groups,
+   * and step aside if the player walks right into them.
+   */
+  private idleLife(st: NpcState, dt: number, player: THREE.Vector3) {
+    if ((st.dist ?? 1e9) > ACTIVE_R + 10) return;
+    const e = this.effective(st);
+    const place = this.settlements.get(st.rec.settlement)!.places.get(e.place);
+    // Out of the way of the player.
+    const px = st.pos.x - player.x, pz = st.pos.z - player.z;
+    const pd = Math.hypot(px, pz);
+    if (pd < 0.9 && pd > 1e-4 && st !== this.engaged && !place?.seated) {
+      st.pos.x += (px / pd) * 1.6 * dt;
+      st.pos.z += (pz / pd) * 1.6 * dt;
+      st.pos.y = heightAt(st.pos.x, st.pos.z);
+    }
+    const leisure = e.activity === 'idle' || e.activity === 'talk' || e.activity === 'drink' || e.activity === 'play' || e.activity === 'shop';
+    const free = leisure && !place?.seated && !place?.indoors && !(st.rec.named && e.place.startsWith('post:'));
+    // Whom to face: the nearest person standing within a few steps.
+    if (this.tick === 0) {
+      let best: NpcState | null = null, bd = 3.6;
+      if (free && e.activity !== 'shop') {
+        for (const o of this.nearby) {
+          if (o === st || o.moving || o.hidden) continue;
+          const d = Math.hypot(o.pos.x - st.pos.x, o.pos.z - st.pos.z);
+          if (d < bd) (bd = d), (best = o);
+        }
+      }
+      st.faceYaw = best ? Math.atan2(best.pos.x - st.pos.x, best.pos.z - st.pos.z) : null;
+    }
+    if (st.faceYaw !== null) st.yaw = dampAngle(st.yaw, st.faceYaw, 3, dt);
+    if (!free) return;
+    st.millT -= dt;
+    if (st.millT > 0) return;
+    const child = st.rec.job === 'child' && e.activity === 'play';
+    st.millT = child ? 2 + Math.random() * 4 : 9 + Math.random() * 22;
+    // Mostly a step or two from their own spot; children run further.
+    const r = child ? 1.5 + Math.random() * 3 : 0.6 + Math.random() * 1.8;
+    const a = Math.random() * Math.PI * 2;
+    const to = new THREE.Vector3(st.spot.x + Math.cos(a) * r, 0, st.spot.z + Math.sin(a) * r);
+    to.y = heightAt(to.x, to.z);
+    st.path = [to];
+    st.moving = true;
+    st.strolling = true;
+    st.waitT = 0;
+    st.faceYaw = null;
   }
 
   private finishSprites(n: number) {
