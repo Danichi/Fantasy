@@ -202,7 +202,7 @@ export class Equipment implements LimbFit {
         socket.add(m);
         objs.push(m);
       } else if (item.def.armor) {
-        const parts: ArmorPart[] = buildArmorParts(item.def.armor, this);
+        const parts: ArmorPart[] = buildArmorParts(item.def.armor, this, item.def.look);
         for (const p of parts) {
           p.object.visible = this.showArmor;
           objs.push(p.object);

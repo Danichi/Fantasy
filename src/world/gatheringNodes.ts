@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { heightAt, roadDist, TOWN_R, PORT_AURELLE } from './terrainHeight';
-import { reliefAt, RELIEF, SEA_LEVEL } from './worldMap';
+import { reliefAt, RELIEF, SEA_LEVEL, regionAt } from './worldMap';
 import { QUARRY } from './glenLandmarks';
 import { mulberry32 } from '../core/math';
 import type { Interactable } from '../dungeon/instance';
@@ -33,10 +33,17 @@ export const NODE_KINDS = {
   oak: { item: 'planks', label: 'Fallen oak', tool: 'axe', regrow: 30, n: [2, 3], rare: 'ashWood' },
   ash: { item: 'ashWood', label: 'Fallen ash', tool: 'axe', regrow: 36, n: [1, 2], rare: 'yewWood' },
   yew: { item: 'yewWood', label: 'Fallen yew', tool: 'axe', regrow: 48, n: [1, 1] },
+  // the higher tiers (items/catalog), each in its own country
+  deepsteel: { item: 'deepsteelOre', label: 'Deepsteel vein', tool: 'pick', regrow: 48, n: [1, 2], rare: 'mithrilDust' },
+  tin: { item: 'tinOre', label: 'Tin and copper vein', tool: 'pick', regrow: 36, n: [1, 3], rare: 'copperOre' },
+  gold: { item: 'goldOre', label: 'Gold vein', tool: 'pick', regrow: 60, n: [1, 1] },
+  ironwood: { item: 'ironwood', label: 'Fallen ironwood', tool: 'axe', regrow: 48, n: [1, 2] },
+  sunpalm: { item: 'sunpalm', label: 'Fallen sunpalm', tool: 'axe', regrow: 40, n: [1, 2] },
+  driftwood: { item: 'driftwood', label: 'Driftwood pile', tool: 'axe', regrow: 30, n: [1, 3] },
 } satisfies Record<string, NodeKind>;
 export type NodeKindId = keyof typeof NODE_KINDS;
 /** The rough gem each kind of vein can hold. */
-const GEMS: Partial<Record<NodeKindId, string>> = { iron: 'roughGarnet', coal: 'roughGarnet', copper: 'roughAmethyst', silver: 'roughSapphire' };
+const GEMS: Partial<Record<NodeKindId, string>> = { iron: 'roughGarnet', coal: 'roughGarnet', copper: 'roughAmethyst', silver: 'roughSapphire', deepsteel: 'roughRuby', tin: 'roughTopaz', gold: 'roughEmerald' };
 
 interface Node {
   id: string;
@@ -119,6 +126,12 @@ const MODELS: Record<NodeKindId, () => Part[]> = {
   oak: () => logModel(0x5a4430, 0xc8a070),
   ash: () => logModel(0x8a8a80, 0xe2d6b8),
   yew: () => logModel(0x5a3428, 0xb8604a),
+  deepsteel: () => veinModel(0x3a5aa8, true, 15),
+  tin: () => veinModel(0xc8b070, false, 16),
+  gold: () => veinModel(0xe8c040, true, 17),
+  ironwood: () => logModel(0x3a2e24, 0x6a4a34),
+  sunpalm: () => logModel(0xb89a68, 0xe8d0a0),
+  driftwood: () => logModel(0xa8a090, 0xd8d0c0),
 };
 
 export class GatheringNodes {
@@ -227,6 +240,18 @@ export class GatheringNodes {
     if (Math.hypot(x - PORT_AURELLE.x, z - PORT_AURELLE.y) < 220) return null;
     const far = Math.min(1, Math.hypot(x, z) / 2500);
     const rel = reliefAt(x, z);
+    // The higher tiers' ore and timber, in their own country (items/catalog/tiers.ts).
+    const reg = regionAt(x, z);
+    if (reg === 'whiteMountains' || reg === 'deepMountains' || reg === 'frostedPeaks') {
+      if ((rel === RELIEF.mountain || h > 16) && r2 < 0.35) return r2 < 0.06 ? 'gold' : 'deepsteel';
+      if (rel === RELIEF.forest && r2 < 0.3) return 'ironwood';
+    }
+    if (reg === 'goldenExpanse') {
+      if ((rel === RELIEF.mountain || h > 12) && r2 < 0.5) return r2 < 0.08 ? 'gold' : 'tin';
+      if (r2 < 0.12) return 'sunpalm';
+    }
+    if (reg && /Isles$/.test(reg) && h < SEA_LEVEL + 5 && r2 < 0.4) return 'driftwood';
+    if (reg === 'verdantElves' && rel === RELIEF.forest && r2 < 0.25) return 'ironwood';
     if (rel === RELIEF.mountain || h > 16) {
       if (r2 < 0.08 + far * 0.18) return 'silver';
       return r < 0.45 ? 'iron' : r < 0.75 ? 'coal' : 'copper';

@@ -28,7 +28,7 @@ const CATEGORIES: [Category, string, string, ItemKind[]][] = [
   ['materials', 'Materials', '❖', ['material']],
   ['quest', 'Quest items', '⌘', ['key']],
 ];
-const RARITY_RANK: Record<string, number> = { epic: 0, rare: 1, fine: 2, common: 3 };
+const RARITY_RANK: Record<string, number> = { legendary: -1, epic: 0, rare: 1, fine: 2, common: 3 };
 const KIND_RANK: Record<ItemKind, number> = { sword: 0, shield: 1, armor: 2, accessory: 3, spell: 4, consumable: 5, material: 6, key: 7,
   spear: 0, greatsword: 0, axe: 0, mace: 0, dagger: 0, bow: 0, crossbow: 0, staff: 0, ammo: 1, tool: 5 };
 const STAT_NAMES: Partial<Record<keyof ItemStats, string>> = {

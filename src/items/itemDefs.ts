@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { buildSword, buildRoundShield, buildKiteShield, buildOdachi, buildCrabShield } from './weaponModels';
-import { buildArmorPiece, type ArmorPieceId } from './armorModels';
+import { buildArmorPiece, type ArmorPieceId, type ArmorLook } from './armorModels';
 import { PRODUCE_ITEMS } from './produce';
 import { HERB_ITEMS, HERB_MODELS } from './herbs';
 import { FISH_ITEMS } from '../world/fishing';
@@ -26,7 +26,7 @@ export const ACCESSORY_SLOTS: Slot[] = ['amulet', 'ring1', 'ring2', 'belt', 'tri
 export type ItemKind = 'sword' | 'shield' | 'armor' | 'accessory' | 'spell' | 'consumable' | 'key' | 'material'
   // Arms and Crafting (feat/arms): the weapon families, arrows and bolts, gathering tools
   | 'spear' | 'greatsword' | 'axe' | 'mace' | 'dagger' | 'bow' | 'crossbow' | 'staff' | 'ammo' | 'tool';
-export type Rarity = 'common' | 'fine' | 'rare' | 'epic';
+export type Rarity = 'common' | 'fine' | 'rare' | 'epic' | 'legendary';
 
 export interface ItemStats {
   damage?: number;
@@ -81,7 +81,7 @@ export function traitLines(s: ItemStats): string[] {
 
 /** What an item is worth to a merchant buying it from you (gold). */
 export function itemValue(def: ItemDef) {
-  const base = { common: 8, fine: 30, rare: 90, epic: 220 }[def.rarity];
+  const base = { common: 8, fine: 30, rare: 90, epic: 220, legendary: 600 }[def.rarity];
   const s = def.stats;
   let v = base;
   if (def.kind === 'sword' || isWeaponKind(def.kind)) v += (s.damage ?? 0) * 3 + ((s.burn ?? 0) + (s.frost ?? 0) * 100 + (s.lifesteal ?? 0) * 300 + (s.crit ?? 0) * 200) * 2;
@@ -118,6 +118,17 @@ export interface ItemDef {
   buff?: { id: string; sec: number; label: string; m?: Record<string, number> };
   /** gathering tools */
   tool?: 'pick' | 'hatchet';
+  // ---- the item catalog (items/catalog) ----
+  /** armour: how the piece looks on the body (weight, colours, helm shape) */
+  look?: ArmorLook;
+  /** gear effects beyond stats, while worn (items/catalog/gearFx.ts names them) */
+  fx?: Record<string, number>;
+  /** a faction set this piece belongs to (items/catalog/sets.ts) */
+  set?: string;
+  /** one-use items: what using it does beyond stats and buff (scrolls, bombs, wards, kits) */
+  use?: { kind: string; n?: number; r?: number; sec?: number; style?: string };
+  /** the item's level (shops and drops choose by it) */
+  lvl?: number;
 }
 
 const longsword = { bladeLen: 0.86, bladeWidth: 0.025, thickness: 0.0042, fullerLen: 0.66, gripLen: 0.15, guardSpan: 0.115, guardStyle: 'curved' as const, pommel: 'pear' as const };
@@ -538,6 +549,6 @@ for (const id of ['sungrass', 'moongrass', 'wildmint', 'ironleaf']) ITEMS[id].bu
 
 export function buildItemModel(def: ItemDef): THREE.Object3D | null {
   if (def.build) return def.build();
-  if (def.armor) return buildArmorPiece(def.armor, null);
+  if (def.armor) return buildArmorPiece(def.armor, null, def.look);
   return null;
 }

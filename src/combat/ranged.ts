@@ -206,7 +206,8 @@ export class Ranged {
     shot.life = 4;
     shot.dmg = dmg;
     shot.crit = p.mods.crit + (ws.crit ?? 0) + (as.crit ?? 0) + (power >= 0.98 ? 0.08 : 0);
-    shot.poise = (L.kind === 'crossbow' ? 45 : 14 + 30 * power) * (opening > 1 ? 2.5 : 1);
+    // Heavy and blunt heads (items/catalog) stagger harder.
+    shot.poise = (L.kind === 'crossbow' ? 45 : 14 + 30 * power) * (opening > 1 ? 2.5 : 1) * (as.stagger ?? 1);
     shot.pierce = (ws.pierce ?? 0) + (as.pierce ?? 0);
     shot.returning = p.equip.mainWeapon?.rune?.split('*')[0] === 'returning';
     shot.obj.visible = true;

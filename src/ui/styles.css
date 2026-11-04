@@ -1021,3 +1021,10 @@ body.book-open .waypoint { display: none !important; }
 .guard-xhair b { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: rgba(255, 236, 200, 0.95); box-shadow: 0 0 4px rgba(0, 0, 0, 0.7); }
 .guard-xhair.hit i { animation: guard-hit 0.35s ease-out; }
 @keyframes guard-hit { 0% { transform: scale(1.5); border-color: #fff3c8; } 100% { transform: scale(1); } }
+
+/* legendary: the Grandmaster pieces (items/catalog) */
+.inv2 .eqslot.r-legendary { border-color: rgba(255, 170, 60, .75); }
+.inv2 .grid .item.r-legendary { background: linear-gradient(180deg, rgba(255,160,40,.22), rgba(0,0,0,.2)); }
+.inv2 .detail .rar.r-legendary { color: #ffb84a; }
+.shop2 .sc.r-legendary { border-color: rgba(255, 170, 60, .75); background: linear-gradient(90deg, rgba(255,160,40,.16), rgba(0,0,0,0) 60%); }
+.shop2 .r-legendary .sc-name { color: #ffc870; }

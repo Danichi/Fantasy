@@ -16,13 +16,33 @@ export const METAL = {
   iron: 0x9d9893,
   steel: 0xe2e0dc,
   silversteel: 0xdfe8ff,
+  // tiers 4-8 (items/catalog/tiers.ts)
+  deepsteel: 0x46526a,
+  sunbrass: 0xd8a84a,
+  tideglass: 0x6ad8c8,
+  starmetal: 0x34343f,
+  duskiron: 0x1e1b24,
 } as const;
 /** Wood of each tier (oak is the planks the carpenter sells). */
 export const WOOD = {
   oak: 0x8a6440,
   ash: 0xc8a878,
   yew: 0xa0522d,
+  ironwood: 0x4a3a2e,
+  sunpalm: 0xd8b878,
+  driftwood: 0xb4ab9c,
+  starwood: 0x2e2c44,
+  gloamwood: 0x2a1e2e,
 } as const;
+/** Metals that shine of themselves: [emissive colour, strength]. */
+export const METAL_GLOW: Partial<Record<keyof typeof METAL, [number, number]>> = {
+  silversteel: [0x6f8fc8, 0.18],
+  deepsteel: [0x2a4aa8, 0.12],
+  sunbrass: [0xa0661a, 0.1],
+  tideglass: [0x2aa8a0, 0.32],
+  starmetal: [0x9ab8ff, 0.42],
+  duskiron: [0x7a3aff, 0.5],
+};
 export type Metal = keyof typeof METAL;
 export type Wood = keyof typeof WOOD;
 
@@ -33,22 +53,25 @@ function wood(c: number) {
   return m;
 }
 const metalMats = new Map<string, THREE.MeshStandardMaterial>();
-function metal(c: number, glow = 0) {
-  const key = c + ':' + glow;
+function metal(c: number, glow = 0, tint = 0x6f8fc8) {
+  const key = c + ':' + glow + ':' + tint;
   let m = metalMats.get(key);
   if (!m) {
     m = (mats().blade as THREE.MeshStandardMaterial).clone();
     m.color.set(c);
     if (glow) {
       // Silversteel: a faint moonlit sheen so it reads at a distance.
-      m.emissive.set(0x6f8fc8);
+      m.emissive.set(tint);
       m.emissiveIntensity = glow;
     }
     metalMats.set(key, m);
   }
   return m;
 }
-const metalOf = (t: Metal) => metal(METAL[t], t === 'silversteel' ? 0.18 : 0);
+const metalOf = (t: Metal) => {
+  const g = METAL_GLOW[t];
+  return metal(METAL[t], g?.[1] ?? 0, g?.[0]);
+};
 
 function finish(g: THREE.Group, base: number, tip: number, offGrip?: number) {
   g.traverse((o) => {
@@ -150,7 +173,7 @@ export function buildGreatsword(metalTier: Metal, opts: { len?: number; flamberg
   const sword = buildSword({
     bladeLen: len, bladeWidth: 0.034, thickness: 0.0055, fullerLen: 0.55, gripLen: 0.3, guardSpan: 0.19,
     guardStyle: opts.flamberge ? 'curved' : 'straight', pommel: 'pear', guardMat: metalTier === 'silversteel' ? 'brass' : 'darkSteel',
-    tint: METAL[metalTier], ...(metalTier === 'silversteel' ? { glow: 0x9fc4ff, glowStrength: 0.7 } : {}),
+    tint: METAL[metalTier], ...(metalTier === 'silversteel' ? { glow: 0x9fc4ff, glowStrength: 0.7 } : METAL_GLOW[metalTier] && metalTier !== 'deepsteel' && metalTier !== 'sunbrass' ? { glow: METAL_GLOW[metalTier]![0], glowStrength: 1.2 } : {}),
   });
   // The right hand holds just under the guard; the left hand rides the long grip below.
   sword.position.y = -0.08;
