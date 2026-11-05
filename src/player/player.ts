@@ -114,6 +114,14 @@ const WALK_SPEED = 1.7;
 /** how long a sprint pivot lasts */
 const PIVOT_TIME = 0.3;
 
+/** Between a and b round a vertical axis through `c` (angle, distance and height each eased across). */
+function arcLerp(a: THREE.Vector3, b: THREE.Vector3, u: number, c: THREE.Vector3, out: THREE.Vector3) {
+  const ra = Math.hypot(a.x - c.x, a.z - c.z), rb = Math.hypot(b.x - c.x, b.z - c.z);
+  const aa = Math.atan2(a.x - c.x, a.z - c.z), ab = Math.atan2(b.x - c.x, b.z - c.z);
+  const ang = aa + wrapAngle(ab - aa) * u, r = ra + (rb - ra) * u;
+  return out.set(c.x + Math.sin(ang) * r, a.y + (b.y - a.y) * u, c.z + Math.cos(ang) * r);
+}
+
 export class Player {
   /** the hero's body (replaced whole by rebuildBody when the look changes) */
   char = new Character();
@@ -1548,13 +1556,20 @@ export class Player {
         const d = to.length() - tg.radius;
         swept = d < sweep.reach && (d < 0.3 || to.normalize().dot(fwd) >= sweep.arc) && Math.abs(tg.center.y - this.center.y) < 1.6;
       } else if (seg && from) {
-        // Sweep between the blade's previous and current positions.
+        // Sweep between the blade's previous and current positions: straight
+        // across, and round the body along the swing's arc (after a long frame
+        // the straight chord cuts inside the arc and falls short of the tip's reach).
+        const [ha, hb] = hurtSegment(tg);
         for (let i = 0; i <= 6 && !swept; i++) {
           const u = i / 6;
           b.lerpVectors(from[0], seg[0], u);
           t.lerpVectors(from[1], seg[1], u);
-          const [ha, hb] = hurtSegment(tg);
           swept = segmentSegmentDistance(b, t, ha, hb) < tg.radius + 0.06;
+          if (!swept && i > 0 && i < 6) {
+            arcLerp(from[0], seg[0], u, this.center, b);
+            arcLerp(from[1], seg[1], u, this.center, t);
+            swept = segmentSegmentDistance(b, t, ha, hb) < tg.radius + 0.06;
+          }
         }
       }
       // Short blades (the dagger) also land on whatever is right in front at the height of the thrust.

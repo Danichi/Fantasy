@@ -75,3 +75,7 @@ Measured from the hand's frame-to-frame jump at each handover:
 
 - **Momentum:** a move started from a run carries its momentum through its first 0.22 s instead of stopping dead.
 - **Flinch:** a blow that lands jolts the body away from where it came from (lean, twist and head) and settles within a third of a second. It shows on top of whatever you are doing, staggers included, so reactions show their direction.
+
+### Hit checks after a long frame
+
+Blade hits are checked against the drawn pose, sweeping from the blade's last drawn position to its current one. A slow frame can skip a large part of a swing. A straight line between the two positions then cuts inside the swing's arc and falls short of the blade tip's real reach. The sweep now also follows the arc around the body (angle, distance and height eased across), so a swing that reaches a foe still lands on a slow machine.
