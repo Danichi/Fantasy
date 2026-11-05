@@ -1,6 +1,6 @@
 import { named, namedShield, type Named } from './templates';
 import { FACTIONS } from './factions';
-import { source } from './kit';
+import { source, CAT } from './kit';
 
 // Faction and regional weapons (the item plan, §2b): 113 named weapons and
 // six faction shields. Each faction's gear is sold by its quartermasters and
@@ -62,7 +62,7 @@ F('dwarven', [
   { id: 'stonepiercer', name: 'Stonepiercer Crossbow', t: 'crossbow', tier: 4, desc: 'A deepsteel crossbow whose bolts go through shields.', s: { pierce: 0.2 }, o: { len: 1.1 } },
   { id: 'tunnelShortblade', name: 'Tunnel Shortblade', t: 'shortsword', tier: 4, desc: 'Short enough to swing in a mine. Most dwarven fights are in mines.' },
   { id: 'thrainsAxe', name: 'Thrain\'s Ceremonial Axe', t: 'axe', tier: 5, desc: 'Gold knotwork over deepsteel. It was made for ceremonies; it was used for other things.', o: { metal: 'sunbrass' } },
-  { id: 'lanternPick', name: 'Lantern Pick', t: 'club', tier: 4, desc: 'A miner\'s pick with a lantern hung off the back of the head.', fx: { lightRoom: 1, oreYield: 0.1 } },
+  { id: 'lanternPick', name: 'Lantern Pick', t: 'club', tier: 4, desc: 'A miner\'s pick with a lantern hung off the back of the head. It works ore veins as well as heads.', fx: { lightRoom: 1, oreYield: 0.1 } },
 ]);
 F('desert', [
   { id: 'sunGuardKhopesh', name: 'Sun Guard Khopesh', t: 'khopesh', tier: 5, desc: 'The palace Sun Guard\'s hooked blade: it catches shields and opens guards.' },
@@ -84,10 +84,10 @@ F('scrap', [
   { id: 'pipeSpear', name: 'Pipe Spear', t: 'spear', tier: 4, desc: 'A length of pipe with a blade hammered into the end.' },
   { id: 'sawbladeAxe', name: 'Sawblade Axe', t: 'axe', tier: 5, desc: 'A sawmill blade cut in half and bolted on. Hits bleed badly.', s: { bleed: 5 } },
   { id: 'chainflail', name: 'Chainflail', t: 'flail', tier: 5, desc: 'A length of anchor chain on a handle.' },
-  { id: 'junkCrossbow', name: 'Junk Crossbow', t: 'crossbow', tier: 4, desc: 'A crossbow built from bedframes and wire. It fires whatever you put in it.' },
+  { id: 'junkCrossbow', name: 'Junk Crossbow', t: 'crossbow', tier: 4, desc: 'A crossbow built from bedframes and wire. When the bolts run out it fires scrap metal from your pack.' },
   { id: 'rebarGreatsword', name: 'Rebar Greatsword', t: 'greatsword', tier: 5, desc: 'Rebar beaten flat and ground to an edge. Heavy enough not to need a good one.', o: { tint: 0x7a6a5a } },
   { id: 'solderKnife', name: 'Solder Knife', t: 'dagger', tier: 4, desc: 'Kept hot on the bench. Some of the heat stays.', s: { burn: 3 } },
-  { id: 'boltThrower', name: 'Bolt-Thrower', t: 'crossbow', tier: 5, desc: 'A heavy repeating crossbow with a hopper. Mother Solder\'s own design.', s: { speed: 1.15 }, o: { len: 1.15 } },
+  { id: 'boltThrower', name: 'Bolt-Thrower', t: 'crossbow', tier: 5, desc: 'A heavy repeating crossbow with a hopper: three shots to a winding. Mother Solder\'s own design.', s: { speed: 1.15 }, o: { len: 1.15 } },
   { id: 'tinroofBucklerBlade', name: 'Tinroof Buckler-Blade', t: 'shortsword', tier: 4, desc: 'A short blade with a tin buckler welded over the hand.', fx: { parryWindow: 0.06 } },
 ]);
 F('wrecker', [
@@ -178,12 +178,15 @@ F('temple', [
 ]);
 
 // ---- faction shields (§3) -----------------------------------------------------------------------
-namedShield({ id: 'watchPavise', name: 'Watch Pavise', tier: 2, desc: 'A tall Glen Watch pavise with a prop leg. On the wall it was planted in the ground; off it, it is a wall you carry.', look: { shape: 'pavise', face: 0x2a4a8a, accent: 0xe8e4d8, rim: 0x5a5650, device: 'pale' }, s: { block: 120, stability: 0.74, poise: 6 } }, ['fshop:glenWatch', 'quest:glenWatch']);
+namedShield({ id: 'watchPavise', name: 'Watch Pavise', tier: 2, desc: 'A tall Glen Watch pavise with a prop leg. On the wall it was planted in the ground; off it, it is a wall you carry.', look: { shape: 'pavise', face: 0x2a4a8a, accent: 0xe8e4d8, rim: 0x5a5650, device: 'pale' }, s: { block: 120, stability: 0.74, poise: 6 }, fx: { plant: 1, arrowWall: 1 } }, ['fshop:glenWatch', 'quest:glenWatch']);
 namedShield({ id: 'silverLanceHeater', name: 'Silver Lance Heater', tier: 3, desc: 'A silversteel heater with the lance on a blue field.', look: { shape: 'heater', face: 0x2a4a8a, accent: 0xdfe6f4, rim: 0xdfe6f4, device: 'pale' }, s: { block: 115, stability: 0.7 }, fx: { sprintHit: 0.1 } }, ['fshop:crown', 'quest:crown']);
-namedShield({ id: 'dwarvenDoorshield', name: 'Dwarven Doorshield', tier: 4, desc: 'A tower shield the size of a hold\'s door, and as hard to get through.', look: { shape: 'tower', face: 0x46526a, accent: 0xd0a040, rim: 0xd0a040, device: 'cross', metalFace: true }, s: { block: 150, stability: 0.86, poise: 12 } }, ['fshop:dwarven', 'quest:dwarven']);
+namedShield({ id: 'dwarvenDoorshield', name: 'Dwarven Doorshield', tier: 4, desc: 'A tower shield the size of a hold\'s door, and as hard to get through.', look: { shape: 'tower', face: 0x46526a, accent: 0xd0a040, rim: 0xd0a040, device: 'cross', metalFace: true }, s: { block: 150, stability: 0.86, poise: 12 }, fx: { arrowWall: 1 } }, ['fshop:dwarven', 'quest:dwarven']);
 namedShield({ id: 'wreckersHatchLid', name: 'Wrecker\'s Hatch-Lid', tier: 5, desc: 'A ship\'s hatch with a handle bolted on.', look: { shape: 'hatch', face: 0x6a5a44, accent: 0x6a5a44, rim: 0x3a3a3a, device: 'none' }, s: { block: 125, stability: 0.74, poise: 6 } }, ['fshop:wrecker', 'quest:wrecker']);
 namedShield({ id: 'legionScutum', name: 'Legion Scutum', tier: 4, desc: 'The Legion\'s curved oblong shield, red with a gold eagle.', look: { shape: 'scutum', face: 0x9a2a1a, accent: 0xd8b04a, rim: 0xb08a3a, device: 'sun' }, s: { block: 130, stability: 0.8, poise: 8 } }, ['fshop:valorian', 'quest:valorian']);
 namedShield({ id: 'duneTargeShield', name: 'Sun Guard Targe', tier: 5, desc: 'The Sun Guard\'s round shield, a sun-disc boss on white enamel. It leads the desert line.', look: { shape: 'targe', face: 0xe8e0c8, accent: 0xd8a84a, rim: 0xd8a84a, device: 'sun', metalFace: true, spikes: 1 }, s: { block: 115, stability: 0.7 }, fx: { desertWard: 0.05 } }, ['fshop:desert', 'quest:desert']);
 
 // The orcs' tusk cleaver is the one the wilds already drop.
 source('tuskCleaver', 'fshop:orc', 'quest:orc', 'drop:orc:3');
+
+// The Lantern Pick is a miner's pick too.
+CAT.lanternPick.tool = 'pick';

@@ -70,6 +70,10 @@ import { PORT_QUESTS } from './quests/portQuests';
 import { SEA_QUESTS } from './quests/seaQuests';
 import { RIVER_LEVEL, DROWNED_MERE, SINKHOLE, roadDist, TOWN_R } from './world/terrainHeight';
 import { GearRuntime } from './items/catalog/gearRuntime';
+import { Locks } from './items/catalog/locks';
+import { Specials } from './items/catalog/specials';
+import { Exposure } from './items/catalog/exposure';
+import { GEAR } from './items/catalog/hooks';
 import { CatalogSources } from './items/catalog/sources';
 import { ORE_SENSE } from './world/gatheringNodes';
 import { road, distanceAlong, roadLength } from './world/roadNetwork';
@@ -1784,7 +1788,7 @@ async function boot() {
   const hereRegion = () => (realm.mode === 'dungeon' ? 'cresha' : realm.interior ? regionAt(realm.interior.door.pos.x, realm.interior.door.pos.z) : regionAt(player.pos.x, player.pos.z));
   const gearRt = new GearRuntime({
     scene: r.scene, player, rt: skillRt, arms: arms.runtime, toast: (m) => hud.toast(m),
-    region: hereRegion, rain: () => weather.p.rain, hour: () => time.hour, day: () => time.day,
+    region: hereRegion, rain: () => weather.p.rain, hour: () => time.hour, day: () => time.day, inDungeon: () => realm.mode === 'dungeon',
     gold: (n) => player.prog.addGold(n), xp: (n) => player.prog.addXp(n),
     give: (id, n) => {
       player.equip.add(id, n);
@@ -1836,6 +1840,37 @@ async function boot() {
     playerPos: () => player.pos as unknown as { distanceTo(v: unknown): number }, flags: worldFlags, gear: gearRt,
     owns: (id) => player.equip.items.some((it) => it.def.id === id),
   });
+  // Locks on chests, caches and hatches: picked with lockpicks, or forced with something heavy.
+  const locks = new Locks(player, worldFlags, (m) => hud.toast(m), () => player.paths.level('dungeoneering'));
+  GEAR.locks = locks;
+  locks.onToggle = (open) => {
+    input.uiMode = open || inv.open || skills.open || mapUI.open || dialogue.open || shopUI.open;
+    if (open) input.exitLock();
+    else if (!dialogue.open && !shopUI.open) input.requestLock();
+  };
+  // The one-of-a-kind items: the grappling hook, summoned spirits, traps, the flask, the pot, the bell.
+  const specials = new Specials({
+    scene: r.scene, player, rt: skillRt, arms: arms.runtime, toast: (m) => hud.toast(m), camera: r.camera,
+    castRay: (o, dir, max) => physics.castRay(o, dir, max), day: () => time.day, flags: worldFlags,
+    choose: (title, text, options) => dialogue.show(title, 'One thing to let go', text, options.map((o) => ({ label: o.label, run: () => (dialogue.close(), o.run()) }))),
+    calmSea: (sec) => {
+      const b = sailing.beast;
+      if (!b || !b.alive || b.pos.distanceTo(player.pos) > 400) return false;
+      b.calmT = Math.max(b.calmT, sec);
+      return true;
+    },
+  });
+  gearRt.specials = specials;
+  // The Golden Expanse wears you down: heat, thirst, the sandstorm.
+  gearRt.exposure = new Exposure({
+    player, arms: arms.runtime, toast: (m) => hud.toast(m), region: hereRegion, hour: () => time.hour,
+    sheltered: () => realm.mode !== 'overworld' || !!realm.interior,
+    inTown: () => npcs.npcs.some((n: { pos: THREE.Vector3 }) => n.pos.distanceTo(player.pos) < 30),
+    storm: () => desert?.storm ?? 0, fx: () => gearRt.fx, flags: worldFlags,
+  });
+  // The Crown Guard fights better beside friends: the guards and the Watch close by.
+  const friendly = /guard|watch|captain|soldier|knight|brannoc|crew/i;
+  gearRt.friendsNear = (radius) => npcs.npcs.filter((n: { pos: THREE.Vector3; rec: { job: string } }) => friendly.test(n.rec.job) && n.pos.distanceTo(player.pos) < radius).length;
   // Shops of every kind carry the catalog's stock for their region and faction.
   const baseShop = town.showShop.bind(town);
   town.showShop = (who, title, intro, stock, extra = {}) => baseShop(who, title, intro, catalogSources.stockFor(who, title, intro, stock), extra);
@@ -2453,7 +2488,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources,
+      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       yard, combatDebug, // combat rework: the drill yard and the F9 overlay

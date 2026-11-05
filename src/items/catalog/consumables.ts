@@ -15,10 +15,13 @@ import { fxText } from './gearFx';
 const potionArt = (s: PotionArt): CatArt => ({ k: 'potion', s });
 type Buff = NonNullable<ItemDef['buff']>;
 const mins = (sec: number) => (sec >= 60 ? `${Math.round(sec / 60)} min` : `${sec} s`);
-const buffLine = (b: Buff) => `For ${mins(b.sec)}: ${fxText(b.m ?? {}).replace(/\.$/, '')}.`;
+const buffLine = (b: Buff) => {
+  const t = fxText(b.m ?? {});
+  return t ? `For ${mins(b.sec)}: ${t.replace(/\.$/, '')}.` : '';
+};
 
 function one(id: string, name: string, rarity: Rarity, desc: string, stats: ItemStats, src: string[], art: CatArt, o: { buff?: Buff; use?: ItemDef['use']; lvl?: number } = {}) {
-  const d: ItemDef = { id, name, kind: 'consumable', rarity, stack: true, desc: o.buff ? `${desc} ${buffLine(o.buff)}` : desc, stats, lvl: o.lvl ?? 1, ...(o.buff ? { buff: o.buff } : {}), ...(o.use ? { use: o.use } : {}) };
+  const d: ItemDef = { id, name, kind: 'consumable', rarity, stack: true, desc: o.buff && buffLine(o.buff) ? `${desc} ${buffLine(o.buff)}` : desc, stats, lvl: o.lvl ?? 1, ...(o.buff ? { buff: o.buff } : {}), ...(o.use ? { use: o.use } : {}) };
   return add(d, src, art);
 }
 
@@ -68,14 +71,14 @@ const ELIXIRS: E[] = [
   ['featherfoot', 'Featherfoot Draught', 'fine', 'Light on your feet.', b('featherfoot', 'Featherfoot', 180, { dodgeCost: -0.15, moveSpeed: 0.05 }), { vessel: 'tall', liquid: ['#e0f0ff', '#7aa0d8'], glyph: 'feather', fx: ['sparkle'] }, [['falconFeather', 1], ['honeycomb', 1]], 6],
   ['waterbreath', 'Waterbreath', 'fine', 'Tastes of the sea. For three minutes you can breathe underwater.', b('waterbreath', 'Waterbreath', 180, {}), { vessel: 'gourd', liquid: ['#4ae4d0', '#0a5a74'], glyph: 'fish', fx: ['bubbles'] }, [['sailorsKelp', 2], ['saltwort', 1]], 8, { kind: 'breath', sec: 180 }],
   ['coldward', 'Coldward', 'common', 'Keeps the cold out.', b('coldward', 'Coldward', 600, { stamina: 20, dmgTaken: -0.05 }), { vessel: 'square', liquid: ['#a8e4ff', '#2e60b0'], glyph: 'shield', fx: ['frost'] }, [['emberroot', 1], ['wildGarlic', 1]], 4],
-  ['heatward', 'Heatward', 'fine', 'Keeps the sun off your skin from the inside.', b('heatward', 'Heatward', 600, { fireResist: 0.3, desertWard: 0.08 }), { vessel: 'square', liquid: ['#ffc24a', '#c0400e'], glyph: 'sun', fx: ['embers'] }, [['ghostCactus', 1], ['oasisWater', 1]], 10],
+  ['heatward', 'Heatward', 'fine', 'Keeps the sun off your skin from the inside.', b('heatward', 'Heatward', 600, { heatImmune: 1, fireResist: 0.3 }), { vessel: 'square', liquid: ['#ffc24a', '#c0400e'], glyph: 'sun', fx: ['embers'] }, [['ghostCactus', 1], ['oasisWater', 1]], 10],
   ['swiftfoot', 'Swiftfoot', 'fine', 'You walk like you are late.', b('swiftfoot', 'Swiftfoot', 300, { moveSpeed: 0.15 }), { vessel: 'bottle', liquid: ['#e0a458', '#7a4210'], glyph: 'boot' }, [['wildmint', 1], ['eaglefern', 1]], 5],
-  ['hush', 'Hush', 'rare', 'Your footsteps go quiet. Foes do not see you coming: blows from behind land harder.', b('hush', 'Hush', 180, { backstab: 0.3 }), { vessel: 'bottle', liquid: ['#5a4a7a', '#0c0818'], glyph: 'moon', glass: '#3a3450', fx: ['dark'] }, [['duskbloom', 1], ['moongrass', 1]], 10],
+  ['hush', 'Hush', 'rare', 'Your footsteps go quiet: foes more than six paces off don\'t notice you, and blows from behind land harder.', b('hush', 'Hush', 180, { hush: 1, backstab: 0.2 }), { vessel: 'bottle', liquid: ['#5a4a7a', '#0c0818'], glyph: 'moon', glass: '#3a3450', fx: ['dark'] }, [['duskbloom', 1], ['moongrass', 1]], 10],
   ['fogCutter', 'Fog-Cutter', 'common', 'A sailor\'s pick-me-up. Clears the head on a grey morning.', b('fogCutter', 'Fog-Cutter', 300, { staminaRegen: 0.15, crit: 0.03 }), { vessel: 'bottle', liquid: ['#e8e0c8', '#8a7a5a'], glyph: 'anchor' }, [['saltwort', 1], ['wildmint', 1]], 3],
   ['mulesBack', 'Mule\'s Back', 'fine', 'For long hauls: you could carry a cart.', b('mulesBack', 'Mule\'s Back', 600, { stamina: 40 }), { vessel: 'jar', liquid: ['#c8a050', '#5a3a10'], glyph: 'hammer' }, [['wheat', 2], ['honeycomb', 1]], 5],
   ['longLungs', 'Long Lungs', 'common', 'You can hold your breath for a minute and a half.', b('longLungs', 'Long Lungs', 90, {}), { vessel: 'gourd', liquid: ['#7ad0e0', '#1a5a6a'], glyph: 'drop' }, [['sailorsKelp', 1]], 2, { kind: 'breath', sec: 90 }],
   // rare
-  ['draughtOfRemembering', 'Draught of Remembering', 'epic', 'Everything you have ever learned comes back, sharper. You learn faster for a while.', b('remembering', 'Remembering', 600, { xpGain: 0.25, masteryGain: 0.25 }), { vessel: 'heart', liquid: ['#e8d8ff', '#6a4ab8'], glyph: 'book', fx: ['sparkle'], stopper: 'gold' }, [['moonpetal', 2], ['essenceStar', 1]], 22],
+  ['draughtOfRemembering', 'Draught of Remembering', 'epic', 'Everything you have ever learned comes back at once, and one thing can be let go: unlearn one skill-tree node (one with nothing learned after it) and spend its point again.', b('remembering', 'Remembering', 1, {}), { vessel: 'heart', liquid: ['#e8d8ff', '#6a4ab8'], glyph: 'book', fx: ['sparkle'], stopper: 'gold' }, [['moonpetal', 2], ['essenceStar', 1]], 22, { kind: 'remember' }],
   ['phoenixTear', 'Phoenix Tear', 'epic', 'A single burning drop. For ten minutes, the first blow that would kill you leaves you standing with half your health instead.', b('phoenix', 'Phoenix Tear', 600, {}), { vessel: 'heart', liquid: ['#ffb040', '#c02a0a'], fx: ['embers', 'glow'], stopper: 'gold' }, [['phoenixFeather', 1], ['lifebloomTonic', 1]], 28, { kind: 'phoenix' }],
   ['liquidCourage', 'Liquid Courage', 'common', 'It is mostly brandy.', b('courage', 'Liquid Courage', 120, { melee: 0.1, dmgTaken: -0.05 }), { vessel: 'bottle', liquid: ['#d08a3a', '#5a2a0a'], glyph: 'fist' }, [['grainSpirit', 1], ['honeycomb', 1]], 3],
   ['tearsOfDawn', 'Tears of the Dawn', 'epic', 'Holy water wept by a statue in the Temple. Rarer than it should be.', b('tearsOfDawn', 'Tears of the Dawn', 300, { heal: 0.3, holyDmg: 0.1 }), { vessel: 'heart', liquid: ['#fff6c8', '#e0b040'], glyph: 'dawn', fx: ['glow', 'sparkle'], stopper: 'gold' }, [['essenceLight', 1], ['springWater', 2]], 20],
@@ -88,7 +91,7 @@ const ELIXIRS: E[] = [
 ];
 for (const [id, name, rarity, desc, buff, art, inputs, lvl, use] of ELIXIRS) {
   const t = Math.max(1, Math.min(6, Math.ceil(lvl / 5)));
-  one(id, name, rarity, desc, {}, [`shop:alchemist:${t}`, `chest:${t + 1}`], potionArt(art), { buff, use, lvl });
+  one(id, name, rarity, desc, {}, [`shop:alchemist:${t}`, `chest:${t + 1}`], potionArt(art), { buff: use?.kind === 'remember' ? undefined : buff, use, lvl });
   recipe(id, 'alchemy', 'herbalism', lvl, inputs, 'basic', { step: 'stir' });
 }
 
@@ -122,7 +125,7 @@ const BOMBS: [string, string, Rarity, string, NonNullable<ItemDef['use']>, Potio
   ['smokeBomb', 'Smoke Bomb', 'fine', 'A cloud of smoke: foes lose sight of you for 4 s.', { kind: 'veil', sec: 4 }, { vessel: 'bomb', liquid: ['#a0a0a0', '#3a3a3a'], glyph: 'cloud', fx: ['smoke'] }, [['caveGuano', 1], ['coal', 1]], 5, ['fshop:twoCoins']],
   ['plagueFlask', 'Plague Flask', 'rare', 'Bursts 4 m ahead in a sickly cloud: whatever is caught rots, 8 damage a second for 6 s.', { kind: 'rot', n: 8, r: 3, sec: 6 }, { vessel: 'bomb', liquid: ['#a8d04a', '#3a5a0a'], glyph: 'skull', fx: ['toxic'] }, [['plagueTooth', 2], ['acidSac', 1]], 10, []],
   ['flashPowder', 'Flash Powder', 'fine', 'A blinding flash around you: foes within 5 m are stunned.', { kind: 'stun', r: 5 }, { vessel: 'jar', liquid: ['#ffffff', '#e8e0a0'], glyph: 'sun', fx: ['sparkle'] }, [['sulphur', 1], ['quicksilver', 1]], 8, []],
-  ['caltrops', 'Caltrops', 'common', 'Scattered iron spikes: foes within 4 m bleed 4 a second.', { kind: 'caltrops', n: 4, r: 4 }, { vessel: 'jar', liquid: ['#8a8a90', '#3a3a3a'], glyph: 'claw' }, [['ironIngot', 1]], 2, ['shop:smith:1']],
+  ['caltrops', 'Caltrops', 'common', 'Scatter them where you stand: for 30 s anything that walks through the spikes (3 m round) bleeds.', { kind: 'caltrops', n: 4, r: 3, sec: 30 }, { vessel: 'jar', liquid: ['#8a8a90', '#3a3a3a'], glyph: 'claw' }, [['ironIngot', 1]], 2, ['shop:smith:1']],
   ['glueMug', 'Sticky Glue Pot', 'fine', 'Bursts 4 m ahead: those caught are stuck fast (stunned).', { kind: 'stunAhead', r: 3 }, { vessel: 'jar', liquid: ['#e8d080', '#8a6a1a'], glyph: 'drop' }, [['slimeJelly', 2], ['pressedOil', 1]], 6, []],
   ['thunderclap', 'Thunderclap', 'rare', 'A clap like a cannon around you: 50 damage and a great shove.', { kind: 'blast', n: 50, r: 4.5 }, { vessel: 'bomb', liquid: ['#cfe0ff', '#4a5ab8'], glyph: 'bolt', fx: ['sparkle'] }, [['sulphur', 2], ['caveGuano', 1]], 12, []],
   ['holyWaterFlask', 'Holy Water Flask', 'fine', 'Bursts in a holy flash 4 m ahead: 50 damage, three times that to the dead.', { kind: 'holy', n: 50, r: 3 }, { vessel: 'bomb', liquid: ['#fff6c8', '#e0b040'], glyph: 'dawn', fx: ['glow'] }, [['springWater', 1], ['marigold', 2]], 6, ['fshop:temple']],
@@ -130,11 +133,11 @@ const BOMBS: [string, string, Rarity, string, NonNullable<ItemDef['use']>, Potio
   ['sandBomb', 'Sand Bomb', 'fine', 'A bag of hot sand: foes 4 m ahead are blinded (stunned) and burned a little.', { kind: 'stunAhead', r: 3.5, n: 15 }, { vessel: 'jar', liquid: ['#e8c890', '#8a6a3a'], glyph: 'sun' }, [['pureSalt', 1], ['dates', 1]], 10, ['fshop:desert']],
   ['pitchPot', 'Pitch Pot', 'common', 'Burning pitch 4 m ahead: 35 fire damage.', { kind: 'bomb', n: 35, r: 3, style: 'fire' }, { vessel: 'jar', liquid: ['#3a2a1a', '#0a0a0a'], glyph: 'flame', fx: ['smoke'] }, [['coal', 2], ['pressedOil', 1]], 2, ['shop:trader:1']],
   ['netBomb', 'Net Bomb', 'fine', 'A weighted net, thrown: whatever is 4 m ahead is held still for a moment.', { kind: 'stunAhead', r: 2.5 }, { vessel: 'jar', liquid: ['#c8a87a', '#5a3a1a'], glyph: 'spider' }, [['spiderSilk', 1], ['flax', 2]], 6, []],
-  ['decoyDoll', 'Decoy Doll', 'fine', 'A straw doll in your coat: foes lose sight of you for 6 s.', { kind: 'veil', sec: 6 }, { vessel: 'jar', liquid: ['#d8c080', '#8a6a3a'], glyph: 'circle' }, [['wheat', 3], ['woolCloth', 1]], 4, ['shop:trader:2']],
+  ['decoyDoll', 'Decoy Doll', 'fine', 'A straw doll in an old coat. Set it down and slip away: for 8 s foes lose sight of you, puzzling over the doll.', { kind: 'decoy', sec: 8 }, { vessel: 'jar', liquid: ['#d8c080', '#8a6a3a'], glyph: 'circle' }, [['wheat', 3], ['woolCloth', 1]], 4, ['shop:trader:2']],
   ['beehivePot', 'Beehive Pot', 'fine', 'A pot with an angry hive in it: foes 4 m ahead are stung, 5 damage a second for 8 s.', { kind: 'rot', n: 5, r: 3.5, sec: 8 }, { vessel: 'jar', liquid: ['#f0c040', '#8a5a0a'], glyph: 'wing' }, [['honeycomb', 2]], 4, ['site:hives']],
   ['blackpowderKeg', 'Blackpowder Keg', 'rare', 'A small keg with a short fuse. 120 damage 4 m ahead.', { kind: 'bomb', n: 120, r: 4.5, style: 'fire' }, { vessel: 'jar', liquid: ['#3a3a3a', '#0a0a0a'], glyph: 'flame', fx: ['smoke'] }, [['sulphur', 2], ['coal', 2], ['caveGuano', 2]], 16, ['fshop:wrecker', 'drop:sea:5']],
   ['gloamGrenade', 'Gloam Grenade', 'epic', 'Shade-smoke in black glass. 90 damage 4 m ahead, and the light goes out of those it touches (stunned).', { kind: 'gloam', n: 90, r: 3.5 }, { vessel: 'bomb', liquid: ['#5a3a8a', '#0a0414'], glyph: 'moon', fx: ['dark'] }, [['shadeSmoke', 1], ['gloamIchor', 1]], 26, ['drop:gloam:6']],
-  ['sirenBell', 'Siren Bell', 'rare', 'A little bell that calms the sea\'s creatures: sea foes within 10 m are stunned.', { kind: 'calm', r: 10, style: 'sea' }, { vessel: 'jar', liquid: ['#e0d0ff', '#4a3a8a'], glyph: 'anchor' }, [['choirPearl', 1], ['silverIngot', 1]], 22, ['fshop:wrecker']],
+  ['sirenBell', 'Siren Bell', 'rare', 'A little bell that calms the sea\'s creatures: sea foes within 10 m are stunned, and a great sea beast fighting your ship goes still for 20 s.', { kind: 'calm', r: 10, style: 'sea' }, { vessel: 'jar', liquid: ['#e0d0ff', '#4a3a8a'], glyph: 'anchor' }, [['choirPearl', 1], ['silverIngot', 1]], 22, ['fshop:wrecker']],
 ];
 for (const [id, name, rarity, desc, use, art, inputs, lvl, extra] of BOMBS) {
   const t = Math.max(1, Math.min(6, Math.ceil(lvl / 5)));
@@ -283,15 +286,15 @@ const SCROLLS: Scroll[] = [
   ['scrollShadowStep', 'Scroll of Shadow Step', 'rare', 'Step behind your target, unseen for 3 s.', { kind: 'shadowStep', sec: 3 }, '#3a2a5a', 'moon', 10],
   ['scrollCurse', 'Scroll of Curse', 'fine', 'Curse your target: it takes 25% more damage from you for 20 s (branded).', { kind: 'curse', sec: 20 }, '#3a2a5a', 'skull', 6],
   ['scrollSoulSiphon', 'Scroll of Soul Siphon', 'rare', 'Draw the life out of your target: 60 damage, and you heal as much.', { kind: 'siphon', n: 60 }, '#3a2a5a', 'heart', 12],
-  ['scrollSpectralWolf', 'Scroll of the Spectral Wolf', 'rare', 'A ghostly wolf harries the foes nearest you: six bites of 18 damage over six seconds.', { kind: 'summon', n: 18, sec: 6, style: 'frost' }, '#8a8a90', 'paw', 10],
-  ['scrollSummonWatchman', 'Scroll of the Watchman', 'epic', 'The ghost of a Glen watchman stands with you: eight blows of 30 damage on the foes nearest you.', { kind: 'summon', n: 30, sec: 8, style: 'steel' }, '#2a4a8a', 'shield', 18],
+  ['scrollSpectralWolf', 'Scroll of the Spectral Wolf', 'rare', 'A ghostly wolf comes to your side for 30 s: it runs down the nearest foe and bites (18 damage, more as you grow). Foes cannot hurt it.', { kind: 'summon', n: 18, sec: 30, style: 'frost' }, '#8a8a90', 'paw', 10],
+  ['scrollSummonWatchman', 'Scroll of the Watchman', 'epic', 'The ghost of a Glen watchman stands with you for 45 s, spear and shield: it goes for the nearest foe (30 damage a thrust, more as you grow). Foes cannot hurt it.', { kind: 'summon', n: 30, sec: 45, style: 'steel' }, '#2a4a8a', 'shield', 18],
   ['scrollSunwheelRecall', 'Scroll of Sunwheel Recall', 'rare', 'Carries you to the last Sunwheel you touched.', { kind: 'recall' }, '#e8c060', 'wheel', 6],
-  ['scrollDetectSecrets', 'Scroll of Detect Secrets', 'fine', 'Marks the nearest place you have not found on your map.', { kind: 'detect' }, '#6a4a2a', 'eye', 3],
+  ['scrollDetectSecrets', 'Scroll of Detect Secrets', 'fine', 'In a dungeon: for two minutes every hidden wall, lever and loose tile within ten paces shimmers. Outside: marks the nearest place you have not found on your map.', { kind: 'detect' }, '#6a4a2a', 'eye', 3],
   ['scrollRevealOre', 'Scroll of Reveal Ore', 'fine', 'Shows the ore veins within 150 m (they flash).', { kind: 'ore', r: 150 }, '#6a4a2a', 'mountain', 3],
   ['scrollCalmBeast', 'Scroll of Calm Beast', 'fine', 'Beasts within 10 m stop (stunned), and for a minute they hurt you 40% less.', { kind: 'calm', r: 10, style: 'beast' }, '#4a6a2a', 'paw', 4],
   ['scrollLightTorch', 'Scroll of Light', 'common', 'Lights the dark around you for 10 minutes.', { kind: 'light', sec: 600 }, '#e8c060', 'sun', 1],
   ['scrollFeatherStep', 'Scroll of Feather Step', 'fine', 'For a minute, dodging costs half as much.', { kind: 'buff', sec: 60, style: 'feather' }, '#5ab4ff', 'feather', 4],
-  ['scrollWaterwalk', 'Scroll of Waterbreath', 'fine', 'Breathe underwater for 5 minutes.', { kind: 'breath', sec: 300 }, '#2aa8a0', 'fish', 6],
+  ['scrollWaterwalk', 'Scroll of Waterwalk', 'fine', 'For two minutes, water holds you up like ground: walk across rivers, lakes and the sea. Hold jump to sink through.', { kind: 'waterwalk', sec: 120 }, '#2aa8a0', 'fish', 6],
   ['scrollSilence', 'Scroll of Silence', 'rare', 'A ring of silence around you: foes within 6 m are stunned and lose sight of you for 3 s.', { kind: 'silence', r: 6, sec: 3 }, '#3a2a5a', 'circle', 12],
   ['scrollBanishUndead', 'Scroll of Banish Undead', 'rare', 'Holy light within 8 m: 60 damage, three times that to the dead.', { kind: 'holyArea', n: 60, r: 8 }, '#e8c060', 'cross', 10],
 ];
@@ -311,7 +314,7 @@ const WARDS: [string, string, Rarity, string, NonNullable<ItemDef['use']> | null
   ['wardStoneBeast', 'Beast Ward Stone', 'fine', 'Break it and beasts think twice.', null, b('wardStone', 'Beast Ward', 180, { ward_beast: 0.3 }), '#8a6a3a', 4, [['copperIngot', 1], ['wolfFang', 1]]],
   ['waystoneShard', 'Waystone Shard', 'rare', 'A chip of a Sunwheel stone. Break it to be carried to the last wheel you touched.', { kind: 'recall' }, null, '#ffd88a', 8, [['silverIngot', 1], ['starmoss', 1]]],
   ['runeOfMending', 'Rune of Mending', 'fine', 'Break it: half your health comes back.', { kind: 'mend' }, null, '#8ae05a', 6, [['copperIngot', 1], ['lifebloomTonic', 1]]],
-  ['tripwireRune', 'Tripwire Rune', 'fine', 'Break it: everything within 4 m trips (stunned) and takes 30 damage.', { kind: 'freeze', n: 30, r: 4, style: 'steel' }, null, '#c8a040', 6, [['copperIngot', 1], ['flax', 1]]],
+  ['tripwireRune', 'Tripwire Rune', 'fine', 'Set it in the ground where you stand. The first foe to cross it springs it: everything within 4 m is thrown down (stunned) and takes 30 damage. It waits three minutes.', { kind: 'tripwire', n: 30, r: 4, sec: 180 }, null, '#c8a040', 6, [['copperIngot', 1], ['flax', 1]]],
   ['runeOfLight', 'Rune of Light', 'common', 'Break it: light around you for 15 minutes.', { kind: 'light', sec: 900 }, null, '#fff0a0', 1, [['copperIngot', 1], ['glowmoss', 1]]],
   ['runeOfReturn', 'Rune of Return', 'rare', 'Break it to be carried back to where you last rested.', { kind: 'return' }, null, '#c0c8ff', 10, [['silverIngot', 1], ['moonpetal', 1]]],
   ['runeOfBinding', 'Rune of Binding', 'rare', 'Break it at your target: it is held fast for 5 s, even a great one.', { kind: 'bind', sec: 5 }, null, '#d080ff', 14, [['silverIngot', 1], ['spiderSilk', 1]]],
@@ -354,3 +357,21 @@ const LURES: [string, string, number, TrinketSpec][] = [
 for (const [id, name, v, art] of LURES) {
   one(id, name, v >= 1.2 ? 'rare' : 'fine', 'Tie it on before you cast: rare fish bite more often.', {}, [v >= 1.2 ? 'shop:trader:6' : 'shop:trader:2', 'fshop:wrecker'], trink(art), { buff: b('lure', name, 900, { fishLuck: v }) });
 }
+
+// ---- picks and the grappling hook (locks.ts, gearRuntime.ts) -----------------------------------
+add({ id: 'lockpicks', name: 'Lockpicks', kind: 'tool', rarity: 'common', stack: true, lvl: 1, stats: {},
+  desc: 'A roll of bent iron picks. Carry them and a locked chest, cache or hatch can be picked: lift each pin while the pick is in the notch. A miss may snap one.' },
+['shop:trader:1', 'shop:trader:2', 'shop:trader:3', 'shop:smith:2', 'fshop:twoCoins', 'chest:1', 'drop:bandit:0'], { k: 'trinket', s: { kind: 'key', metal: 'iron', shape: 'thin' } });
+recipe('lockpicks', 'workbench', 'smithing', 2, [['ironIngot', 1]], 'basic', { n: 3, quality: false });
+add({ id: 'masterLockpicks', name: 'Master Lockpicks', kind: 'tool', rarity: 'rare', stack: true, lvl: 12, stats: {},
+  desc: 'Silver-tipped picks in a velvet roll, the Two Coins\' best. The notch is wider for them, and they rarely snap.' },
+['fshop:twoCoins', 'shop:trader:4', 'shop:trader:5', 'chest:3', 'chest:4'], { k: 'trinket', s: { kind: 'key', metal: 'silver', shape: 'thin', glow: '#c4ccd6' } });
+recipe('masterLockpicks', 'workbench', 'smithing', 12, [['steelIngot', 1], ['silverIngot', 1]], 'basic', { n: 2, quality: false });
+one('grapplingHook', 'Grappling Hook', 'fine', 'A three-pronged iron hook on forty metres of tarred rope. Use it looking at a ledge, a cliff edge or a rooftop up to 30 m away and it hauls you up to the top. It is not used up.', {},
+  ['shop:trader:2', 'shop:trader:4', 'fshop:wrecker', 'fshop:dwarven', 'fshop:twoCoins'], { k: 'trinket', s: { kind: 'sickle', metal: 'iron' } }, { use: { kind: 'grapple', n: 0, r: 30 } });
+recipe('grapplingHook', 'workbench', 'smithing', 6, [['ironIngot', 2], ['linen', 2]], 'basic', { quality: false });
+
+// ---- water for the Expanse (exposure.ts) ------------------------------------------------------
+one('waterskin', 'Waterskin', 'common', 'A goatskin of clean water. In the Golden Expanse it is worth more than gold: a drink puts out your thirst and cools the heat a little.', { restoreStamina: 20 },
+  ['shop:trader:5', 'shop:inn:5', 'inn:goldenExpanse', 'fshop:desert', 'fshop:scrap', 'shop:trader:1', 'shop:inn:1'], potionArt({ vessel: 'gourd', liquid: ['#bfe4f0', '#4a8aa8'], glyph: 'drop' }));
+recipe('waterskin', 'kitchen', 'cooking', 1, [['springWater', 1], ['leather', 1]], 'basic', { quality: false, step: 'none' });

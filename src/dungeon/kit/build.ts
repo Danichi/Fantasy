@@ -21,6 +21,8 @@ import type { DelverPerks } from './delving';
 import { rollChest, type LootTable } from './loot';
 import { TrapSet } from './traps';
 import { SecretSet } from './secrets';
+import { lockLevel } from '../../items/catalog/locks';
+import { GEAR } from '../../items/catalog/hooks';
 import { PuzzleSet } from './puzzles';
 import { BossFight, type BossDef } from './boss';
 import type { AutoLayer } from '../../ui/dungeonMap';
@@ -828,11 +830,14 @@ export class KitInstance {
       if (rec.hidden) g.visible = false;
       this.chests.push(rec);
       this.box(pos.clone().setY(0.4), V(0.55, 0.4, 0.55));
+      // Most chests are locked (items/catalog/locks.ts); hidden ones are a secret's reward and stay open.
+      const lockId = `${this.def.id}/${ch.id}`, lockLv = rec.hidden ? 0 : lockLevel(lockId, ch.tier);
+      const L = () => GEAR.locks;
       this.interactables.push({
         pos, radius: 1.9,
-        label: () => 'Open chest',
+        label: () => (lockLv && L() && !L()!.isOpen(lockId) ? `Open chest (${L()!.label(lockLv)})` : 'Open chest'),
         enabled: () => !rec.open && !rec.hidden,
-        action: () => this.openChest(rec),
+        action: () => (lockLv && L() ? L()!.attempt(lockId, lockLv, (forced) => this.openChest(rec, forced)) : this.openChest(rec)),
       });
     }
   }
@@ -848,12 +853,17 @@ export class KitInstance {
     (c.root.userData as { rise: number }).rise = 0.6;
   }
 
-  private openChest(ch: (typeof this.chests)[number]) {
+  private openChest(ch: (typeof this.chests)[number], forced = false) {
     ch.open = true;
     this.progress.chests.push(ch.id);
     const at = ch.pos.clone().setY(0.9);
     this.fx.add.spawn({ pos: at, spread: 2, count: 30, life: [0.4, 0.9], size: [0.08, 0.01], color: 0xfff0b0, color2: 0xffb030, upBias: 1.4, drag: 2 });
     const got = rollChest(this.def.loot, ch.tier, this.hooks.perks().lootMul, ch.item);
+    // A forced lock: the blow may have smashed something inside (never a fixed find such as a key).
+    if (forced && got.items.length && Math.random() < 0.4) {
+      const lost = got.items.findIndex((id) => id !== ch.item);
+      if (lost >= 0) this.hooks.toast(`The ${ITEMS[got.items.splice(lost, 1)[0]]?.name ?? 'something'} inside was smashed when the lock gave.`);
+    }
     if (got.gold) this.hooks.giveGold(at, got.gold);
     const names = got.items.map((id) => this.hooks.giveItem(id));
     this.hooks.toast(names.length ? `Found: ${names.join(', ')}` : 'The chest is full of old coins.');

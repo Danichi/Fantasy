@@ -1,3 +1,5 @@
+import { lockLevel } from '../../items/catalog/locks';
+import { GEAR } from '../../items/catalog/hooks';
 import * as THREE from 'three';
 import { placeSites } from './place';
 import { SiteKit } from './kit';
@@ -109,6 +111,16 @@ export class Sites {
       },
     });
     kit.finish();
+    // Chests, cellar hatches and smugglers' trapdoors are locked (items/catalog/locks.ts):
+    // the finer the country, the finer the lock.
+    for (const a of live.actions) {
+      if (!/^Open the (old chest|hidden trapdoor|cellar hatch)/.test(a.label())) continue;
+      const lockId = 'site/' + s.id, lv = lockLevel(lockId, Math.min(4, Math.floor(this.hooks.level(s.x, s.z) / 10) + 1));
+      if (!lv) continue;
+      const label = a.label, act = a.act;
+      a.label = () => (GEAR.locks && !GEAR.locks.isOpen(lockId) ? `${label()} (${GEAR.locks.label(lv)})` : label());
+      a.act = () => (GEAR.locks ? GEAR.locks.attempt(lockId, lv, () => act()) : act());
+    }
     this.built.set(s.id, { site: s, kit, live });
   }
 

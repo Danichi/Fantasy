@@ -62,9 +62,12 @@ test('a watchtower can be climbed for the view (the map is revealed) and its che
       g.player.teleport(new T.Vector3(s.x + dx, heightAt(s.x + dx, s.z + dz) + 0.5, s.z + dz));
       g.stepSim(20);
     };
+    // Chests and hatches may be locked (items/catalog/locks.ts): carry picks, and lift every pin.
+    g.player.equip.add('lockpicks', 5);
     const act = (s: any, label: RegExp) => {
       const a = S.live(s.id).actions.find((x: any) => label.test(x.label()));
       a.act();
+      while (g.locks.open) g.locks.lift(true);
       g.stepSim(2);
       return a;
     };
@@ -118,7 +121,11 @@ test('reading all twelve Sunwheel stones gives the charm; a farm cellar and a gu
       g.stepSim(20);
     };
     const action = (s: any, label: RegExp) => S.live(s.id).actions.find((x: any) => label.test(x.label()));
-    // The twelve stones.
+    // Chests and hatches may be locked (items/catalog/locks.ts): carry picks, and lift every pin.
+    g.player.equip.add('lockpicks', 5);
+    const pick = () => {
+      while (g.locks.open) g.locks.lift(true);
+    };
     for (const s of S.of('stone')) {
       go(s, 3);
       action(s, /Read/).act();
@@ -129,6 +136,7 @@ test('reading all twelve Sunwheel stones gives the charm; a farm cellar and a gu
     const farm = S.of('farmstead')[0];
     go(farm, 4);
     action(farm, /cellar/).act();
+    pick();
     g.stepSim(5);
     const farmDone = S.st(farm.id).done;
     // A guarded wreck: something comes, and the wreck can't be searched until it's dead.

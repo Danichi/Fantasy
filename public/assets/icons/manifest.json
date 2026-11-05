@@ -1,5 +1,5 @@
 {
- "v": "mw2pgwd5",
+ "v": "mw2zwhb7",
  "ext": "webp",
  "square": [
   "academyBlademaster_chest",
@@ -807,6 +807,7 @@
   "golemCoreFist",
   "golemOil",
   "grainSpirit",
+  "grapplingHook",
   "graveBellMace",
   "graveCloth",
   "gravediggersSpade",
@@ -954,6 +955,7 @@
   "linenGambeson",
   "liosLuteString",
   "liquidCourage",
+  "lockpicks",
   "longLungs",
   "longsword",
   "lostChampionsBanner",
@@ -975,6 +977,7 @@
   "marlin",
   "marshalsGreatsword",
   "marshmallow",
+  "masterLockpicks",
   "maudsShawl",
   "maudsThimble",
   "mellsBookmark",
@@ -1760,6 +1763,7 @@
   "waterWrit",
   "waterbearersYoke",
   "waterbreath",
+  "waterskin",
   "waxEarplugs",
   "wayfarerCloak",
   "wayfarerStew",

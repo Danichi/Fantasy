@@ -105,13 +105,19 @@ export class Ranged {
     return d && (d.kind === 'bow' || d.kind === 'crossbow') ? d : null;
   }
   /** The ammunition the next shot uses: the quiver's, else the first that fits. */
+  /** shots left in the Bolt-Thrower's hopper after this one */
+  private mag = 0;
+
   ammo(): ItemInstance | null {
     const L = this.launcher;
     if (!L) return null;
     const eq = this.player.equip;
     const q = eq.inSlot('quiver');
     if (q && q.def.ammo === L.ammo && q.qty > 0) return q;
-    return eq.items.find((i) => i.def.kind === 'ammo' && i.def.ammo === L.ammo && i.qty > 0) ?? null;
+    const found = eq.items.find((i) => i.def.kind === 'ammo' && i.def.ammo === L.ammo && i.qty > 0) ?? null;
+    // The Junk Crossbow (items/catalog) fires scrap metal when the bolts run out.
+    if (!found && L.id === 'junkCrossbow') return eq.items.find((i) => i.def.id === 'scrapMetal' && i.qty > 0) ?? null;
+    return found;
   }
   ammoCount() {
     const L = this.launcher;
@@ -171,6 +177,8 @@ export class Ranged {
     }
     if (name === 'arms:loaded') {
       this.loaded = true;
+      // The Bolt-Thrower's hopper: three shots to a winding.
+      this.mag = this.launcher?.id === 'boltThrower' ? 2 : 0;
       return true;
     }
     return false;
@@ -191,7 +199,8 @@ export class Ranged {
     }
     const ammoId = it.def.id;
     const as = it.def.stats;
-    p.equip.consume(it.uid);
+    // A bandolier or a bag of holding (items/catalog) sometimes spares the shot.
+    if (Math.random() >= GEAR.ammoSave) p.equip.consume(it.uid);
     events.emit('equipmentChanged', {});
     const from = this.launchPoint();
     const dir = this.aimDirection(from, L.kind === 'crossbow' ? BOLT_SPEED : ARROW_SPEED[0] + (ARROW_SPEED[1] - ARROW_SPEED[0]) * power);
@@ -213,7 +222,10 @@ export class Ranged {
     shot.returning = p.equip.mainWeapon?.rune?.split('*')[0] === 'returning';
     shot.obj.visible = true;
     shot.obj.lookAt(from.clone().add(dir));
-    if (L.kind === 'crossbow') this.loaded = false;
+    if (L.kind === 'crossbow') {
+      if (this.mag > 0) this.mag--;
+      else this.loaded = false;
+    }
     this.draw = 0;
     this.renock = L.kind === 'bow' ? 0.22 : 0;
     this.fired++;

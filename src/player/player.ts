@@ -371,6 +371,8 @@ export class Player {
   /** holding floating wreckage (no stamina drain), and water-breathing (no breath drain) seconds */
   buoyed = false;
   waterBreathT = 0;
+  /** seconds you can walk on water (a Scroll of Waterwalk) */
+  waterWalk = 0;
   get underwater() {
     return this.swimming && this.diveDepth > 0.8;
   }
@@ -913,7 +915,7 @@ export class Player {
       if (this.webbed > 0 && !this.mounted) targetSpeed = Math.min(targetSpeed, 1.3);
       // Wading slows you down; deep water means swimming.
       const wade = waterDepthAt(this.pos.x, this.pos.z);
-      if (wade > 0.25) targetSpeed *= 0.5;
+      if (wade > 0.25 && !(this.waterWalk > 0)) targetSpeed *= 0.5;
       if (this.swimming) targetSpeed = (this.sprinting ? 3.6 : 2.3) * this.swimSpeedMul;
     }
     // Swimming: float with the chest at the waterline, tire, and drown if spent.
@@ -923,7 +925,7 @@ export class Player {
     const depth = surface === null ? 0 : surface - this.groundBelow();
     // ...but only in it: standing on a ship's deck over deep water isn't swimming.
     const inWater = surface !== null && this.pos.y < surface - (this.swimming ? -0.4 : 0.6);
-    this.swimming = !this.dead && depth > 1.35 && inWater;
+    this.swimming = !this.dead && depth > 1.35 && inWater && !(this.waterWalk > 0 && !this.diveHeld);
     if (this.swimming) {
       // Armour drags you down: every point of it makes swimming harder (unless you've learned to carry it).
       const drag = this.armourDrag ? 1 + (this.equip?.armorValue ?? 0) / 18 : 1;
@@ -1013,7 +1015,11 @@ export class Player {
     } else this.yawVel *= Math.exp(-16 * dt);
 
     // Vertical.
-    if (this.swimming && surface !== null) {
+    if (this.waterWalk > 0 && !this.diveHeld && surface !== null && depth > 0.2 && this.pos.y < surface + 0.6) {
+      // Walking on water: the surface holds you like ground (hold jump to sink through).
+      this.vel.y = Math.max(this.vel.y, (surface + 0.02 - this.pos.y) * 12);
+      if (this.pos.y > surface - 0.05) this.grounded = true;
+    } else if (this.swimming && surface !== null) {
       // Buoyancy: ease toward treading water at the surface.
       this.vel.y = (surface - 1.25 - this.diveDepth - this.pos.y) * 5;
     } else if (!this.flying) {

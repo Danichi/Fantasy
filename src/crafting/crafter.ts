@@ -1,3 +1,4 @@
+import { GEAR } from '../items/catalog/hooks';
 import { ITEMS, type ItemDef } from '../items/itemDefs';
 import type { ItemInstance } from '../items/equipment';
 import { DISC } from '../paths/data';
@@ -188,7 +189,7 @@ export class Crafter {
       mats: 1,
       station,
       notches: this.quick ? 2 : notches,
-      bonus: this.x(r.calling, 'potency') * 2 + (masterwork ? 0.5 : 0) + this.cats(r).reduce((v, k) => v + this.x(r.calling, k), 0),
+      bonus: this.x(r.calling, 'potency') * 2 + (masterwork ? 0.5 : 0) + this.cats(r).reduce((v, k) => v + this.x(r.calling, k), 0) + GEAR.craftBonus(r.calling),
     });
   }
 
@@ -247,7 +248,7 @@ export class Crafter {
     if (loom ? this.x('tailoring', 'loomTemper') <= 0 : !this.hasNode('smithing', 'Temper')) return { ok: false, why: loom ? 'Learn Double Stitch (Tailoring) to temper what you sew.' : 'Learn Temper (Smithing) to temper gear.' };
     if (it.rune && this.x('smithing', 'runeTemper') <= 0) return { ok: false, why: 'A runed piece can’t be tempered without Runed Temper (Smithing).' };
     const q = it.q ?? COMMON;
-    const cap = Math.min(MAX_QUALITY, 3 + Math.round(this.x(calling, 'temperCap')));
+    const cap = Math.min(MAX_QUALITY, 3 + Math.round(this.x(calling, 'temperCap')) + GEAR.craftBonus(calling));
     if (q >= cap) return { ok: false, why: q >= MAX_QUALITY ? 'It can’t be made any finer.' : `As fine as your tempering can make it (${['Crude', 'Common', 'Fine', 'Superior', 'Masterwork', 'Legendary'][cap]}).` };
     const mult = Math.max(0.25, 1 - this.x(calling, 'temperCheap'));
     const main = r.inputs.find((i) => !GROUPS[i.id]) ?? r.inputs[0];
@@ -309,7 +310,9 @@ export class Crafter {
   salvage(uid: number) {
     const eq = this.player.equip, it = eq.get(uid);
     if (!it || !this.canSalvage(it)) return null;
-    const back = this.salvageYield(it)!;
+    const back = this.salvageYield(it)!.map((b) => ({ ...b }));
+    // The Scavenger Rig: more comes back out of everything you break down.
+    if (GEAR.salvage > 0) for (const b of back) b.n += Math.floor(b.n * GEAR.salvage) + (Math.random() < (b.n * GEAR.salvage) % 1 ? 1 : 0);
     if (it.qty > 1) it.qty--;
     else eq.items = eq.items.filter((x) => x !== it);
     for (const b of back) eq.add(b.id, b.n);

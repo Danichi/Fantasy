@@ -1,6 +1,7 @@
 import type { ItemStats, Rarity } from '../itemDefs';
 import type { TrinketSpec } from '../../ui/art/trinkets';
 import { add, recipe, rd, source } from './kit';
+import { fxText } from './gearFx';
 
 // Rings, amulets and trinkets (the item plan, §6). The metal sets a jewel's
 // strength and the gem its stat; trinkets are wards, Sunwheel tokens, lucky
@@ -87,7 +88,9 @@ export const TOKENS: { id: string; name: string; fx?: Record<string, number>; s?
   { id: 'sunwheelToken12', name: 'Token of the Twelfth Stone', fx: { wheelHeal: 1 }, line: 'The wheel mends you when it carries you.' },
 ];
 for (const [i, t] of TOKENS.entries()) {
-  trinket(t.id, t.name, 'rare', `A gold disc with the Sunwheel on it, found at the foot of a standing stone. ${t.line} Carry all twelve and the one you wear counts twice.`, t.s ?? {}, t.fx, [`stone:${i + 1}`], { kind: 'badge', metal: 'gold', color: '#ffd88a', glyph: 'wheel', glow: '#ffd88a' });
+  // Tokens work while carried (gearRuntime.ts): every one you hold, and all twelve make the Full Wheel.
+  add({ id: t.id, name: t.name, kind: 'key', rarity: 'rare', lvl: 1, stats: {}, desc: `A gold disc with the Sunwheel on it, found at the foot of a standing stone. Carried, it works: ${t.line} ${fxText(t.fx ?? {})}${t.s?.maxStamina ? ` +${t.s.maxStamina} max stamina.` : ''}${t.s?.manaRegen ? ' Faster mana.' : ''} Carry all twelve and they are the Full Wheel: Sunwheel travel heals you, +5% damage and spell damage, 5% less damage taken, +5% experience.` },
+    [`stone:${i + 1}`], { k: 'trinket', s: { kind: 'badge', metal: 'gold', color: '#ffd88a', glyph: 'wheel', glow: '#ffd88a' } });
 }
 
 // Lucky charms.

@@ -1,3 +1,4 @@
+import { GEAR } from '../../items/catalog/hooks';
 import * as THREE from 'three';
 import { events } from '../../core/events';
 import { heightAt } from '../terrainHeight';
@@ -1087,7 +1088,7 @@ export class Sailing {
         this.hooks.toast('Thunder broadside!');
       }
       this.gunnery.broadside(ship, side, range, target?.pos, target?.vel, { shot: this.shot, dmg: this.perks.ballDmg * (thunder ? 2 : 1), spread: this.perks.spread * (thunder ? 0.3 : 1) });
-      this.reload[side] = Gunnery.reload(ship, eff.gunner) * this.perks.reload;
+      this.reload[side] = Gunnery.reload(ship, eff.gunner) * this.perks.reload * (1 - GEAR.cannonReload);
       this.hooks.shake(thunder ? 0.7 : 0.35);
     }
     const line = this.gunnery.tetheredTo(ship);
@@ -1279,7 +1280,9 @@ export class Sailing {
     // The great monster of the moment.
     const bst = this.beast;
     if (bst) {
-      bst.update(dt, ship, this.player, this.beastCtx(ship));
+      // A Siren Bell's note (items/catalog) holds the beast still for a while.
+      if (bst.calmT > 0) bst.calmT -= dt;
+      else bst.update(dt, ship, this.player, this.beastCtx(ship));
       const near = bst.alive && bst.pos.distanceTo(this.player.pos) < 260;
       if (near) this.hooks.bossBar(bst, bst.name);
       if (bst.beaten && !this.trophiesTaken.has(bst)) {

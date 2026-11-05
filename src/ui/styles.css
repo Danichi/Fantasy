@@ -1028,3 +1028,21 @@ body.book-open .waypoint { display: none !important; }
 .inv2 .detail .rar.r-legendary { color: #ffb84a; }
 .shop2 .sc.r-legendary { border-color: rgba(255, 170, 60, .75); background: linear-gradient(90deg, rgba(255,160,40,.16), rgba(0,0,0,0) 60%); }
 .shop2 .r-legendary .sc-name { color: #ffc870; }
+
+/* Lockpicking (items/catalog/locks.ts) */
+.lockpick { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8, 6, 4, .55); z-index: 60; }
+.lockpick.hidden { display: none; }
+.lockpick .lp-box { width: min(440px, 92vw); padding: 18px 22px; background: linear-gradient(180deg, #2a2219, #19140f); border: 1px solid rgba(220, 180, 110, .45); border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,.6); color: #eadcc0; font-family: inherit; }
+.lockpick .lp-title { font-size: 18px; letter-spacing: .04em; margin-bottom: 10px; color: #f0d9a4; }
+.lockpick .lp-pins { display: flex; gap: 8px; margin-bottom: 14px; }
+.lockpick .lp-pins i { width: 14px; height: 30px; border-radius: 4px; background: #4a3f30; border: 1px solid #6a5a42; }
+.lockpick .lp-pins i.set { background: #d8b45a; border-color: #ffe08a; box-shadow: 0 0 8px rgba(255, 210, 120, .6); }
+.lockpick .lp-bar { position: relative; height: 26px; border-radius: 6px; background: #120e0a; border: 1px solid #5a4a36; overflow: hidden; }
+.lockpick .lp-zone { position: absolute; top: 0; bottom: 0; background: linear-gradient(180deg, rgba(255, 220, 140, .55), rgba(200, 150, 60, .35)); }
+.lockpick .lp-pick { position: absolute; top: -2px; bottom: -2px; width: 4px; margin-left: -2px; background: #e8eef4; box-shadow: 0 0 6px #fff; }
+.lockpick .lp-note { margin: 10px 0 4px; min-height: 18px; font-size: 13px; color: #cdbb98; }
+.lockpick .lp-picks { font-size: 12px; color: #9c8a6c; margin-bottom: 12px; }
+.lockpick .lp-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.lockpick button { padding: 7px 14px; border-radius: 6px; border: 1px solid #a0844e; background: #4a3a22; color: #f5e6c4; cursor: pointer; }
+.lockpick button.alt { background: transparent; border-color: #6a5a42; color: #cdbb98; }
+.lockpick button small { opacity: .6; margin-left: 4px; }

@@ -63,6 +63,9 @@ export interface GameEvents {
   equipmentChanged: {};
   /** carried by the Sunwheel (story/sunwheel.ts) */
   wheelTravel: { to: string };
+  /** a lock picked or forced (items/catalog/locks.ts) */
+  lockPicked: { id: string; level: number };
+  lockForced: { id: string };
   originAbility: { origin: string; ability: string; };
   slimeLand: { at: Vector3; size: number };
   mapRevealed: { cells: number };

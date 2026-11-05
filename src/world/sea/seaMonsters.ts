@@ -117,6 +117,8 @@ export abstract class SeaBeast {
   beaten = false;
   pos = new THREE.Vector3();
   t = 0;
+  /** seconds it lies still, calmed (a Siren Bell) */
+  calmT = 0;
   protected parts_: Part[] = [];
 
   constructor(protected scene: THREE.Scene, protected fx: FX, at: THREE.Vector3, hp: number, readonly danger: number) {

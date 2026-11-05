@@ -1,3 +1,4 @@
+import { GEAR } from '../../items/catalog/hooks';
 import type { NodeEffect } from '../../paths/effects';
 import { DISC } from '../../paths/data';
 import { treeOf, type Paths } from '../../paths/paths';
@@ -80,7 +81,7 @@ export function perksOf(paths: Paths, origin?: string): DelverPerks {
     torchbearer: on('torchbearer'),
     automap: on('automap'),
     trapSense: on('trapSense'),
-    delverSense: on('delverSense') || keenEyes,
+    delverSense: on('delverSense') || keenEyes || GEAR.secretSense,
     lightFeet: on('lightFeet'),
     treasureNose: on('treasureNose'),
     keenNose: on('keenNose') || on('treasureNose'),

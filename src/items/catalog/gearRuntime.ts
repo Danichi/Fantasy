@@ -9,12 +9,14 @@ import type { Style } from '../../magic/circles';
 import { events } from '../../core/events';
 import { baseMods } from '../../combat/mods';
 import { afflictions } from '../../combat/afflictions';
-import { stealth } from '../../origins/stealth';
+import { stealth, fearful } from '../../origins/stealth';
 import { XP_FOR_KIND } from '../../progression/progression';
 import { GEAR } from './hooks';
 import { MOD_KEYS, familyOf } from './gearFx';
 import { SET } from './sets';
 import { TOKENS } from './jewels';
+import type { Specials } from './specials';
+import type { Exposure } from './exposure';
 
 // Gear at work (items/catalog): adds up what you wear (effects, set bonuses,
 // the Sunwheel tokens) and what you have drunk or eaten, and makes each
@@ -47,12 +49,20 @@ export interface GearDeps {
   detect?: () => string | null;
   /** flash the ore veins within r m; how many */
   orePing?: (r: number) => number;
+  /** in a dungeon (secrets) */
+  inDungeon?: () => boolean;
+  /** the sea beast fighting your ship goes still for `sec` (false: none near) */
+  calmSea?: (sec: number) => boolean;
+  /** friendly folk within r m: guards, the Watch, crew (the Crown Guard fights better beside them) */
+  friendsNear?: (r: number) => number;
 }
 
 const COMBAT_KEYS = new Set(Object.keys(baseMods()));
 const STAT_MODS: Record<string, string> = { maxHp: 'hp', maxStamina: 'stamina', maxMana: 'mana', staminaRegen: 'staminaRegen', manaRegen: 'manaRegen' };
 const STYLE: Record<string, Style> = { fire: 'fire', frost: 'frost', wind: 'wind', light: 'light', steel: 'steel', sea: 'gale', beast: 'blood', shadow: 'shadow' };
 const SEA = /Isles$|^ocean$/;
+/** The Full Wheel: all twelve Sunwheel tokens carried together. */
+export const FULL_WHEEL: Record<string, number> = { wheelHeal: 1, dmgTaken: -0.05, melee: 0.05, spell: 0.05, xpGain: 0.05 };
 
 export class GearRuntime {
   /** every effect now in force: worn, set bonuses, buffs */
@@ -70,6 +80,14 @@ export class GearRuntime {
   private light: THREE.PointLight | null = null;
   private cursed = new Map<Target, number>();
   private t = 0;
+  /** the one-of-a-kind items and the desert (main.ts sets them) */
+  specials: Specials | null = null;
+  friendsNear: ((r: number) => number) | null = null;
+  exposure: Exposure | null = null;
+  /** seconds a Scroll of Detect Secrets has left */
+  senseT = 0;
+  private plantT = 0;
+  private blind = new Map<Target, number>();
   /** numbers for tests */
   readonly stats = { thorns: 0, wardSaved: 0, gold: 0, veils: 0, uses: 0 };
 
@@ -83,7 +101,12 @@ export class GearRuntime {
       return { mult: a.mult * this.dealt(t, true), crit: a.crit };
     };
     GEAR.shotMult = (t) => this.dealt(t, false);
-    GEAR.gather = (k) => (k === 'yield' ? this.fx.oreYield ?? 0 : 0);
+    // Gathering: more from every vein; the Dwarven Expedition's double in the mountains, where the deep ore is.
+    GEAR.gather = (k) => (k === 'yield' ? (this.fx.oreYield ?? 0) : k === 'oreYield' && /Mountains|Peaks$/.test(this.d.region()) ? this.fx.deepYield ?? 0 : 0);
+    // Fröst's hammer in your pack: smithing comes out a full step finer, up to Legendary.
+    GEAR.craftBonus = (c) => (c === 'smithing' && this.packTools.froestsHammer ? 1 : 0);
+    // The Wrong-Turning Ring: the wheel takes you somewhere else.
+    GEAR.wheelRedirect = (chosen, all) => (this.fx.wheelRedirect && all.length > 1 ? all[Math.floor(Math.random() * all.length)] : chosen);
     // Damage taken: wards against a kind of foe, the desert, the sea; thorns, rage, a blocked blow's healing.
     const recv = p.receiveAttack.bind(p);
     p.receiveAttack = (att: IncomingAttack) => {
@@ -93,6 +116,14 @@ export class GearRuntime {
         k -= f['ward_' + familyOf(src.kind)] ?? 0;
         if (/wolf/i.test(src.kind)) k -= f.ward_wolf ?? 0;
         if (this.calm > 0 && familyOf(src.kind) === 'beast') k -= 0.4;
+      }
+      // A blinded foe (the Kraken-Ink Blade) swings at where you were: half its blows miss.
+      if (src && (this.blind.get(src) ?? 0) > 0 && Math.random() < 0.5) return 'dodged';
+      // A tower shield takes arrows and bolts whole.
+      if (att.projectile && f.arrowWall && p.blocking) {
+        events.emit('blockImpact', { at: (att.at ?? att.from).clone(), guardBroken: false });
+        if (f.blockHeal) p.heal(f.blockHeal);
+        return 'blocked';
       }
       if (att.poison) k -= f.ward_venom ?? 0;
       if (att.burn) k -= f.ward_fire ?? 0;
@@ -111,6 +142,17 @@ export class GearRuntime {
         this.rageT = 8;
       }
       if (r === 'blocked' && f.blockHeal) p.heal(f.blockHeal);
+      // Stormscale: a blocked blow crackles back up the attacker's arm.
+      if (r === 'blocked' && f.blockShock && src?.alive) {
+        rt.hit(src, f.blockShock, { poise: 40, type: 'arcane', noVerdict: true });
+        rt.vfx.lightning(p.center.clone(), src.center.clone(), 'wind');
+      }
+      // The Siren's pearls: now and then whoever struck you is charmed and stands still.
+      if ((r === 'hit' || r === 'blocked') && f.charmOnHit && src?.alive && Math.random() < f.charmOnHit) {
+        src.stunned = true;
+        fearful.set(src, 3);
+        rt.vfx.ring(src.position, 'light', 1.2);
+      }
       return r;
     };
     // The Phoenix Tear and Second Dawn: the first killing blow leaves you standing.
@@ -158,6 +200,20 @@ export class GearRuntime {
       if (f.scrapFind && Math.random() < f.scrapFind) d.give('scrapMetal', 1);
       if (f.beastLoot && familyOf(kind) === 'beast' && Math.random() < f.beastLoot * 2) d.give(Math.random() < 0.5 ? 'rawHide' : 'rawMeat', 1);
     });
+    events.on('meleeHit', ({ target, crit, action }) => {
+      const f = this.fx;
+      if (f.bashBleed && action === 'shieldBash' && target.alive) rt.bleed(target, f.bashBleed);
+      if (f.blindOnHit && target.alive) {
+        this.blind.set(target, f.blindOnHit);
+        rt.vfx.burst(target.center.clone(), 'shadow', 0.6, 2);
+      }
+      // The Oxidised Greatsword: on a critical hit the rust flies off in a cutting flurry.
+      if (f.critFlurry && crit && target.alive) {
+        for (let i = 1; i <= 3; i++) rt.later(i * 0.12, () => target.alive && rt.hit(target, f.critFlurry, { poise: 5, source: 'melee', noVerdict: true }));
+        rt.bleed(target, Math.round(f.critFlurry / 2));
+        rt.vfx.burst(target.center.clone(), 'blood', 1, 3);
+      }
+    });
     events.on('wheelTravel', () => {
       if (this.fx.wheelHeal) {
         p.hp = p.maxHp;
@@ -173,6 +229,10 @@ export class GearRuntime {
     this.recompute();
   }
   private combatT = 99;
+  /** all twelve Sunwheel tokens carried */
+  fullWheel = false;
+  private gills = false;
+  private packTools = { froestsHammer: false };
 
   /** What you wear, added up (on every change of gear). */
   recompute() {
@@ -184,14 +244,24 @@ export class GearRuntime {
     const sets: Record<string, number> = {};
     let breath = 0;
     const owned = new Set(eq.items.map((it) => it.def.id));
-    const fullWheel = TOKENS.every((t) => owned.has(t.id));
+    // The Sunwheel tokens work while you carry them; all twelve together are the Full Wheel.
+    let tokens = 0;
+    for (const t of TOKENS) {
+      if (!owned.has(t.id)) continue;
+      tokens++;
+      add(t.fx);
+      for (const [k, v] of Object.entries(t.s ?? {})) if (STAT_MODS[k]) fx['$' + STAT_MODS[k]] = (fx['$' + STAT_MODS[k]] ?? 0) + (v as number);
+    }
+    this.fullWheel = tokens === TOKENS.length;
+    if (this.fullWheel) add(FULL_WHEEL);
+    // Tools that work from the pack: Fröst's hammer at the forge.
+    this.packTools = { froestsHammer: owned.has('froestsHammer') };
     for (const slot of Object.keys(eq.equipped) as (keyof typeof eq.equipped)[]) {
       const it = eq.inSlot(slot);
       if (!it) continue;
       const def = it.def;
-      const twice = fullWheel && def.id.startsWith('sunwheelToken');
-      add(def.fx, twice ? 2 : 1);
-      if (twice) for (const [k, v] of Object.entries(def.stats)) if (STAT_MODS[k]) fx['$' + STAT_MODS[k]] = (fx['$' + STAT_MODS[k]] ?? 0) + (v as number);
+      if (def.id.startsWith('sunwheelToken')) continue;
+      add(def.fx);
       if (def.set) sets[def.set] = (sets[def.set] ?? 0) + 1;
       breath += def.stats.waterBreathing ?? 0;
     }
@@ -205,6 +275,8 @@ export class GearRuntime {
     this.sets = sets;
     this.wornFx = fx;
     this.d.player.breathTime = 25 + breath;
+    // A Leviathan's heart, a Tidewarden's helm: you breathe the sea itself.
+    this.gills = breath >= 600;
     this.refresh();
   }
 
@@ -234,7 +306,16 @@ export class GearRuntime {
     const f = this.fx, p = this.d.player;
     let m = 1 + (f['bane_' + familyOf(t.kind)] ?? 0) + (/wolf/i.test(t.kind) ? f.bane_wolf ?? 0 : 0);
     if (f.backstab && this.d.arms.behind(t)) m += f.backstab;
-    if (melee && f.sprintHit && p.act?.def.id === 'sprintAttack') m += f.sprintHit;
+    if (melee && f.sprintHit && p.act?.def.id === 'sprintAttack') {
+      m += f.sprintHit;
+      // The Silver Lance's charge: the blow knocks a foe off its feet.
+      if (f.sprintKnock && t.alive) {
+        t.stunned = true;
+        this.d.rt.vfx.ring(t.position, 'steel', 1.6);
+      }
+    }
+    if (f.allyDmg && this.alliesNear(10) > 0) m += f.allyDmg;
+    if (f.brandDmg && this.d.rt.branded(t)) m += f.brandDmg;
     if (f.crowdDmg && this.foesNear(8) >= 2) m += f.crowdDmg;
     if (f.rainDmg && this.d.rain() > 0.3) m += f.rainDmg;
     const h = this.d.hour();
@@ -244,6 +325,11 @@ export class GearRuntime {
     if (f.seaDmg && SEA.test(this.d.region())) m += f.seaDmg;
     if (this.cursed.has(t)) m += 0.25;
     return m + this.rage;
+  }
+
+  /** Allies beside you: your summoned spirits, and the guards, the Watch and your crew. */
+  alliesNear(r: number) {
+    return (this.specials?.allies.near(this.d.player.pos, r) ?? 0) + (this.friendsNear?.(r) ?? this.d.friendsNear?.(r) ?? 0);
   }
 
   private foesNear(r: number) {
@@ -261,17 +347,6 @@ export class GearRuntime {
     }
     return best;
   }
-  private nearest(r: number) {
-    let best: Target | null = null, bd = r;
-    const p = this.d.player.pos;
-    for (const t of targets) {
-      if (!t.alive || !t.lockable) continue;
-      const dd = t.position.distanceTo(p);
-      if (dd < bd) (best = t), (bd = dd);
-    }
-    return best;
-  }
-
   /** Every step, before the arms runtime adds its modifiers. */
   update(dt: number) {
     const d = this.d, p = d.player, f = this.fx;
@@ -296,8 +371,25 @@ export class GearRuntime {
     }
     if (f.seaDmg && SEA.test(reg)) m.dmgTaken = (m.dmgTaken ?? 0) - f.seaDmg / 2;
     if (f.wildsSpell && !d.inTown?.()) m.manaCost = (m.manaCost ?? 0) - f.wildsSpell;
+    // The Watch Pavise: hold your shield still a moment and it's planted, and takes blows for half the stamina.
+    const still = Math.hypot(p.vel.x, p.vel.z) < 0.4;
+    this.plantT = f.plant && p.blocking && still ? this.plantT + dt : 0;
+    if (this.plantT > 1) m.blockCost = (m.blockCost ?? 0) - 0.5;
     GEAR.mods = m;
     GEAR.fishLuck = f.fishLuck ?? 0;
+    GEAR.cannonReload = f.cannonReload ?? 0;
+    GEAR.salvage = f.salvage ?? 0;
+    GEAR.ammoSave = Math.min(0.6, f.ammoSave ?? 0);
+    this.senseT = Math.max(0, this.senseT - dt);
+    GEAR.secretSense = (f.secretSense ?? 0) > 0 || this.senseT > 0;
+    // Hush: foes more than six paces off don't hear you coming.
+    stealth.hush = f.hush ? 6 : 0;
+    stealth.at.copy(p.pos);
+    for (const [t, v] of this.blind) v - dt <= 0 || !t.alive ? this.blind.delete(t) : this.blind.set(t, v - dt);
+    // Gills: breathe the sea itself.
+    if (this.gills) p.waterBreathT = Math.max(p.waterBreathT, 2);
+    this.exposure?.update(dt);
+    this.specials?.update(dt);
     // Fire resistance on top of the origin's own.
     const want = Math.max(0, Math.min(0.9 - (p.fireResist - this.lastFire), f.fireResist ?? 0));
     p.fireResist += want - this.lastFire;
@@ -330,6 +422,7 @@ export class GearRuntime {
     if (def.buff) this.refresh();
     const f = this.fx;
     if (f.potionPower && def.stats.heal) p.heal(def.stats.heal * f.potionPower);
+    this.exposure?.drink(def);
     const u = def.use;
     if (!u) return;
     this.stats.uses++;
@@ -378,8 +471,8 @@ export class GearRuntime {
         break;
       }
       case 'caltrops':
-        rt.area(p.pos, u.r ?? 4, 1, { poise: 5 }).forEach((t) => rt.bleed(t, u.n ?? 4));
-        rt.vfx.ring(p.pos, 'steel', u.r ?? 4);
+        // Scattered on the ground: anything that walks through them for the next 30 s bleeds.
+        this.specials?.place('caltrops', u.r ?? 3, u.n ?? 4, u.sec ?? 30);
         break;
       case 'blast':
         rt.area(p.pos, u.r ?? 4, u.n ?? 50, { poise: 220 });
@@ -399,6 +492,8 @@ export class GearRuntime {
       }
       case 'calm': {
         const want = u.style === 'sea' ? 'sea' : 'beast';
+        // At sea, the bell's note reaches the great beasts too: the one fighting your ship goes still.
+        if (want === 'sea' && (d.calmSea?.(20) ?? this.specials?.calmSea(20))) d.toast('The bell\'s note goes down into the water, and the beast goes still. You have twenty seconds.');
         for (const t of targets) if (t.alive && familyOf(t.kind) === want && t.position.distanceTo(p.pos) < (u.r ?? 10)) t.stunned = true;
         if (want === 'beast') this.calm = 60;
         rt.vfx.ring(p.pos, 'light', u.r ?? 10);
@@ -494,18 +589,40 @@ export class GearRuntime {
         break;
       }
       case 'summon': {
-        const n = u.n ?? 18;
-        for (let i = 1; i <= (u.sec ?? 6); i++) {
-          rt.later(i, () => {
-            const t = this.nearest(10);
-            if (!t) return;
-            rt.hit(t, n, { poise: 30, source: 'spell', noVerdict: true });
-            rt.vfx.burst(t.center.clone(), style, 0.8, 2);
-          });
-        }
-        d.toast(u.style === 'steel' ? 'A grey watchman steps out of the air beside you.' : 'A pale wolf pads out of nowhere and goes for them.');
+        // A spirit that fights beside you (allies.ts): it finds the foe, runs to it and strikes on its own.
+        const sp = this.specials;
+        if (!sp) break;
+        sp.allies.summon(u.style === 'steel' ? 'watchman' : 'wolf', 1, u.sec ?? 30, Math.round((u.n ?? 18) * (1 + p.prog.level * 0.04)));
+        d.toast(u.style === 'steel' ? 'A grey watchman steps out of the air beside you, spear ready.' : 'A pale wolf pads out of nowhere and goes for them.');
         break;
       }
+      case 'grapple':
+        this.specials?.grapple(u.r ?? 30);
+        break;
+      case 'tripwire':
+        this.specials?.place('tripwire', u.r ?? 4, u.n ?? 30, u.sec ?? 180);
+        d.toast('You set the rune in the ground. The next foe to step on it will regret it.');
+        break;
+      case 'decoy':
+        this.specials?.decoy(u.sec ?? 8);
+        d.toast('You set the doll down in your coat and slip away. They are looking at the doll.');
+        break;
+      case 'waterwalk':
+        p.waterWalk = Math.max(p.waterWalk, u.sec ?? 120);
+        d.toast('The water is firm under your feet. Hold jump to sink through it.');
+        break;
+      case 'remember':
+        this.specials?.remember(def);
+        break;
+      case 'flask':
+        this.specials?.flask(def);
+        break;
+      case 'pot':
+        this.specials?.pot(def);
+        break;
+      case 'bell':
+        this.specials?.bell(def);
+        break;
       case 'recall':
         if (!d.recall?.()) d.toast('You have not touched a Sunwheel yet: the shard only crumbles.');
         break;
@@ -513,6 +630,11 @@ export class GearRuntime {
         if (!d.returnHome?.()) d.toast('The rune has nowhere to take you.');
         break;
       case 'detect': {
+        if (d.inDungeon?.()) {
+          this.senseT = 120;
+          d.toast('For two minutes, every hidden thing within ten paces shimmers.');
+          break;
+        }
         const name = d.detect?.();
         d.toast(name ? `Your eye falls on something: ${name}. It is on your map now.` : 'There is nothing near you that you have not found.');
         break;

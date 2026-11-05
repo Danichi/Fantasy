@@ -60,3 +60,66 @@ Every item carries source tags in `SOURCES`:
 - **Chests:** dungeon chests draw on `chest:<tier>` (`dungeon/kit/loot.ts`).
 
 `tests/catalog.spec.ts` checks the catalog end to end.
+
+## Systems behind the special items
+
+### Locks (`locks.ts`)
+
+- **Which containers are locked:** dungeon chests (by chest tier) and wild-site chests, cellar hatches and smugglers' trapdoors (by the area's level). Each one has a fixed lock: Simple, Sturdy, Fine or Masterwork.
+- **Picking:** with Lockpicks or Master Lockpicks, a minigame opens. Lift each pin (Space) while the sweeping pick is in the bright notch.
+  - A miss drops a pin back and may snap a pick: 40% for Lockpicks, 12% for master picks. Dungeoneering lowers the chance.
+  - Master picks and Dungeoneering also widen the notch.
+- **Forcing:** with no picks, a heavy weapon (two-handed, mace, axe) forces the lock. Forcing a dungeon chest can smash one thing inside.
+- **Saving:** opened locks are saved in world flags as `lock:<id>`.
+
+### The grappling hook (`specials.ts`)
+
+- **Use:** the hook is cast along the camera's view, up to 30 m. If it bites, it finds a standable top just past the hit with room to stand, then hauls you there in an arc.
+- **Kept:** it is not used up.
+
+### Summoned allies (`allies.ts`)
+
+- **Who:** the Spectral Wolf and Watchman scrolls, and the Bell of the Glen (three watchmen, once a day).
+- **What they do:** each spirit runs to the nearest foe and strikes it on its own cooldown, follows you when nothing is near, and fades when its time ends. Foes can't hurt them.
+- **Crown Guard:** the 6-piece bonus counts these spirits plus guards, the Watch and crew within 10 m.
+
+### The Golden Expanse (`exposure.ts`)
+
+- **Heat:** builds in the open sand from 10:00 to 17:00. It drains stamina and slows you; at its peak (sunstroke) it hurts.
+- **Thirst:** grows anywhere in the Expanse. It slows regeneration and hurts at its worst.
+- **Sandstorm:** slows you.
+- **Remedies:** a Waterskin (or any drink) quenches thirst. A Heatward elixir or the Sun Guard set blocks heat, and the Sun Guard set also ignores the sandstorm. The Dune Strider set never goes thirsty. All three show as debuffs on the buff bar.
+
+### Other mechanics
+
+- **Water-walking:** `player.waterWalk` holds you on the water surface. Hold jump to sink through.
+- **Draught of Remembering:** unlearns a tree node with nothing learned after it, and its point can be spent again.
+- **Sunwheel tokens:** they work while carried. All twelve together are the Full Wheel.
+- **Wenna's flask:** holds three draughts and refills one every 4 minutes.
+- **Mara's pot:** gives a meal once a day.
+- **Fröst's hammer:** with it in your pack, smithing quality goes up one full step (up to Legendary) and the tempering cap rises by one.
+- **Corsair Captain set:** ship guns reload 20% faster (`GEAR.cannonReload`).
+- **Wrong-Turning Ring:** sends Sunwheel travel to a random wheel and heals you and buffs your damage on arrival.
+- **Siren Bell:** holds a sea beast still for 20 s (`SeaBeast.calmT`).
+- **Deep-Eye Lantern and Scroll of Detect Secrets:** turn on the dungeon's secret shimmer (`GEAR.secretSense`).
+- **Traps:**
+  - Tripwire runes wait to be stepped on.
+  - Caltrops make bleeding ground.
+  - A decoy doll hides you while foes puzzle over it.
+- **Shields:**
+  - Tower shields stop arrows outright.
+  - The Watch Pavise plants when held still.
+  - Spiked targes make shield bashes bleed.
+- **Weapons and armour:**
+  - Kraken-Ink Blade blinds (half the blinded foe's blows miss).
+  - Oxidised Greatsword throws off a flurry on crits.
+  - Siren necklace charms attackers.
+  - Stormscale Mail shocks attackers on a block.
+  - Silver Lance set: sprint attacks knock foes down.
+  - Inquisitor set: bonus damage to branded foes.
+- **Gathering and crafting sets:** the Dwarven set doubles mountain ore, and the Scavenger set gives more from salvage.
+- **Stealth and ammo:**
+  - Hush makes far foes miss you.
+  - Bandoliers and Vela's bag can spare ammunition.
+  - The Junk Crossbow fires scrap metal when out of bolts.
+  - The Bolt-Thrower fires three shots per winding.

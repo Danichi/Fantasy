@@ -119,8 +119,8 @@ const SHIELD_KINDS: { key: string; name: string; shape: ShieldShape; base: ItemS
   { key: 'roundShield', name: 'Round Shield', shape: 'round', base: { block: 85, stability: 0.5 }, line: 'Painted boards on a round frame.' },
   { key: 'heater', name: 'Heater', shape: 'heater', base: { block: 95, stability: 0.58 }, line: 'A heraldic heater.' },
   { key: 'kite', name: 'Kite Shield', shape: 'kite', base: { block: 105, stability: 0.65, poise: 4 }, line: 'Long enough to cover the legs.' },
-  { key: 'tower', name: 'Tower Shield', shape: 'tower', base: { block: 125, stability: 0.8, poise: 8 }, line: 'Carried like a wall.' },
-  { key: 'targe', name: 'Spiked Targe', shape: 'targe', base: { block: 80, stability: 0.5, poise: 2 }, fx: { thorns: 4 }, line: 'A spiked boss: whatever strikes you meets it.' },
+  { key: 'tower', name: 'Tower Shield', shape: 'tower', base: { block: 125, stability: 0.8, poise: 8 }, fx: { arrowWall: 1 }, line: 'Carried like a wall.' },
+  { key: 'targe', name: 'Spiked Targe', shape: 'targe', base: { block: 80, stability: 0.5, poise: 2 }, fx: { thorns: 4, bashBleed: 5 }, line: 'A spiked boss: whatever strikes you meets it, and a shield bash opens a wound.' },
 ];
 const SHIELD_FACE: Record<number, Omit<ShieldLook, 'shape'>> = {
   1: { face: 0x8a6a44, accent: 0x7a1d1a, rim: 0x5a5650, device: 'quartered' },
@@ -190,7 +190,7 @@ for (const c of CLOAKS) {
 const BELTS = [
   { key: 'belt', name: 'Belt', stats: (k: number): ItemStats => ({ maxHp: rd(10 * k) }), fx: (n: number) => ({ potionPower: rd(0.05 + 0.02 * n, 0.01) }), line: 'Pouches all the way round.' },
   { key: 'girdle', name: 'Girdle', stats: (k: number): ItemStats => ({ armor: rd(1 * k), poise: rd(4 * k) }), fx: () => ({}), line: 'A broad girdle: it keeps you upright.' },
-  { key: 'bandolier', name: 'Bandolier', stats: (k: number): ItemStats => ({ maxStamina: rd(10 * k) }), fx: (n: number) => ({ staminaCost: -rd(0.02 * n, 0.01) }), line: 'Crossed straps with loops for vials and bolts.' },
+  { key: 'bandolier', name: 'Bandolier', stats: (k: number): ItemStats => ({ maxStamina: rd(10 * k) }), fx: (n: number) => ({ ammoSave: rd(0.04 + 0.03 * n, 0.01), potionPower: rd(0.03 * n, 0.01) }), line: 'Crossed straps with loops for vials and bolts.' },
 ];
 for (const b of BELTS) {
   for (const t of TIERS) {

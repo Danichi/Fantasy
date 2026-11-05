@@ -1,3 +1,4 @@
+import { GEAR } from '../items/catalog/hooks';
 import * as THREE from 'three';
 import { events } from '../core/events';
 import type { DialogueOption } from '../ui/dialogue';
@@ -79,8 +80,11 @@ export class SunwheelNetwork {
       label: `Travel to ${o.name}`,
       run: () => {
         this.h.close();
-        this.h.travel(o.pos, o.name);
-        events.emit('wheelTravel', { to: o.name });
+        // The Wrong-Turning Ring may have other ideas about where you are going.
+        const to = GEAR.wheelRedirect ? GEAR.wheelRedirect(o, others) : o;
+        if (to !== o) this.h.toast(`The wheel turns wrong: you come out at ${to.name}.`);
+        this.h.travel(to.pos, to.name);
+        events.emit('wheelTravel', { to: to.name });
         this.h.save();
       },
     })));
