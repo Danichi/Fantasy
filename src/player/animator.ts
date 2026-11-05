@@ -44,6 +44,29 @@ export interface LocoInput {
   /** horizontal velocity in the character frame, m/s (+X left, +Z forward) */
   local: { x: number; z: number };
   grounded: boolean;
+  /**
+   * strafing (locked on, shield up, aiming; the default): blend the directional
+   * clips by the way you're moving. false: the body leads, only forward clips play.
+   */
+  strafe?: boolean;
+}
+
+/** Bones whose swing the sprint stride lengthens, and by how much of the stretch. */
+const STRIDE_BONES: [string, number][] = [
+  ['LeftUpLeg', 1], ['RightUpLeg', 1], ['LeftLeg', 0.6], ['RightLeg', 0.6],
+  ['LeftArm', 0.7], ['RightArm', 0.7], ['LeftForeArm', 0.5], ['RightForeArm', 0.5],
+];
+
+const _qa = new THREE.Quaternion();
+const _qb = new THREE.Quaternion();
+/** q raised to the power k (its rotation angle scaled by k, same axis). */
+function powQuat(q: THREE.Quaternion, k: number) {
+  const w = Math.max(-1, Math.min(1, q.w));
+  const half = Math.acos(w);
+  const s = Math.sin(half);
+  if (s < 1e-5) return q;
+  const f = Math.sin(half * k) / s;
+  return q.set(q.x * f, q.y * f, q.z * f, Math.cos(half * k));
 }
 
 function filterClip(clip: THREE.AnimationClip, lower: boolean) {
@@ -59,6 +82,14 @@ export class Animator {
   private loco: LocoClip[] = [];
   private phase = 0;
   private idleTime = 0;
+  private moveW = 0;
+  /** smoothed travel direction for the clip blend (character frame) */
+  private dirX = 0;
+  private dirZ = 1;
+  /** standing pose of the stride bones (the idle clip), the zero the sprint stride scales from */
+  private strideRef: { b: THREE.Bone; q: THREE.Quaternion; k: number }[] | null = null;
+  /** how much longer than the clip's own stride the legs are reaching (1 = as authored) */
+  stride = 1;
   private full = new Map<string, OneShot>();
   private upper = new Map<string, OneShot>();
   private actions = new Map<string, THREE.AnimationAction>();
@@ -197,7 +228,10 @@ export class Animator {
     // Locomotion.
     const speed = Math.hypot(loco.local.x, loco.local.z);
     const baseW = 1 - fullW;
-    const moveW = loco.grounded ? smoothstep(0.05, 0.9, speed) : 0.3;
+    // (eased, so a quick stop lets the legs settle rather than snapping to idle)
+    const moveWant = loco.grounded ? smoothstep(0.05, 0.9, speed) : 0.3;
+    this.moveW += (moveWant - this.moveW) * (1 - Math.exp(-(moveWant > this.moveW ? 18 : 9) * dt));
+    const moveW = dt > 0 ? this.moveW : (this.moveW = moveWant);
     const idleW = 1 - moveW;
     if (this.idle) {
       this.idleTime = (this.idleTime + dt) % this.idle.dur;
@@ -206,7 +240,18 @@ export class Animator {
       this.idle.upper.setEffectiveWeight(idleW * baseW * (1 - upperW));
     }
     if (this.loco.length) {
-      const nx = speed > 1e-3 ? loco.local.x / speed : 0, nz = speed > 1e-3 ? loco.local.z / speed : 1;
+      // Free movement plays the forward clips; strafing blends by direction.
+      // Either way the direction eases round, so the blend never pops.
+      let tx = 0, tz = 1;
+      if ((loco.strafe ?? true) && speed > 0.15) {
+        tx = loco.local.x / speed;
+        tz = loco.local.z / speed;
+      }
+      const kd = 1 - Math.exp(-12 * dt);
+      this.dirX += (tx - this.dirX) * kd;
+      this.dirZ += (tz - this.dirZ) * kd;
+      const dl = Math.hypot(this.dirX, this.dirZ) || 1;
+      const nx = this.dirX / dl, nz = this.dirZ / dl;
       // Cardinal direction weights; fall back to forward when a direction is missing.
       const dirW = (d: [number, number]) => Math.max(0, d[0] * nx + d[1] * nz);
       const weights: number[] = [];
@@ -214,21 +259,31 @@ export class Animator {
       for (const l of this.loco) {
         const dw = dirW(l.dir);
         // Walk <-> run tier by speed, using this direction's walk/run speeds.
-        const walk = this.loco.find((o) => o.tier === 'walk' && o.dir[0] === l.dir[0] && o.dir[1] === l.dir[1]);
-        const run = this.loco.find((o) => o.tier === 'run' && o.dir[0] === l.dir[0] && o.dir[1] === l.dir[1]);
+        // (directions are measured from the clips, so pair by "the same way", not exact equality)
+        const same = (o: LocoClip) => o.dir[0] * l.dir[0] + o.dir[1] * l.dir[1] > 0.9;
+        const walk = this.loco.find((o) => o.tier === 'walk' && same(o));
+        const run = this.loco.find((o) => o.tier === 'run' && same(o));
         const t = walk && run ? smoothstep(walk.speed, run.speed, speed) : l.tier === 'run' ? 1 : 0;
         const tw = l.tier === 'run' ? t : 1 - t;
         const w = dw * dw * tw; // squared: favour the dominant direction
         weights.push(w);
         sum += w;
       }
-      // Shared phase so feet stay in step when clips blend.
+      // Shared phase so feet stay in step when clips blend. Past a clip's own
+      // pace the legs quicken only partly; the rest is a longer stride (a sprint
+      // reaches out rather than pedalling the jog twice as fast).
       let rate = 0;
+      let over = 0;
       this.loco.forEach((l, i) => {
         const w = sum > 0 ? weights[i] / sum : 0;
-        rate += (w * Math.min(2.1, speed / l.speed)) / l.dur; // (sprint plays the run up to 2.1x, so feet keep up)
+        const r = speed / l.speed;
+        const play = r <= 1 ? r : Math.min(1.6, 1 + (r - 1) * 0.55);
+        rate += (w * play) / l.dur;
+        over += w * (r / Math.max(1e-3, play));
       });
       if (sum <= 0) rate = 0;
+      const strideWant = sum > 0 && loco.grounded ? Math.min(1.35, Math.max(1, over)) : 1;
+      this.stride += (strideWant - this.stride) * (1 - Math.exp(-8 * dt));
       this.phase = (this.phase + rate * dt) % 1;
       this.loco.forEach((l, i) => {
         const w = sum > 0 ? (weights[i] / sum) * moveW * baseW : 0;
@@ -238,6 +293,21 @@ export class Animator {
       });
     }
     this.char.animate(0);
+    // The standing pose, taken once from a frame of pure idle.
+    if (!this.strideRef && this.idle && moveW < 0.01 && fullW < 0.01 && upperW < 0.01) {
+      this.strideRef = STRIDE_BONES.map(([n, k]) => ({ b: this.char.bone(n)!, k })).filter((r) => r.b).map((r) => ({ ...r, q: r.b.quaternion.clone() }));
+    }
+    // Longer stride: scale each limb's swing away from standing.
+    const reach = (this.stride - 1) * moveW * baseW;
+    if (this.strideRef && reach > 0.002) {
+      for (const r of this.strideRef) {
+        if (r.k < 0.6 && upperW > 0.01) continue; // (forearms hold a raised shield)
+        const kk = 1 + reach * r.k;
+        _qa.copy(r.q).invert().multiply(r.b.quaternion); // swing from standing
+        if (_qa.w < 0) _qa.set(-_qa.x, -_qa.y, -_qa.z, -_qa.w);
+        r.b.quaternion.copy(_qb.copy(r.q).multiply(powQuat(_qa, kk)));
+      }
+    }
   }
 
   /** Current locomotion phase (0..1), used for footsteps. */

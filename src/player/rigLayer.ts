@@ -225,6 +225,60 @@ export class RigLayer {
     });
   }
 
+  /**
+   * Foot planting: each foot keeps its animated stride but rides the real
+   * ground under it, so on a slope or a stair the uphill foot lifts and the
+   * hips sink to let the downhill one reach. Planted feet tip to the slope.
+   * `groundAt` gives the walkable height under (x, z), or null.
+   * `drop` lowers the hips further (metres): a longer sprint stride, a pivot.
+   */
+  plantFeet(groundAt: (x: number, z: number) => number | null, w: number, drop = 0) {
+    if (w <= 0.001 || !this.hips) return;
+    const c = this.char;
+    const legs = (this.legs ??= (['Right', 'Left'] as const).map((s) => ({
+      up: c.bone(s + 'UpLeg')!, leg: c.bone(s + 'Leg')!, foot: c.bone(s + 'Foot')!,
+    })).filter((l) => l.up && l.leg && l.foot));
+    if (legs.length < 2) return;
+    c.root.updateMatrixWorld(true);
+    const rootQ = c.visual.getWorldQuaternion(_q);
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(rootQ).setY(0).normalize();
+    const left = new THREE.Vector3(1, 0, 0).applyQuaternion(rootQ).setY(0).normalize();
+    const base = c.root.getWorldPosition(_v).y;
+    // Offsets are from the body's own floor, where the clip puts its feet (on
+    // flat ground that's the ground itself, and the clip is left as authored).
+    const feet = legs.map((l) => {
+      const p = worldPos(l.foot);
+      const g = groundAt(p.x, p.z);
+      const off = g === null ? 0 : THREE.MathUtils.clamp(g - base, -0.45, 0.45);
+      const toe = g === null ? null : groundAt(p.x + fwd.x * 0.16, p.z + fwd.z * 0.16);
+      const pitch = toe === null || g === null ? 0 : THREE.MathUtils.clamp(Math.atan2(toe - g, 0.16), -0.5, 0.5);
+      // planted: the clip has the foot down (the ankle sits ~0.1 m up)
+      const stance = 1 - THREE.MathUtils.smoothstep(p.y - base, 0.13, 0.26);
+      return { p, q: worldQuat(l.foot), off, pitch, stance };
+    });
+    const sink = (Math.min(0, feet[0].off, feet[1].off) - drop) * w;
+    if (Math.abs(feet[0].off) < 1e-3 && Math.abs(feet[1].off) < 1e-3 && sink > -1e-3) return;
+    if (sink < -1e-4) {
+      const scale = c.root.getWorldScale(_v2).y;
+      const hp = worldPos(this.hips);
+      hp.y += sink * scale;
+      this.hips.position.copy(this.hips.parent!.worldToLocal(hp));
+      this.hips.updateMatrixWorld(true);
+    }
+    legs.forEach((l, i) => {
+      const f = feet[i];
+      const target = f.p.clone();
+      target.y += f.off * w;
+      const knee = worldPos(l.leg).addScaledVector(fwd, 0.6);
+      twoBoneIK(l.up, l.leg, l.foot, target, knee, 1);
+      // keep the clip's foot angle, tipped to the slope while it's planted
+      const tip = new THREE.Quaternion().setFromAxisAngle(left, -f.pitch * f.stance * w);
+      setWorldQuat(l.foot, tip.multiply(f.q));
+    });
+  }
+
+  private legs?: { up: THREE.Bone; leg: THREE.Bone; foot: THREE.Bone }[];
+
   private tuckLegs(k: number, left: THREE.Vector3) {
     const c = this.char;
     for (const s of ['Right', 'Left']) {

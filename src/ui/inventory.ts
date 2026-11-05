@@ -397,7 +397,7 @@ export function buildOverlays(onStart: (origin: Origin | null) => void, initialO
   const controls = `
     <div class="controls">
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</span><span><kbd>Mouse</kbd> Look</span>
-      <span><kbd>Shift</kbd> Sprint · attack while sprinting to lunge</span><span><kbd>Space</kbd> Dodge roll</span>
+      <span><kbd>Shift</kbd> Sprint · attack while sprinting to lunge</span><span><kbd>Z</kbd> Walk / run</span><span><kbd>Space</kbd> Dodge roll</span>
       <span><kbd>LMB</kbd> Attack · hold to charge a heavy (let go as it fills)</span><span><kbd>RMB</kbd> Block / off-hand attack · LMB while blocking: counter</span>
       <span>Hold <kbd>LMB</kbd> into a string's next cut to branch it · locked on, push a direction as you strike</span>
       <span><kbd>F</kbd> Parry (the last instant is a perfect parry)</span><span><kbd>G</kbd> Kick / shield bash: breaks guards</span>

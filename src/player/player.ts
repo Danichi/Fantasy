@@ -9,7 +9,7 @@ import { ThirdPersonCamera } from './camera';
 import { Input } from '../core/input';
 import { afflictions } from '../combat/afflictions';
 import { physics, groups, G_PLAYER, STATIC_ONLY } from '../physics/physics';
-import { clamp, damp, wrapAngle, segmentSegmentDistance, smoothstep } from '../core/math';
+import { clamp, damp, lerp, stepAngle, wrapAngle, segmentSegmentDistance, smoothstep } from '../core/math';
 import { events } from '../core/events';
 import { Equipment } from '../items/equipment';
 import { ACTIONS, BRANCHES, STRING_BRANCH, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, resolveAction, flairAt, type ActionDef } from '../combat/actions';
@@ -107,6 +107,10 @@ const RIDE_HEIGHT = 0.5;
 /** mana per second before bonuses: slow, so spells are a resource to plan around */
 const MANA_REGEN = 0.7;
 const MOUNT_TIME = 0.5;
+/** a walk (Z), in m/s: the walk clip's own pace */
+const WALK_SPEED = 1.7;
+/** how long a sprint pivot lasts */
+const PIVOT_TIME = 0.3;
 
 export class Player {
   /** the hero's body (replaced whole by rebuildBody when the look changes) */
@@ -124,6 +128,21 @@ export class Player {
   yaw = Math.PI; // facing: forward = (sin yaw, 0, cos yaw)
   private prevYaw = Math.PI;
   private yawVel = 0;
+  /** Z toggles a walk (Shift still sprints) */
+  walking = false;
+  /** seconds left in a pivot: a hard about-turn at a sprint plants a foot and swings round */
+  private pivotT = 0;
+  /** free movement (the body leads) rather than strafing round a lock, a shield or an aim */
+  private strafeMove = false;
+  /** horizontal acceleration, smoothed (the body leans with it) */
+  private accelV = new THREE.Vector3();
+  /** visual-only height offset that eases out stair steps and kerbs */
+  private stepOffset = 0;
+  private prevStepOffset = 0;
+  /** whole-body lean into turns, and the torso's lean with speeding up and braking */
+  private bank = 0;
+  private surge = 0;
+  private footW = 0;
   grounded = true;
   private airTime = 0;
   private landT = 1; // seconds since landing (drives the landing half of the jump clip)
@@ -432,6 +451,7 @@ export class Player {
   // ==========================================================================
   update(dt: number, input: Input, cam: ThirdPersonCamera) {
     this.prevPos.copy(this.pos);
+    this.prevStepOffset = this.stepOffset;
     this.prevYaw = this.yaw;
     this.updateStats(dt);
     this.blockHitT += dt;
@@ -502,6 +522,7 @@ export class Player {
       this.airTime = 0;
     }
     if (input.wasPressed('lockOn')) this.toggleLock(cam);
+    if (input.wasPressed('walk') && !this.vehicle) this.walking = !this.walking;
     this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0 && !this.blocking && (this.mounted || this.stamina > 0) && !this.act && this.grounded;
   }
 
@@ -904,13 +925,47 @@ export class Player {
     return 0;
   }
 
+  /**
+   * Free movement on foot: the body turns toward the stick and the legs carry
+   * it the way it faces, so a change of direction is a turn, never a slide on
+   * the backpedal and strafe clips. Velocity may bend a little off the facing
+   * for responsiveness (more at a walk, where it can't be seen). Sharp turns
+   * shed speed; a hard about-turn at a sprint becomes a planted pivot.
+   */
+  private steer(hv: THREE.Vector3, intent: THREE.Vector3, targetSpeed: number, dt: number) {
+    const sp = hv.length();
+    if (intent.lengthSq() < 1e-6) {
+      // Stopping: brake along the line you were running (a sprint takes a stride or two).
+      const ns = Math.max(0, sp - (sp > 5 ? 17 : 24) * dt);
+      if (sp > 1e-5) hv.multiplyScalar(ns / sp);
+      this.yawVel *= Math.exp(-16 * dt);
+      return;
+    }
+    const want = Math.atan2(intent.x, intent.z);
+    if (Math.abs(wrapAngle(want - this.yaw)) > 2.3 && sp > 5.5 && this.pivotT <= 0) this.pivotT = PIVOT_TIME;
+    const pivoting = this.pivotT > 0;
+    // Quick from a standstill, wider arcs at speed.
+    const fast = smoothstep(1, 8, sp);
+    this.turnToward(want, dt, pivoting ? 420 : lerp(420, 120, fast), pivoting ? 20 : lerp(20, 11, fast));
+    const off = wrapAngle(want - this.yaw);
+    const slip = lerp(Math.PI, 0.5, smoothstep(0.3, 3, sp));
+    const dirWant = this.yaw + clamp(off, -slip, slip);
+    const cur = sp > 0.3 ? Math.atan2(hv.x, hv.z) : dirWant;
+    const head = stepAngle(cur, dirWant, (sp < 1 ? 40 : 16) * dt);
+    const turnSlow = smoothstep(Math.PI * 0.4, Math.PI, Math.abs(off));
+    const spWant = pivoting ? Math.min(targetSpeed, 1.2) : targetSpeed * (1 - 0.65 * turnSlow);
+    const accel = spWant > sp ? (sp < 4.5 ? 18 : 9) : pivoting ? 34 : 20;
+    const ns = sp + clamp(spWant - sp, -accel * dt, accel * dt);
+    hv.set(Math.sin(head) * ns, 0, Math.cos(head) * ns);
+  }
+
   private move(dt: number) {
     const a = this.act;
     const intent = this.moveIntent;
     let targetSpeed = 0;
     if (!a && intent.lengthSq() > 0) {
       const ms = this.mountStats ?? { canter: 11.5, gallop: 15, accel: 8 };
-      targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking || this.aiming ? 1.6 : this.sprinting ? 8.4 : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
+      targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking || this.aiming ? 1.6 : this.sprinting ? 8.4 : this.walking ? WALK_SPEED : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
       if (this.webbed > 0 && !this.mounted) targetSpeed = Math.min(targetSpeed, 1.3);
       // Wading slows you down; deep water means swimming.
@@ -968,6 +1023,13 @@ export class Player {
     }
 
     const hv = new THREE.Vector3(this.vel.x, 0, this.vel.z);
+    const hv0x = hv.x, hv0z = hv.z;
+    const toLock = this.lock ? Math.atan2(this.lock.position.x - this.pos.x, this.lock.position.z - this.pos.z) : null;
+    // Strafing keeps the body square to something (a lock, a raised shield, an aim);
+    // otherwise the body leads and you run where you face.
+    this.strafeMove = (toLock !== null && !this.sprinting) || this.blocking || this.aiming;
+    let steered = false;
+    this.pivotT = Math.max(0, this.pivotT - dt);
     if (a && (a.def.roll || a.def.move || a.def.boost || a.usingClip)) {
       // Root motion: follow the action's travel curve along its direction.
       const dir = a.rollDir ?? this.forward;
@@ -981,15 +1043,34 @@ export class Player {
     } else if (a) {
       hv.multiplyScalar(Math.exp(-12 * dt));
     } else if (!this.flying) {
-      const want = intent.clone().multiplyScalar(targetSpeed);
-      const accel = this.grounded ? (targetSpeed > hv.length() ? 8 : 11) : 2.5;
-      hv.x = damp(hv.x, want.x, accel, dt);
-      hv.z = damp(hv.z, want.z, accel, dt);
+      const onFoot = this.grounded && !this.mounted && !this.swimming;
+      if (onFoot && !this.strafeMove) {
+        this.steer(hv, intent, targetSpeed, dt);
+        steered = true;
+      } else if (onFoot) {
+        // Strafing: crisp, even acceleration in the direction pressed.
+        const want = intent.clone().multiplyScalar(targetSpeed);
+        const gap = want.clone().sub(hv);
+        const step = (want.lengthSq() > hv.lengthSq() ? 18 : 24) * dt;
+        if (gap.length() <= step) hv.copy(want);
+        else hv.addScaledVector(gap.normalize(), step);
+      } else {
+        const want = intent.clone().multiplyScalar(targetSpeed);
+        const accel = this.grounded ? (targetSpeed > hv.length() ? 8 : 11) : 2.5;
+        hv.x = damp(hv.x, want.x, accel, dt);
+        hv.z = damp(hv.z, want.z, accel, dt);
+      }
+    }
+    if (dt > 0) {
+      const k = 1 - Math.exp(-14 * dt);
+      this.accelV.x += ((hv.x - hv0x) / dt - this.accelV.x) * k;
+      this.accelV.z += ((hv.z - hv0z) / dt - this.accelV.z) * k;
     }
 
     // Facing.
-    const toLock = this.lock ? Math.atan2(this.lock.position.x - this.pos.x, this.lock.position.z - this.pos.z) : null;
-    if (a) {
+    if (steered) {
+      // (steer() has turned the body already)
+    } else if (a) {
       if (a.def.roll && !a.def.roll.back) {
         this.turnToward(Math.atan2(a.rollDir!.x, a.rollDir!.z), dt, 500, 22);
       } else if (a.t < a.def.track) {
@@ -1078,6 +1159,12 @@ export class Player {
     }
     const wasGrounded = this.grounded;
     this.grounded = this.kcc.computedGrounded() && this.vel.y <= 0.1;
+    // Stairs and kerbs: the capsule hops a step in one tick; let the body ease
+    // through it instead (the feet still land on the step, see present()).
+    this.stepOffset *= Math.exp(-13 * dt);
+    if (this.grounded && wasGrounded && !this.swimming && Math.abs(m.y) > Math.hypot(m.x, m.z) * 0.9 + 0.04) {
+      this.stepOffset = clamp(this.stepOffset - m.y, -0.45, 0.45);
+    }
     if (!this.grounded) {
       this.airTime += dt;
       this.fallSpeed = Math.max(this.fallSpeed, -this.vel.y);
@@ -1125,6 +1212,7 @@ export class Player {
     this.pos.copy(p);
     this.prevPos.copy(p);
     this.vel.set(0, 0, 0);
+    this.stepOffset = this.prevStepOffset = 0;
     // (Arrive standing: the next step finds out if there's really ground under you.)
     this.grounded = true;
     this.airTime = 0;
@@ -1139,6 +1227,7 @@ export class Player {
     this.prevPos.add(to.clone().sub(this.pos));
     this.pos.copy(to);
     this.yaw += dyaw;
+    this.stepOffset = this.prevStepOffset = 0;
   }
   /** Called after a teleport so streamed ground and trees can load around the new spot. */
   onTeleport?: (p: THREE.Vector3) => void;
@@ -1171,6 +1260,7 @@ export class Player {
       if (this.dismountT >= 1) this.dismountFrom = null;
     }
     this.mountVisual.visible = this.mounted && !this.mountStats;
+    root.position.y += lerp(this.prevStepOffset, this.stepOffset, alpha);
     root.rotation.y = this.prevYaw + wrapAngle(this.yaw - this.prevYaw) * alpha;
     const yawR = root.rotation.y;
     this.idleClock += dt;
@@ -1203,7 +1293,7 @@ export class Player {
       anim.setUpper('block_hit', this.blockHitT < 0.45, this.blockHitT, 0.06);
     }
     this.landT += dt;
-    anim.update(dt, { local, grounded: this.grounded || !!a });
+    anim.update(dt, { local, grounded: this.grounded || !!a, strafe: this.strafeMove || !this.grounded });
 
     // Footsteps: once per half locomotion cycle.
     const ph = anim.locoPhase;
@@ -1229,10 +1319,19 @@ export class Player {
     } else if (eq.dualWield && !a) {
       base.left = { ...OFFHAND_GUARD_L, w: 0.6 };
     }
-    // Lean into turns and accelerate with the torso.
-    if (!a && this.grounded) {
-      base.spineRoll = clamp(-this.yawVel * speed * 0.012, -0.22, 0.22);
-      base.spinePitch = (base.spinePitch ?? 0) + (this.sprinting ? 0.12 : 0);
+    // Lean into turns with the whole body (as a runner does, from the feet),
+    // and with the torso into speeding up, back against braking. A sprint
+    // runs tall-but-forward; a pivot sits down and leans away from the skid.
+    const moving = !a && this.grounded && !this.mounted && !this.vehicle && !this.swimming && !this.flying && !this.dead;
+    const fwdX = Math.sin(this.yaw), fwdZ = Math.cos(this.yaw);
+    const along = this.accelV.x * fwdX + this.accelV.z * fwdZ;
+    const pivot = this.pivotT > 0 ? Math.sin(Math.PI * (1 - this.pivotT / PIVOT_TIME)) : 0;
+    const bankWant = moving && !this.strafeMove ? clamp(-Math.atan((speed * this.yawVel) / 9.8) * 0.4, -0.2, 0.2) : 0;
+    this.bank = damp(this.bank, bankWant, 10, dt);
+    this.surge = damp(this.surge, moving ? clamp(along * 0.014, -0.2, 0.13) : 0, 8, dt);
+    if (moving) {
+      base.spineRoll = clamp(-this.yawVel * speed * 0.006, -0.12, 0.12);
+      base.spinePitch = (base.spinePitch ?? 0) + this.surge + (this.sprinting ? 0.16 * smoothstep(5, 8, speed) : 0) - 0.3 * pivot;
     }
 
     let pose: ProcPose = base;
@@ -1287,6 +1386,7 @@ export class Player {
       vis.position.set(0, pivot - Math.cos(ang) * pivot, -Math.sin(ang) * pivot);
       vis.position.y -= Math.sin(k * Math.PI) * 0.3;
     }
+    vis.rotation.z += this.bank;
     if (fl) {
       vis.rotation.y += fl.spin;
       vis.rotation.z += fl.bank;
@@ -1299,6 +1399,13 @@ export class Player {
       vis.position.z = -k * 0.2;
     }
     this.rig.apply(pose);
+    // Feet on the real ground (slopes, stairs), hips sinking into a long sprint stride or a pivot.
+    const plant = this.grounded && !this.dead && !rolling && !this.mounted && !this.vehicle && !this.swimming && !this.flying && !a?.def.air;
+    this.footW = damp(this.footW, plant ? 1 : 0, plant ? 10 : 20, dt);
+    if (this.footW > 0.01) {
+      const reachDrop = (anim.stride - 1) * 0.12 + 0.1 * pivot;
+      this.rig.plantFeet((x, z) => this.probeGround(x, z), this.footW, reachDrop);
+    }
     if ((this.mounted && this.mountStats) || (this.vehicle && !this.vehicle.stand) || this.dismountFrom) this.ridePose(this.vehicle ? 1 : rideW);
 
     // Blade hit detection against the pose we just drew.

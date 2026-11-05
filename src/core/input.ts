@@ -4,7 +4,7 @@
 
 export type Action =
   | 'forward' | 'back' | 'left' | 'right'
-  | 'sprint' | 'dodge' | 'jump'
+  | 'sprint' | 'walk' | 'dodge' | 'jump'
   | 'attack' | 'offhand' | 'parry' | 'lockOn' | 'cast' | 'kick'
   | 'inventory' | 'skills' | 'help' | 'toggleBar' | 'interact' | 'map' | 'originAbility'
   | 'slot1' | 'slot2' | 'slot3' | 'slot4' | 'slot5' | 'slot6' | 'slot7' | 'slot8';
@@ -15,6 +15,8 @@ export const DEFAULT_BINDINGS: Record<Action, string[]> = {
   left: ['KeyA', 'ArrowLeft'],
   right: ['KeyD', 'ArrowRight'],
   sprint: ['ShiftLeft'],
+  // toggles a walk (Shift still sprints)
+  walk: ['KeyZ'],
   dodge: ['Space'],
   jump: ['KeyC'], // not Ctrl: Ctrl+W closes the tab and can't be blocked
   attack: ['Mouse0'],
