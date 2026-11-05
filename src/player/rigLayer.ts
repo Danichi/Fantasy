@@ -38,6 +38,9 @@ export interface ProcPose {
 
 type Side = 'Right' | 'Left';
 
+/** seconds a pinned foot takes to step to a new spot */
+const STEP_TIME = 0.16;
+
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 const _q = new THREE.Quaternion();
@@ -231,8 +234,14 @@ export class RigLayer {
    * hips sink to let the downhill one reach. Planted feet tip to the slope.
    * `groundAt` gives the walkable height under (x, z), or null.
    * `drop` lowers the hips further (metres): a longer sprint stride, a pivot.
+   *
+   * `lock` (0..1) also pins feet the clip has planted to the spot they landed
+   * on, so a body travelling or turning through an attack (or turning on the
+   * spot) doesn't skate its feet: when the body has carried a foot too far
+   * from where the clip wants it, the foot lifts and steps there, one foot at
+   * a time.
    */
-  plantFeet(groundAt: (x: number, z: number) => number | null, w: number, drop = 0) {
+  plantFeet(groundAt: (x: number, z: number) => number | null, w: number, drop = 0, lock = 0, dt = 0) {
     if (w <= 0.001 || !this.hips) return;
     const c = this.char;
     const legs = (this.legs ??= (['Right', 'Left'] as const).map((s) => ({
@@ -244,20 +253,75 @@ export class RigLayer {
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(rootQ).setY(0).normalize();
     const left = new THREE.Vector3(1, 0, 0).applyQuaternion(rootQ).setY(0).normalize();
     const base = c.root.getWorldPosition(_v).y;
+    const locks = this.footLocks;
     // Offsets are from the body's own floor, where the clip puts its feet (on
     // flat ground that's the ground itself, and the clip is left as authored).
-    const feet = legs.map((l) => {
+    const feet = legs.map((l, i) => {
       const p = worldPos(l.foot);
-      const g = groundAt(p.x, p.z);
-      const off = g === null ? 0 : THREE.MathUtils.clamp(g - base, -0.45, 0.45);
-      const toe = g === null ? null : groundAt(p.x + fwd.x * 0.16, p.z + fwd.z * 0.16);
-      const pitch = toe === null || g === null ? 0 : THREE.MathUtils.clamp(Math.atan2(toe - g, 0.16), -0.5, 0.5);
+      const q = worldQuat(l.foot);
+      const st = locks[i];
+      const other = locks[1 - i];
+      // the clip's foot velocity over the ground (where a step should land ahead of)
+      const vx = dt > 0 && st.seen ? (p.x - st.px) / dt : 0, vz = dt > 0 && st.seen ? (p.z - st.pz) / dt : 0;
+      st.px = p.x;
+      st.pz = p.z;
+      st.seen = true;
       // planted: the clip has the foot down (the ankle sits ~0.1 m up)
       const stance = 1 - THREE.MathUtils.smoothstep(p.y - base, 0.13, 0.26);
-      return { p, q: worldQuat(l.foot), off, pitch, stance };
+      let lift = 0;
+      if (lock > 0.01) {
+        if (!st.locked) {
+          if (stance > 0.7) {
+            // pin it where it's drawn now (seamless, even mid-blend)
+            const k0 = st.w * lock;
+            st.x = p.x + (st.x - p.x) * k0;
+            st.z = p.z + (st.z - p.z) * k0;
+            st.q.copy(k0 > 0 ? q.clone().slerp(st.q, k0) : q);
+            st.locked = true;
+            st.w = 1;
+          }
+        } else if (stance < 0.35 && !st.step) {
+          st.locked = false; // the clip lifts it for a step of its own
+        } else {
+          if (!st.step) {
+            const drift = Math.hypot(p.x - st.x, p.z - st.z);
+            const twist = q.angleTo(st.q);
+            const otherHolds = other.locked && !other.step;
+            if ((drift > 0.28 || twist > 0.7) && (otherHolds || drift > 0.55)) st.step = { fx: st.x, fz: st.z, fq: st.q.clone(), s: 0 };
+          }
+          if (st.step) {
+            const sp = st.step;
+            sp.s = Math.min(1, sp.s + dt / STEP_TIME);
+            // land a little ahead of where the body is taking the foot
+            const lead = Math.min(0.35, ((1 - sp.s) * STEP_TIME + 0.06));
+            let tx = p.x + vx * lead, tz = p.z + vz * lead;
+            const reach = Math.hypot(tx - p.x, tz - p.z);
+            if (reach > 0.35) (tx = p.x + ((tx - p.x) * 0.35) / reach), (tz = p.z + ((tz - p.z) * 0.35) / reach);
+            const e = sp.s * sp.s * (3 - 2 * sp.s);
+            st.x = sp.fx + (tx - sp.fx) * e;
+            st.z = sp.fz + (tz - sp.fz) * e;
+            st.q.copy(sp.fq).slerp(q, e);
+            lift = Math.sin(Math.PI * sp.s) * 0.08;
+            if (sp.s >= 1) st.step = null;
+          }
+        }
+      } else {
+        st.locked = false;
+        st.step = null;
+      }
+      if (!st.locked && st.w > 0) st.w = Math.max(0, st.w - dt / 0.12);
+      const k = st.w * lock;
+      const x = p.x + (st.x - p.x) * k, z = p.z + (st.z - p.z) * k;
+      lift *= k;
+      const g = groundAt(x, z);
+      const off = g === null ? 0 : THREE.MathUtils.clamp(g - base, -0.45, 0.45);
+      const toe = g === null ? null : groundAt(x + fwd.x * 0.16, z + fwd.z * 0.16);
+      const pitch = toe === null || g === null ? 0 : THREE.MathUtils.clamp(Math.atan2(toe - g, 0.16), -0.5, 0.5);
+      const fq = k > 0 ? q.clone().slerp(st.q, k) : q;
+      return { p: new THREE.Vector3(x, p.y + lift, z), q: fq, off, pitch, stance, moved: k > 0.001 };
     });
     const sink = (Math.min(0, feet[0].off, feet[1].off) - drop) * w;
-    if (Math.abs(feet[0].off) < 1e-3 && Math.abs(feet[1].off) < 1e-3 && sink > -1e-3) return;
+    if (Math.abs(feet[0].off) < 1e-3 && Math.abs(feet[1].off) < 1e-3 && sink > -1e-3 && !feet[0].moved && !feet[1].moved) return;
     if (sink < -1e-4) {
       const scale = c.root.getWorldScale(_v2).y;
       const hp = worldPos(this.hips);
@@ -275,6 +339,32 @@ export class RigLayer {
       const tip = new THREE.Quaternion().setFromAxisAngle(left, -f.pitch * f.stance * w);
       setWorldQuat(l.foot, tip.multiply(f.q));
     });
+  }
+
+  private footLocks = [0, 1].map(() => ({
+    locked: false, x: 0, z: 0, q: new THREE.Quaternion(), w: 0,
+    /** a step from the pinned spot to a new one, s 0..1 */
+    step: null as { fx: number; fz: number; fq: THREE.Quaternion; s: number } | null,
+    px: 0, pz: 0, seen: false,
+  }));
+  /** Forget where the feet were pinned (teleports, respawns). */
+  releaseFeet() {
+    for (const st of this.footLocks) {
+      st.locked = false;
+      st.w = 0;
+      st.step = null;
+      st.seen = false;
+    }
+  }
+  /** Carry pinned feet along with what they stand on (a ship's deck). */
+  shiftFeet(dx: number, dz: number) {
+    for (const st of this.footLocks) {
+      st.x += dx;
+      st.z += dz;
+      st.px += dx;
+      st.pz += dz;
+      if (st.step) (st.step.fx += dx), (st.step.fz += dz);
+    }
   }
 
   private legs?: { up: THREE.Bone; leg: THREE.Bone; foot: THREE.Bone }[];
@@ -371,7 +461,15 @@ export function blendPose(a: ProcPose, b: ProcPose, t: number): ProcPose {
     legTuck: f(a.legTuck, b.legTuck),
     right: blendHand(a.right, b.right, t),
     left: blendHand(a.left, b.left, t),
+    leftFollows: blendFollow(a.leftFollows, b.leftFollows, t),
   };
+}
+
+function blendFollow(a: ProcPose['leftFollows'], b: ProcPose['leftFollows'], t: number): ProcPose['leftFollows'] {
+  if (!a && !b) return undefined;
+  if (!a) return { ...b!, w: b!.w * t };
+  if (!b) return { ...a, w: a.w * (1 - t) };
+  return { off: a.off + (b.off - a.off) * t, w: a.w + (b.w - a.w) * t, slide: t < 0.5 ? a.slide : b.slide };
 }
 
 /** Action pose fields override the base; missing hands fall back to the base. */

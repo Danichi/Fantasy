@@ -38,7 +38,14 @@ interface OneShot {
   time: number;
   fadeIn: number;
   fadeOut: number;
+  /** clip seconds per real second, measured while it's driven; a clip fading out keeps this pace */
+  rate?: number;
+  prevTime?: number;
+  fresh?: boolean;
 }
+
+/** Fade weights ease in and out (a linear ramp starts and stops the blend with a jolt). */
+const ease = (w: number) => w * w * (3 - 2 * w);
 
 export interface LocoInput {
   /** horizontal velocity in the character frame, m/s (+X left, +Z forward) */
@@ -156,7 +163,11 @@ export class Animator {
    * cross-fades from the previous clip.
    */
   setFull(key: string | null, time: number, fadeIn = 0.12, fadeOut = 0.18) {
-    for (const s of this.full.values()) if (s.key !== key) s.target = 0;
+    // A clip handing over to another fades out in step with the newcomer.
+    for (const s of this.full.values()) if (s.key !== key) {
+      s.target = 0;
+      if (key) s.fadeOut = Math.max(s.fadeOut, fadeIn);
+    }
     if (!key) return;
     let s = this.full.get(key);
     const action = s?.action ?? this.action(key);
@@ -166,6 +177,8 @@ export class Animator {
       this.full.set(key, s);
     }
     s.target = 1;
+    s.prevTime = s.time;
+    s.fresh = true;
     s.time = time;
     s.fadeIn = fadeIn;
     s.fadeOut = fadeOut;
@@ -187,7 +200,7 @@ export class Animator {
 
   get fullWeight() {
     let w = 0;
-    for (const s of this.full.values()) w += s.w;
+    for (const s of this.full.values()) w += ease(s.w);
     return Math.min(1, w);
   }
 
@@ -206,23 +219,31 @@ export class Animator {
     };
     fade(this.full);
     fade(this.upper);
+    // A clip that's fading out plays on at its own pace rather than freezing
+    // mid-swing (so a combo's follow-through flows into the next cut).
+    for (const s of this.full.values()) {
+      if (s.fresh) {
+        if (dt > 0 && s.prevTime !== undefined && s.time >= s.prevTime) s.rate = Math.min(3, (s.time - s.prevTime) / dt);
+        s.fresh = false;
+      } else if (s.target <= 0 && s.rate) s.time += s.rate * dt;
+    }
     const fullW = this.fullWeight;
     let upperW = 0;
-    for (const s of this.upper.values()) upperW += s.w;
+    for (const s of this.upper.values()) upperW += ease(s.w);
     upperW = Math.min(1, upperW);
 
     // Full-body one-shots: split the available weight in proportion.
     let sumFull = 0;
-    for (const s of this.full.values()) sumFull += s.w;
+    for (const s of this.full.values()) sumFull += ease(s.w);
     for (const s of this.full.values()) {
       s.action.time = Math.min(s.time, s.action.getClip().duration - 1e-4);
-      s.action.setEffectiveWeight(sumFull > 0 ? (s.w / Math.max(1, sumFull)) : 0);
+      s.action.setEffectiveWeight(sumFull > 0 ? (ease(s.w) / Math.max(1, sumFull)) : 0);
     }
     for (const s of this.upper.values()) {
       const d = s.action.getClip().duration;
       const loops = this.char.clipInfo.get(s.key)?.loop;
       s.action.time = loops ? s.time % d : Math.min(s.time, d - 1e-4);
-      s.action.setEffectiveWeight(s.w * (1 - fullW) / Math.max(1, upperW));
+      s.action.setEffectiveWeight(ease(s.w) * (1 - fullW) / Math.max(1, upperW));
     }
 
     // Locomotion.

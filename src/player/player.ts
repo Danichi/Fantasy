@@ -94,6 +94,8 @@ interface ActiveAction {
   perfect: boolean;
   /** the button let go of a charge */
   released: boolean;
+  /** seconds its clip takes to blend in (longer out of another clip: a combo's link) */
+  blendIn?: number;
 }
 
 /**
@@ -143,6 +145,9 @@ export class Player {
   private bank = 0;
   private surge = 0;
   private footW = 0;
+  private footLock = 0;
+  /** a blow landing on you: the body gives with it for a moment (world direction toward the attacker) */
+  private flinch: { t: number; x: number; z: number; amt: number } | null = null;
   grounded = true;
   private airTime = 0;
   private landT = 1; // seconds since landing (drives the landing half of the jump clip)
@@ -561,6 +566,9 @@ export class Player {
     this.act = { def, t: t0 ?? def.startAt ?? 0, speed, hitSet: new Set(), charge: 0, charging: false, fired: false, usingClip, landed: false, mult: 1, ev: 0, connected: false, tier: 0, fullAt: 0, perfect: false, released: false };
     this.bladePrev.main = this.bladePrev.off = null;
     this.lastPresentT = -1;
+    // Reactions and guards snap in; a cut out of another cut takes a beat longer to flow into.
+    const snap = !!def.parry || id === 'stagger' || id === 'guardBreak';
+    this.act.blendIn = snap ? 0.07 : this.anim.fullWeight > 0.25 ? 0.2 : 0.13;
 
     if (def.roll) {
       // Rolling tears you most of the way out of webbing.
@@ -1037,8 +1045,9 @@ export class Player {
       // Don't lunge through an enemy we're already touching.
       if (!a.def.roll && this.lock && this.lock.center.distanceTo(this.center) < 1.4) d *= 0.2;
       const v = d / dt;
-      // Blend in so the transition from running isn't a hard stop.
-      const keep = a.t < 0.12 ? Math.exp(-18 * dt) : 0;
+      // Blend in so the transition from running isn't a hard stop: the body
+      // carries its momentum into the first beat of the move.
+      const keep = a.t < 0.22 * a.speed ? Math.exp(-10 * dt) : 0;
       hv.multiplyScalar(keep).addScaledVector(dir, v * (1 - keep));
     } else if (a) {
       hv.multiplyScalar(Math.exp(-12 * dt));
@@ -1213,6 +1222,7 @@ export class Player {
     this.prevPos.copy(p);
     this.vel.set(0, 0, 0);
     this.stepOffset = this.prevStepOffset = 0;
+    this.rig?.releaseFeet();
     // (Arrive standing: the next step finds out if there's really ground under you.)
     this.grounded = true;
     this.airTime = 0;
@@ -1225,6 +1235,7 @@ export class Player {
     this.body.setTranslation(c, true);
     this.collider.setTranslation(c);
     this.prevPos.add(to.clone().sub(this.pos));
+    this.rig?.shiftFeet(to.x - this.pos.x, to.z - this.pos.z);
     this.pos.copy(to);
     this.yaw += dyaw;
     this.stepOffset = this.prevStepOffset = 0;
@@ -1278,7 +1289,7 @@ export class Player {
     const anim = this.anim;
     const rolling = a?.def.roll && !a.def.roll.back;
     if (this.dead && anim.has('death')) anim.setFull('death', this.deadT, 0.15);
-    else if (a?.usingClip) anim.setFull(a.def.clip!, at, a.t < 0.05 ? 0.1 : 0.12, 0.2);
+    else if (a?.usingClip) anim.setFull(a.def.clip!, at, a.blendIn ?? 0.12, 0.2);
     else if (rolling && anim.has('jump_air')) anim.setFull('jump_air', 0.42, 0.06, 0.18); // tucked ball for the roll
     else if (!a && !this.flying && (!this.grounded || this.landT < 0.34) && anim.has('jump_air')) {
       // Jump clip time follows the physical arc: rise, apex, fall, land.
@@ -1366,12 +1377,30 @@ export class Player {
     const fl = a && !this.dead ? flairAt(a.def.flair, at) : null;
     if (fl && (fl.lean || fl.crouch)) pose = { ...pose, spinePitch: (pose.spinePitch ?? 0) + fl.lean, hipsDrop: (pose.hipsDrop ?? 0) + fl.crouch };
     if (this.dead) pose = {};
+    // Flinch: a quick jolt away from the blow that settles in a third of a second.
+    if (this.flinch && !this.dead) {
+      const f = this.flinch;
+      f.t += dt;
+      const env = (f.t < 0.05 ? f.t / 0.05 : Math.exp(-(f.t - 0.05) * 9)) * f.amt;
+      const fz = f.x * Math.sin(yawR) + f.z * Math.cos(yawR); // from the front (+) or behind
+      const fx = f.x * Math.cos(yawR) - f.z * Math.sin(yawR); // from the left (+) or right
+      pose = {
+        ...pose,
+        spinePitch: (pose.spinePitch ?? 0) - 0.3 * fz * env,
+        spineRoll: (pose.spineRoll ?? 0) + 0.24 * fx * env,
+        spineYaw: (pose.spineYaw ?? 0) - 0.18 * fx * env,
+        headPitch: (pose.headPitch ?? 0) - 0.22 * fz * env,
+      };
+      if (f.t > 0.6) this.flinch = null;
+    }
 
+    // The weapon family's holds go in before the blend, so leaving an attack
+    // eases back into the guard (applied after, the hold snapped in at once).
+    if (this.poseHook && !this.dead) pose = this.poseHook(pose, a, at);
     if (this.poseFrom && this.poseFade < 1) {
-      this.poseFade = Math.min(1, this.poseFade + dt / 0.18);
+      this.poseFade = Math.min(1, this.poseFade + dt / 0.2);
       pose = blendPose(this.poseFrom, pose, smoothstep(0, 1, this.poseFade));
     }
-    if (this.poseHook && !this.dead) pose = this.poseHook(pose, a, at);
     this.lastPose = pose;
 
     // Procedural roll: rotate the tucked body around its middle.
@@ -1402,9 +1431,12 @@ export class Player {
     // Feet on the real ground (slopes, stairs), hips sinking into a long sprint stride or a pivot.
     const plant = this.grounded && !this.dead && !rolling && !this.mounted && !this.vehicle && !this.swimming && !this.flying && !a?.def.air;
     this.footW = damp(this.footW, plant ? 1 : 0, plant ? 10 : 20, dt);
+    // Pinned feet through attacks and casts, and while turning on the spot.
+    const lockWant = plant && ((a && !a.def.roll) || (!a && speed < 0.4)) ? 1 : 0;
+    this.footLock = damp(this.footLock, lockWant, lockWant ? 30 : 12, dt);
     if (this.footW > 0.01) {
       const reachDrop = (anim.stride - 1) * 0.12 + 0.1 * pivot;
-      this.rig.plantFeet((x, z) => this.probeGround(x, z), this.footW, reachDrop);
+      this.rig.plantFeet((x, z) => this.probeGround(x, z), this.footW, reachDrop, this.footLock, dt);
     }
     if ((this.mounted && this.mountStats) || (this.vehicle && !this.vehicle.stand) || this.dismountFrom) this.ridePose(this.vehicle ? 1 : rideW);
 
@@ -1689,6 +1721,8 @@ export class Player {
       this.vel.addScaledVector(toAtt, -att.knock);
       this.vel.y = Math.max(this.vel.y, att.knock * 0.4);
     }
+    // The body gives with the blow, away from where it came from.
+    if (!this.dead) this.flinch = { t: 0, x: toAtt.x, z: toAtt.z, amt: clamp(dmg / 25, 0.45, 1) };
     this.onShake?.(0.3);
     return 'hit';
   }
