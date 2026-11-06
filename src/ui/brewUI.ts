@@ -39,7 +39,7 @@ interface StirState { p: number; t: number; held: boolean; color: number; fail: 
 export class BrewUI {
   isOpen = false;
   onToggle?: (open: boolean) => void;
-  private el: HTMLDivElement;
+  readonly el: HTMLDivElement;
   private mode: Mode = 'codex';
   private title = '';
   private tab: Tab = 'brew';

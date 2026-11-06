@@ -94,8 +94,9 @@ export const ACT1_QUESTS: QuestDef[] = [
       ], say: 'A little. The granary\'s a little fuller and last night we only lost the dog, and Tom Hale says you\'re "all right, for a sky-person." From Tom that\'s a knighthood. It isn\'t enough. Nothing is enough, this year. But it\'s more than yesterday. Magus Orren wants you. He\'s been reading about people like you, and he hasn\'t slept in a week. His tower, by the forge.' }] },
       { note: 'See Magus Orren.', objectives: [{ type: 'talk', npc: 'magus', text: 'See Magus Orren', reply: 'Maud sent me.', say: 'Give me your hand. ...Yes. Warm. Warmer than it should be. There is a waystone at the east gate, older than the road, with a wheel cut into it: the Sunwheel. Every one of them in Cresha is the same wheel, I think. Go and put your hand on it, and tell me what it says to you. I suspect it has been waiting for you.' }] },
       { note: 'Lay your hand on the waystone at the east gate.', hook: 'wheel:wake', objectives: [{ type: 'signal', id: 'wheel-woken', text: 'Touch the Sunwheel waystone at the east gate', at: [128, -10] }] },
+      { note: 'Go back to Magus Orren and tell him what the wheel said.', objectives: [{ type: 'talk', npc: 'magus', text: 'Tell Magus Orren what the wheel said', reply: 'The wheel spoke to me.', say: 'It spoke. Of course it spoke; I could see it on you from the door. Sit down before you fall down. ...It called you. Out of your own world, and four before you. Four. I have read every page in Cresha about the Sunwheel and not one of them says four. And six more on the same night, carried off by other hands. Gods. Whatever is playing this game, it is older than my books and it is not playing for us.' }] },
     ],
-    done: 'The wheel answered you. It will carry you now, between any of its stones you have touched. And I think it was the wheel that called you here.',
+    done: 'The wheel will carry you now, between any of its stones you have touched. Use it. And go and see Maud: the shepherds came down off the north hill this morning white as milk. There are lights in the old crypt again.',
     rewards: { gold: 60, xp: 120 },
   },
   {
@@ -136,7 +137,7 @@ export const ACT1_QUESTS: QuestDef[] = [
         ['ward:silver', 'Dying. And the silver held, did it? Good. My book says only that something old rules over there, and nothing has ever seen it die. If it is dying... I don\'t know what that means. Whatever brought you here knows. Ask it, not me. And be careful what it asks of you in return.'],
       ] }] },
     ],
-    done: 'This was left with the Order when the ward was raised: Dawnbreaker. It burns clean. Take it. You\'ll need it more than any of us.',
+    done: 'This was left with the Order when the ward was raised: Dawnbreaker. It burns clean. Take it. You\'ll need it more than any of us. And find Captain Brannoc. He has been at my door twice asking for you: something about rifts in the fields.',
     rewards: { gold: 250, xp: 450, items: [['dawnbreaker', 1]], guildRep: 30 },
   },
   {

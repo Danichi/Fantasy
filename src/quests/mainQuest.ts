@@ -1,9 +1,12 @@
 import type { QuestLog } from './questLog';
 
 // The main story's chain (the chapters themselves live in src/story/act*.ts).
-// Each chapter hands straight on to the next, so the tracker always has
-// somewhere to point you; world state (Grukk's death, a broken curse) is
-// polled into signals so a crypt cleared before the story asked still counts.
+// Each chapter ends in a conversation, and the next is put to you by someone:
+// the one you report to, if it's theirs to give, or else the tracker and the
+// map point you to whoever has it (QuestLog.leads). Only a chapter nobody
+// offers (a letter, a summons) starts by itself. World state (Grukk's death,
+// a broken curse) is polled into signals so a crypt cleared before the story
+// asked still counts.
 
 /** Act I, then the road to the sea. */
 export const MAIN_CHAIN = ['mq-fall', 'mq-stranger', 'mq-crypt', 'mq-gravewood', 'mq-bells', 'road-to-port'];
@@ -21,7 +24,7 @@ export function setupMainQuest(quests: QuestLog, world: { grukkDead: () => boole
     const prev = quests.hooks.get(a + ':done');
     quests.hooks.set(a + ':done', (q) => {
       prev?.(q);
-      if (!quests.state[b]) quests.accept(b);
+      if (!quests.state[b] && !quests.defs.get(b)?.offer) quests.accept(b);
     });
   };
   for (let i = 0; i < MAIN_CHAIN.length - 1; i++) link(MAIN_CHAIN[i], MAIN_CHAIN[i + 1]);

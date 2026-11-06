@@ -801,6 +801,7 @@ async function boot() {
     toast: (m) => hud.toast(m),
     npcPos: (id) => serviceNpc(id)?.pos ?? npcs.find(id)?.pos ?? roadLife.npcPos(id) ?? null,
     npcAway: (id) => (serviceNpc(id) ? null : npcs.whereabouts(id)),
+    npcName: (id) => serviceNpc(id)?.spec.name ?? (npcs.find(id)?.rec as { name?: string } | undefined)?.name ?? id,
     hour: () => time.hour,
   });
   const glenQuests = setupElderGlenQuests({
@@ -1517,19 +1518,46 @@ async function boot() {
     if (open) input.exitLock();
     else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
   };
-  // The book: the menus as tabbed pages, opened from the corner button or their keys.
+  // The book: every menu in one window, four tabs with sub-tabs (ui/menuBook.ts).
+  const skillsSub = (id: 'disc' | 'attr' | 'mast', label: string, key?: string) => ({
+    id: 'skills-' + id, label, key, el: () => skills.el,
+    isOpen: () => skills.open && skills.tabId === id,
+    open: () => { skills.setTab(id); skills.toggle(true); },
+    close: () => skills.toggle(false),
+  });
   const book = new MenuBook([
-    { id: 'inventory', label: 'Inventory', key: 'I', isOpen: () => inv.open, open: () => inv.toggle(true), close: () => inv.toggle(false) },
-    { id: 'skills', label: 'Skills', key: 'K', isOpen: () => skills.open, open: () => skills.toggle(true), close: () => skills.toggle(false) },
-    { id: 'journal', label: 'Journal', key: 'J', isOpen: () => questUI.open, open: () => questUI.toggle(true), close: () => questUI.toggle(false) },
-    { id: 'people', label: 'People', key: 'P', isOpen: () => repPanel.open, open: () => repPanel.toggle(true), close: () => repPanel.toggle(false) },
-    { id: 'herbal', label: 'Herbal', key: 'O', isOpen: () => herbalism.isOpen, open: () => herbalism.openCodex(), close: () => herbalism.ui.close() },
-    { id: 'seamanship', label: 'Seamanship', key: 'N', isOpen: () => seaPanel.open, open: () => seaPanel.toggle(true), close: () => seaPanel.toggle(false) },
+    {
+      id: 'character', label: 'Character', key: 'I',
+      subs: [
+        { id: 'inventory', label: 'Gear & Bag', key: 'I', see: true, el: () => inv.el, isOpen: () => inv.open && inv.viewId === 'items', open: () => { inv.setView('items'); inv.toggle(true); }, close: () => inv.toggle(false) },
+        { id: 'stats', label: 'Stats', see: true, el: () => inv.el, isOpen: () => inv.open && inv.viewId === 'stats', open: () => { inv.setView('stats'); inv.toggle(true); }, close: () => inv.toggle(false) },
+      ],
+    },
+    {
+      id: 'skills', label: 'Skills', key: 'K',
+      subs: [
+        skillsSub('disc', 'Disciplines', 'K'),
+        skillsSub('attr', 'Attributes'),
+        skillsSub('mast', 'Mastery'),
+        { id: 'herbal', label: 'Herbal', key: 'O', el: () => herbalism.ui.el, isOpen: () => herbalism.isOpen, open: () => herbalism.openCodex(), close: () => herbalism.ui.close() },
+        { id: 'seamanship', label: 'Seamanship', key: 'N', el: () => seaPanel.el, isOpen: () => seaPanel.open, open: () => seaPanel.toggle(true), close: () => seaPanel.toggle(false) },
+      ],
+    },
+    {
+      id: 'journal', label: 'Journal', key: 'J',
+      subs: [
+        { id: 'quests', label: 'Quests', key: 'J', el: () => questUI.journal, isOpen: () => questUI.open, open: () => questUI.toggle(true), close: () => questUI.toggle(false) },
+        { id: 'people', label: 'People', key: 'P', el: () => repPanel.el, isOpen: () => repPanel.open, open: () => repPanel.toggle(true), close: () => repPanel.toggle(false) },
+      ],
+    },
     {
       id: 'map', label: 'Map', key: 'M',
-      isOpen: () => worldMap.open || mapUI.open,
-      open: () => (realm.mode === 'dungeon' ? mapUI.toggle(true) : realm.mode === 'interior' ? hud.toast('Step outside to read the map.') : worldMap.toggle(true)),
-      close: () => (worldMap.open ? worldMap.toggle(false) : mapUI.toggle(false)),
+      subs: [{
+        id: 'map', label: 'Map', see: true, el: () => null,
+        isOpen: () => worldMap.open || mapUI.open,
+        open: () => (realm.mode === 'dungeon' ? mapUI.toggle(true) : realm.mode === 'interior' ? hud.toast('Step outside to read the map.') : worldMap.toggle(true)),
+        close: () => (worldMap.open ? worldMap.toggle(false) : mapUI.toggle(false)),
+      }],
     },
   ]);
   questUI.onShowOnMap = (x, z) => {

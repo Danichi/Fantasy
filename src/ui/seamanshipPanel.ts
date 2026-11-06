@@ -39,7 +39,7 @@ const CSS = `
 export class SeamanshipPanel {
   open = false;
   onToggle?: (open: boolean) => void;
-  private el: HTMLDivElement;
+  readonly el: HTMLDivElement;
   private backdrop: HTMLDivElement;
   private grid: HTMLDivElement;
   private foot: HTMLDivElement;

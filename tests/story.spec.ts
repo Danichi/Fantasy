@@ -22,7 +22,9 @@ const HELPERS = `(() => {
   /** A decision in conversation (a 'choose' objective): open it, then take answer \`pick\`. */
   const choose = (npc, pick) => { let opts = []; const o = q.options(npc, (_t, os) => { opts = os; }, () => {}).find((o) => !o.label.startsWith('❗')); if (!o) return false; o.run(); const c = opts[pick]; if (c) c.run(); return !!c; };
   const stage = (id) => (q.state[id] ? q.state[id].status + '@' + q.state[id].stage : 'none');
-  return { g, q, T, S, sleep, tick, settle, kill, talk, tp, wheel, rite, say, stage, choose };
+  /** Take up the next chapter someone puts to you (their ❗ offer, then yes). */
+  const take = (npc) => { let opts = []; const o = q.options(npc, (_t, os) => { opts = os; }, () => {}).find((o) => o.label.startsWith('❗')); if (!o) return false; o.run(); if (opts[0]) opts[0].run(); return true; };
+  return { g, q, T, S, sleep, tick, settle, kill, talk, tp, wheel, rite, say, stage, choose, take };
 })()`;
 
 test('the opening: you fall into the wheat, the Dark comes, Kaela and Brannoc come over the wall, and Maud takes you in', async ({ game }) => {
@@ -85,6 +87,10 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
     out.riteLabel = h.rite('glen');
     await h.settle();
     out.afterWake = { awake: S.wheelAwake, crypt: h.stage('mq-crypt'), stranger: h.stage('mq-stranger') };
+    // Back to Orren with what the wheel said; then Maud has the next chapter (and the tracker says so).
+    h.talk('magus');
+    out.reported = { stranger: h.stage('mq-stranger'), lead: q.leads().map((l) => l.npc), crypt: h.stage('mq-crypt') };
+    out.tookCrypt = h.take('maud') && h.stage('mq-crypt');
     // Travel: attune Millbrook, then touch the east gate's wheel again.
     g.worldFlags['way:millbrook'] = true;
     S.wheel.touch(h.wheel('glen'));
@@ -127,6 +133,8 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
     await h.settle();
     h.talk('magus');
     out.gravewood = h.stage('mq-gravewood');
+    out.bellsLead = q.leads().some((l) => l.npc === 'brannoc');
+    h.take('brannoc');
     out.bells = h.stage('mq-bells');
     // ---- The Night of Bells.
     h.talk('brannoc');
@@ -143,13 +151,17 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
     for (let i = 0; i < 40 && h.stage('mq-bells') !== 'active@2'; i++) await h.tick(4);
     await h.settle();
     h.talk('brannoc');
-    out.after = { bells: h.stage('mq-bells'), road: h.stage('road-to-port') };
+    const roadBefore = h.stage('road-to-port');
+    h.take('maud');
+    out.after = { bells: h.stage('mq-bells'), roadBefore, road: h.stage('road-to-port') };
     out.log = S.state.log.length;
     return out;
   }, HELPERS);
   expect(res.beforeWake).toEqual({ awake: false, stage: 'active@3' });
   expect(res.riteLabel).toContain('hand');
-  expect(res.afterWake).toEqual({ awake: true, crypt: 'active@0', stranger: 'done@3' });
+  expect(res.afterWake).toEqual({ awake: true, crypt: 'none', stranger: 'active@4' });
+  expect(res.reported).toEqual({ stranger: 'done@4', lead: ['maud'], crypt: 'none' });
+  expect(res.tookCrypt).toBe('active@0');
   expect(res.travelOpts.some((o: string) => /Millbrook/.test(o))).toBe(true);
   expect(res.atMillbrook).toBe(true);
   expect(res.wardens).toBe(3);
@@ -162,11 +174,12 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
   expect(res.mirrorRite).toContain('Dark');
   expect(res.mirrorFoes).toBe(6);
   expect(res.gravewood).toBe('done@3');
+  expect(res.bellsLead).toBe(true);
   expect(res.bells).toBe('active@0');
   expect(res.siege.allies).toBeGreaterThanOrEqual(2);
   expect(res.siege.militia).toBe(2);
   expect(res.siege.prep).toEqual({ fewer: 0.25, watchHp: 1, watchPower: 1.35 });
-  expect(res.after).toEqual({ bells: 'done@2', road: 'active@0' });
+  expect(res.after).toEqual({ bells: 'done@2', roadBefore: 'none', road: 'active@0' });
   expect(res.log).toBeGreaterThanOrEqual(5);
   expect(errors).toEqual([]);
 });
@@ -235,6 +248,7 @@ test('Act II and Act III part one: the index, Dorian, the ledger, the Feast, the
     q.accept('mq-archive');
     out.archiveSay = h.say('mell');
     await h.settle();
+    h.talk('mell');
     out.archive = { stage: h.stage('mq-archive'), met: ['elin', 'oswald', 'hallam', 'tobin'].every((id) => S.state.met.has(id)) };
     out.census = S.flags.censusKnown;
     // Dorian, claw-sworn: he writes to Master Veyr.
@@ -248,11 +262,13 @@ test('Act II and Act III part one: the index, Dorian, the ledger, the Feast, the
     S.director.autoChoice = 0;
     h.say('dorian');
     await h.settle();
+    h.talk('mell');
     out.dorian = { stage: h.stage('mq-dorian'), flag: S.flags.dorian };
     // The ledger (accepted when the Oldest Prayer is done).
     q.accept('oldest-prayer');
     q.state['oldest-prayer'] = { status: 'active', stage: 2, progress: [0] };
     h.talk('king');
+    h.take('king');
     out.ledger0 = h.stage('mq-ledger');
     h.talk('twig');
     S.director.autoChoice = 1;
@@ -260,6 +276,7 @@ test('Act II and Act III part one: the index, Dorian, the ledger, the Feast, the
     await h.settle();
     // Tell the King, and spare the Chancellor (the story remembers).
     out.vaun = h.choose('king', 0) && q.flag('mq-ledger', 'vaun');
+    h.take('king');
     out.ledger = { stage: h.stage('mq-ledger'), feast: h.stage('mq-feast'), clue: S.state.clues.has('heskLedger') };
     // The Feast: shield the King.
     g.time.hour = 20;
@@ -269,7 +286,9 @@ test('Act II and Act III part one: the index, Dorian, the ledger, the Feast, the
     await h.tp(PALACE[0] + 46, PALACE[1] + 8);
     await h.tick(10);
     await h.settle();
-    for (let i = 0; i < 20 && h.stage('mq-feast') !== 'done@1'; i++) await h.tick(4);
+    for (let i = 0; i < 20 && h.stage('mq-feast') !== 'active@2'; i++) await h.tick(4);
+    h.talk('king');
+    h.take('king');
     out.feast = { stage: h.stage('mq-feast'), choice: S.flags.feast, varro: S.state.met.has('varro'), clue: S.state.clues.has('heskIron'), slain: S.state.slain.has('hesk') };
     // The Wheelbreaker at dawn.
     g.time.hour = 6;
@@ -281,6 +300,8 @@ test('Act II and Act III part one: the index, Dorian, the ledger, the Feast, the
     const m = S.champions.find((c) => c.def.id === 'malric');
     if (m) m.takeHit({ damage: m.maxHp, poise: 0, dir: new T.Vector3(1, 0, 0), at: m.center.clone(), crit: false, source: 'melee' });
     await h.settle();
+    h.talk('king');
+    h.take('librarian');
     out.duel = { stage: h.stage('mq-wheelbreaker'), box: g.player.equip.items.some((i) => i.def.id === 'blackIronBox'), four: h.stage('mq-four') };
     // The four.
     g.sites.state.championCamp2 = { k: { read: true } };
@@ -314,14 +335,14 @@ test('Act II and Act III part one: the index, Dorian, the ledger, the Feast, the
     return out;
   }, HELPERS);
   expect(res.archiveSay).toContain('index');
-  expect(res.archive).toEqual({ stage: 'done@0', met: true });
+  expect(res.archive).toEqual({ stage: 'done@1', met: true });
   expect(res.census).toBe(true);
-  expect(res.dorian).toEqual({ stage: 'done@3', flag: 'friend' });
+  expect(res.dorian).toEqual({ stage: 'done@4', flag: 'friend' });
   expect(res.ledger0).toBe('active@0');
   expect(res.ledger).toEqual({ stage: 'done@2', feast: 'active@0', clue: true });
   expect(res.vaun).toBe('mercy');
-  expect(res.feast).toEqual({ stage: 'done@1', choice: 'shield', varro: true, clue: true, slain: true });
-  expect(res.duel).toEqual({ stage: 'done@1', box: true, four: 'active@0' });
+  expect(res.feast).toEqual({ stage: 'done@2', choice: 'shield', varro: true, clue: true, slain: true });
+  expect(res.duel).toEqual({ stage: 'done@2', box: true, four: 'active@0' });
   expect(res.spokes).toBe(4);
   expect(res.fourStage).toBe('active@1');
   expect(res.turning).toBe('active@0');

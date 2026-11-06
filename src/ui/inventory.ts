@@ -152,6 +152,15 @@ export class InventoryUI {
     });
   }
 
+  /** Gear and bag, or the stats sheet (the book's sub-tabs switch it). */
+  get viewId(): View {
+    return this.view;
+  }
+  setView(v: View) {
+    this.view = v;
+    if (this.open) this.render();
+  }
+
   toggle(force?: boolean) {
     this.open = force ?? !this.open;
     this.el.classList.toggle('hidden', !this.open);
@@ -235,6 +244,9 @@ export class InventoryUI {
     this.bagBody.classList.toggle('hidden', this.view !== 'items');
     this.stats.classList.toggle('hidden', this.view !== 'stats');
     this.search.style.visibility = this.sortSel.style.visibility = this.view === 'items' ? '' : 'hidden';
+    const h = this.el.querySelector('.inv-bag header h2');
+    if (h?.firstChild) h.firstChild.textContent = this.view === 'items' ? 'BAG ' : 'STATS ';
+    this.countEl.style.display = this.view === 'items' ? '' : 'none';
     if (this.view === 'items') this.renderBag();
     else this.renderStats();
   }
