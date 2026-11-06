@@ -368,7 +368,8 @@ export class QuestLog {
         },
       });
     });
-    for (const q of this.offers(npc)) {
+    // (The story's next chapter comes before any side work they have.)
+    for (const q of this.offers(npc).sort((a, b) => Number(!!b.main) - Number(!!a.main))) {
       const no = q.main || q.contract ? null : this.offerGate?.(npc, q) ?? null;
       if (no) {
         out.push({ label: `❗ ${q.title}`, run: () => show(no, [{ label: 'Back.', run: back }]) });
