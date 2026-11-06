@@ -893,7 +893,9 @@ export class Player {
   }
   /** A blow can only land if no wall stands between the swing and the target. */
   private reachable(t: Target) {
-    return physics.lineOfSight(this.center, t.center, t.radius * 0.5);
+    // Stop the ray just outside the target's own body: a training dummy's post is
+    // static geometry, and a ray to its centre would call the dummy its own wall.
+    return physics.lineOfSight(this.center, t.center, t.radius + 0.25);
   }
 
   private updateLock(cam: ThirdPersonCamera) {
