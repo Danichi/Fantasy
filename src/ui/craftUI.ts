@@ -115,6 +115,11 @@ export class CraftUI {
     events.on('equipmentChanged', () => this.refresh());
   }
 
+  /** the station open now (lessons check it) */
+  get stationKind() {
+    return this.station;
+  }
+
   /** Open at a station. `bonus` is the station's quality bonus (a master's forge: +0.5). */
   show(station: StationKind, where: string, bonus = 0) {
     this.station = station;

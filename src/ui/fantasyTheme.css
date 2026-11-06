@@ -466,6 +466,17 @@
   border: 1px solid #8a6431; border-bottom-width: 2px; border-radius: 3px;
   font: 700 11px/1 var(--sans); text-align: center;
 }
+/* A long speech comes in pages: dots for where you are, and a short reply to carry on. */
+#ui .dialogue .page { display: flex; gap: 5px; position: absolute; right: 34px; bottom: 14px; pointer-events: none; }
+#ui .dialogue .page:empty { display: none; }
+#ui .dialogue .page i { width: 6px; height: 6px; border-radius: 50%; background: rgba(122, 90, 46, .25); }
+#ui .dialogue .page i.seen { background: rgba(122, 90, 46, .55); }
+#ui .dialogue .page i.on { background: var(--ink-red); transform: scale(1.25); }
+#ui .dialogue .opts.nudge button {
+  align-self: flex-start; min-width: 160px;
+  font-style: italic; color: var(--ink-mid) !important;
+}
+#ui .dialogue .opts.nudge kbd { animation: dlgnudge 0.8s ease-in-out infinite alternate; }
 /* How the speaker feels about you, and the tone of each reply (NPC overhaul). */
 #ui .dialogue .who .mood {
   margin-left: auto; padding: 3px 9px 4px; border-radius: 10px;
@@ -679,3 +690,37 @@ body.book-open #ui .npc-tag { display: none !important; }
 /* The decisions you made and the extra things you did (the dynamic main quest). */
 #ui .journal .j-choices { margin: 10px 0 4px; padding: 8px 12px; border: 1px solid rgba(122, 31, 18, .25); border-radius: 4px; background: rgba(122, 90, 46, .06); }
 #ui .journal .j-choices div { color: rgba(46, 33, 18, .85); font: 400 14px/1.5 var(--fell); }
+
+/* ==========================================================================
+   Lessons (story/lessons.ts): the mentor's step, the goal and the keys
+   ========================================================================== */
+#ui .lesson-panel {
+  position: absolute; left: 50%; top: 92px; transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px)); padding: 12px 20px 10px;
+  color: var(--ink-dark); pointer-events: none; z-index: 30;
+  border-radius: 4px;
+  background: var(--paper-noise), linear-gradient(180deg, var(--parch-hi), var(--parch-lo));
+  box-shadow: inset 0 0 0 2px var(--parch-edge), inset 0 0 30px rgba(120, 80, 30, .25), 0 0 0 4px var(--oak-lo), 0 12px 36px rgba(0, 0, 0, .5);
+  transition: opacity .2s;
+}
+#ui .lesson-panel.waiting { opacity: .7; }
+#ui .lesson-panel .lp-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding-bottom: 6px; margin-bottom: 7px; border-bottom: 1px solid rgba(122, 90, 46, .35);
+  color: var(--ink-red); font: 700 13px/1 var(--serif); letter-spacing: .12em; text-transform: uppercase;
+}
+#ui .lesson-panel .lp-dots { display: flex; gap: 5px; }
+#ui .lesson-panel .lp-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(122, 90, 46, .22); }
+#ui .lesson-panel .lp-dots i.done { background: #5f8a3a; }
+#ui .lesson-panel .lp-dots i.on { background: var(--ink-red); box-shadow: 0 0 0 2px rgba(142, 27, 18, .2); }
+#ui .lesson-panel .lp-task { font: 400 18px/1.35 var(--fell); }
+#ui .lesson-panel .lp-task b { margin-left: 6px; color: var(--ink-red); font: 700 14px/1 var(--sans); }
+#ui .lesson-panel .lp-keys {
+  display: inline-block; margin-top: 6px; padding: 3px 8px;
+  color: #3a2810; background: linear-gradient(180deg, var(--brass-hi), #c9a259);
+  border: 1px solid #8a6431; border-bottom-width: 2px; border-radius: 3px; font: 700 11px/1.3 var(--sans);
+}
+#ui .lesson-panel .lp-praise { font: italic 400 17px/1.35 var(--fell); color: #3d5a24; }
+#ui .lesson-panel .lp-skip { margin-top: 8px; color: var(--ink-mid); font: italic 400 12px/1 var(--fell); opacity: .8; }
+/* With a book window open (bag, skills, a station), the lesson waits in the corner, out of its way. */
+body.book-open #ui .lesson-panel, #ui .lesson-panel.corner { top: auto; bottom: 18px; left: 18px; transform: none; width: min(380px, calc(100vw - 36px)); }

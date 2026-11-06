@@ -11,6 +11,10 @@ export default defineConfig({
     // node_modules may be a link (the test worktree shares the main one): serve its real path too.
     fs: { allow: [searchForWorkspaceRoot(process.cwd()), realpathSync('node_modules')] },
   },
+  // OneDrive turns node_modules files into cloud placeholders (reparse points); Vite's resolver
+  // can't follow those to a real path and fails to resolve every package (even 'three'). Keeping
+  // the paths as they are sidesteps it, and is harmless for a plain npm node_modules.
+  resolve: { preserveSymlinks: true },
   build: { target: 'es2022', chunkSizeWarningLimit: 4000 },
   optimizeDeps: { exclude: ['@dimforge/rapier3d-compat'] },
 });

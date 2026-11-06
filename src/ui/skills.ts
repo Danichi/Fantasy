@@ -235,6 +235,10 @@ export class SkillsUI {
       ['Healing', `+${Math.round((P.healPower - 1) * 100)}%`],
       ['Stamina regen', `+${Math.round(P.staminaRegen * 100)}%`],
       ['Mana regen', `+${Math.round(P.manaRegen * 100)}%`],
+      ['Block stamina cost', `-${Math.round((1 - P.blockCost) * 100)}%`],
+      ['Roll stamina cost', `-${Math.round((1 - P.rollCost) * 100)}%`],
+      ['Critical chance', `+${(P.critChance * 100).toFixed(1)}%`],
+      ['Damage taken', `-${Math.round((1 - P.guard) * 100)}%`],
     ];
     this.body.innerHTML = `<div class="sk-view">
       <p class="sk-help">You get one <b>attribute point</b> per character level and can spend it anywhere. Character level is 1 plus half the total levels of all your disciplines, so it rises whichever classes and callings you invest in.</p>

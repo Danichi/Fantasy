@@ -7,15 +7,21 @@ import { DISC, DISCIPLINES, type DisciplineDef } from './data';
 // class. XP itself lives on Progression (it's also what pickups add to).
 
 export type AttrId = 'vig' | 'end' | 'mig' | 'fin' | 'int' | 'fai' | 'spi';
+// Each point is worth about the same: Vigor used to give +10 health (8% of a
+// new hero's 120) while Might gave 3% damage with half the weapons, so every
+// build poured everything into Vigor. Now each attribute is one clear role,
+// and the damage ones also carry a defensive perk.
 export const ATTRS: { id: AttrId; name: string; glyph: string; desc: string }[] = [
-  { id: 'vig', name: 'Vigor', glyph: 'V', desc: '+10 max health.' },
-  { id: 'end', name: 'Endurance', glyph: 'E', desc: '+4 max stamina and +2% stamina regen.' },
-  { id: 'mig', name: 'Might', glyph: 'M', desc: '+3% damage with heavy weapons and +2% poise damage.' },
-  { id: 'fin', name: 'Finesse', glyph: 'F', desc: '+3% damage with light and balanced weapons.' },
-  { id: 'int', name: 'Intellect', glyph: 'I', desc: '+6 max mana and +3% spell damage.' },
-  { id: 'fai', name: 'Faith', glyph: 'Fa', desc: '+4% healing from spells and potions.' },
-  { id: 'spi', name: 'Spirit', glyph: 'S', desc: '+4% mana regen.' },
+  { id: 'vig', name: 'Vigor', glyph: 'V', desc: 'Toughness. +7 max health.' },
+  { id: 'end', name: 'Endurance', glyph: 'E', desc: 'Staying power for blocking, rolling and swinging. +6 max stamina and +4% stamina regen.' },
+  { id: 'mig', name: 'Might', glyph: 'M', desc: 'Heavy weapons and shields. +4% damage with heavy weapons (2% with balanced ones), +3% stagger with every weapon, and blocking costs 2% less stamina.' },
+  { id: 'fin', name: 'Finesse', glyph: 'F', desc: 'Light weapons and footwork. +4% damage with light weapons (2% with balanced ones), +0.5% critical chance, and rolling costs 2% less stamina.' },
+  { id: 'int', name: 'Intellect', glyph: 'I', desc: 'Spell power. +8 max mana and +4% spell damage.' },
+  { id: 'fai', name: 'Faith', glyph: 'Fa', desc: 'Protection. +5% healing from every source, and you take 1% less damage.' },
+  { id: 'spi', name: 'Spirit', glyph: 'S', desc: 'Mana flow. +6% mana regen and +4 max mana.' },
 ];
+/** the most the defensive perks can reach (so no attribute makes you untouchable) */
+const PERK_CAP = 0.35;
 
 export type NodeType = 'center' | 'minor' | 'notable' | 'active' | 'keystone' | 'choice' | 'cap';
 export interface TreeNode {
@@ -326,33 +332,49 @@ export class Paths {
   // ---- stat effects ---------------------------------------------------------------
   // Character level gives a little of everything; attributes do the rest.
   get bonusHp() {
-    return (this.charLevel - 1) * 4 + this.attrs.vig * 10;
+    return (this.charLevel - 1) * 4 + this.attrs.vig * 7;
   }
   get bonusStamina() {
-    return (this.charLevel - 1) * 2 + this.attrs.end * 4;
+    return (this.charLevel - 1) * 2 + this.attrs.end * 6;
   }
   get bonusMana() {
-    return (this.charLevel - 1) * 2 + this.attrs.int * 6;
+    return (this.charLevel - 1) * 2 + this.attrs.int * 8 + this.attrs.spi * 4;
   }
   get staminaRegen() {
-    return this.attrs.end * 0.02;
+    return this.attrs.end * 0.04;
   }
   get manaRegen() {
-    return this.attrs.spi * 0.04;
+    return this.attrs.spi * 0.06;
   }
   get spellPower() {
-    return 1 + this.attrs.int * 0.03;
+    return 1 + this.attrs.int * 0.04;
   }
   get healPower() {
-    return 1 + this.attrs.fai * 0.04;
+    return 1 + this.attrs.fai * 0.05;
   }
   /** Melee damage multiplier. Slow (heavy) weapons scale with Might, fast ones with Finesse. */
   meleePower(weaponSpeed = 1) {
     const heavy = weaponSpeed < 0.95 ? 1 : weaponSpeed > 1.05 ? 0 : 0.5;
-    return 1 + 0.03 * (this.attrs.mig * heavy + this.attrs.fin * (1 - heavy));
+    return 1 + 0.04 * (this.attrs.mig * heavy + this.attrs.fin * (1 - heavy));
   }
   get poisePower() {
-    return 1 + this.attrs.mig * 0.02;
+    return 1 + this.attrs.mig * 0.03;
+  }
+  /** Might: what a block costs in stamina (a multiplier) */
+  get blockCost() {
+    return 1 - Math.min(PERK_CAP, this.attrs.mig * 0.02);
+  }
+  /** Finesse: what a roll costs in stamina (a multiplier) */
+  get rollCost() {
+    return 1 - Math.min(PERK_CAP, this.attrs.fin * 0.02);
+  }
+  /** Finesse: extra critical chance (0..1) */
+  get critChance() {
+    return this.attrs.fin * 0.005;
+  }
+  /** Faith: the damage you take (a multiplier) */
+  get guard() {
+    return 1 - Math.min(PERK_CAP, this.attrs.fai * 0.01);
   }
 
   // ---- save ------------------------------------------------------------------------

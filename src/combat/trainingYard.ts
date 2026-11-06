@@ -79,7 +79,7 @@ export const BASICS: Step[] = [
   { id: 'lock', need: 1, goal: 'locked on', partner: ['cut'], say: 'Now someone who hits back. Press Q (or the middle mouse button) to lock on to her. Locked on, you circle her instead of wandering off.' },
   { id: 'block', need: 2, goal: 'blows blocked', partner: ['cut'], say: 'Hold right click to raise your guard, shield or blade. Take two of her cuts on it. Blocking costs stamina: the green bar. When it runs out, your guard breaks.' },
   { id: 'parry', need: 1, goal: 'parry', partner: ['cut'], say: 'Better than a block: a parry. Press F just as her blade arrives. Too early and you only knock it aside. Turn one blow.' },
-  { id: 'dodge', need: 2, goal: 'attacks dodged', partner: ['lunge', 'cleave'], say: 'Some blows can\'t be stopped. A red glint means get out of the way. Space rolls you clear (with no direction held, you hop back). Dodge two of her attacks.' },
+  { id: 'dodge', need: 2, goal: 'attacks dodged', partner: ['lunge', 'cleave'], say: 'Some blows can\'t be stopped. A red glint means get out of the way. Space rolls you clear, the way you push (or straight ahead, if you push nowhere). Dodge two of her attacks.' },
   { id: 'kick', need: 1, goal: 'kick, then a cut', partner: ['cut'], say: 'When someone hides behind their guard, kick it in: G. Then cut while they stagger.' },
   { id: 'finish', need: 1, goal: 'finisher', partner: ['cut', 'flurry'], postureMax: 70, say: 'Everything you land, block or parry wears down her posture: the bar under her health. When it breaks she reels. Get close and strike for a finisher.' },
 ];
@@ -246,6 +246,40 @@ export class TrainingYard {
     const toward = new THREE.Vector3(-k.x, 0, -4 - k.z).normalize();
     this.ring.set(k.x + toward.x * 7, 0, k.z + toward.z * 7);
     this.ring.y = heightAt(this.ring.x, this.ring.z);
+  }
+
+  /** Lessons: stand in the ring, facing where the partner will come in. */
+  lessonRing() {
+    this.placeRing();
+    this.player.teleport(this.ring.clone().add(new THREE.Vector3(0, 0.05, 2.5)));
+    this.player.yaw = Math.PI;
+  }
+
+  /** Lessons: a sparring partner at the ring (null sends her away). */
+  lessonSpar(moves: string[] | null, postureMax?: number) {
+    if (!moves) {
+      if (this.partner) {
+        const p = this.partner;
+        setTimeout(() => p.dispose(), 600);
+      }
+      this.partner = null;
+      this.player.damageFloor = 0;
+      return;
+    }
+    if (!this.partner) this.placeRing();
+    this.player.damageFloor = this.player.maxHp * 0.2;
+    this.spar(moves, postureMax);
+  }
+  get lessonPartner(): Target | null {
+    return this.partner;
+  }
+  /** step the lesson's partner (the yard only steps her during a drill) */
+  lessonUpdate(dt: number) {
+    const p = this.partner;
+    if (this.active || !p) return;
+    if (!p.alive || p.hp < p.maxHp * 0.1) p.hp = p.maxHp;
+    p.update(dt, this.player);
+    if (this.player.hp <= this.player.maxHp * 0.22) this.player.hp = this.player.maxHp;
   }
 
   /** A sparring partner who only throws `moves` (a new one stands in if the moves change). */

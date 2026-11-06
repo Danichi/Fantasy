@@ -63,9 +63,18 @@ export class SunwheelNetwork {
     const title = node.name;
     const who = KIND_NAME[node.kind];
     if (!this.h.awake()) {
+      // Asleep, but the story may be waiting here (Magus Orren's waystone: the
+      // rite that wakes it). That rite has to be offered before the wheel is
+      // awake, or the main quest can never move on.
+      const waking = this.h.rite?.(node);
+      if (waking) {
+        this.h.show(who, title, 'The Sunwheel carved here goes warm the moment your palm touches it. Light gathers in the spokes. Something on the other side of the stone is listening for you.', [waking, { label: 'Step back.', run: () => this.h.close() }]);
+        this.h.save();
+        return;
+      }
       this.h.show(who, title, first
         ? 'The Sunwheel carved here warms under your palm and glows, as if it has remembered you. Something in you answers, very faintly, and then nothing more. Not yet.'
-        : 'The wheel glows at your touch, and waits. Whatever it is waiting for, it isn\'t here yet.', [{ label: 'Step back.', run: () => this.h.close() }]);
+        : 'The wheel glows at your touch, and waits. It knows you now, but it will not carry you yet. (Magus Orren in Elder Glen knows more about the wheels.)', [{ label: 'Step back.', run: () => this.h.close() }]);
       this.h.save();
       return;
     }

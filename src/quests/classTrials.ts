@@ -1,6 +1,7 @@
 import type { QuestDef, QuestLog } from './questLog';
 import type { Paths } from '../paths/paths';
 import { DISC } from '../paths/data';
+import { lessonHook } from '../paths/mentors';
 import { CRYPT } from '../world/terrainHeight';
 import { CHAPEL } from '../world/kingsRoad';
 
@@ -92,6 +93,8 @@ export function setupClassTrials(o: { quests: QuestLog; paths: Paths; toast: (m:
   for (const [quest, disc] of Object.entries(TEACHES)) {
     o.quests.hooks.set(quest + ':done', () => {
       if (o.paths.learned(disc)) return; // already taught (or re-run on load)
+      // The mentor's lesson does the teaching, once the turn-in conversation is over.
+      if (lessonHook.start?.(DISC[disc], true)) return;
       if (o.paths.teach(disc)) o.toast(`Learned ${DISC[disc].name} · open Skills (K) to invest XP`);
     });
   }

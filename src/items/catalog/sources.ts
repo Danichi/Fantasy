@@ -29,17 +29,65 @@ export interface SourceDeps {
 }
 
 /** The shop kinds a keeper's name, title and greeting suggest. */
+// Matched on the keeper's name and title first, whole words only: the old
+// match ran over their greeting too, so "rough travel" made a carpenter a
+// trader and "during" made anyone a jeweller.
 const KINDS: [string, RegExp][] = [
-  ['smith', /smith|forge|arms|armou?r|blade|weapon|steel|fröst|ragna|brightforge|anvil|quartermaster/i],
-  ['tailor', /tailor|thread|cloth|silk|leather|vela|weaver|seamstress|cloak|tanner/i],
-  ['alchemist', /alchem|apothecar|draught|herbal|potion|medicine|remed|quill|ilyra|wenna|hedge/i],
-  ['inn', /\binn\b|tavern|baker|cook|kitchen|food|\bale\b|provision|mara\b|hester|stag|galley|bread|ration/i],
-  ['arcane', /arcan|mage|magic|scroll|library|collegium|sera|archmage|orren|scribe/i],
-  ['jeweller', /jewel|gem|glass|gold(smith)?\b|bruni|ring/i],
-  ['bowyer', /bow|fletch|carpenter|bram|hunter|timber/i],
-  ['temple', /temple|dawn|chapel|pilgrim|priest|sister|brother/i],
-  ['trader', /trader|merchant|market|bazaar|wander|caravan|scrap|fence|hawker|goods|wares|rope|travel/i],
+  ['smith', /smith\b|\bforge|\barms\b|armou?rer|weapon|fröst|ragna|brightforge|anvil|quartermaster/i],
+  ['tailor', /tailor|\bthread\b|clothier|silk|leatherworker|\bvela\b|weaver|seamstress|tanner/i],
+  ['alchemist', /alchem|apothecar|herbalist|\bquill\b|\bilyra\b|\bwenna\b|hedge-?witch/i],
+  ['inn', /\binn(keeper)?\b|tavern|baker|\bcook\b|kitchen|provisioner|\bmara\b|hester|galley/i],
+  ['arcane', /arcan|\bmagus\b|\bmage\b|magic|scroll|library|collegium|\bsera\b|archmage|\borren\b|scribe/i],
+  ['jeweller', /jewel|\bgem|glassblow|goldsmith|\bbruni\b/i],
+  ['bowyer', /bowyer|fletch|carpenter|shieldwright|\bbram\b|hunter|timber/i],
+  ['temple', /temple|\bdawn\b|chapel|pilgrim|priest|sister|brother/i],
+  ['trader', /trader|merchant|market|bazaar|wander|caravan|scrap|\bfence\b|hawker|peddler|outfitter/i],
 ];
+const RAR_RANK: Record<string, number> = { common: 0, fine: 1, rare: 2, epic: 3, legendary: 4 };
+const named = (d: ItemDef, rx: RegExp) => rx.test(d.id) || rx.test(d.name);
+/**
+ * Does this item belong on this trade's counter? A tailor sells cloth and
+ * leather and what is sewn from them, not steel; a smith sells steel.
+ */
+export function fitsTrade(kind: string, d: ItemDef): boolean {
+  const weight = d.look?.weight;
+  const mat = d.kind === 'material';
+  switch (kind) {
+    case 'smith':
+      return (isWeaponKind(d.kind) && d.kind !== 'bow' && d.kind !== 'staff') || d.kind === 'shield'
+        || (d.kind === 'armor' && (weight === 'mail' || weight === 'plate'))
+        || (d.kind === 'ammo' && d.ammo === 'bolt') || d.kind === 'tool'
+        || (mat && named(d, /ingot|\bore\b|Ore$|coal|rivet/i)) || named(d, /repairKit|whetstone/i);
+    case 'tailor':
+      return (d.kind === 'armor' && (weight === 'robe' || weight === 'leather' || d.slot === 'cloak'))
+        || (d.kind === 'accessory' && d.slot === 'belt')
+        || (mat && named(d, /hide|leather|cloth|wool|linen|silk|felt|fleece|cotton|byssus|thread|flax|weave|fur/i))
+        || named(d, /repairKit|Patterns/i);
+    case 'alchemist':
+      return d.kind === 'consumable'
+        || (mat && named(d, /herb|root|leaf|petal|moss|cap\b|bloom|salt|vial|resin|venom|ichor|sap\b|spore|flower|thistle|wort|weed/i))
+        || named(d, /bookAlchemy/i);
+    case 'inn':
+      return (d.kind === 'consumable' && named(d, /meal|stew|bread|ale\b|mead|wine|cheese|pie\b|soup|roast|ration|honey|tea\b|fish|berr|apple|loaf|cake|potion|draught/i))
+        || named(d, /seed|bookCooking/i);
+    case 'arcane':
+      return d.kind === 'spell' || d.kind === 'staff' || (d.kind === 'armor' && weight === 'robe')
+        || (d.kind === 'consumable' && named(d, /mana|scroll|rune|ward|recall/i))
+        || (mat && named(d, /dust|essence|crystal|ink|parchment|rune|arcane|shard|mote/i)) || /^book/.test(d.id);
+    case 'jeweller':
+      return (d.kind === 'accessory' && d.slot !== 'belt')
+        || (mat && named(d, /gem|ruby|sapphire|emerald|diamond|pearl|amber|opal|garnet|topaz|jade|sunstone|silver|gold|quartz|amethyst/i));
+    case 'bowyer':
+      return d.kind === 'bow' || d.kind === 'crossbow' || d.kind === 'staff' || d.kind === 'spear' || d.kind === 'ammo' || d.kind === 'shield'
+        || d.tool === 'hatchet' || (mat && named(d, /wood|timber|plank|feather|sinew|string|resin/i));
+    case 'temple':
+      return (d.kind === 'consumable' && named(d, /holy|blessed|dawn|prayer|candle|incense|relic|water|ward/i))
+        || (d.kind === 'accessory' && named(d, /holy|dawn|sun|prayer|relic|saint|icon/i));
+    case 'trader':
+      return d.kind === 'consumable' || d.kind === 'tool' || d.kind === 'ammo' || (d.kind === 'accessory' && d.slot === 'belt') || (mat && (d.tier ?? 1) <= 2);
+  }
+  return true;
+}
 
 const RAR_PRICE: Record<string, number> = { common: 10, fine: 32, rare: 85, epic: 220, legendary: 600 };
 
@@ -193,19 +241,28 @@ export class CatalogSources {
   // ---- shops -------------------------------------------------------------------------------------
   /** The catalog's stock for a shop: its kinds at the region's tier, and any faction it serves. */
   stockFor(who: string, title: string, intro: string, stock: Stock): Stock {
-    const text = `${who} ${title} ${intro}`;
     const reg = this.d.region();
     const t = Math.max(1, Math.min(6, tierOfRegion(reg) || 1));
+    // Ordinary counters don't carry treasure: fine goods at most near the start,
+    // rare from the middle of the map, epic only in the far regions.
+    const cap = t <= 2 ? 1 : t <= 4 ? 2 : 3;
+    let kinds = KINDS.filter(([, rx]) => rx.test(`${who} ${title}`)).map(([k]) => k);
+    // (Someone with no trade in their name or title: then their greeting may say it.)
+    if (!kinds.length) kinds = KINDS.filter(([, rx]) => rx.test(intro)).map(([k]) => k).slice(0, 1);
+    const text = `${who} ${title}`;
     const day = this.d.day();
     const seed = hash(who) + day;
     const have = new Set(stock.map(([id]) => id));
     const out: Stock = [];
-    const put = (id: string) => {
+    const put = (id: string, capAt = cap) => {
       if (have.has(id) || !ITEMS[id]) return;
+      const d = ITEMS[id];
+      if ((RAR_RANK[d.rarity] ?? 0) > capAt) return;
+      // Only what one of their trades makes.
+      if (kinds.length && !kinds.some((k) => fitsTrade(k, d))) return;
       have.add(id);
       out.push([id, priceOf(ITEMS[id])]);
     };
-    const kinds = KINDS.filter(([, rx]) => rx.test(text)).map(([k]) => k);
     for (const k of kinds) {
       const now = withTag(`shop:${k}:${t}`), prev = t > 1 ? withTag(`shop:${k}:${t - 1}`) : [];
       const n = k === 'smith' || k === 'tailor' ? 12 : 7;
@@ -218,8 +275,10 @@ export class CatalogSources {
       const qm = f.shop?.test(text);
       const home = f.home.includes(reg) && kinds.some((k) => k === 'smith' || k === 'tailor' || k === 'trader');
       if (!qm && !home) continue;
-      const pool = withTag(`fshop:${key}`);
-      for (const id of rotate(pool, seed + key.length, qm ? 10 : 4)) put(id);
+      // A quartermaster serves their whole faction (one grade better than a plain
+      // counter); anyone else only stocks the faction's pieces of their own trade.
+      const pool = withTag(`fshop:${key}`).filter((id) => ITEMS[id] && (qm || kinds.some((k) => fitsTrade(k, ITEMS[id]))));
+      for (const id of rotate(pool, seed + key.length, qm ? 10 : 4)) put(id, qm ? cap + 1 : cap);
     }
     const all = [...stock, ...out];
     const off = this.d.gear.fx.shopDiscount ?? 0;
