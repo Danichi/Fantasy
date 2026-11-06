@@ -124,6 +124,8 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
     out.clues = [...S.state.clues];
     h.talk('maud');
     out.crypt = h.stage('mq-crypt');
+    // Maud sends you to Orren; the Dead Wood is his to put to you.
+    h.take('magus');
     // ---- The Dead Wood.
     out.ringRite = h.rite('ring');
     await h.settle();
