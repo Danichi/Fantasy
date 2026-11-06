@@ -246,6 +246,11 @@ export const ITEMS: Record<string, ItemDef> = {
     desc: 'A fist-sized steel buckler with a spike in the boss. Catches blades, and parries like lightning.',
     stats: { block: 60, stability: 0.35, poise: 3 }, build: () => { const s = buildRoundShield('plain', ['#5a5f66', '#8a8f96']); s.scale.setScalar(0.6); return s; },
   },
+  rustedShield: {
+    id: 'rustedShield', name: 'Rusted Buckler', kind: 'shield', slot: 'off', rarity: 'common',
+    desc: 'A dented little buckler from the same furrow as the blade, its rim eaten through in places. It will turn a blow or two. Hold right mouse to block; F to parry.',
+    stats: { block: 55, stability: 0.3 }, build: () => { const s = buildRoundShield('plain', ['#6b4a32', '#7d5a3a']); s.scale.setScalar(0.72); return s; },
+  },
   roundShield: {
     id: 'roundShield', name: 'Round Shield', kind: 'shield', slot: 'off', rarity: 'common',
     desc: 'Linden planks with an iron rim and boss. Light, and quick to parry with.',

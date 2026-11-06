@@ -560,7 +560,7 @@ export class Player {
     // Rolls by armour weight: light gear rolls far and long, heavy gear short and costly.
     if (def.roll && !def.roll.back) def = this.weighRoll(def);
     const m = this.mods;
-    const stam = def.stamina * m.staminaCost * (def.roll ? m.dodgeCost : 1);
+    const stam = def.stamina * m.staminaCost * (def.roll ? m.dodgeCost * this.paths.rollCost : 1);
     if (stam > 0 && this.stamina <= 0) {
       events.emit('notEnough', { stat: 'stamina' });
       return false;
@@ -674,7 +674,8 @@ export class Player {
       if (b.a === 'attack' && eq.mainWeapon) next = !this.grounded ? 'airAttack' : this.sprinting ? 'sprintAttack' : this.opener();
       else if (b.a === 'offhand' && eq.dualWield) next = 'offslash1';
       else if (b.a === 'kick') next = shove();
-      else if (b.a === 'dodge') next = this.grounded ? (this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep') : null;
+      // A dodge is always a roll: the way you push, or the way you face (no little backstep on its own).
+      else if (b.a === 'dodge') next = this.grounded ? 'roll' : null;
       else if (b.a === 'parry') next = parry();
       else if (b.a === 'cast') next = this.spellAction();
       if (next === null && b.a === 'dodge' && !this.grounded) return; // keep it for landing
@@ -696,7 +697,7 @@ export class Player {
         else next = c.next;
       } else if (b.a === 'offhand' && eq.dualWield && comboOpen) next = d.id.startsWith('offslash') && d.combo ? d.combo.next : 'offslash1';
       else if (b.a === 'kick' && a.t >= cancelAt) next = shove();
-      else if (b.a === 'dodge' && a.t >= cancelAt && this.grounded) next = this.moveIntent.lengthSq() > 0 ? 'roll' : 'backstep';
+      else if (b.a === 'dodge' && a.t >= cancelAt && this.grounded) next = 'roll';
       else if (b.a === 'parry' && a.t >= cancelAt) next = parry();
       else return; // keep buffering
     }
@@ -893,7 +894,9 @@ export class Player {
   }
   /** A blow can only land if no wall stands between the swing and the target. */
   private reachable(t: Target) {
-    return physics.lineOfSight(this.center, t.center, t.radius * 0.5);
+    // Stop the ray just outside the target's own body: a training dummy's post is
+    // static geometry, and a ray to its centre would call the dummy its own wall.
+    return physics.lineOfSight(this.center, t.center, t.radius + 0.25);
   }
 
   private updateLock(cam: ThirdPersonCamera) {
@@ -1299,7 +1302,10 @@ export class Player {
     if (this.dead && anim.has('death')) anim.setFull('death', this.deadT, 0.15);
     else if (a?.usingClip) anim.setFull(a.def.clip!, at, a.blendIn ?? 0.12, 0.2);
     else if (rolling && anim.has('jump_air')) anim.setFull('jump_air', 0.42, 0.06, 0.18); // tucked ball for the roll
-    else if (!a && !this.flying && (!this.grounded || this.landT < 0.34) && anim.has('jump_air')) {
+    // Airborne for the clip only on a real jump or a real fall: a body that is a
+    // hair off the ground (spawning, a teleport, a bump in the road) stays standing.
+    // (It used to spawn frozen in the jump pose behind the title screen.)
+    else if (!a && !this.flying && ((!this.grounded && (this.vel.y > 0.5 || this.airTime > 0.15)) || this.landT < 0.34) && anim.has('jump_air')) {
       // Jump clip time follows the physical arc: rise, apex, fall, land.
       const vy = this.vel.y;
       const t = !this.grounded ? (vy > 0 ? 0.27 + (1 - vy / JUMP_V) * 0.2 : 0.47 + Math.min(1, -vy / JUMP_V) * 0.15) : 0.62 + this.landT;
@@ -1411,11 +1417,13 @@ export class Player {
     }
     this.lastPose = pose;
 
-    // Procedural roll: rotate the tucked body around its middle.
+    // Procedural roll: rotate the tucked body around its middle. Only for a
+    // body without the roll clip: the clip already rolls, and spinning the
+    // whole body on top of it made the hero flip twice.
     const vis = this.char.visual;
     vis.rotation.set(0, 0, 0);
     vis.position.set(0, 0, 0);
-    if (rolling) {
+    if (rolling && !a?.usingClip) {
       const k = smoothstep(0.04, 0.58, at);
       const ang = k * Math.PI * 2;
       const pivot = 0.5;
@@ -1597,7 +1605,7 @@ export class Player {
         at: at2,
         source: 'melee',
         heavy,
-        keen: this.mods.crit + (ws.crit ?? 0),
+        keen: this.mods.crit + this.paths.critChance + (ws.crit ?? 0),
         forceCrit: !!extra?.crit || counter,
         pierce: ws.pierce,
         finisher: fin,
@@ -1647,6 +1655,7 @@ export class Player {
         events.emit('slowMo', { scale: 0.35, sec: 0.4 });
       }
       this.onDodged?.(att);
+      events.emit('attackDodged', { at: this.center });
       return 'dodged';
     }
     const toAtt = att.from.clone().sub(this.pos).setY(0).normalize();
@@ -1686,7 +1695,7 @@ export class Player {
     if (this.blocking && answerable && (this.equip.hasShield || guard) && facing > this.blockFacing && this.blockT > 0.06) {
       const st = guard ?? this.equip.offItem!.def.stats;
       // Heavy blows cost far more to hold.
-      const cost = (att.damage * (1 - (st.stability ?? 0.4)) * 1.1 + 4) * this.mods.blockCost * (kind === 'heavy' ? 1.8 : 1);
+      const cost = (att.damage * (1 - (st.stability ?? 0.4)) * 1.1 + 4) * this.mods.blockCost * this.paths.blockCost * (kind === 'heavy' ? 1.8 : 1);
       this.stamina -= cost;
       this.staminaDelay = 0.8;
       this.blockHitT = 0;
@@ -1744,7 +1753,7 @@ export class Player {
 
   private applyDamage(d: number) {
     if (d <= 0 || this.invulnerable) return;
-    d *= this.mods.dmgTaken;
+    d *= this.mods.dmgTaken * this.paths.guard;
     if (this.absorb) d = this.absorb(d);
     if (d <= 0) return;
     this.hp = Math.max(this.damageFloor, this.hp - d);

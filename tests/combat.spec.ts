@@ -358,3 +358,34 @@ test('balance: every weapon family kills every armour within reason (light strin
   }
   expect(game.errors).toEqual([]);
 });
+
+test('the plaza training dummies take hits (their posts are not walls)', async ({ game }) => {
+  const { page } = game;
+  const res = await page.evaluate(async () => {
+    const g = (window as any).__game, p = g.player, T = g.THREE;
+    const { targets } = await import('/src/combat/targets.ts');
+    const dummies = [...targets].filter((t: { kind: string }) => t.kind === 'dummy');
+    const start = p.pos.clone(), yaw0 = p.yaw;
+    let hits = 0;
+    const off = g.events.on('meleeHit', (e: { target: { kind: string } }) => e.target.kind === 'dummy' && hits++);
+    for (const d of dummies) {
+      const away = new T.Vector3(1, 0, 0.4).normalize();
+      p.teleport(d.position.clone().addScaledVector(away, 1.5).setY(d.position.y + 0.3));
+      await (window as any).W(20);
+      p.yaw = Math.atan2(d.position.x - p.pos.x, d.position.z - p.pos.z);
+      p.lock = null;
+      g.input.press('Mouse0');
+      await (window as any).W(4);
+      g.input.release('Mouse0');
+      await (window as any).W(60);
+    }
+    off?.();
+    // Back where the test began, so the next test starts in the open.
+    p.teleport(start);
+    p.yaw = yaw0;
+    await (window as any).W(10);
+    return { dummies: dummies.length, hits };
+  });
+  expect(res.dummies).toBe(3);
+  expect(res.hits).toBe(3);
+});

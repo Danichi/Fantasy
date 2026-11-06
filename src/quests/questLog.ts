@@ -121,6 +121,8 @@ export interface QuestContext {
   /** world position of an NPC (for markers), null if unknown */
   npcPos(id: string): THREE.Vector3 | null;
   hour(): number;
+  /** an item's name (for "what's in it for me?") */
+  itemName?(id: string): string;
   /** a quest NPC who isn't where you'd expect (asleep, indoors, off their post), and when they're back */
   npcAway?(id: string): Away | null;
   /** an NPC's name as the player knows it (for "speak with..." leads) */
@@ -379,18 +381,10 @@ export class QuestLog {
         label: `❗ ${q.title}`,
         // The story's next chapter is what they want to talk about.
         auto: !!q.main,
-        run: () => this.offerNow(q, show, back),
+        run: () => this.offerTalk(q, show, back),
       });
     }
     return out;
-  }
-
-  /** Someone puts a quest to you: their words, then yes or not yet. */
-  private offerNow(q: QuestDef, show: (text: string, opts: DialogueOption[]) => void, back: () => void) {
-    show(q.offer, [
-      { label: q.acceptLabel ?? 'I\'ll do it.', run: () => { this.accept(q.id); show(q.stages[0].note, [{ label: 'Farewell.', run: back }]); } },
-      { label: 'Not right now.', run: back },
-    ]);
   }
 
   /**
@@ -402,7 +396,7 @@ export class QuestLog {
   private afterWord(q: QuestDef, npc: string, finishing: boolean, show: (text: string, opts: DialogueOption[]) => void, back: () => void): DialogueOption[] {
     if (!finishing) return [{ label: 'On it.', run: back }];
     const next = q.main ? this.offers(npc).find((n) => n.main && n.offer) : undefined;
-    if (next) return [{ label: 'What now?', run: () => this.offerNow(next, show, back) }];
+    if (next) return [{ label: 'What now?', run: () => this.offerTalk(next, show, back) }];
     return [{ label: 'Glad to help.', run: back }];
   }
 
@@ -416,6 +410,35 @@ export class QuestLog {
     return [...this.defs.values()]
       .filter((q) => q.main && !!q.offer && this.canOffer(q) && !this.offerHidden?.(q.giver, q))
       .map((q) => ({ quest: q, npc: q.giver, name: this.ctx.npcName?.(q.giver) ?? q.giver }));
+  }
+
+  /**
+   * Offering a quest is a conversation: they ask, and you can ask back
+   * (the pay, where to start) before you give your answer.
+   */
+  private offerTalk(q: QuestDef, show: (text: string, opts: DialogueOption[]) => void, back: () => void) {
+    const asked = new Set<string>();
+    const answer = () => {
+      const r = q.rewards;
+      const k = q.contract ? 1 : this.rewardMult?.(q.giver) ?? 1;
+      const gold = Math.round(r.gold * k);
+      const things = (r.items ?? []).map(([id, n]) => (n > 1 ? `${n} × ` : '') + (this.ctx.itemName?.(id) ?? id));
+      const pay = gold ? `${gold} gold` : '';
+      const all = [pay, ...things].filter(Boolean);
+      if (!all.length) return 'Pay? There\'s no purse in this one. But you\'ll come out of it knowing more than you do now — and people remember who helped.';
+      const list = all.length > 1 ? `${all.slice(0, -1).join(', ')} and ${all[all.length - 1]}` : all[0];
+      return `${list}. That's what it's worth to me${gold > r.gold ? ' — a little extra, for a friend' : ''}.`;
+    };
+    const ask = [
+      { id: 'pay', label: 'What\'s in it for me?', say: answer },
+      { id: 'start', label: 'Where would I start?', say: () => this.note(q, 0) },
+    ];
+    const choose = (text: string) => show(text, [
+      { label: q.acceptLabel ?? 'I\'ll do it.', tone: 'kind', run: () => { this.accept(q.id); show(this.note(q, 0), [{ label: 'Farewell.', run: back }]); } },
+      ...ask.filter((a) => !asked.has(a.id)).map((a) => ({ label: a.label, run: () => { asked.add(a.id); choose(a.say()); } })),
+      { label: 'Not right now.', run: back },
+    ]);
+    choose(q.offer || q.summary);
   }
 
   /**

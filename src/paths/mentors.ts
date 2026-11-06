@@ -1,7 +1,14 @@
 import type { DialogueOption } from '../ui/dialogue';
 import type { NpcSpec } from '../npc/npc';
-import { DISC, DISCIPLINES } from './data';
+import { DISC, DISCIPLINES, type DisciplineDef } from './data';
 import type { Paths } from './paths';
+
+/**
+ * Lessons (story/lessons.ts): set by main. Being taught plays the mentor's
+ * lesson, which does the teaching; `wait` holds it until the conversation
+ * that led to it has closed (a trial's turn-in). False: no lesson ran.
+ */
+export const lessonHook: { start?: (d: DisciplineDef, wait?: boolean) => boolean; has?: (id: string) => boolean } = {};
 
 // What a mentor can do for you, as extra dialogue replies: teach their
 // disciplines, make one of their combat classes your active one, or undo
@@ -39,6 +46,8 @@ export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: 
             say(`Not yet. Come back when your ${DISC[req].name} has reached level ${lv}.`);
             return;
           }
+          // The lesson teaches it, one step at a time (the tree opens at the end).
+          if (lessonHook.start?.(d)) return;
           paths.teach(d.id);
           notify(`Learned ${d.name} · open Skills (K) to invest XP`);
           say(`${d.flavour} That is the first lesson. The rest you pay for in sweat, and in the XP you bring me.`);
@@ -46,6 +55,7 @@ export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: 
       });
       continue;
     }
+    if (lessonHook.has?.(d.id)) out.push({ label: `Go over the first lesson of ${d.name} again.`, run: () => void lessonHook.start?.(d) });
     if (d.fam === 'combat' && paths.active !== d.id) {
       out.push({
         label: `Make ${d.name} my fighting class.`,

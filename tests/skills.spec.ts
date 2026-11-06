@@ -55,15 +55,15 @@ test('attributes change the player\'s real stats', async ({ game }) => {
     while (P.raise('vig')) spentAll.push(1);
     return {
       free, lvl: P.charLevel,
-      dHp: p.maxHp - hp0 - spentAll.length * 10, dSt: p.maxStamina - st0, dMp: p.maxMana - mp0,
+      dHp: p.maxHp - hp0 - spentAll.length * 7, dSt: p.maxStamina - st0, dMp: p.maxMana - mp0,
       melee: P.meleePower(1) - melee0, freeAfter: P.attrFree, extra: P.raise('vig'),
     };
   });
   expect(res.free).toBeGreaterThan(3);
-  expect(res.dHp).toBe(10);
-  expect(res.dSt).toBe(4);
-  expect(res.dMp).toBe(6);
-  expect(res.melee).toBeCloseTo(0.015, 5); // balanced weapon: half of Finesse's 3%
+  expect(res.dHp).toBe(7);
+  expect(res.dSt).toBe(6);
+  expect(res.dMp).toBe(8);
+  expect(res.melee).toBeCloseTo(0.02, 5); // balanced weapon: half of Finesse's 4%
   expect(res.freeAfter).toBe(0);
   expect(res.extra).toBe(false);
   expect(errors).toEqual([]);

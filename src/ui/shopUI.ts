@@ -1,5 +1,6 @@
 import { ITEMS, itemValue, traitLines, STAT_LABEL, type ItemDef, type ItemStats } from '../items/itemDefs';
 import { iconFor } from './icons';
+import { isWeaponKind } from '../items/weapons/kinds';
 import { events } from '../core/events';
 import type { Player } from '../player/player';
 
@@ -32,10 +33,11 @@ const fmt = (k: keyof ItemStats, v: number) =>
   k === 'speed' ? `×${v.toFixed(2)}` : k === 'stability' ? `${Math.round(v * 100)}%` : k === 'damagePct' || k === 'staminaRegen' || k === 'manaRegen' ? `+${Math.round(v * 100)}%` : `${Math.round(v)}`;
 
 type Tab = 'buy' | 'sell' | 'back';
-type Filter = 'all' | 'arms' | 'armour' | 'magic' | 'supplies' | 'goods';
-const FILTERS: [Filter, string][] = [['all', 'All'], ['arms', 'Weapons & shields'], ['armour', 'Armour & trinkets'], ['magic', 'Spells'], ['supplies', 'Supplies'], ['goods', 'Goods']];
+// No "everything at once" list: the counter is always shown one section at a time.
+type Filter = 'weapons' | 'shields' | 'armour' | 'trinkets' | 'magic' | 'supplies' | 'goods';
+const FILTERS: [Filter, string][] = [['weapons', 'Weapons'], ['shields', 'Shields'], ['armour', 'Armour'], ['trinkets', 'Trinkets'], ['magic', 'Spells'], ['supplies', 'Supplies'], ['goods', 'Goods']];
 const groupOf = (d: ItemDef): Filter =>
-  d.kind === 'sword' || d.kind === 'shield' ? 'arms' : d.kind === 'armor' || d.kind === 'accessory' ? 'armour' : d.kind === 'spell' ? 'magic' : d.kind === 'consumable' ? 'supplies' : 'goods';
+  isWeaponKind(d.kind) || d.kind === 'ammo' ? 'weapons' : d.kind === 'shield' ? 'shields' : d.kind === 'armor' ? 'armour' : d.kind === 'accessory' ? 'trinkets' : d.kind === 'spell' ? 'magic' : d.kind === 'consumable' || d.kind === 'tool' ? 'supplies' : 'goods';
 
 export class ShopUI {
   open = false;
@@ -43,7 +45,7 @@ export class ShopUI {
   private el: HTMLDivElement;
   private opts: ShopOpts | null = null;
   private tab: Tab = 'buy';
-  private filter: Filter = 'all';
+  private filter: Filter = 'weapons';
   private note = '';
   private noteBad = false;
   /** what you sold this visit, so you can change your mind (at the price you were paid) */
@@ -83,7 +85,6 @@ export class ShopUI {
   show(opts: ShopOpts) {
     this.opts = opts;
     this.tab = 'buy';
-    this.filter = 'all';
     this.note = '';
     this.sold = [];
     this.open = true;
@@ -224,8 +225,10 @@ export class ShopUI {
 
   private chips(defs: ItemDef[]) {
     const have = new Set(defs.map(groupOf));
+    // Stay on the section you picked while it has anything; otherwise the first that does.
+    if (!have.has(this.filter)) this.filter = FILTERS.find(([f]) => have.has(f))?.[0] ?? this.filter;
     if (have.size < 2) return '';
-    return `<div class="sc-chips">${FILTERS.filter(([f]) => f === 'all' || have.has(f)).map(([f, label]) => `<button data-act="filter" data-f="${f}" class="${this.filter === f ? 'on' : ''}">${label}</button>`).join('')}</div>`;
+    return `<div class="sc-chips">${FILTERS.filter(([f]) => have.has(f)).map(([f, label]) => `<button data-act="filter" data-f="${f}" class="${this.filter === f ? 'on' : ''}">${label}</button>`).join('')}</div>`;
   }
 
   private render(top: boolean) {
@@ -234,7 +237,7 @@ export class ShopUI {
     const scroll = top ? 0 : this.el.querySelector('.sc-list')?.scrollTop ?? 0;
     const p = this.player, eq = p.equip;
     const gold = p.prog.gold;
-    const show = (d: ItemDef) => this.filter === 'all' || groupOf(d) === this.filter;
+    const show = (d: ItemDef) => groupOf(d) === this.filter;
     let body = '', chips = '';
     if (this.tab === 'buy') {
       const stock = o.stock.filter(([id]) => ITEMS[id]);
@@ -250,7 +253,8 @@ export class ShopUI {
         return this.card(def, `<div class="sc-price">${price}<i>g</i></div>${btns}`, tags);
       }).join('');
       if (!body) body = '<p class="sc-empty">Nothing of that kind on the counter today.</p>';
-      if (o.locked?.length && this.filter === 'all') body += `<div class="sc-locked-h">Promised, not yet in stock</div>` + o.locked.map(([id, why]) => `<div class="sc-locked r-${ITEMS[id]?.rarity}"><b>${esc(ITEMS[id]?.name ?? id)}</b><span>${esc(why)}</span></div>`).join('');
+      const locked = (o.locked ?? []).filter(([id]) => ITEMS[id] && show(ITEMS[id]));
+      if (locked.length) body += `<div class="sc-locked-h">Promised, not yet in stock</div>` + locked.map(([id, why]) => `<div class="sc-locked r-${ITEMS[id]?.rarity}"><b>${esc(ITEMS[id]?.name ?? id)}</b><span>${esc(why)}</span></div>`).join('');
     } else if (this.tab === 'sell') {
       const items = eq.items.filter((it) => it.def.kind !== 'key' && !eq.slotOf(it.uid));
       chips = this.chips(items.map((i) => i.def));

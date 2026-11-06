@@ -39,6 +39,8 @@ export interface GameEvents {
   /** the defence ladder: a parry inside the first frames, a last-moment dodge, a block answered with a counter */
   perfectParry: { at: Vector3 };
   perfectDodge: { at: Vector3 };
+  /** any blow that passed through a roll's i-frames (perfect or not) */
+  attackDodged: { at: Vector3 };
   guardCounter: { at: Vector3 };
   /** a finisher landed on a broken or downed enemy */
   finisher: { target: import('../combat/targets').Target; at: Vector3 };

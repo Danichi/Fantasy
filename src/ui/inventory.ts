@@ -15,10 +15,9 @@ const SLOT_LABEL: Record<Slot, string> = {
 };
 
 type View = 'items' | 'stats';
-type Category = 'all' | 'weapons' | 'shields' | 'armour' | 'accessories' | 'spells' | 'usables' | 'materials' | 'quest';
+type Category = 'weapons' | 'shields' | 'armour' | 'accessories' | 'spells' | 'usables' | 'materials' | 'quest';
 type Sort = 'recent' | 'name' | 'rarity' | 'type';
 const CATEGORIES: [Category, string, string, ItemKind[]][] = [
-  ['all', 'All items', '✧', []],
   ['weapons', 'Weapons', '⚔', ['sword', 'spear', 'greatsword', 'axe', 'mace', 'dagger', 'bow', 'crossbow', 'staff', 'ammo']],
   ['shields', 'Shields', '◈', ['shield']],
   ['armour', 'Armour', '⬟', ['armor']],
@@ -71,7 +70,7 @@ export class InventoryUI {
   private search: HTMLInputElement;
   private sortSel: HTMLSelectElement;
   private view: View = 'items';
-  private cat: Category = 'all';
+  private cat: Category = 'weapons';
   private sort: Sort = 'recent';
   private query = '';
   private selected: number | null = null;
@@ -255,7 +254,8 @@ export class InventoryUI {
     const eq = this.player.equip;
     const kinds = CATEGORIES.find((c) => c[0] === this.cat)![3];
     const order = new Map(eq.items.map((it, i) => [it.uid, i]));
-    const list = eq.items.filter((it) => (!kinds.length || kinds.includes(it.def.kind)) && (!this.query || it.def.name.toLowerCase().includes(this.query) || it.def.desc.toLowerCase().includes(this.query)));
+    // One section at a time; a search looks through the whole bag.
+    const list = eq.items.filter((it) => (this.query || kinds.includes(it.def.kind)) && (!this.query || it.def.name.toLowerCase().includes(this.query) || it.def.desc.toLowerCase().includes(this.query)));
     const by: Record<Sort, (a: ItemInstance, b: ItemInstance) => number> = {
       recent: (a, b) => order.get(b.uid)! - order.get(a.uid)!,
       name: (a, b) => a.def.name.localeCompare(b.def.name),
@@ -270,8 +270,8 @@ export class InventoryUI {
     this.countEl.textContent = `${eq.items.length} ${eq.items.length === 1 ? 'item' : 'items'}`;
     // Categories with counts (empty ones stay listed but dimmed).
     this.cats.innerHTML = CATEGORIES.map(([id, label, glyph, kinds]) => {
-      const n = kinds.length ? eq.items.filter((it) => kinds.includes(it.def.kind)).length : eq.items.length;
-      return `<button class="cat${this.cat === id ? ' on' : ''}${n ? '' : ' empty'}" data-cat="${id}"><i>${glyph}</i><span>${label}</span><b>${n}</b></button>`;
+      const n = eq.items.filter((it) => kinds.includes(it.def.kind)).length;
+      return `<button class="cat${this.cat === id && !this.query ? ' on' : ''}${n ? '' : ' empty'}" data-cat="${id}"><i>${glyph}</i><span>${label}</span><b>${n}</b></button>`;
     }).join('');
     this.cats.querySelectorAll<HTMLButtonElement>('[data-cat]').forEach((b) =>
       b.addEventListener('click', () => {
@@ -423,7 +423,7 @@ export function buildOverlays(onStart: (origin: Origin | null) => void, initialO
   start.className = 'overlay';
   start.innerHTML = `<div class="title-card"><div class="pause-banner">THE WORLD WAITS</div><h1>ELDERGLEN TOWN</h1><div class="pause-status"></div><p class="sub">A thriving frontier town. Choose your origin, shape your Heroic Legacy, take Guild contracts, and explore beyond the walls.</p>
   <div class="origin-picker creator-launch"><span>Six peoples · your face, build and colours · a name: the character creator opens when you begin.</span></div>
-  <span class="cta">CLICK TO BEGIN</span><p class="mobile-note">Best played with a keyboard and mouse on a larger screen.</p>${controls}</div>`;
+  <span class="cta">CLICK TO BEGIN</span><p class="mobile-note">Best played with a keyboard and mouse on a larger screen.</p></div>`;
   root.appendChild(start);
   const selectedOrigin = initialOrigin;
   const help = document.createElement('div');
@@ -457,8 +457,10 @@ export function buildOverlays(onStart: (origin: Origin | null) => void, initialO
   const row = document.createElement('div');
   row.className = 'desk-row';
   const musicLabel = () => (music?.muted ? 'Music: Off' : 'Music: On');
+  // The full controls list lives on its own page, behind a button (it was too much on the pause card).
+  row.innerHTML = '<button data-a="controls">Controls (H)</button>';
   const numbersLabel = () => (numbers?.on ? 'Damage numbers: On' : 'Damage numbers: Off');
-  if (music) row.innerHTML = `<button data-a="music">${musicLabel()}</button>`;
+  if (music) row.innerHTML += `<button data-a="music">${musicLabel()}</button>`;
   if (numbers) row.innerHTML += `<button data-a="numbers">${numbersLabel()}</button>`;
   if (desktop) row.innerHTML += '<button data-a="fs">Toggle fullscreen (F11)</button><button data-a="quit">Quit game</button>';
   row.addEventListener('click', (e) => {
@@ -466,7 +468,8 @@ export function buildOverlays(onStart: (origin: Origin | null) => void, initialO
     const a = btn.dataset.a;
     if (!a) return;
     e.stopPropagation();
-    if (a === 'music' && music) {
+    if (a === 'controls') help.classList.remove('hidden');
+    else if (a === 'music' && music) {
       music.setMuted(!music.muted);
       btn.textContent = musicLabel();
     } else if (a === 'numbers' && numbers) {
@@ -475,7 +478,7 @@ export function buildOverlays(onStart: (origin: Origin | null) => void, initialO
     } else if (a === 'quit') desktop?.quit();
     else if (a === 'fs') desktop?.toggleFullscreen();
   });
-  if (row.childElementCount) start.querySelector('.title-card')!.appendChild(row);
+  start.querySelector('.title-card')!.appendChild(row);
   help.addEventListener('click', () => help.classList.add('hidden'));
   const api = {
     /** opens the character creator; it calls `begin` when the hero is made */

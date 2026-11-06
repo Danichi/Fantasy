@@ -234,6 +234,12 @@ export function setupAct1(c: ActCtx) {
         player.equip.equip(blade.uid, 'main');
       }
       await s.say(null, 'Your hand closes on something in the furrow. Most of a sword, rusted half through. Someone else died here once.', 3.6);
+      // ...and beside it, what they carried in the other hand: you start able to block.
+      if (!player.equip.offItem) {
+        const shield = player.equip.add('rustedShield');
+        player.equip.equip(shield.uid, 'off');
+      }
+      await s.say(null, 'Beside it, half buried, a rusted buckler. You strap it on.', 2.6);
       // A rift tears open in the wheat.
       const rift = around(me, 11, -0.6);
       for (let k = 0; k < 6; k++) story.h.fx.add.spawn({ pos: rift.clone().setY(rift.y + 1.2), spread: 1.6, count: 30, life: [0.4, 1.2], size: [0.3, 0.06], color: 0x7a2aaa, color2: 0x050008, upBias: 1.6 });
@@ -297,12 +303,13 @@ export function setupAct1(c: ActCtx) {
     if (quests.isActive('mq-stranger', 0) && (GLEN_FAVOURS.includes(q.id) || (q.id.startsWith('req:') && q.region === 'elderGlen'))) quests.signal('glen-trust');
   };
   // The waystone at the east gate wakes.
-  quests.hooks.set('wheel:wake', () => {
-    story.rites.set('wake', (node) => {
-      if (node.id !== 'glen' || !quests.wants('wheel-woken')) return null;
-      return { label: '(Press your hand flat to the wheel, and listen.)', run: () => { story.h.dialogue.close(); wakeWheel(); } };
-    });
+  // (Always registered: it only answers while the quest is waiting on it, so
+  // it can't go missing however the stage was reached.)
+  story.rites.set('wake', (node) => {
+    if (node.id !== 'glen' || !quests.wants('wheel-woken')) return null;
+    return { label: '(Press your hand flat to the wheel, and listen.)', run: () => { story.h.dialogue.close(); wakeWheel(); } };
   });
+  quests.hooks.set('wheel:wake', () => {});
   const wakeWheel = () => {
     void story.play('wheel', async (s) => {
       s.bars(true);

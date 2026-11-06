@@ -75,13 +75,19 @@ test('shops: buy five, buy and equip, sell a stack, and buy it back', async ({ g
     ui.show({ speaker: 'Test', title: 'Shop', intro: 'Hello.', stock: [['healthPotion', 20], ['bastardSword', 150]] });
     const click = (sel: string) => (document.querySelector('.shop2 ' + sel) as HTMLElement).click();
     const chips = document.querySelectorAll('.shop2 .sc-chips button').length;
+    // No "all" list: one section at a time, so pick Supplies for the potions, then Weapons.
+    const opensOn = document.querySelector('.shop2 .sc-chips button.on')?.textContent;
+    const section = (f: string) => click(`[data-act=filter][data-f=${f}]`);
     const pots0 = count('healthPotion');
+    section('supplies');
     click('[data-act=buy][data-id=healthPotion][data-n="5"]');
+    section('weapons');
     const pots1 = count('healthPotion');
     click('[data-act=buy][data-id=bastardSword][data-equip="1"]');
     const wielding = p.equip.mainWeapon?.def.id;
     const gold1 = p.prog.gold;
     click('[data-tab=sell]');
+    section('supplies');
     const potName = (await import('/src/items/itemDefs.ts')).ITEMS.healthPotion.name;
     const potCard = [...document.querySelectorAll('.shop2 .sc')].find((c) => c.querySelector('.sc-name')?.textContent === potName)!;
     (potCard.querySelector('[data-all="1"]') as HTMLElement).click();
@@ -92,9 +98,10 @@ test('shops: buy five, buy and equip, sell a stack, and buy it back', async ({ g
     click('[data-act=buyback]');
     const potsBack = count('healthPotion');
     ui.close();
-    return { chips, pots0, pots1, wielding, gold1, potsSold, gold2, backCards, potsBack };
+    return { chips, opensOn, pots0, pots1, wielding, gold1, potsSold, gold2, backCards, potsBack };
   });
-  expect(res.chips).toBeGreaterThan(1);
+  expect(res.chips).toBe(2);
+  expect(res.opensOn).toBe('Weapons');
   expect(res.pots1 - res.pots0).toBe(5);
   expect(res.wielding).toBe('bastardSword');
   expect(res.gold1).toBe(2000 - 100 - 150);

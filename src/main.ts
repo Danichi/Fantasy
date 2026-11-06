@@ -3,6 +3,9 @@ import { combat } from './combat/core';
 import { director } from './combat/ai';
 import { combatFeedback } from './combat/feedback';
 import { TrainingYard } from './combat/trainingYard';
+import { Lessons } from './story/lessons';
+import { lessonHook } from './paths/mentors';
+import type { StationKind } from './crafting/recipes';
 import { Mastery, wireMastery } from './paths/mastery';
 import { CombatDebug } from './combat/debugOverlay';
 import { WeaponTrail } from './fx/weaponTrail';
@@ -206,8 +209,7 @@ import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 import { afflictions } from './combat/afflictions';
 import { ShopUI } from './ui/shopUI';
-import { setupArms } from './crafting/arms';
-import type { StationKind } from './crafting/recipes'; // Arms and Crafting (feat/arms)
+import { setupArms } from './crafting/arms'; // Arms and Crafting (feat/arms)
 import { withArms } from './items/armsShops';
 // ---- Origins (feat/origins) ----
 import { prepareHero } from './origins/hero';
@@ -248,8 +250,15 @@ async function boot() {
   await player.init(r.scene, spawn);
   mark('player');
   const saveData = TEST_MODE && !location.search.includes('save') ? null : loadSave();
-  if (saveData) applySave(player, saveData);
-  else {
+  if (saveData) {
+    applySave(player, saveData);
+    // Saves from before the opening handed you a shield: a hero who is armed but
+    // has never owned one gets the rusted buckler (blocking is needed early on).
+    if (player.equip.mainWeapon && !player.equip.items.some((i) => i.def.kind === 'shield')) {
+      const sh = player.equip.add('rustedShield');
+      if (!player.equip.offItem) player.equip.equip(sh.uid, 'off');
+    }
+  } else {
     setupLoadout(player.equip, TEST_MODE); // (a new game starts with nothing; tests start armed)
     // A new character starts full (max health depends on level and attributes).
     player.hp = player.maxHp;
@@ -569,6 +578,7 @@ async function boot() {
   // ---- Dungeons Reborn (feat/dungeons): Hollow Ridge Caves and the Drowned Shrine open onto the world ----
   const dungeons = setupDungeonEntrances(r.scene, world.mats, realm);
   const dialogue = new DialogueUI();
+  dialogue.paging = !TEST_MODE; // tests go straight to the replies
   const town = new Town(r.scene, r.camera, dialogue, player);
   const shopUI = new ShopUI(player);
   town.shopUI = shopUI;
@@ -807,6 +817,7 @@ async function boot() {
     npcAway: (id) => (serviceNpc(id) ? null : npcs.whereabouts(id)),
     npcName: (id) => serviceNpc(id)?.spec.name ?? (npcs.find(id)?.rec as { name?: string } | undefined)?.name ?? id,
     hour: () => time.hour,
+    itemName: (id) => ITEMS[id]?.name ?? id,
   });
   const glenQuests = setupElderGlenQuests({
     quests, scene: r.scene, fx, player, time, fauna, cowRange: farm.ranges.cows, farm, npcs, beasts: slimes,
@@ -859,7 +870,11 @@ async function boot() {
   // Corvin's trial counts blows turned aside; Ilse's counts strikes in rhythm.
   events.on('blockImpact', ({ guardBroken }) => !guardBroken && quests.signal('trial-boundary'));
   events.on('parrySuccess', () => quests.signal('trial-boundary'));
-  skillRt.cc.onBeat = () => quests.signal('trial-cross');
+  const lessonBeat = { fn: () => {} };
+  skillRt.cc.onBeat = () => {
+    quests.signal('trial-cross');
+    lessonBeat.fn();
+  };
   const mainQuest = setupMainQuest(quests, { grukkDead: () => realm.progress.bossDead, gravewoodCleared: () => gravewood.cleared, test: TEST_MODE, opening: () => {} });
   // ---- Road encounters, caravans and the King's Road quests (phase 4) ------------------
   const encounters = new Encounters(r.scene, player, slimes, fx);
@@ -1817,6 +1832,40 @@ async function boot() {
     saved: saveData?.world?.story,
   });
   const story = main.story;
+  // ---- Lessons: a mentor teaching you plays a scene and walks you through it step by step ----
+  const lessons = new Lessons({
+    player, dialogue, flags: worldFlags,
+    scene: (name, script) => story.play(name, script),
+    toast: (m) => hud.toast(m),
+    give: giveItem,
+    count: countItem,
+    mentor: (id) => {
+      const spec = NPCS.find((n) => n.id === id);
+      const d = Object.values(DISC).find((x) => x.mentorNpc === id);
+      const pos = serviceNpc(id)?.pos ?? npcs.find(id)?.pos ?? roadLife.npcPos(id) ?? (spec ? new THREE.Vector3(spec.pos[0], 0, spec.pos[1]) : null);
+      return { name: spec?.name ?? d?.mentor.split(',')[0] ?? 'Your teacher', title: spec?.title ?? 'Mentor', pos: pos?.clone() ?? null };
+    },
+    teach: (id) => void player.paths.teach(id),
+    learned: (id) => player.paths.learned(id),
+    skillsOpen: () => skills.open,
+    openSkills: (id) => skills.show(id),
+    invOpen: () => inv.open,
+    craftOpen: (st) => arms.craft.open && arms.craft.stationKind === st,
+    openCraft: (st, where) => arms.craft.show(st as StationKind, where, 0),
+    brewOpen: () => herbalism.isOpen,
+    openBrew: (where) => herbalism.openStation(where),
+    toYard: () => yard.lessonRing(),
+    spar: (moves, postureMax) => yard.lessonSpar(moves, postureMax),
+    partner: () => yard.lessonPartner,
+    boundaryUp: () => skillRt.cc.domainR > 0,
+    save: () => save(),
+    busy: () => !!story.director.active,
+    menuOpen: () => arms.craft.open || herbalism.isOpen || inv.open || skills.open,
+  });
+  lessonBeat.fn = () => lessons.beat();
+  // (Tests learn at once, without the lesson; they can still start one by hand.)
+  lessonHook.start = (d, wait) => (TEST_MODE ? false : lessons.request(d, wait));
+  lessonHook.has = (id) => lessons.has(id);
   realm.overworldInteractables.push(...main.interactables);
   questUI.storyRecap = () => story.state.recap();
   repPanel.codex = () => story.state.codex();
@@ -2212,6 +2261,8 @@ async function boot() {
       roadLife.step(STEP, player);
       duel.update(STEP);
       yard.update(STEP);
+      yard.lessonUpdate(STEP);
+      lessons.update(STEP);
       gravewood.update(STEP, player);
       desert?.update(STEP, player);
       wilds?.update(STEP, player);
@@ -2533,7 +2584,7 @@ async function boot() {
       arms, // Arms and Crafting (feat/arms)
       yard, combatDebug, // combat rework: the drill yard and the F9 overlay
       ghLife, outcast, ghSide, scrapTowns,
-      wilds, roadLife, herbalism, riches, gwKey, sanctum,
+      wilds, roadLife, herbalism, riches, gwKey, sanctum, lessons,
       origins, creator, // ---- Origins (feat/origins) ----
       dungeons, // Dungeons Reborn (feat/dungeons)
       perf,
