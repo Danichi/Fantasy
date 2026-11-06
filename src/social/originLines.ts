@@ -29,6 +29,11 @@ export const NOTICE: Record<string, number> = { elf: 0.45, dwarf: 0.45, beastfol
 
 export const ORIGIN_LINES: Record<string, Pool> = {
   'react.elf': [
+    'An elf. Huh. You\'re the second interesting thing to happen this year, and the first was the blight.',
+    'You\'ll have to excuse the stares. Folk here think elves are something out of a song.',
+    'Elf, eh? Well, the wheat doesn\'t care what you are, and neither do I.',
+    'Long way from the trees. Did you come for the scenery? There isn\'t any.',
+
     { t: 'An elf, in {town}! My gran used to say you lot could hear grass growing. ...Can you?', v: [...F, ...C] },
     { t: 'Don\'t see many of the forest folk this far from the trees. Welcome, I suppose.', v: [...F, ...B] },
     { t: 'Elf. Hm. You\'ll find we don\'t sing much round here.', v: G },
@@ -50,6 +55,11 @@ export const ORIGIN_LINES: Record<string, Pool> = {
   ],
 
   'react.dwarf': [
+    'A dwarf, walking about in daylight. Don\'t see that every day.',
+    'You\'re sturdier than you look. Which is saying something.',
+    'Dwarf! You\'ll want Fröst, then. He thinks he\'s half dwarf, the way he goes on about steel.',
+    'The mountains are that way, if you\'re lost. No? Just passing through, then.',
+
     { t: 'A dwarf! Mind the doorframe. Ha, no, you\'re fine. Welcome to {town}.', v: [...F, ...C], when: funny },
     { t: 'Dwarf. Good. Somebody round here who knows which end of a hammer to hold.', v: [...G, ...B] },
     { t: 'You\'re a long way from the mountains. What brings stone-folk down to {town}?', v: [...F, ...FO] },
@@ -68,6 +78,11 @@ export const ORIGIN_LINES: Record<string, Pool> = {
   ],
 
   'react.beastfolk': [
+    'Didn\'t hear you come up. You walk soft for someone your size.',
+    'Beastfolk. Huh. The dogs have been odd all morning; I suppose that explains it.',
+    'You\'ll have the children asking if they can touch your ears. Say no. Firmly.',
+    'Wild country, wild folk. Don\'t mind me. Good day.',
+
     { t: '(Their dog runs up to you, sniffs, and sits on your foot.) Well. He likes you. That settles it.', v: [...F, ...C] },
     { t: 'Wild folk. Keep your claws to yourself and we\'ll get on fine.', v: [...G, ...B] },
     { t: 'You\'re not from round here, are you? I mean, obviously. The ears. Sorry. Hello.', v: N },
@@ -86,6 +101,11 @@ export const ORIGIN_LINES: Record<string, Pool> = {
   ],
 
   'react.demon': [
+    'Well. You\'re not what I expected to see today. Or ever.',
+    'I\'ll be honest, the horns are taking some getting used to.',
+    'Demon or no, you\'re a customer, and we\'ve had few enough of those.',
+    'The priest will want a word with you, I expect. I don\'t. What do you need?',
+
     { t: '(Their hand goes to the charm at their neck.) We\'ve no trouble here. None at all.', when: pious },
     { t: '(They make the Dawn\'s sign, quickly, and pretend they didn\'t.) Can I... help you?', v: [...F, ...N], when: pious },
     { t: 'Horns. Right. I\'m going to assume you\'re here to buy something.', v: [...B, ...G] },
@@ -108,6 +128,11 @@ export const ORIGIN_LINES: Record<string, Pool> = {
   ],
 
   'react.dragonkin': [
+    'You blot out the sun a bit, standing there. Not a complaint.',
+    'Wings. Real ones. My nephew is going to be unbearable when I tell him.',
+    'Don\'t take it amiss if folk duck when you stretch.',
+    'Dragonkin, here. The Glen gets stranger every week.',
+
     { t: '(They stare at your wings, then remember themselves.) Old stories walk again. Welcome, I think.', v: [...F, ...FO] },
     { t: 'Wings. Indoors. Mind the lamps.', v: [...G, ...B] },
     { t: 'You can fly? Actually fly? Up there? I\'d be sick. Gods, I\'d be so sick.', v: [...C, ...F], when: funny },

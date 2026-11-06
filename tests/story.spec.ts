@@ -51,7 +51,10 @@ test('the opening: you fall into the wheat, the Dark comes, Kaela and Brannoc co
     const morning = { stage: h.stage('mq-fall'), nearMaud: Math.hypot(g.player.pos.x - 10, g.player.pos.z + 10) < 12, allies: S.allies.length };
     h.talk('maud');
     await h.tick(4);
-    return { fight, fell, second, morning, after: [h.stage('mq-fall'), h.stage('mq-stranger')], log: S.state.log.length };
+    // (Maud puts the next chapter to you; it doesn't start by itself.)
+    const offered = h.stage('mq-stranger');
+    h.take('maud');
+    return { fight, fell, second, morning, offered, after: [h.stage('mq-fall'), h.stage('mq-stranger')], log: S.state.log.length };
   }, HELPERS);
   expect(res.fight.foes).toBe(3);
   expect(res.fight.at, String(res.fight.pos)).toBe(true);
@@ -62,6 +65,7 @@ test('the opening: you fall into the wheat, the Dark comes, Kaela and Brannoc co
   expect(res.morning.stage).toBe('active@1');
   expect(res.morning.nearMaud).toBe(true);
   expect(res.morning.allies).toBe(0);
+  expect(res.offered).toBe('none');
   expect(res.after).toEqual(['done@1', 'active@0']);
   expect(res.log).toBeGreaterThan(0);
   expect(errors).toEqual([]);

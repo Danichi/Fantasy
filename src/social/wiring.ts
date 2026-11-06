@@ -41,6 +41,9 @@ export interface SocialHooks {
   save?: SocialSave;
   /** Elder Glen's hard year (Act I): the Glen talks like a starving village */
   hard?: () => boolean;
+  /** what the hero is (elf, dwarf...), and whose lands they're in, for first meetings */
+  origin?: () => string;
+  faction?: () => string;
   /** what a resident is doing right now (work, shop, drink, patrol...) */
   activityOf?: (id: string) => string | undefined;
 }
@@ -73,6 +76,7 @@ export function setupSocial(h: SocialHooks) {
     const region = regionOf(p?.settlement ?? 'elderGlen');
     return {
       region, job: p?.job, hard: region === 'glen' && !!h.hard?.(),
+      origin: h.origin?.(), faction: h.faction?.(),
       hour: h.hour(), rain: h.rain(), you,
       town: townName(p?.settlement ?? 'elderGlen'),
       deed: told?.text, deedGood: told?.good,

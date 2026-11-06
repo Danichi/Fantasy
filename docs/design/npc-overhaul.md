@@ -45,6 +45,12 @@ resident through `folkTalk`) goes through `Conversation.open(spec)`:
    they feel, plus one thing on their mind (a story beat, what you did lately,
    that you've been away, the weather, the hour). Friends sometimes press a
    keepsake into your hands.
+   - **What you are:** the first time you meet, some people remark on your origin (`originLines.ts`).
+     - Who notices is fixed per person: about half for ears, more for horns and wings.
+     - The remark is in their own voice and temperament (the nervous stammer, the devout reach for a charm, the funny make a joke of it), with a few lines for particular regions' people.
+     - It never repeats one the last few people said.
+     - It replaced a wrapper that put one fixed line per region in front of the first thing anyone said, quest-givers' story speeches included.
+   - **Stock introductions:** a stock introduction someone else has only just given you is skipped, and they greet you in their own voice instead.
 2. **Their business** (quests, wares, services), hidden from people who refuse
    you.
 3. **Let's talk**: about themselves, what they want (neutral or better), their

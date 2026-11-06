@@ -206,7 +206,8 @@ import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 import { afflictions } from './combat/afflictions';
 import { ShopUI } from './ui/shopUI';
-import { setupArms } from './crafting/arms'; // Arms and Crafting (feat/arms)
+import { setupArms } from './crafting/arms';
+import type { StationKind } from './crafting/recipes'; // Arms and Crafting (feat/arms)
 import { withArms } from './items/armsShops';
 // ---- Origins (feat/origins) ----
 import { prepareHero } from './origins/hero';
@@ -681,6 +682,9 @@ async function boot() {
     save: saveData?.world?.social,
     // Elder Glen's hard year lasts until the Night of Bells is won.
     hard: () => quests.status('mq-bells') !== 'done',
+    // What you are, and whose lands these are: a few people remark on it when you first meet.
+    origin: () => player.prog.origin,
+    faction: () => origins.factionNow(),
     activityOf: (id) => npcs.activityOf(id),
   });
   town.converse = (spec) => social.talk(spec);
@@ -1647,8 +1651,16 @@ async function boot() {
   const yard = new TrainingYard(r.scene, encounters.bolts, player, new THREE.Vector3(kaelaSpec?.pos[0] ?? -13.5, 0, kaelaSpec?.pos[1] ?? 0.5), worldFlags, (m) => hud.toast(m), (n) => player.prog.addXp(n));
   yard.close = () => dialogue.close();
   const baseServices = town.serviceOptions;
+  // The Glen's tradespeople let you work at their stations: ask the smith for his forge.
+  const STATION_KEEPERS: Record<string, [StationKind, string, string][]> = {
+    froest: [['forge', 'Can I use your forge?', 'Fröst\'s forge'], ['runestone', 'Can I use your runestone?', 'Fröst\'s runestone']],
+    innkeeper: [['kitchen', 'Could I use your kitchen?', 'the Wayfarer\'s kitchen']],
+    tailor: [['loom', 'Could I use your loom?', 'Vela\'s loom']],
+    carpenter: [['workbench', 'Could I use your bench?', 'Bram\'s workbench']],
+  };
   town.serviceOptions = (id, show, back) => [
     ...(id === 'kaela' ? [{ label: 'Teach me to fight.', run: () => yard.menu(show, back) }] : []),
+    ...(STATION_KEEPERS[id] ?? []).map(([kind, label, where]) => ({ label, run: () => { dialogue.close(); arms.craft.show(kind, where, 0); } })),
     ...(baseServices?.(id, show, back) ?? []),
   ];
   microDiscoveries = new MicroDiscoveries(
