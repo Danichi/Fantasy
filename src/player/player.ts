@@ -442,6 +442,11 @@ export class Player {
    */
   bound = 0;
   boundAt: THREE.Vector3 | null = null;
+  /** Field abilities (paths/fieldAbilities.ts, set by main): extra jumps in the air, gliding. */
+  fieldAirJumps?: () => number;
+  fieldGlide?: () => boolean;
+  onAirJump?: () => void;
+  private airJumps = 0;
   /** Height of the walkable surface (terrain, bridges, floors) under (x, z) near the player's feet. */
   private probeGround(x: number, z: number) {
     const top = this.pos.y + 1.3;
@@ -580,6 +585,12 @@ export class Player {
       this.vel.y = JUMP_V;
       this.grounded = false;
       this.airTime = 0;
+      this.airJumps = 0;
+    } else if (input.wasPressed('jump') && !this.grounded && !this.swimming && !this.act && this.airJumps < (this.fieldAirJumps?.() ?? 0)) {
+      // Gale Style's field ability: a step off the wind itself.
+      this.airJumps++;
+      this.vel.y = JUMP_V * 0.9;
+      this.onAirJump?.();
     }
     if (input.wasPressed('lockOn')) this.toggleLock(cam);
     if (input.wasPressed('walk') && !this.vehicle) this.walking = !this.walking;
@@ -1175,6 +1186,8 @@ export class Player {
     } else if (!this.flying) {
       this.vel.y -= GRAVITY * dt;
       if (this.grounded && this.vel.y < 0) this.vel.y = 0;
+      // Windcaller's field ability: hold Jump while falling to glide.
+      if (!this.grounded && this.diveHeld && this.vel.y < -2.4 && this.fieldGlide?.()) this.vel.y = -2.4;
     }
     this.vel.x = hv.x;
     this.vel.z = hv.z;
@@ -1247,6 +1260,7 @@ export class Player {
   }
 
   private onLand() {
+    this.airJumps = 0;
     const a = this.act;
     if (this.fallSpeed > 8) this.onShake?.(Math.min(0.35, this.fallSpeed * 0.02));
     if (this.airTime > 0.15) this.landT = 0;

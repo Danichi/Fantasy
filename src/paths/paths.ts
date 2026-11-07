@@ -1,6 +1,7 @@
 import { events } from '../core/events';
 import type { Progression } from '../progression/progression';
 import { DISC, DISCIPLINES, type DisciplineDef } from './data';
+import { ASCENSIONS, ASC_COST, ASC_LEVEL } from './ascensions';
 
 // The player's disciplines: levels bought with XP, tree nodes bought with
 // each discipline's tree points, mastery, attributes and the active combat
@@ -44,6 +45,13 @@ export interface Tree {
 export const NODE_COST: Record<NodeType, number> = { center: 0, minor: 1, notable: 2, active: 2, choice: 2, keystone: 3, cap: 5 };
 export const TIER_GATE = [0, 1, 5, 10, 15, 20, 25];
 export const MAX_LEVEL = 30;
+/** Combat and magic classes go further: levels 30 to 50 are the Ascension (paths/ascensions.ts). */
+export const CLASS_MAX_LEVEL = 50;
+/** The level cap for a discipline: classes 50, callings and the legacy 30. */
+export function capOf(id: string) {
+  const f = DISC[id]?.fam;
+  return f === 'combat' || f === 'magic' ? CLASS_MAX_LEVEL : MAX_LEVEL;
+}
 export const MAX_RANK = 5;
 export const MASTERY_XP = [0, 100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500, 5500];
 export const MASTERY_NAMES = ['Untrained', 'Novice', 'Novice', 'Apprentice', 'Apprentice', 'Adept', 'Adept', 'Expert', 'Expert', 'Master', 'Grandmaster'];
@@ -51,9 +59,10 @@ export const MASTERY_DISCOUNT = 0.035;
 export const RESPEC_REFUND = 0.75;
 /** nodes a branch needs before its gateway opens */
 export const GATE_NODES = 10;
-export const PATHS_VERSION = 3;
+export const PATHS_VERSION = 4;
 const REDESIGNED_V2 = ['pyromancer', 'lightbinder'];
 const REDESIGNED_V3 = ['gale', 'boundary', 'cross'];
+const REDESIGNED_V4 = ['warbreaker'];
 
 /** Full-price XP to go from level L to L+1 (learning, 0 to 1, is done by a mentor). */
 export function levelCost(L: number) {
@@ -102,6 +111,8 @@ export interface PathsSave {
   nodes: Record<string, Record<string, LearnedNode>>;
   attrs: Record<AttrId, number>;
   active: string;
+  secondary?: string;
+  asc?: Record<string, { k: number; n: number }>;
   /** 2: the Pyromancer and Lightbinder trees were redesigned (their old nodes are refunded) */
   v?: number;
 }
@@ -113,6 +124,10 @@ export class Paths {
   attrs: Record<AttrId, number> = { vig: 0, end: 0, mig: 0, fin: 0, int: 0, fai: 0, spi: 0 };
   /** the active combat class ('' until one is learned) */
   active = '';
+  /** a second combat class: its passives at half strength, its techniques usable (recharging a quarter slower) */
+  secondary = '';
+  /** Ascensions: for each class, the one chosen (k) and how many of its nodes are learned (n) */
+  asc: Record<string, { k: number; n: number }> = {};
 
   constructor(private prog: Progression) {
     this.reset();
@@ -130,6 +145,8 @@ export class Paths {
     }
     this.attrs = { vig: 0, end: 0, mig: 0, fin: 0, int: 0, fai: 0, spi: 0 };
     this.active = '';
+    this.secondary = '';
+    this.asc = {};
     this.syncLevel(false);
   }
 
@@ -156,7 +173,7 @@ export class Paths {
   canInvest(id: string) {
     if (DISC[id]?.fam === 'legacy') return false; // Renown only (origins/legacy.ts)
     const L = this.level(id);
-    return L > 0 && L < MAX_LEVEL && this.prog.xp >= this.nextCost(id);
+    return L > 0 && L < capOf(id) && this.prog.xp >= this.nextCost(id);
   }
   /** Spend XP to raise a learned discipline one level. */
   invest(id: string) {
@@ -196,7 +213,51 @@ export class Paths {
   setActive(id: string) {
     if (DISC[id]?.fam !== 'combat' || !this.learned(id) || this.active === id) return false;
     this.active = id;
+    if (this.secondary === id) this.secondary = '';
     events.emit('pathsChanged', {});
+    return true;
+  }
+  /** A second combat class ('' clears it). */
+  setSecondary(id: string) {
+    if (id && (DISC[id]?.fam !== 'combat' || !this.learned(id) || this.active === id)) return false;
+    this.secondary = id;
+    events.emit('pathsChanged', {});
+    return true;
+  }
+
+  // ---- Ascensions --------------------------------------------------------------------
+  /** The Ascension chosen for a class (-1: none yet). */
+  ascension(id: string) {
+    return this.asc[id]?.k ?? -1;
+  }
+  ascNodes(id: string) {
+    return this.asc[id]?.n ?? 0;
+  }
+  canAscend(id: string) {
+    return !!ASCENSIONS[id] && this.level(id) >= ASC_LEVEL[0] && this.ascension(id) < 0;
+  }
+  /** Choose one of a class's two Ascensions (at level 30; for good, until a respec). */
+  ascend(id: string, k: number) {
+    if (!this.canAscend(id) || (k !== 0 && k !== 1)) return false;
+    this.asc[id] = { k, n: 0 };
+    events.emit('pathsChanged', {});
+    events.emit('progressChanged', {});
+    return true;
+  }
+  /** Why the next Ascension node can't be learned (null: it can). */
+  ascWhyNot(id: string): string | null {
+    const a = this.asc[id];
+    if (!a) return 'Choose an Ascension first';
+    if (a.n >= 4) return 'Every node is learned';
+    if (this.level(id) < ASC_LEVEL[a.n]) return `Needs level ${ASC_LEVEL[a.n]}`;
+    if (this.points(id) < ASC_COST[a.n]) return `Needs ${ASC_COST[a.n]} tree points`;
+    return null;
+  }
+  learnAscNode(id: string) {
+    if (this.ascWhyNot(id)) return false;
+    this.asc[id].n++;
+    events.emit('pathsChanged', {});
+    events.emit('progressChanged', {});
     return true;
   }
   /** Full-price XP that went into a discipline's levels past the first. */
@@ -215,6 +276,7 @@ export class Paths {
     this.prog.xp += back;
     this.lv[id] = 1;
     this.nodes[id] = {};
+    delete this.asc[id];
     this.syncLevel(false);
     events.emit('pathsChanged', {});
     events.emit('progressChanged', {});
@@ -262,6 +324,7 @@ export class Paths {
       const n = t.map[nid];
       if (n) s += NODE_COST[n.type] + (n.type === 'active' ? v.r - 1 : 0);
     }
+    for (let i = 0; i < (this.asc[id]?.n ?? 0); i++) s += ASC_COST[i];
     return s;
   }
   points(id: string) {
@@ -381,17 +444,17 @@ export class Paths {
 
   // ---- save ------------------------------------------------------------------------
   serialize(): PathsSave {
-    return { lv: { ...this.lv }, mx: { ...this.mx }, nodes: structuredClone(this.nodes), attrs: { ...this.attrs }, active: this.active, v: PATHS_VERSION };
+    return { lv: { ...this.lv }, mx: { ...this.mx }, nodes: structuredClone(this.nodes), attrs: { ...this.attrs }, active: this.active, secondary: this.secondary, asc: structuredClone(this.asc), v: PATHS_VERSION };
   }
   load(s: PathsSave) {
     this.reset();
     for (const d of DISCIPLINES) {
-      this.lv[d.id] = Math.max(0, Math.min(MAX_LEVEL, Math.floor(s.lv?.[d.id] ?? this.lv[d.id])));
+      this.lv[d.id] = Math.max(0, Math.min(capOf(d.id), Math.floor(s.lv?.[d.id] ?? this.lv[d.id])));
       this.mx[d.id] = Math.max(0, s.mx?.[d.id] ?? 0);
       const t = treeOf(d);
       // Redesigned trees: old nodes don't map onto the new ones, so they're refunded (points come back).
       const v = s.v ?? 1;
-      const saved = (v < 2 && REDESIGNED_V2.includes(d.id)) || (v < 3 && REDESIGNED_V3.includes(d.id)) ? {} : s.nodes?.[d.id] ?? {};
+      const saved = (v < 2 && REDESIGNED_V2.includes(d.id)) || (v < 3 && REDESIGNED_V3.includes(d.id)) || (v < 4 && REDESIGNED_V4.includes(d.id)) ? {} : s.nodes?.[d.id] ?? {};
       this.nodes[d.id] = {};
       if (t) for (const [nid, v] of Object.entries(saved)) if (t.map[nid]) this.nodes[d.id][nid] = { r: Math.max(1, Math.min(MAX_RANK, v.r | 0)), pick: v.pick };
     }
@@ -403,6 +466,8 @@ export class Paths {
     }
     const combat = DISCIPLINES.find((d) => d.fam === 'combat' && this.learned(d.id));
     this.active = DISC[s.active]?.fam === 'combat' && this.learned(s.active) ? s.active : combat?.id ?? '';
+    this.secondary = s.secondary && s.secondary !== this.active && DISC[s.secondary]?.fam === 'combat' && this.learned(s.secondary) ? s.secondary : '';
+    for (const [id, a] of Object.entries(s.asc ?? {})) if (ASCENSIONS[id] && (a.k === 0 || a.k === 1)) this.asc[id] = { k: a.k, n: Math.max(0, Math.min(4, a.n | 0)) };
     this.syncLevel(false);
   }
 }

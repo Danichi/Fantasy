@@ -110,13 +110,13 @@ export class CombatClasses {
   /** Rage gained (Reckless doubles it). */
   addRage(n: number) {
     if (this.active !== 'warbreaker') return;
-    const k = n > 0 && this.rt.has('reckless') ? 2 : 1;
+    const k = n > 0 ? (this.rt.has('reckless') ? 2 : 1) * (1 + this.rt.x('resGain')) : 1;
     this.rage = Math.max(0, Math.min(this.rageMax, this.rage + n * k));
     if (n > 0) this.rageIdle = 0;
   }
 
   addTempo(n: number) {
-    this.tempo = Math.max(0, Math.min(this.tempoMax, this.tempo + n));
+    this.tempo = Math.max(0, Math.min(this.tempoMax, this.tempo + n * (n > 0 ? 1 + this.rt.x('resGain') : 1)));
   }
   /** Leave an enemy open: the next hit on it is a critical. */
   open(t: Target, sec = 2.5) {

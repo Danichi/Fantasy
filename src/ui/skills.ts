@@ -4,9 +4,11 @@ import { events } from '../core/events';
 import { DISC, DISCIPLINES, FAMILIES, NODE_TEXT, type DisciplineDef, type Family } from '../paths/data';
 import { perksOf, EARN_TEXT } from '../paths/mastery';
 import {
-  ATTRS, GATE_NODES, MASTERY_DISCOUNT, MASTERY_NAMES, MASTERY_XP, MAX_LEVEL, MAX_RANK, NODE_COST, levelCost, masteryRank, treeOf,
+  ATTRS, GATE_NODES, MASTERY_DISCOUNT, MASTERY_NAMES, MASTERY_XP, MAX_RANK, NODE_COST, capOf, levelCost, masteryRank, treeOf,
   type TreeNode,
 } from '../paths/paths';
+import { ASCENSIONS, ASC_COST, ASC_LEVEL } from '../paths/ascensions';
+import { FIELD_ABILITIES } from '../paths/fieldAbilities';
 import { ICONS, HEX, TreeView, drawSealed } from './skillTree';
 import { classEmblemIcon } from './icons';
 import { SkillRuntime } from '../paths/skills';
@@ -18,7 +20,7 @@ import { legacyCardInfo, renderLegacy } from '../origins/legacyUI';
 // XP and attribute points can be spent anywhere. Learning a class, switching
 // the active combat class and respeccing happen at mentors (npc/town.ts).
 
-type Tab = 'disc' | 'attr' | 'mast';
+type Tab = 'disc' | 'attr' | 'mast' | 'atlas';
 const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
 const TYPE_LABEL: Record<TreeNode['type'], string> = { center: 'Foundation', minor: 'Minor', notable: 'Notable', active: 'Skill', keystone: 'Keystone', choice: 'Choice', cap: 'Capstone' };
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -110,6 +112,7 @@ export class SkillsUI {
   setTab(t: Tab) {
     this.tab = t;
     if (this.open) this.closeTree();
+    else { this.disposeTree(); this.openId = null; }
   }
 
   /** Open straight to one discipline's tree (used by mentors). */
@@ -135,7 +138,7 @@ export class SkillsUI {
     set('lv', String(P.charLevel));
     set('ap', String(P.attrFree));
     const ap = P.attrFree;
-    this.tabsEl.innerHTML = ([['disc', 'Disciplines'], ['attr', 'Attributes'], ['mast', 'Mastery']] as [Tab, string][])
+    this.tabsEl.innerHTML = ([['disc', 'Disciplines'], ['attr', 'Attributes'], ['mast', 'Mastery'], ['atlas', 'Class Atlas']] as [Tab, string][])
       .map(([id, l]) => `<button class="sk-tab${this.tab === id && !this.openId ? ' on' : ''}" type="button" data-tab="${id}">${l}${id === 'attr' && ap > 0 ? `<span class="n">${ap}</span>` : ''}</button>`)
       .join('');
     this.tabsEl.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) =>
@@ -158,14 +161,15 @@ export class SkillsUI {
     this.el.classList.toggle('tree', !!this.openId);
     if (this.openId) return this.renderTree();
     this.crumbEl.textContent = 'SKILLS';
-    this.titleEl.textContent = { disc: 'Disciplines', attr: 'Attributes', mast: 'Mastery' }[this.tab];
+    this.titleEl.textContent = { disc: 'Disciplines', attr: 'Attributes', mast: 'Mastery', atlas: 'Class Atlas' }[this.tab];
     if (this.tab === 'disc') this.renderAtlas();
     else if (this.tab === 'attr') this.renderAttrs();
+    else if (this.tab === 'atlas') this.renderClassAtlas();
     else this.renderMastery();
   }
 
   private medal(d: DisciplineDef) {
-    const L = this.paths.level(d.id), C = 2 * Math.PI * 24, p = L / MAX_LEVEL;
+    const L = this.paths.level(d.id), C = 2 * Math.PI * 24, p = L / capOf(d.id);
     const dots = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<circle cx="${(28 + Math.cos((i * Math.PI) / 4) * 24).toFixed(2)}" cy="${(28 + Math.sin((i * Math.PI) / 4) * 24).toFixed(2)}" r="1" fill="var(${d.color})" opacity=".5"/>`).join('');
     return `<svg viewBox="0 0 56 56" width="56" height="56" aria-hidden="true">
       <defs><radialGradient id="skg-${d.id}" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="var(${d.color})" stop-opacity=".28"/><stop offset="1" stop-color="var(${d.color})" stop-opacity="0"/></radialGradient></defs>
@@ -183,16 +187,16 @@ export class SkillsUI {
       const f = FAMILIES[fk];
       const items = DISCIPLINES.filter((d) => d.fam === fk && P.visible(d)).map((d) => {
         const L = P.level(d.id), locked = L === 0;
-        const isCombat = d.fam === 'combat', isActive = isCombat && P.active === d.id, isInactive = isCombat && !isActive && !locked;
+        const isCombat = d.fam === 'combat', isActive = isCombat && P.active === d.id, isSecond = isCombat && P.secondary === d.id, isInactive = isCombat && !isActive && !isSecond && !locked;
         const nc = P.nextCost(d.id), base = levelCost(L), mr = P.masteryRank(d.id);
         const badges = (d.secret ? '<span class="sk-badge secret">Secret</span>' : '') +
-          (locked ? '<span class="sk-badge locked">Unlearned</span>' : isActive ? '<span class="sk-badge active">Active</span>' : isInactive ? '<span class="sk-badge inactive">Inactive</span>' : '');
+          (locked ? '<span class="sk-badge locked">Unlearned</span>' : isActive ? '<span class="sk-badge active">Active</span>' : isSecond ? '<span class="sk-badge active">Second</span>' : isInactive ? '<span class="sk-badge inactive">Inactive</span>' : '');
         const pts = !locked && d.branches ? P.points(d.id) : 0;
         const info = locked
           ? `Learn from ${esc(d.mentor)}`
           : `<span class="sk-mchip">${MASTERY_NAMES[mr]}${mr > 0 ? ` · -${Math.round(P.discount(d.id) * 100)}% cost` : ''}</span>${pts > 0 ? ` · <span class="sk-pts">${pts} tree pt${pts > 1 ? 's' : ''}</span>` : ''}`;
         const legacy = d.fam === 'legacy' ? legacyCardInfo(this.player) : null; // origins: Renown, not XP
-        const btn = legacy ? legacy.btn : locked ? '' : L >= MAX_LEVEL ? '<span class="sk-mchip">MAX</span>' :
+        const btn = legacy ? legacy.btn : locked ? '' : L >= capOf(d.id) ? '<span class="sk-mchip">MAX</span>' :
           `<button class="sk-invest" type="button" data-invest="${d.id}" ${P.canInvest(d.id) ? '' : 'disabled'}>${nc < base ? `<s>${fmt(base)}</s>` : ''}+1 · ${fmt(nc)} XP</button>`;
         return `<div class="sk-disc${locked && !legacy ? ' is-locked' : ''}${isInactive ? ' is-inactive' : ''}" role="button" tabindex="0" data-open="${d.id}" style="--c:var(${d.color})">
           <div class="sk-medal">${this.medal(d)}</div>
@@ -319,6 +323,45 @@ export class SkillsUI {
     this.renderPanel();
   }
 
+  /** A class's Ascension: the choice at level 30, then its four nodes. */
+  private ascensionHtml(d: DisciplineDef) {
+    const A = ASCENSIONS[d.id];
+    if (!A) return '';
+    const P = this.paths, k = P.ascension(d.id), L = P.level(d.id);
+    const nodeList = (a: (typeof A)[number], got: number, live: boolean) => a.nodes.map((n, i) => `<li class="${i < got ? 'on' : ''}"><b>${esc(n.name)}</b> <small>level ${ASC_LEVEL[i]} · ${ASC_COST[i]} pts</small><br>${esc(n.text)}${live && i === got ? (P.ascWhyNot(d.id) ? ` <em>(${esc(P.ascWhyNot(d.id)!)})</em>` : ' <button class="sk-btn primary" type="button" data-ascnode>Learn</button>') : ''}</li>`).join('');
+    if (k < 0) {
+      const cards = A.map((a, i) => `<div class="sk-asc"><h4>${esc(a.name)}</h4><p>${esc(a.flavour)}</p><ul>${nodeList(a, 0, false)}</ul>${P.canAscend(d.id) ? `<button class="sk-btn primary" type="button" data-ascend="${i}">Ascend: ${esc(a.name)}</button>` : ''}</div>`).join('');
+      return `<div class="sk-sep"></div><div class="sk-note"><b>Ascension.</b> ${L >= ASC_LEVEL[0] ? 'Choose one of two paths. It reshapes the class for good (a respec undoes it).' : `At level ${ASC_LEVEL[0]} this class can ascend, down one of two paths.`}</div><div class="sk-ascs">${cards}</div>`;
+    }
+    const a = A[k];
+    return `<div class="sk-sep"></div><div class="sk-asc chosen"><h4>Ascension: ${esc(a.name)}</h4><p>${esc(a.flavour)}</p><ul>${nodeList(a, P.ascNodes(d.id), true)}</ul></div>`;
+  }
+
+  /** Every class there is: what you have, what's out there, and the hidden ones as silhouettes. */
+  private renderClassAtlas() {
+    const P = this.paths;
+    const tiers: [string, string, (d: DisciplineDef) => boolean][] = [
+      ['Foundation classes', 'Taught by mentors in the towns', (d) => !d.requires && !d.secret && !d.gateFrom],
+      ['Advanced classes', 'A foundation class at the right level, and a master to teach you', (d) => !!d.requires && !d.secret],
+      ['Hidden classes', 'Behind a capstone gateway, a secret or the story', (d) => !!d.secret || !!d.gateFrom],
+    ];
+    const card = (d: DisciplineDef) => {
+      const L = P.level(d.id), known = L > 0 || !d.secret;
+      const how = d.gateFrom ? `A gateway capstone in ${esc(DISC[d.gateFrom]?.name ?? d.gateFrom)}'s tree` : d.requires ? `${esc(DISC[d.requires[0]].name)} at level ${d.requires[1]}, then ${esc(d.mentor.split(',')[0])}` : esc(d.mentor);
+      const asc = P.ascension(d.id) >= 0 ? ` · ${esc(ASCENSIONS[d.id][P.ascension(d.id)].name)}` : '';
+      return `<div class="sk-atlas-card${L ? ' got' : ''}${known ? '' : ' hidden'}" style="--c:var(${d.color})" ${known ? `data-open="${d.id}"` : ''}>
+        <b>${known ? esc(d.name) : '???'}</b><span>${L ? `Level ${L}${P.active === d.id ? ' · Active' : P.secondary === d.id ? ' · Second' : ''}${asc}` : 'Not learned'}</span>
+        <small>${known ? esc(d.how || d.flavour) : esc(d.flavour)}</small><em>${how}</em></div>`;
+    };
+    const classes = DISCIPLINES.filter((d) => d.fam === 'combat' || d.fam === 'magic');
+    const html = tiers.map(([name, note, test]) => {
+      const list = classes.filter(test);
+      const got = list.filter((d) => P.learned(d.id)).length;
+      return `<section class="sk-atlas-tier"><h3>${name} <span>${got} / ${list.length}</span></h3><p>${note}</p><div class="sk-atlas-grid">${list.map(card).join('')}</div></section>`;
+    }).join('');
+    this.body.innerHTML = `<div class="sk-view sk-atlas">${html}<p class="sk-foot">Classes reach level 50; at 30 each can ascend down one of two paths. A second class runs at half strength beside your active one.</p></div>`;
+  }
+
   private renderPanel() {
     if (this.openId && DISC[this.openId]?.fam === 'legacy') return renderLegacy(this.body, this.player, (m) => this.toast(m));
     const panel = this.body.querySelector<HTMLElement>('.sk-panel');
@@ -332,14 +375,21 @@ export class SkillsUI {
       h += `<div class="sk-note">Not learned yet. Find <b>${esc(d.mentor)}</b> to learn it${d.trial ? ' (they will set you a short trial first)' : ''}. You can look at the tree, but nothing can be bought until then.</div>`;
     } else {
       h += `<div class="sk-kv">
-        <span>Level</span><span class="hi">${L} / ${MAX_LEVEL}</span>
+        <span>Level</span><span class="hi">${L} / ${capOf(d.id)}</span>
         ${t ? `<span>Tree points</span><span class="hi">${P.points(d.id)} free · ${P.earned(d.id)} earned</span>` : ''}
         ${d.res ? `<span>Resource</span><span>${esc(d.res)}</span>` : ''}
-        <span>Next level</span><span>${L >= MAX_LEVEL ? 'Max' : `${nc < base ? `<s style="opacity:.5">${fmt(base)}</s> ` : ''}${fmt(nc)} XP`}</span></div>
+        <span>Next level</span><span>${L >= capOf(d.id) ? 'Max' : `${nc < base ? `<s style="opacity:.5">${fmt(base)}</s> ` : ''}${fmt(nc)} XP`}</span></div>
       <div class="sk-meter"><div class="top"><span>MASTERY ${mr} · ${MASTERY_NAMES[mr].toUpperCase()}</span><span>-${Math.round(mr * MASTERY_DISCOUNT * 100)}% cost</span></div><div class="bar"><i style="width:${mpct}%"></i></div></div>
       ${perksOf(d).length ? `<div class="sk-perks">${perksOf(d).map((p) => `<span class="sk-perk ${p.rank <= mr ? 'on' : ''}"><b>${p.rank}</b> ${esc(p.text)}</span>`).join('')}</div>` : ''}
-      <div class="sk-actions"><button class="sk-btn primary" type="button" data-invest="${d.id}" ${P.canInvest(d.id) ? '' : 'disabled'}>${L >= MAX_LEVEL ? 'Max level' : `Invest ${fmt(nc)} XP`}</button></div>`;
-      if (d.fam === 'combat' && P.active !== d.id) h += `<div class="sk-note">This class is <b>inactive</b>. None of its nodes or skills do anything until you switch to it at ${esc(d.mentor.split(',')[0])}.</div>`;
+      <div class="sk-actions"><button class="sk-btn primary" type="button" data-invest="${d.id}" ${P.canInvest(d.id) ? '' : 'disabled'}>${L >= capOf(d.id) ? 'Max level' : `Invest ${fmt(nc)} XP`}</button></div>`;
+      if (d.fam === 'combat' && P.active !== d.id) {
+        h += P.secondary === d.id
+          ? `<div class="sk-note">This is your <b>second class</b>: its nodes count at half strength and its techniques work, recharging a quarter slower. <button class="sk-btn" type="button" data-second="">Stop using it as my second class</button></div>`
+          : `<div class="sk-note">This class is <b>inactive</b>. Switch to it at ${esc(d.mentor.split(',')[0])}, or use it as your second class: its nodes at half strength, its techniques recharging a quarter slower. <button class="sk-btn" type="button" data-second="${d.id}">Make it my second class</button></div>`;
+      }
+      const fa = FIELD_ABILITIES[d.id];
+      if (fa) h += `<div class="sk-note"><b>Field ability: ${esc(fa.name)}.</b> ${esc(fa.text)}</div>`;
+      h += this.ascensionHtml(d);
       h += `<div class="sk-note">Respec at ${esc(d.mentor.split(',')[0])}: back to level 1, tree cleared, ${fmt(P.respecRefund(d.id))} XP returned (75%).</div>`;
     }
     if (t) {
@@ -354,6 +404,21 @@ export class SkillsUI {
       h += `<div class="sk-legend">${this.legend(d)}</div>`;
     }
     panel.innerHTML = h;
+    panel.querySelector<HTMLElement>('[data-second]')?.addEventListener('click', (e) => {
+      const id = (e.currentTarget as HTMLElement).dataset.second ?? '';
+      if (P.setSecondary(id)) this.toast(id ? `${DISC[id].name} is now your second class` : 'No second class');
+      this.renderPanel();
+    });
+    panel.querySelectorAll<HTMLElement>('[data-ascend]').forEach((b) => b.addEventListener('click', () => {
+      const k = Number(b.dataset.ascend);
+      if (P.ascend(d.id, k)) this.toast(`${d.name} ascends: ${ASCENSIONS[d.id][k].name}`);
+      this.renderPanel();
+    }));
+    panel.querySelector<HTMLElement>('[data-ascnode]')?.addEventListener('click', () => {
+      const i = P.ascNodes(d.id);
+      if (P.learnAscNode(d.id)) this.toast(`Learned ${ASCENSIONS[d.id][P.ascension(d.id)].nodes[i].name}`);
+      this.renderPanel();
+    });
     panel.querySelector<HTMLElement>('[data-learn]')?.addEventListener('click', (e) => this.learn(Number((e.currentTarget as HTMLElement).dataset.learn)));
     panel.querySelector<HTMLElement>('[data-learn-b]')?.addEventListener('click', () => this.learn(1));
     panel.querySelector<HTMLElement>('[data-rank]')?.addEventListener('click', () => this.rankUp());

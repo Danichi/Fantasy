@@ -1536,6 +1536,24 @@ async function boot() {
   });
   bosses.fromJSON(saveData?.world?.bosses);
   if (TEST_MODE) bosses.enabled = false;
+  // ---- Field abilities (paths/fieldAbilities.ts): Wind Step, Glide, Lantern Soul ----
+  player.fieldAirJumps = () => (player.paths.learned('gale') ? 1 : 0);
+  player.fieldGlide = () => player.paths.learned('windcaller');
+  player.onAirJump = () => fx.add.spawn({ pos: player.pos.clone().setY(player.pos.y + 0.2), spread: 0.6, count: 14, life: [0.2, 0.45], size: [0.16, 0.02], color: 0xe8fffb, color2: 0x6fd6c6, drag: 3 });
+  const lantern = { light: null as THREE.PointLight | null };
+  const lanternSoul = () => {
+    const dark = realm.mode === 'dungeon' || story.darkness > 0.5 || (realm.mode === 'overworld' && time.state.night > 0.55);
+    const want = player.paths.learned('lightbinder') && dark && !player.dead;
+    if (want && !lantern.light) lantern.light = spells.borrowLight(lantern);
+    if (!want && lantern.light) (spells.returnLight(lantern.light), (lantern.light = null));
+    if (lantern.light) {
+      lantern.light.position.set(player.pos.x, player.pos.y + 2.4, player.pos.z);
+      lantern.light.color.set(0xfff0c0);
+      lantern.light.intensity = 3.2;
+      lantern.light.distance = 14;
+      lantern.light.decay = 1.4;
+    }
+  };
   town.guild.bounties = () => bosses.bounties();
   town.guild.onBounty = (id) => bosses.hear(id);
   // ---- The Adventurer's Guild: halls, the Hunt Map, the trophy rack, the Quartermaster ----
@@ -1591,7 +1609,7 @@ async function boot() {
     else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
   };
   // The book: every menu in one window, four tabs with sub-tabs (ui/menuBook.ts).
-  const skillsSub = (id: 'disc' | 'attr' | 'mast', label: string, key?: string) => ({
+  const skillsSub = (id: 'disc' | 'attr' | 'mast' | 'atlas', label: string, key?: string) => ({
     id: 'skills-' + id, label, key, el: () => skills.el,
     isOpen: () => skills.open && skills.tabId === id,
     open: () => { skills.setTab(id); skills.toggle(true); },
@@ -1611,6 +1629,7 @@ async function boot() {
         skillsSub('disc', 'Disciplines', 'K'),
         skillsSub('attr', 'Attributes'),
         skillsSub('mast', 'Mastery'),
+        skillsSub('atlas', 'Class Atlas'),
         { id: 'herbal', label: 'Herbal', key: 'O', el: () => herbalism.ui.el, isOpen: () => herbalism.isOpen, open: () => herbalism.openCodex(), close: () => herbalism.ui.close() },
         { id: 'seamanship', label: 'Seamanship', key: 'N', el: () => seaPanel.el, isOpen: () => seaPanel.open, open: () => seaPanel.toggle(true), close: () => seaPanel.toggle(false) },
       ],
@@ -2409,6 +2428,7 @@ async function boot() {
     // B on land: brew from the Herbalist's Satchel (B is the spyglass only when aboard).
     if (input.pressedKey('KeyB') && !sailing.aboard && herbalism.count('herbalistSatchel') > 0) herbalism.openField();
     origins.update(STEP); // ---- Origins (feat/origins) ----
+    lanternSoul(); // (Lightbinder's field ability: in the dark, above and below ground)
     if (realm.mode === 'overworld') {
       slimes.update(STEP, player);
       population.update(STEP, player, time.hour, time.day);

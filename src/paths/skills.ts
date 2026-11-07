@@ -12,6 +12,7 @@ import type { Style } from '../magic/circles';
 import { DISC, DISCIPLINES } from './data';
 import { treeOf, type TreeNode } from './paths';
 import { PASSIVES, genericEffect, type NodeEffect, type NumMod } from './effects';
+import { ASCENSIONS } from './ascensions';
 import { SkillFx, PALETTE } from './skillFx';
 import { FIRE_SKILLS } from './classes/fire';
 import { CombatClasses } from './classes/combat';
@@ -214,9 +215,15 @@ export class SkillRuntime {
     const P = this.paths;
     const m: Partial<Record<NumMod, number>> = {};
     const x: Record<string, number> = {};
+    const add = (e: NodeEffect, k: number) => {
+      for (const [key, val] of Object.entries(e.m ?? {})) m[key as NumMod] = (m[key as NumMod] ?? 0) + val * k;
+      for (const [key, val] of Object.entries(e.x ?? {})) x[key] = (x[key] ?? 0) + val * k;
+    };
     for (const d of DISCIPLINES) {
       if (!P.learned(d.id) || d.fam === 'calling') continue;
-      if (d.fam === 'combat' && P.active !== d.id) continue;
+      // A combat class counts while active; a second class counts at half strength.
+      const k = d.fam !== 'combat' || P.active === d.id ? 1 : P.secondary === d.id ? 0.5 : 0;
+      if (!k) continue;
       const t = treeOf(d);
       if (!t) continue;
       for (const [nid, v] of Object.entries(P.nodes[d.id])) {
@@ -225,9 +232,11 @@ export class SkillRuntime {
         if (n.type === 'cap' && SKILLS[`${d.id}:${n.name}`]) continue;
         const e = SkillRuntime.effect(d.id, n, v.pick);
         if (e.craft) continue;
-        for (const [k, val] of Object.entries(e.m ?? {})) m[k as NumMod] = (m[k as NumMod] ?? 0) + val;
-        for (const [k, val] of Object.entries(e.x ?? {})) x[k] = (x[k] ?? 0) + val;
+        add(e, k);
       }
+      // The Ascension's nodes (levels 30 to 45).
+      const a = P.asc[d.id];
+      if (a && ASCENSIONS[d.id]) for (let i = 0; i < a.n; i++) add(ASCENSIONS[d.id][a.k].nodes[i], k);
     }
     // Mastery perks (paths/mastery.ts) ride on top of the trees.
     const ex = this.extra?.();
@@ -454,7 +463,7 @@ export class SkillRuntime {
     if (!s?.def) return 'That technique is not in the game yet';
     const P = this.paths, p = this.player, def = s.def;
     if (!this.rankOf(s.d.id, s.n.id)) return `You haven't learned ${s.n.name}`;
-    if (s.d.fam === 'combat' && P.active !== s.d.id) return `${s.d.name} is not your active class`;
+    if (s.d.fam === 'combat' && P.active !== s.d.id && P.secondary !== s.d.id) return `${s.d.name} is not your active or second class`;
     if (p.dead) return 'You are dead';
     if (this.cooldown(s.key) > 0) return `${s.n.name} is recharging`;
     if (s.d.id === 'pyromancer' && this.buff('overheat')) return 'You are overheated';
@@ -512,7 +521,9 @@ export class SkillRuntime {
     const extra = def.charges && this.has(def.charges) ? 2 : 1;
     const used = (this.uses.get(s.key) ?? 0) + 1;
     if (used >= extra) {
-      this.cds.set(s.key, def.cd);
+      // Ascensions shorten cooldowns; a second class's techniques recharge a quarter slower.
+      const second = s.d.fam === 'combat' && this.paths.secondary === s.d.id && this.paths.active !== s.d.id;
+      this.cds.set(s.key, def.cd * (1 - Math.min(0.5, this.x('cdr'))) * (second ? 1.25 : 1));
       this.uses.set(s.key, 0);
     } else this.uses.set(s.key, used);
     events.emit('spellCast', { spell: s.key });
@@ -686,6 +697,7 @@ export class SkillRuntime {
     this.lastHitT = 0;
     void P;
     this.cc.onMeleeHit(t, action);
+    if (crit && this.x('critStamina') > 0) this.player.stamina = Math.min(this.player.maxStamina, this.player.stamina + this.x('critStamina'));
     if (crit && this.has('critBleed')) this.bleed(t, this.weapon() * 0.12);
     this.addVerdict(t);
     // Firebrand: each blade hit spends 5 Heat as extra fire.
@@ -725,6 +737,7 @@ export class SkillRuntime {
     this.status.delete(id);
     const burning = (s?.burn?.left ?? 0) > 0;
     this.cc.onKill();
+    if (this.x('killHealPct') > 0 && !this.player.dead) this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * this.x('killHealPct'));
     if (burning && this.has('inferno')) {
       this.vfx.burst(at, 'fire', 1.5, 6);
       this.vfx.ring(at, 'fire', 7);
@@ -988,6 +1001,7 @@ export class SkillRuntime {
     for (const [k, v] of Object.entries(this.passive.m)) (m as unknown as Record<string, number>)[k] += v;
     const p = this.player;
     this.cc.applyMods(m);
+    if (this.x('lowHpDmg') > 0 && p.hp < p.maxHp * 0.35) (m.melee += this.x('lowHpDmg')), (m.spell += this.x('lowHpDmg'));
     if (this.has('emberShield') && this.buff('firebrand')) m.dmgTaken -= 0.15;
     if (this.has('deflectAir') && this.buff('windwall')) m.dmgTaken -= 0.2;
     if (this.buff('faithZone')) m.dmgTaken -= 0.2;
