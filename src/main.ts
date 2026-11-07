@@ -211,7 +211,8 @@ import { Town, NPCS } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
 import { loadArmourKit } from './enemies/armourKit';
 import { MINE_CLEARING } from './world/mineEntrance';
-import { loadSave, writeSave, buildSave, applySave, clearSave } from './save';
+import { loadSave, writeSave, buildSave, applySave } from './save';
+import { buildSavePicker } from './ui/savePicker';
 import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 import { afflictions } from './combat/afflictions';
@@ -2133,8 +2134,12 @@ async function boot() {
     if (open) input.exitLock();
     else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
   };
+  // A new save isn't written until its hero is made, so leaving the title for
+  // another slot doesn't leave this one holding a hero nobody created.
+  let heroMade = !!saveData || TEST_MODE;
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
+    if (!heroMade) return;
     const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
     writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, story: story.save(), social: social.save(), requests: requests.save(), pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), sites: sites.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
@@ -2184,6 +2189,7 @@ async function boot() {
   const overlays = buildOverlays((origin) => {
     if (origin) player.prog.origin = origin;
     started = true;
+    heroMade = true;
     // (A new game always begins in the wheat: the story starts there.)
     if (!arrived && saveData && !TEST_MODE && loadInto() === 'ghagrabba' && realm.mode === 'overworld' && !realm.interior) {
       const [gx, gz] = EAST_GATE;
@@ -2290,17 +2296,11 @@ async function boot() {
     overlays.lockOrigin();
     const cta = overlays.start.querySelector('.cta')!;
     cta.textContent = 'CLICK TO CONTINUE';
-    const nw = document.createElement('button');
-    nw.className = 'newgame';
-    nw.textContent = 'Start a new game';
-    nw.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!confirm('Start over? Your progress and drawn maps will be erased.')) return;
-      window.removeEventListener('beforeunload', save);
-      clearSave();
-      location.reload();
-    });
-    cta.after(nw);
+  }
+  // Save slots: pick whose game this is, name a save, or start a new one.
+  if (!TEST_MODE) {
+    const picker = buildSavePicker(overlays.start.querySelector('.title-card')!);
+    overlays.start.querySelector('.cta')!.after(picker.el);
   }
   document.addEventListener('pointerlockchange', () => {
     if (input.locked) hadLock = true;
