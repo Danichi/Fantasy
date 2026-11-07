@@ -95,7 +95,7 @@ function buildPlaces(houses: HouseInfo[]) {
   places.set('tavern', { id: 'tavern', spots: [v(-20, 21), v(-22, 22.5), v(-25, 22), v(-27, 20.5), v(-19, 19)] }); // outside the Wayfarer Inn
   places.set('forge', { id: 'forge', spots: [v(24, 17), v(29, 16)] });
   places.set('mill', { id: 'mill', spots: [v(150, 18), v(152, 24)] });
-  places.set('guild', { id: 'guild', spots: [v(18, -5), v(26, -5)] });
+  places.set('guild', { id: 'guild', spots: [v(14.7, -8.8), v(11.75, -14)] });
   places.set('training', { id: 'training', spots: ring(P.x, P.y - 6, 13, 6) });
   places.set('fields', { id: 'fields', spots: Array.from({ length: 18 }, (_, i) => v(-60 + (i % 6) * 26, 150 + Math.floor(i / 6) * 22)) });
   places.set('pasture', { id: 'pasture', spots: [v(-60, -150), v(-40, -170), v(-80, -135)] });

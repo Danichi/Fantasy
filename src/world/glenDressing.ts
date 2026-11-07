@@ -7,7 +7,7 @@ import { mulberry32 } from '../core/math';
 
 // Elder Glen's market square (World Expansion phase 3): six stalls with
 // striped awnings and goods on the counters south of the plaza, the town well
-// and the noticeboard by the guild. Stalls face north; shoppers stand on
+// and the town well. Stalls face north; shoppers stand on
 // their north side facing south (see MARKET_SPOTS).
 
 export const STALLS: { x: number; z: number; awning: [string, string]; goods: 'produce' | 'bread' | 'cloth' | 'pots' | 'fish' | 'flowers' }[] = [
@@ -21,7 +21,6 @@ export const STALLS: { x: number; z: number; awning: [string, string]; goods: 'p
 /** Where shoppers (and the market NPCs) stand: 2.4 m north of each stall (spots jitter 0.8 m). */
 export const MARKET_SPOTS = STALLS.map((s) => new THREE.Vector3(s.x, heightAt(s.x, s.z - 2.4), s.z - 2.4));
 export const WELL = new THREE.Vector3(-12, 0, -15);
-export const NOTICEBOARD = new THREE.Vector3(11, 0, -9.5);
 
 function stripes(a: string, b: string) {
   const c = document.createElement('canvas');
@@ -148,38 +147,7 @@ export function buildGlenDressing(scene: THREE.Scene, m: WorldMats) {
     physics.addCylinder(new THREE.Vector3(x, y + 0.6, z), 0.6, 1.4);
   }
 
-  // ---- noticeboard ------------------------------------------------------------------
-  {
-    const x = NOTICEBOARD.x, z = NOTICEBOARD.z, y = heightAt(x, z);
-    NOTICEBOARD.y = y;
-    for (const sx of [-1, 1]) put(wood, new THREE.BoxGeometry(0.16, 2.6, 0.16), x + sx * 1.1, y + 1.3, z);
-    put(planks, new THREE.BoxGeometry(2.4, 1.4, 0.1), x, y + 1.6, z);
-    const roof = new THREE.BoxGeometry(2.8, 0.1, 0.7);
-    roof.rotateX(0.35);
-    put(planks, roof, x, y + 2.6, z + 0.08);
-    // Pinned notices.
-    const c = document.createElement('canvas');
-    c.width = 256; c.height = 150;
-    const g = c.getContext('2d')!;
-    g.fillStyle = '#6b4b30'; g.fillRect(0, 0, 256, 150);
-    const notes: [number, number, number, number, string][] = [[12, 10, 70, 60, '#efe3c2'], [92, 16, 64, 76, '#f4ead0'], [168, 8, 76, 56, '#e8d9b0'], [20, 80, 80, 58, '#f4ead0'], [120, 96, 60, 46, '#efe3c2'], [190, 72, 56, 70, '#e8d9b0']];
-    for (const [nx, ny, nw, nh, col] of notes) {
-      g.save();
-      g.translate(nx + nw / 2, ny + nh / 2);
-      g.rotate((rnd() - 0.5) * 0.12);
-      g.fillStyle = col; g.fillRect(-nw / 2, -nh / 2, nw, nh);
-      g.fillStyle = '#5a4a3a';
-      for (let l = 0; l < 5; l++) g.fillRect(-nw / 2 + 6, -nh / 2 + 10 + l * 9, nw - 12 - (l % 2) * 14, 2);
-      g.fillStyle = '#b8402e'; g.beginPath(); g.arc(0, -nh / 2 + 4, 3, 0, 7); g.fill();
-      g.restore();
-    }
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.3), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }));
-    face.position.set(x, y + 1.6, z + 0.06);
-    scene.add(face);
-    physics.addBox(new THREE.Vector3(x, y + 1.3, z), new THREE.Vector3(1.2, 1.3, 0.12));
-  }
+  // (The old noticeboard is gone: the guild's Quest Wall is inside the Guild Hall, world/guildHall.ts.)
 
   const add = (list: THREE.BufferGeometry[], mat: THREE.Material) => {
     if (!list.length) return;

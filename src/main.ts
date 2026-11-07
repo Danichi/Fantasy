@@ -6,6 +6,8 @@ import { TrainingYard } from './combat/trainingYard';
 import { EAST_GATE } from './world/desert/ghagrabbaPlaces';
 import { Lessons } from './story/lessons';
 import { lessonHook, mentorMemory } from './paths/mentors';
+import { NAMED_KINDS, RANKS, rankIndex } from './guild/ranks';
+import type { HallId } from './guild/contracts';
 import type { StationKind } from './crafting/recipes';
 import { Mastery, wireMastery } from './paths/mastery';
 import { CombatDebug } from './combat/debugOverlay';
@@ -63,7 +65,8 @@ import { Fishing, type FishingSpot } from './world/fishing';
 import { Duel } from './combat/duel';
 import { buildCharacter, type Look } from './npc/charBuilder';
 import { DOORS, type Door, type InteriorKind } from './world/doors';
-import type { Interior } from './world/interior';
+import { guildHook, type Interior } from './world/interior';
+import type { DialogueOption } from './ui/dialogue';
 import type { Interactable } from './dungeon/instance';
 import { setupAcademy } from './quests/academy';
 import { setupLowerCity, SALLOW_LOOK, NIX_LOOK } from './quests/lowerCity';
@@ -128,7 +131,7 @@ import { Bestiary } from './progression/bestiary';
 import { BestiaryUI } from './ui/bestiaryUI';
 import { glenNamedFolk } from './npc/glenNamed';
 import { ITEMS } from './items/itemDefs';
-import { buildGlenDressing, MARKET_SPOTS, NOTICEBOARD, WELL } from './world/glenDressing';
+import { buildGlenDressing, MARKET_SPOTS, WELL } from './world/glenDressing';
 import { Weather } from './world/weather';
 import { Precipitation } from './world/precipitation';
 import { Ambience } from './audio/ambience';
@@ -595,7 +598,6 @@ async function boot() {
   );
   realm.overworldInteractables.push(...town.interactables(), ...frontier.interactables);
   realm.overworldInteractables.push(
-    { pos: NOTICEBOARD, radius: 2.2, label: () => 'Read the noticeboard', enabled: () => true, action: () => town.guild.open('board') },
     {
       pos: WELL, radius: 2.2, label: () => 'Drink from the well', enabled: () => true,
       action: () => {
@@ -1022,7 +1024,7 @@ async function boot() {
       dialogue.show('Old Nell Crabbe', 'Fish Market', g ? `Lovely fat fish. ${g} gold, and not a copper less.` : 'You\'ve nothing I can sell, dearie. Catch something first!', [{ label: 'Farewell.', run: () => dialogue.close() }]);
     },
   }]);
-  folkServices.set('guildmaster', () => [{ label: 'See the guild board', run: () => { dialogue.close(); town.guild.open('board'); } }]);
+  folkServices.set('guildmaster', (show, back) => guildDesk('port', show, back));
   const riverLife = new RiverLife(r.scene, fx);
   const boats = new Boats(r.scene, player);
   // Ships: owned, hired and crewed; the helm, the deck, pirates and serpents.
@@ -1107,7 +1109,7 @@ async function boot() {
     },
   }]);
   // ---- The Royal Capital's services ----------------------------------------------------
-  folkServices.set('grandmaster', () => [{ label: 'See the guild board', run: () => { dialogue.close(); town.guild.open('board'); } }]);
+  folkServices.set('grandmaster', (show, back) => guildDesk('capital', show, back));
   folkServices.set('armourer', () => [{ label: 'Browse royal armour', run: () => shop('armourer', 'Fitted by appointment. Today is your appointment.', [['ironHelm', 70], ['pauldrons', 85], ['breastplate', 170], ['gauntlets', 60], ['greaves', 95], ['sabatons', 60], ['kiteShield', 95], ['towerShield', 150]]) }]);
   folkServices.set('bladesmith', () => [{ label: 'Browse capital blades', run: () => shop('bladesmith', 'Every edge here was folded under the royal charter.', withArms('bladesmith', [['knightSword', 115], ['bastardSword', 150], ['claymore', 280], ['estoc', 260], ['frostbite', 340], ['emberbrand', 340]])) }]);
   folkServices.set('capAlchemist', () => [{ label: 'Browse court draughts', run: () => shop('capAlchemist', 'Brewed to the Collegium\u2019s own recipes.', withArms('capAlchemist', [['healthPotion', 16], ['manaPotion', 20], ['greaterHealthPotion', 50], ['greaterManaPotion', 55]])) }]);
@@ -1437,7 +1439,6 @@ async function boot() {
       const st = npcs.find(keeper);
       if (st) folkInside(st, spot, it, extras, spot.seated ? 'sit' : 'idle'); // (the King sits his throne)
     }
-    if (it.kind === 'guild') extras.push({ pos: it.at(0, -it.D / 2 + 0.8), radius: 2, label: () => 'Read the quest board', enabled: () => true, action: () => town.guild.open('board') });
     // Taverns and the guild have company: residents who live nearby.
     if (it.kind === 'undercity') fillUndercity(it, extras);
     // The Palace of the Sun: the royal family and their court, each in their chamber.
@@ -1537,6 +1538,49 @@ async function boot() {
   if (TEST_MODE) bosses.enabled = false;
   town.guild.bounties = () => bosses.bounties();
   town.guild.onBounty = (id) => bosses.hear(id);
+  // ---- The Adventurer's Guild: halls, the Hunt Map, the trophy rack, the Quartermaster ----
+  for (const d of BOSS_DEFS) NAMED_KINDS.add(d.kind);
+  town.guild.day = () => time.day;
+  town.guild.toast = (m) => hud.toast(m);
+  town.guild.huntMarks = () => bosses.markers();
+  town.guild.onTrophies = (ids) => world.guildHall.setTrophies(ids);
+  world.guildHall.setTrophies(town.guild.trophyIds);
+  shopUI.discount = () => town.guild.discount;
+  hud.guildRank = town.guild.guildRank;
+  town.guild.onPromote = (rank) => {
+    hud.guildRank = rank;
+    hud.regionCard(`${rank}-RANK`, 'The Adventurer\'s Guild', true);
+    hud.toast(`Promoted to ${rank}-rank! ${RANKS[rankIndex(rank)].perks.join(' · ')}`);
+    if (!TEST_MODE) dialogue.show('The Registrar', 'Adventurer\'s Guild', `By the charter of the Crown, you are ${rank}-rank. Here: the badge. The whole hall saw it, and the whole valley will hear. ${RANKS[rankIndex(rank)].perks.join('. ')}.`, [{ label: 'Thank you.', run: () => dialogue.close() }]);
+  };
+  guildHook.wall = (hall) => town.guild.open('board', hall as HallId);
+  guildHook.map = (hall) => town.guild.open('map', hall as HallId);
+  guildHook.ladder = (hall) => town.guild.open('roster', hall as HallId);
+  guildHook.board = (hall) => town.guild.wallLook(hall as HallId);
+  guildHook.quartermaster = () => quartermaster();
+  const quartermaster = () => {
+    const G = town.guild;
+    const opts = G.quartermasterStock().map((x) => {
+      const locked = rankIndex(x.rank) > rankIndex(G.guildRank);
+      return {
+        label: `${ITEMS[x.id].name} · ${x.marks} Marks${locked ? ` (${x.rank}-rank)` : ''}`,
+        run: () => {
+          if (locked) return void hud.toast(`The Quartermaster only sells that to ${x.rank}-rank and above.`);
+          if (!G.spendMarks(x.marks)) return void hud.toast('Not enough Guild Marks.');
+          giveItem(x.id, 1);
+          hud.toast(`Bought ${ITEMS[x.id].name} for ${x.marks} Marks`);
+          quartermaster();
+        },
+      };
+    });
+    dialogue.show('The Quartermaster', `Guild stores · you hold ${G.marks} Marks`, 'Marks only, no coin. You earn them on the Wall; you spend them here.', [...opts, { label: 'That\'s all.', run: () => dialogue.close() }]);
+  };
+  /** A Registrar's or guildmaster's desk: the hall's wall, the trophies and exams, what your rank gives. */
+  const guildDesk = (hall: HallId, show: (text: string, opts: DialogueOption[]) => void, back: () => void): DialogueOption[] => [
+    ...town.guild.registrarOptions((t) => show(t, [{ label: 'Go on.', run: back }])),
+    { label: 'Show me the Quest Wall.', run: () => { dialogue.close(); town.guild.open('board', hall); } },
+  ];
+  folkServices.set('registrar', (show, back) => guildDesk('glen', show, back));
   let shutters = 1;
   if (TEST_MODE) raids.auto = false;
   // The Seamanship calling (N): the sea's skill tree.
@@ -2077,6 +2121,7 @@ async function boot() {
     writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, story: story.save(), social: social.save(), requests: requests.save(), pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), sites: sites.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
+  hud.guildRank = town.guild.guildRank;
   // Guild contracts show in the quest log (tracker, journal, map, waypoint).
   const guildContracts = linkGuildContracts(town.guild, quests);
   guildContracts.restore();
@@ -2399,7 +2444,9 @@ async function boot() {
       const px = player.pos.x, pz = player.pos.z;
       for (const it of realm.interactables) {
         const d = Math.hypot(it.pos.x - px, it.pos.z - pz);
-        if (d >= it.radius || d >= bestD || !it.enabled()) continue;
+        if (d >= it.radius || d >= bestD) continue;
+        if ((it as { level?: number }).level !== undefined && Math.abs(player.pos.y - (it.pos.y - 0.4)) > (it as { level?: number }).level!) continue;
+        if (!it.enabled()) continue;
         {
           bestD = d;
           best = it;
@@ -2411,6 +2458,7 @@ async function boot() {
     else if (best && input.wasPressed('interact')) best.action();
     spells.update(STEP);
     world.update(STEP);
+    world.guildHall.update(STEP, time.state.night);
     river.update(STEP);
     fx.update(STEP, r.renderer.domElement.height, r.camera.fov);
     physics.step(STEP);

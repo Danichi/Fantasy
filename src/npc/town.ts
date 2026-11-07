@@ -236,7 +236,6 @@ export class Town {
         enabled: () => true,
         action: () => this.talk(n.spec),
       })),
-      this.guild.interactable() as Interactable,
     ];
   }
 

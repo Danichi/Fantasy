@@ -30,6 +30,8 @@ export interface Interactable {
   label: () => string;
   enabled: () => boolean;
   action: () => void;
+  /** only within this height of pos.y (rooms with a gallery upstairs); unset: any height */
+  level?: number;
 }
 
 export interface DungeonProgress {

@@ -63,34 +63,40 @@ const NAMED: Named[] = [
     look: { body: 'female', outfit: 'peasant', hair: 'buns', hairColor: 0xe6e2da, skin: 0xe0b894, linen: 0xd9cfe8, height: 1.58 },
     lines: { any: ['Elder Glen was a glen before it was a town, and a town before it was a kingdom\'s breadbasket.', 'The harvest festival is the one night the whole valley dances.'] },
   },
-  // The guild hall regulars: two parties and a veteran.
+  // The Registrar of the Glen chapter: keeps the Quest Wall, pays out, holds the rank exams.
   {
-    id: 'rook', name: 'Rook Ashdown', title: 'D-Rank Swordsman · Glen Wardens', post: [16, -4], activity: 'talk', hours: [8, 18], home: 'home5', evening: 'tavern',
+    id: 'registrar', name: 'Registrar Odette Marsh', title: 'Registrar of the Adventurer\'s Guild', post: [14.7, -9.7], activity: 'idle', hours: [7, 22], home: 'home12',
+    look: { body: 'female', outfit: 'peasant', hair: 'buns', hairColor: 0x5a3a22, skin: 0xe0b894, linen: 0xe8dcc0, cloth: 0x24456e, height: 1.7 },
+    lines: { any: ['Contracts on the Wall, payment at my counter. Proof first, gold second.', 'Every name on the Rank Ladder started at the bottom. Most of them stayed there.'] },
+  },
+  // The guild hall regulars: two parties and a veteran, round the fire in front of the hall.
+  {
+    id: 'rook', name: 'Rook Ashdown', title: 'D-Rank Swordsman · Glen Wardens', post: [11.2, -16], activity: 'talk', hours: [8, 18], home: 'home5', evening: 'tavern',
     look: { body: 'male', outfit: 'ranger', hair: 'simpleparted', hairColor: 0x3a2618, skin: 0xfff0e6, cloth: 0x8a3a2a, height: 1.8 },
     lines: { any: ['The Glen Wardens: me, Lyssa and Garrick. D-rank now, B-rank by spring.', 'Wolf contracts pay the rent. Crypt contracts pay for the good ale.'] },
   },
   {
-    id: 'lyssa', name: 'Lyssa Fen', title: 'C-Rank Archer · Glen Wardens', post: [18, -2], activity: 'talk', hours: [8, 18], home: 'home6', evening: 'tavern',
+    id: 'lyssa', name: 'Lyssa Fen', title: 'C-Rank Archer · Glen Wardens', post: [8.7, -16.3], activity: 'talk', hours: [8, 18], home: 'home6', evening: 'tavern',
     look: { body: 'female', outfit: 'ranger', hair: 'long', hairColor: 0xb0562a, skin: 0xfff0e6, cloth: 0x3d7a45, hood: true, height: 1.7 },
     lines: { any: ['Rook swings first and thinks second. That\'s why I stand behind him with a bow.', 'There are goblin tracks along the north pasture. Fresh ones.'] },
   },
   {
-    id: 'garrick', name: 'Garrick Stone', title: 'D-Rank Shieldbearer · Glen Wardens', post: [20, -4], activity: 'patrol', hours: [8, 18], home: 'home7', evening: 'tavern',
+    id: 'garrick', name: 'Garrick Stone', title: 'D-Rank Shieldbearer · Glen Wardens', post: [9.2, -10.3], activity: 'patrol', hours: [8, 18], home: 'home7', evening: 'tavern',
     look: { body: 'male', outfit: 'ranger', hair: 'buzzed', beard: true, hairColor: 0x8a3f22, skin: 0xe0b894, cloth: 0x5a6a7a, pauldron: true, height: 1.74 },
     lines: { any: ['A good shield is a door you carry with you.', 'The dwarves in Port Aurelle make shields that ring like bells.'] },
   },
   {
-    id: 'selka', name: 'Selka Moor', title: 'D-Rank Mage · Two Coins', post: [26, -3], activity: 'talk', hours: [9, 19], home: 'home8', evening: 'tavern',
+    id: 'selka', name: 'Selka Moor', title: 'D-Rank Mage · Two Coins', post: [15.6, -8.2], activity: 'talk', hours: [9, 19], home: 'home8', evening: 'tavern',
     look: { body: 'female', outfit: 'peasant', hair: 'buzzedfemale', hairColor: 0x1f1a17, skin: 0x7a4e32, linen: 0xd9cfe8, cloth: 0x5a3f8a, height: 1.68 },
     lines: { any: ['Magus Orren taught me my first flame. I only burned one eyebrow off.', 'Tam and I are "Two Coins". Heads I cast, tails he stabs.'] },
   },
   {
-    id: 'tam', name: 'Tam Quickley', title: 'D-Rank Rogue · Two Coins', post: [28, -1], activity: 'idle', hours: [10, 20], home: 'home10', evening: 'tavern',
+    id: 'tam', name: 'Tam Quickley', title: 'D-Rank Rogue · Two Coins', post: [15, -6.1], activity: 'idle', hours: [10, 20], home: 'home10', evening: 'tavern',
     look: { body: 'male', outfit: 'ranger', hair: 'buzzed', hairColor: 0x6a4428, skin: 0xfff0e6, cloth: 0x2a2a30, hood: true, height: 1.72 },
     lines: { any: ['Rogue is a strong word. I prefer "flexible".', 'Heard there\'s a thieves\' guild down in Port Aurelle\'s Lower City. Purely academic interest.'] },
   },
   {
-    id: 'ingrid', name: 'Ingrid Vale', title: 'B-Rank Veteran', post: [22, -6], activity: 'sit', hours: [9, 17], home: 'home11', evening: 'tavern',
+    id: 'ingrid', name: 'Ingrid Vale', title: 'B-Rank Veteran', post: [10, -18.2], activity: 'sit', hours: [9, 17], home: 'home11', evening: 'tavern',
     look: { body: 'female', outfit: 'ranger', hair: 'buns', hairColor: 0xb8b4ae, skin: 0xe0b894, cloth: 0x3a5f9e, pauldron: true, height: 1.76 },
     lines: { any: ['B-rank took me twelve years. Don\'t rush it and you\'ll live to see A.', 'When you reach Port Aurelle, visit the big guild hall. The board there is three times this size.'] },
   },

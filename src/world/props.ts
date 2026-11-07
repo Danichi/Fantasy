@@ -11,6 +11,7 @@ import { buildHouse, worldUV, type WorldMats } from './buildings';
 import { buildBridge } from './water';
 import { buildCrypt } from './crypt';
 import { buildMineEntrance } from './mineEntrance';
+import { buildGuildHall, GUILD_HALL, type GuildHallBuilt } from './guildHall';
 import { mulberry32, wrapAngle as wrap } from '../core/math';
 import { newTargetId, targets, type HitInfo, type Target } from '../combat/targets';
 import type { FX } from '../fx/particles';
@@ -180,6 +181,8 @@ export interface World {
   crypt: ReturnType<typeof buildCrypt>;
   mineEntrance: ReturnType<typeof buildMineEntrance>;
   mineDoor: THREE.Vector3;
+  /** the Guild Hall on the plaza (world/guildHall.ts) */
+  guildHall: GuildHallBuilt;
   village: Village;
   /** the painted material set, shared with other settlements */
   mats: WorldMats;
@@ -221,7 +224,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     { x: 35, z: 62, rot: -0.12, spec: { w: 8, d: 6.5, floors: 1, roof: 'thatch', seed: 34 } },
     { x: 67, z: 52, rot: 0.22, spec: { w: 7, d: 6, floors: 2, roof: 'slate', seed: 35 } },
     // Commerce district / civic buildings.
-    { x: 22, z: -12, rot: 0, spec: { w: 16, d: 12, floors: 2, roof: 'slate', seed: 90 }, door: { kind: 'guild', name: 'the guild hall' } },
+    // (The Guild Hall on the plaza's east side is its own build: world/guildHall.ts.)
     { x: -24, z: 14, rot: 0.06, spec: { w: 12, d: 9, floors: 2, roof: 'slate', seed: 91 }, door: { kind: 'tavern', name: 'the Wayfarer Inn', keeper: 'innkeeper' } },
     { x: -5, z: 29, rot: -0.04, spec: { w: 11, d: 8, floors: 1, roof: 'thatch', seed: 92 }, door: { kind: 'shop', keeper: 'baker' } },
     { x: 27, z: 25, rot: 0.05, spec: { w: 11, d: 8, floors: 1, roof: 'slate', seed: 93 }, door: { kind: 'smithy', name: 'Fröst Forge', keeper: 'froest' } },
@@ -254,6 +257,9 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
   buildBridge(scene, m);
   const crypt = buildCrypt(scene, m, fx);
   const mineEntrance = buildMineEntrance(scene, m, fx);
+  const guildHall = buildGuildHall(scene, m);
+  // (So the village keeps its trees and clutter out of the hall.)
+  placed.push({ x: GUILD_HALL.x, z: GUILD_HALL.z, rot: GUILD_HALL.yaw, half: new THREE.Vector3(GUILD_HALL.w / 2 + 1.5, 6, GUILD_HALL.d / 2 + 4), chimney: null });
   const village = buildVillage(scene, m, fx, placed, keepClear);
 
   // Large civic square and shopfront signs. These buildings make the starting
@@ -273,7 +279,6 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     mesh.castShadow = true;
     scene.add(mesh);
   };
-  sign("ADVENTURER'S GUILD", 22, -18, '#704d1f', 6.8);
   sign('THE WAYFARER INN', -24, 8, '#6b4b3b', 5.2);
   sign('FRÖST FORGE', 27, 19, '#5d6870', 4.4);
   sign('MOONGLASS APOTHECARY', 48, -2, '#2f7462', 5.8);
@@ -464,17 +469,18 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
   // Fire in the pit.
   const pit = new THREE.Vector3(PLAZA_CENTER.x + 9.5, heightAt(PLAZA_CENTER.x + 9.5, PLAZA_CENTER.y - 9.5) + 0.35, PLAZA_CENTER.y - 9.5);
   let fireT = 0;
-
   return {
     crypt,
     mineEntrance,
     mineDoor: mineEntrance.door,
+    guildHall,
     village,
     mats: m,
     update(dt: number) {
       crypt.update(dt);
       mineEntrance.update(dt);
       village.update(dt);
+
       for (const d of dummies) d.update(dt);
       fireT += dt;
       if (fireT > 0.03) {
