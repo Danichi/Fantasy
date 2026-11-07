@@ -88,8 +88,102 @@ its tree.
 Paths save version 4: the second class and each class's Ascension (choice
 and nodes learned).
 
+## The roster (`paths/roster/`)
+
+Every class the classes update adds is one spec (`roster/types.ts`): its
+resource and what builds it, what a full resource releases, the mark it lays
+on enemies, its field ability, its trial, its tree, techniques and
+Ascensions. `roster/gen.ts` writes every passive from the class's own
+mechanic, so a node always names what it changes ("Tension builds 20%
+faster", "Each Quarry stack makes enemies take 3% more damage from you").
+`roster/engine.ts` runs every roster class that is in play (a combat class
+while it is your active or second class; a magic class once learned).
+
+What a mechanic can be made of:
+
+- **Builds from:** blows with the class's weapon, heavy blows, critical
+  blows, blows in mid-air or from behind, arrows and bolts, the class's own
+  techniques landing or being used, kills, perfect dodges, parries, blocks,
+  blows you take, or on its own over time.
+- **Gives:** a bonus that grows with how full it is.
+- **Releases at full:** a blast, a buff, a heal, a volley of shots, chain
+  lightning, summoned allies or an execution (on the next blow, shot or
+  technique, or at once).
+- **Marks:** stacks on enemies that make them take more damage from you, and
+  at the last stack burst, stun, root, bleed or execute.
+- **Also:** bonuses at low health, techniques paid for in health
+  (Bloodmage, Hellborn), and kills that raise allies (Necromancer, Seawitch,
+  Beastmaster).
+
+Techniques are built by the skill forge, which gained traps, leaps and
+grabs; marks, roots, chill, curses and venom; and techniques that feed or
+spend the class resource.
+
+### Foundation classes (taught in towns, after a trial)
+
+| Class | Weapon or element | Resource and release | Mentor |
+| --- | --- | --- | --- |
+| Ranger | Bow | Tension, Hail of Arrows; Quarry roots | Lyssa Fen, Elder Glen |
+| Lancer | Spear | Momentum, Skewer; Pinned stuns | Ser Gawen Ashby, the capital |
+| Brawler | Bare fists | Combo (pips), Haymaker | Bess Harrow, Port Aurelle |
+| Rogue | Dagger | Edge, Coup de Grace; Poison bleeds | Dice Coveley, Port Aurelle |
+| Woodsman | Axe | Swing, Timber; Notch bleeds | Old Garth, Millbrook |
+| Earthshaper | Stone | Stone, Upheaval; Tremor stuns | Bruni Stonevein, Port Aurelle |
+| Tidecaller | Water | Tide (rises on its own), High Tide; Soaked roots | Mira Vane, Port Aurelle |
+| Druid | Nature | Bloom, Spirit Beasts; Thorns bleed | Envoy Lirael, the capital |
+
+Trials: land arrows with a bow, blows with a spear, bare-handed blows, blows
+from behind with a dagger, heavy axe blows, defeat enemies, catch fish, and
+gather herbs. A Brawler (or anyone on the Brawler's trial) can fight with
+bare fists, which hit harder as the class levels.
+
+### Advanced classes (a foundation class at level 10, and a master)
+
+Arbalest (Ranger; Garrot), Dragoon (Lancer; Captain Mara Thorne), Monk
+(Brawler; Brother Aldo), Assassin (Rogue; Slick Marlo), Berserker (Woodsman;
+Ragna Ironsides), Templar (Boundary; High Priestess Seraphine), Stormcaller
+(Windcaller; Archmage Venn), Ironshaper (Earthshaper; Thrain Ironbrow),
+Necromancer (Shadowcaller; Archivist Mell), Shapeshifter (Druid; Old
+Wendel), Bloodmage (Shadowcaller; Lady Corvina), Seawitch (Tidecaller; Old
+Nell).
+
+### Hybrid classes (two classes at level 15)
+
+Spellblade (Gale + Pyromancer), Paladin (Boundary + Lightbinder), Battlemage
+(Boundary + Earthshaper), Arcane Archer (Ranger + Windcaller), Beastmaster
+(Ranger + Druid), Hexblade (Rogue + Shadowcaller), Runeknight (Warbreaker +
+Runecraft), Grenadier (Rogue + Herbalism), Stormlancer (Lancer +
+Stormcaller), Tidewarden (Lancer + Tidecaller).
+
+### Hidden classes (hidden teachers)
+
+The fifteen gateway classes (Stormdancer, Moonblade, Sword Saint, Reaver,
+Nightblade, Bladedancer, Stillmind, Ironwall, Shieldwarden, Lifewarden,
+Inquisitor, Lightweaver, Sunbreaker, Ashwalker, Phoenix) now each have a
+mechanic and a teacher waiting at a shrine in the world
+(`world/hiddenTeachers.ts`). Opening a gateway capstone no longer teaches the
+class: it shows where the teacher is and marks them on the world map.
+Oathbreaker (Boundary at 15; the Fallen Knight in the Gravewood) and
+Voidwalker (Shadowcaller at 15; the Starless Man by the Sunwheel Stones) can
+now be learned too.
+
+### Origin classes (your people's blood)
+
+Dragonheart (dragonkin), Hellborn (demons), Wildheart (beastfolk), Runebound
+(dwarves) and Elderwood (elves). Only someone born to that people can learn
+one, and it wakes on its own at Legendary Hero level 2.
+
+### Field abilities added
+
+Pathfinder, Woodland Stride, Forest Walk and others (faster when nothing
+hostile is near), Pole Vault, Sky Vault, Cloud Step and Cloud Dancer (air
+jump), Featherfall and Phoenix Wings (glide), Holy Lantern and
+Lantern of Faith (a light in the dark), Tideborn, Sea-Born and Trident
+Swimmer (swim 60% faster), Light Fingers and Ghost Hands (easier
+lockpicking), Iron Knuckles, Stone Fist, Lockbreaker, Stone Shoulder and Rune
+Fist (break locks without a heavy weapon).
+
 ## Still to come
 
-The wider plan (more classes and many more callings) is in the chat plan this
-update started from: new foundation classes, more hidden classes, and the
-37 callings. This update builds the framework they will use.
+The callings plan (37 callings) is not built yet. Techniques are still made
+by the skill forge from archetypes rather than each animated by hand.

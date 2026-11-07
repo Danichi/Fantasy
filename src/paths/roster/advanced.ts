@@ -12,7 +12,7 @@ export const ADVANCED: ClassSpec[] = [
     core: 'Cranked String', lead: 'Arbalest is the crossbow: slow, heavy bolts that break armour, and one siege shot that ends the argument.',
     mech: {
       res: 'Load', color: '#aeb8cc', weapon: ['crossbow'],
-      gain: { shot: 20, crit: 10, kill: 8 },
+      gain: { shot: 20, kill: 8 },
       per: { poise: 0.4, crit: 0.1 },
       full: { kind: 'blast', name: 'Siege Bolt', when: 'next', style: 'steel', r: 3, d: 200, fx: 'stun' },
       mark: { name: 'Breach', on: 'shot', at: 3, per: 0.04, burst: 'stun', style: 'steel' },

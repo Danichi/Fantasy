@@ -13,7 +13,7 @@ export const FOUNDATION: ClassSpec[] = [
     core: 'Drawn Tension', lead: 'Ranger is the bow: keep your distance, mark your quarry and let the string do the work.',
     mech: {
       res: 'Tension', color: '#8fcf6a', weapon: ['bow'],
-      gain: { shot: 12, crit: 6, kill: 10 },
+      gain: { shot: 12, kill: 10 },
       per: { crit: 0.12, poise: 0.2 },
       full: { kind: 'volley', name: 'Hail of Arrows', when: 'next', style: 'nature', n: 5, d: 60, fx: 'bleed' },
       mark: { name: 'Quarry', on: 'shot', at: 4, per: 0.03, burst: 'root', style: 'nature' },

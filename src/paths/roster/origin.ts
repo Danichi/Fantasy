@@ -20,7 +20,6 @@ export const ORIGIN: ClassSpec[] = [
       per: { melee: 0.15, dmgTaken: -0.1 },
       full: { kind: 'blast', name: 'Dragon Breath', when: 'next', style: 'fire', r: 5, d: 180, fx: 'burn' },
     },
-    field: { name: 'Dragon Wings', kind: 'glide', text: 'Hold Jump while falling to glide on half-unfurled wings.' },
     tree: [
       ['Breath', 'Fire from within', [['Hot Blood', 'Smoke Breath'], ['*Fire Breath', 'Deep Lungs', 'Cinder Tongue'], ['*Flame Gout', '?Blue Flame|Black Flame', 'Hot Throat'], ['*Inferno Breath', '!Firestorm Lungs', 'Scorch'], ['Ember Heart', 'Ancestral Fire']], 'Breath of the First Dragon'],
       ['Wing', 'Wings and the sky', [['Wing Stubs', 'Light Bones'], ['*Wing Buffet', 'Strong Wings', 'Wind Under'], ['*Dragon Leap', '?Swoop|Soar', 'Sky Sense'], ['*Wing Storm', '!Skybound', 'High Air'], ['Eyrie Born', 'Old Sky']], 'Flight of the Wyrm'],

@@ -93,7 +93,8 @@ export function coreText(s: ClassSpec) {
   if (m.low) parts.push(`Below ${pct(m.low.below)} health: ${modsText(m.low.m)}.`);
   if (m.raise) parts.push(`Each kill has a ${pct(m.raise.chance)} chance to raise a ${ALLY[m.raise.ally][0]} for 12 s.`);
   if (m.decay !== 0 && !m.regen) parts.push(`It drains once you stop fighting.`);
-  return parts.join(' ');
+  // (the Skills screen adds its own full stop)
+  return parts.join(' ').replace(/\.$/, '');
 }
 
 // ---- passives made from the mechanic -----------------------------------------------------

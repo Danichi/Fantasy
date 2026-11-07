@@ -55,7 +55,7 @@ const OVERLAYS: Over[] = [
     how: 'Strike from behind and dodge: Shadow builds into Nightfall.',
     mech: { res: 'Shadow', color: '#b48cff', gain: { back: 20, hit: 5, dodge: 10 }, per: { crit: 0.15 }, full: { kind: 'execute', name: 'Nightfall', when: 'next', style: 'shadow', d: 240 }, mark: { name: 'Shadowed', on: 'hit', at: 4, per: 0.03, burst: 'stun', style: 'shadow' } },
     asc: [a('Midnight', 'The darkest hour is yours.', ['Black Steel', 'Night Fury', 'Quick Shadow', 'The Hour of Knives'], 'edge'), a('Dusk', 'Half seen, never caught.', ['Shade Cloak', 'Dusk Ward', 'Half Seen', 'The Long Dusk'], 'guard')],
-    teacher: { npc: 'ht-nightblade', name: 'Vesper', title: 'A shadow among the trees', at: [-330, 318], where: 'at the edge of the Gravewood, west of Elder Glen', idle: 'You saw me. That means you are not ready.', look: 'hooded', cloth: 0x30283a },
+    teacher: { npc: 'ht-nightblade', name: 'Vesper', title: 'A shadow among the trees', at: [-258, 250], where: 'at the edge of the Gravewood, west of Elder Glen', idle: 'You saw me. That means you are not ready.', look: 'hooded', cloth: 0x30283a },
   },
   {
     id: 'bladedancer', fam: 'combat', name: 'Bladedancer', color: '--c-steel', core: 'The Steps',
@@ -153,7 +153,7 @@ const OVERLAYS: Over[] = [
       ['Guilt', 'Pain into power', [['Bleed Out', 'Remember'], ['*Self Flagellation', 'Guilt Well', 'Scar Tissue'], ['*Reckoning', '?Atone|Embrace', 'Grief'], ['!Martyrdom', '*Last Confession', 'Numb'], ['Weight of Years', 'Old Wounds']], 'Absolution'],
       ['Road', 'The failed watch', [['Road Dust', 'Night Watch'], ['*Sentinel', 'Unseen', 'Tireless'], ['*Ambush', '?Lantern|Darkness', 'Patrol'], ['!Lone Guard', '*Hold the Road', 'Old Oath'], ['Watchman', 'Grave Vigil']], 'None Shall Pass'],
     ],
-    teacher: { npc: 'ht-oathbreaker', name: 'The Fallen Knight', title: 'Once of the Silver Lance', at: [-318, 346], where: 'in the Gravewood, west of Elder Glen', idle: 'I broke my word once. It cost a village. You have not yet earned the right to hear how. Hold a line first: Boundary, to fifteen.', look: 'armoured', cloth: 0x3a3428 },
+    teacher: { npc: 'ht-oathbreaker', name: 'The Fallen Knight', title: 'Once of the Silver Lance', at: [-246, 262], where: 'at the edge of the Gravewood, west of Elder Glen', idle: 'I broke my word once. It cost a village. You have not yet earned the right to hear how. Hold a line first: Boundary, to fifteen.', look: 'armoured', cloth: 0x3a3428 },
   },
   {
     id: 'voidwalker', fam: 'magic', name: 'Voidwalker', color: '--c-shadow', core: 'Entropy', requires: ['shadowcaller', 15], noEngine: true,
