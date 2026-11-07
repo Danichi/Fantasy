@@ -206,7 +206,7 @@ export const GHAGRABBA_ITEMS: Record<string, ItemDef> = {
   rayInk: mat('rayInk', 'Ray Ink', 'Deep teal ink from a dune ray. The royal looms dye their silk with nothing else.', vial(0x1f7a8a), 'fine'),
   sharkFin: mat('sharkFin', 'Sand Shark Fin', 'A grey dorsal fin, tough as boot leather. Ghagrabba\'s cooks stew it for feast days.', fin),
   // ---- food ----
-  dates: food('dates', 'Palm Dates', 'Sticky dates shaken from a city palm. Sweet enough to make your teeth ache.', { heal: 12, restoreStamina: 10 }, dates),
+  dates: food('dates', 'Palm Dates', 'Sticky dates shaken from a city palm. Sweet enough to make your teeth ache.', { heal: 5, restoreStamina: 8 }, dates),
   dateCake: food('dateCake', 'Date Cake', 'Cook Baket\'s honeyed date cake, studded with pistachio. Heals and steadies you.', { heal: 50, restoreStamina: 30 }, cake, 'fine'),
   spicedTea: food('spicedTea', 'Spiced Mint Tea', 'Sweet mint tea with a pinch of desert spice. Clears the head and wakes the legs.', { restoreMana: 35, restoreStamina: 40 }, cup),
   // ---- rewards ----

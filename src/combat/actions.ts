@@ -301,7 +301,7 @@ export const ACTIONS: Record<string, ActionDef> = {
   },
   // ---- movement ---------------------------------------------------------------
   roll: {
-    id: 'roll', dur: 0.78, stamina: 18, clip: 'roll',
+    id: 'roll', dur: 0.78, stamina: 32, clip: 'roll',
     iframes: [0.06, 0.46], roll: { dist: 4.6 }, cancel: 0.62, track: 0.02,
     // Mixamo "Stand To Roll" (2.33 s) at 1.9x, from 0.22 s in: the slow
     // crouch of the stand-up start is skipped, so the roll starts as you
@@ -310,7 +310,7 @@ export const ACTIONS: Record<string, ActionDef> = {
     clipTiming: { dur: 2.33, speed: 1.9, startAt: 0.22, iframes: [0.26, 1.25], cancel: 1.55, track: 0.3 },
   },
   backstep: {
-    id: 'backstep', dur: 0.5, stamina: 12, clip: 'backstep',
+    id: 'backstep', dur: 0.5, stamina: 22, clip: 'backstep',
     iframes: [0.04, 0.24], roll: { dist: 1.9, back: true }, cancel: 0.36, track: 0,
     proc: (t) => ({ spinePitch: sampleF([[0, 0], [0.3, -0.2], [1, 0]], t), hipsDrop: sampleF([[0, 0], [0.3, 0.08], [1, 0]], t) }),
   },

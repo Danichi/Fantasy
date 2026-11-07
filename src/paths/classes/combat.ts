@@ -52,6 +52,11 @@ export class CombatClasses {
   lastHitFlow = 0;
   // ---- Cross ----
   tempo = 0;
+  // ---- Warbreaker (Cross Style's heavy road): the beat feeds Rage ----
+  rage = 0;
+  readonly rageMax = 100;
+  private rageIdle = 0;
+  private drum = 0;
   private lastHand: 'main' | 'off' | '' = '';
   private lastBeat = -99;
   private beatHits = 0;
@@ -102,6 +107,14 @@ export class CombatClasses {
     this.rt.flow = Math.max(0, Math.min(this.flowMax, this.rt.flow + n * (n > 0 ? 1 + this.rt.x('resGain') : 1)));
     if (n > 0) this.flowIdle = 0;
   }
+  /** Rage gained (Reckless doubles it). */
+  addRage(n: number) {
+    if (this.active !== 'warbreaker') return;
+    const k = n > 0 && this.rt.has('reckless') ? 2 : 1;
+    this.rage = Math.max(0, Math.min(this.rageMax, this.rage + n * k));
+    if (n > 0) this.rageIdle = 0;
+  }
+
   addTempo(n: number) {
     this.tempo = Math.max(0, Math.min(this.tempoMax, this.tempo + n));
   }
@@ -138,7 +151,27 @@ export class CombatClasses {
       this.addFlow(this.lastHitFlow);
       if (action === 'slash3' && rt.has('updraft')) rt.hit(t, 1, { poise: 160, source: 'melee', noVerdict: true });
     }
-    if (this.active === 'cross' && this.p.equip.dualWield) {
+    if (this.active === 'warbreaker' && this.p.equip.dualWield) {
+      // The beat, as in Cross Style, but it feeds Rage: in rhythm 7, out of it 2.
+      const hand = action.startsWith('offslash') ? 'off' : action.startsWith('slash') ? 'main' : '';
+      if (hand) {
+        const onBeat = !!this.lastHand && hand !== this.lastHand && this.now - this.lastBeat <= 1.3;
+        this.addRage(onBeat ? 7 * (1 + rt.x('hotBlood')) : 2);
+        if (onBeat) {
+          this.drum++;
+          this.onBeat?.();
+          const shock = (rt.has('warDrum') || rt.buff('avatar')) && this.drum % 4 === 0;
+          if (shock) {
+            rt.area(this.p.pos, 3, rt.weapon() * 0.3, { poise: 50, source: 'melee', noVerdict: true });
+            rt.vfx.ring(this.p.pos, 'blood', 6);
+            this.p.onShake?.(0.15);
+          }
+        }
+        this.lastHand = hand;
+        this.lastBeat = this.now;
+      } else this.addRage(3);
+      if (rt.buff('frenzy') && rt.has('berserk')) this.p.hp = Math.min(this.p.maxHp, this.p.hp + this.p.maxHp * 0.03);
+    } else if (this.active === 'cross' && this.p.equip.dualWield) {
       const hand = action.startsWith('offslash') ? 'off' : action.startsWith('slash') ? 'main' : '';
       if (hand) {
         if (this.lastHand && hand !== this.lastHand && this.now - this.lastBeat <= 1.2) {
@@ -186,6 +219,12 @@ export class CombatClasses {
         crit = true;
         rt.buffs.delete('cartwheel');
       }
+    }
+    if (this.active === 'warbreaker') {
+      mult *= 1 + 0.003 * this.rage;
+      if (act.startsWith('offslash')) mult *= 1 + rt.x('ironGrip');
+      if (t.hp < t.maxHp * 0.5) mult *= 1 + rt.x('boneBreaker');
+      if (t.boss) mult *= 1 + rt.x('mountainBreaker');
     }
     if (this.active === 'boundary') {
       if (rt.buff('guardCounter')) {
@@ -259,6 +298,13 @@ export class CombatClasses {
   onHurt() {
     const rt = this.rt;
     this.lastHurt = this.now;
+    if (this.active === 'warbreaker') {
+      this.addRage(5 * (rt.has('painEater') ? 2 : 1) * (rt.buff('lastStand') ? 2 : 1));
+      if (rt.buff('mountain')) {
+        rt.area(this.p.pos, 3, rt.weapon() * 0.6, { poise: 80, source: 'melee', noVerdict: true });
+        rt.vfx.ring(this.p.pos, 'steel', 6);
+      }
+    }
     if (this.active === 'gale') {
       if (rt.has('mirrorGuard')) rt.flow = 0;
       else this.addFlow(-2);
@@ -278,6 +324,10 @@ export class CombatClasses {
       p.stamina = Math.min(p.maxStamina, p.stamina + 15);
     }
     if (this.active === 'cross' && rt.has('endlessWaltz')) this.addTempo(2);
+    if (this.active === 'warbreaker' && rt.has('bloodlust')) {
+      this.addRage(15);
+      p.stamina = Math.min(p.maxStamina, p.stamina + 10);
+    }
   }
 
   /** Before shields and wards: Trickster's Luck, and Unmoved halving what breaks through the ring. */
@@ -409,6 +459,13 @@ export class CombatClasses {
       this.flowIdle += dt;
       if (this.flowIdle > 4 && !rt.has('flowKeep')) rt.flow = Math.max(0, rt.flow - (dt / 1.5) * (rt.has('quietMind') ? 0.5 : 1));
     }
+    // Warbreaker: Rage drains once you stop fighting (Avatar of War keeps it full).
+    if (this.active !== 'warbreaker') this.rage = 0;
+    else if (rt.buff('avatar')) this.rage = this.rageMax;
+    else {
+      this.rageIdle += dt;
+      if (this.rageIdle > 4) this.rage = Math.max(0, this.rage - dt * 6 * (rt.has('furyWell') ? 0.5 : 1));
+    }
     // Cross: Tempo drains when the beat stops.
     if (this.active !== 'cross') this.tempo = 0;
     else {
@@ -445,6 +502,19 @@ export class CombatClasses {
       if (rt.has('dancersGrace') && this.tempo >= this.tempoMax) m.dmgTaken -= 0.15;
       if (rt.has('swallowCut') && this.p.moveIntent.lengthSq() > 0.01) m.melee += 0.05;
     }
+    if (this.active === 'warbreaker') {
+      const r = this.rage;
+      if (rt.buff('howl')) (m.melee += 0.25), (m.poise += 0.2);
+      if (rt.buff('frenzy')) (m.attackSpeed += 0.3), (m.dmgTaken += rt.has('coldRage') ? 0 : 0.1);
+      if (rt.buff('avatar')) (m.melee += 0.2), (m.attackSpeed += 0.2);
+      if (rt.buff('lastStand') || rt.buff('mountain')) m.dmgTaken -= 0.5;
+      if (rt.buff('defiant')) m.dmgTaken -= 0.25;
+      if (rt.has('ironBack') && r >= 50) m.dmgTaken -= 0.1;
+      if (rt.has('bulwarkBody') && r >= 25) m.dmgTaken -= 0.08;
+      if (rt.has('redMist') && r >= 90) (m.melee += 0.2), (m.attackSpeed += 0.15), (m.canBlock = false);
+      if (rt.has('warpath')) m.moveSpeed += 0.05 * Math.floor(r / 25);
+      if (rt.has('oldWounds')) m.melee += 0.5 * Math.max(0, 1 - this.p.hp / Math.max(1, this.p.maxHp));
+    }
     if (this.active === 'boundary') {
       if (this.domainOn && rt.buff('holdFast')) m.moveSpeed -= 0.5;
       if (rt.buff('challenge')) m.dmgTaken -= 0.2;
@@ -455,6 +525,7 @@ export class CombatClasses {
     const a = this.active;
     if (a === 'gale') out.push({ name: 'FLOW', value: this.rt.flow, max: this.flowMax, kind: 'pips', color: '#6fd6c6' });
     if (a === 'cross') out.push({ name: 'TEMPO', value: this.tempo, max: this.tempoMax, kind: 'pips', color: '#c8d2e6', hot: this.tempo >= this.tempoMax });
+    if (a === 'warbreaker') out.push({ name: 'RAGE', value: this.rage, max: this.rageMax, kind: 'bar', color: '#d83a2a', hot: this.rage >= 90 });
     if (a === 'boundary') out.push({ name: 'FOCUS', value: this.focus, max: this.focusMax, kind: 'bar', color: this.lockout > 0 ? '#7a8aa8' : '#5fa8ff' });
   }
 }

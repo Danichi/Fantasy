@@ -142,7 +142,13 @@ export function setupArms(ctx: ArmsContext) {
   // Bow and crossbow events ride the player's skill-event channel.
   const prevEvent = player.onSkillEvent;
   player.onSkillEvent = (name) => {
-    if (name.startsWith('arms:')) ranged.onEvent(name);
+    if (name === 'arms:groundShock') {
+      // The mace's third blow hits the ground: a ring of dust and a shake.
+      const at = player.pos.clone().addScaledVector(player.forward, 1.4);
+      ctx.skillRt.vfx.ring(at, 'steel', 2.6);
+      ctx.fx.add.spawn({ pos: at.clone().setY(at.y + 0.2), spread: 1.2, count: 26, life: [0.3, 0.8], size: [0.18, 0.04], color: 0xb8a888, color2: 0x6a5a48, upBias: 1.2 });
+      player.onShake?.(0.18);
+    } else if (name.startsWith('arms:')) ranged.onEvent(name);
     else prevEvent?.(name);
   };
   const clips = loadExtraClips(player.char);

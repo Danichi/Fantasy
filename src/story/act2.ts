@@ -128,11 +128,11 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
       for (const id of ['elin', 'oswald', 'hallam', 'tobin']) story.state.meet(id);
       // What nobody in this world knows: the voice tells you how the Game is counted.
       await s.dark(0.35, 1.4);
-      await s.voice('She has found my four. She will never find the rest, so listen to me now. No one else in this world will tell you how the Game is counted.', 5);
-      await s.voice('Eighty years ago the seven of us who want his chair swore an Accord. We do not fight each other. Each of us may call one champion every twenty years. Each calling is an age.', 6);
-      await s.voice('Seven came in the First Age. Two still walk. Fewer are left of every age, and every one left is worse: twenty, forty, sixty, eighty years at a god\'s table.', 6);
-      await s.voice('The six who came with you were carried home to be taught. You will not meet them for a long while. The old ones are already out here with you.', 5);
-      await s.voice('This world knows our names. It knows some of our champions\' names, as heroes, as legends. It does not know the Game. Keep it that way.', 5);
+      await s.voice('She has found my four champions. Now listen, because no one else in this world will explain the Game to you.', 5);
+      await s.voice('Eighty years ago, the seven powers who want the Hollow King\'s throne made a pact, the Accord. We never fight each other directly. Instead, every twenty years, each of us brings one champion across. Each of those summonings is an age.', 7);
+      await s.voice('So there have been five ages: eighty, sixty, forty and twenty years ago, and now. Fewer champions survive from each age, but the ones who do have spent all those years growing stronger. The older they are, the more dangerous.', 7);
+      await s.voice('The six who came across with you are still being trained. You will not meet them for a long while. But the older champions are already out here.', 5);
+      await s.voice('People here know the powers by name, and some of the champions as heroes. They do not know about the Game. Keep it that way.', 5);
       F.censusKnown = true;
       await s.dark(0, 1.4);
     });

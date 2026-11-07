@@ -18,8 +18,8 @@ export const EXPANDED_TREES: Record<string, BranchDef[]> = {
     ['Pilgrim', 'Light on the move', [['Road Prayer', 'Light Feet'], ['*Sunstep', 'Pilgrim Pace', 'Glint'], ['*Judgment Leap', '?Comet|Lantern', 'Sure Stride'], ['*Radiant Charge', '!Sun Runner', 'Flare'], ['Zenith', 'Long Road']], 'Hour of the Sun'],
   ]),
   warbreaker: br([
-    ['Ruin', 'Huge blows', [['Heavy Hands', 'Thick Arms'], ['*Skullsplitter', 'Overhead', 'Brute'], ['*Earthbreaker', '?Fault Line|Rubble', 'Iron Back'], ['*Ruinous Blow', '!Reckless', 'Hammerfall'], ['Mountain Breaker', 'Bone Crusher']], 'The Last Swing'],
-    ['Fury', 'Rage and speed', [['Hot Blood', 'Grit'], ['*Blood Howl', 'Fury Well', 'Snarl'], ['*Frenzy', '?Berserk|Cold Rage', 'Bloodlust'], ['*Rampage', '!Red Mist', 'Pain Eater'], ['Unstoppable', 'Warpath']], 'Avatar of War'],
+    ['Ruin', 'Huge blows with both weapons', [['Heavy Hands', 'Iron Grip'], ['*Skullsplitter', 'Bone Breaker', 'Brute'], ['*Earthbreaker', '?Fault Line|Aftershock', 'Iron Back'], ['*Ruinous Blow', '!Reckless', 'Hammerfall'], ['Mountain Breaker', 'Bone Crusher']], 'The Last Swing'],
+    ['Fury', 'Rage and the beat', [['Hot Blood', 'War Drum'], ['*Blood Howl', 'Fury Well', 'Snarl'], ['*Frenzy', '?Berserk|Cold Rage', 'Bloodlust'], ['*Rampage', '!Red Mist', 'Pain Eater'], ['Unstoppable', 'Warpath']], 'Avatar of War'],
     ['Ironhide', 'Take it and keep coming', [['Scarred', 'Thick Skin'], ['*Shrug Off', 'Hard to Kill', 'Stubborn'], ['*Iron Roar', '?Defiant|Taunting', 'Bulwark Body'], ['*Last Stand', '!Unbreakable', 'Oxhide'], ['Old Wounds', 'Orc Blood']], 'Mountain That Walks'],
   ]),
 

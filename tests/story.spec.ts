@@ -117,8 +117,9 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
     await h.tick(10);
     await h.settle();
     const m = S.champions.find((c) => c.def.id === 'malric');
-    out.malric = m ? { age: m.def.age, hp: m.maxHp, floor: m.floor } : null;
-    if (m) m.takeHit({ damage: m.maxHp, poise: 0, dir: new T.Vector3(1, 0, 0), at: m.center.clone(), crit: false, source: 'melee' });
+    out.malric = m ? { age: m.def.age, hp: m.maxHp, floor: m.floor, overwhelm: m.overwhelm } : null;
+    // (A blow barely marks him now: the fight ends when he has made his point.)
+    if (m) m.onShown?.();
     await h.settle();
     out.malricChoice = S.flags.malricChoice;
     out.clues = [...S.state.clues];
@@ -172,7 +173,7 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
   expect(res.atMillbrook).toBe(true);
   expect(res.wardens).toBe(3);
   expect(res.door).toBe('active@2');
-  expect(res.malric).toEqual({ age: 4, hp: 1500, floor: 0.55 });
+  expect(res.malric).toEqual({ age: 4, hp: 3750, floor: 0.3, overwhelm: true });
   expect(res.malricChoice).toBe('ask');
   expect(res.clues).toEqual(expect.arrayContaining(['malricIron', 'malricEye']));
   expect(res.crypt).toBe('done@4');

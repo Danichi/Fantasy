@@ -435,6 +435,13 @@ export class Player {
   private drownT = 0;
   /** hp never drops below this (sparring duels) */
   damageFloor = 0;
+  /**
+   * Held by a spell (a champion's gravity, iron vines): seconds you can't move
+   * or act. `boundAt`, when set, is where the spell is holding you (lifted into
+   * the air, dragged across the ground).
+   */
+  bound = 0;
+  boundAt: THREE.Vector3 | null = null;
   /** Height of the walkable surface (terrain, bridges, floors) under (x, z) near the player's feet. */
   private probeGround(x: number, z: number) {
     const top = this.pos.y + 1.3;
@@ -512,6 +519,24 @@ export class Player {
       this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0;
       return;
     }
+    if (this.bound > 0) {
+      this.bound = Math.max(0, this.bound - dt);
+      this.moveIntent.set(0, 0, 0);
+      this.buffer = null;
+      this.sprinting = false;
+      this.blocking = false;
+      this.act = null;
+      if (this.boundAt) {
+        const c = { x: this.boundAt.x, y: this.boundAt.y + CENTER_Y + 0.05, z: this.boundAt.z };
+        this.body.setTranslation(c, true);
+        this.collider.setTranslation(c);
+        this.pos.copy(this.boundAt);
+        this.vel.set(0, 0, 0);
+        this.grounded = false;
+        this.airTime = 0.4;
+        return;
+      }
+    } else this.boundAt = null;
     this.flight?.(dt, input, cam);
     this.updateAction(dt, input);
     this.updateLock(cam);
@@ -583,12 +608,14 @@ export class Player {
     if (def.roll && !def.roll.back) def = this.weighRoll(def);
     const m = this.mods;
     const stam = def.stamina * m.staminaCost * (def.roll ? m.dodgeCost * this.paths.rollCost : 1);
-    if (stam > 0 && this.stamina <= 0) {
+    // A dodge needs most of its cost in hand (you can't roll on an empty tank);
+    // anything else just needs something left.
+    if (stam > 0 && (this.stamina <= 0 || (def.roll && this.stamina < stam * 0.7))) {
       events.emit('notEnough', { stat: 'stamina' });
       return false;
     }
     this.stamina = Math.max(0, this.stamina - stam);
-    if (stam > 0) this.staminaDelay = 0.65;
+    if (stam > 0) this.staminaDelay = def.roll ? 0.9 : 0.75;
     const w = def.hit?.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
     const speed = (def.weaponSpeed ? (w?.def.stats.speed ?? 1) * m.attackSpeed : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1) * (id.startsWith('cast') ? m.castSpeed : 1);
     this.poseFrom = this.lastPose;
@@ -1825,7 +1852,7 @@ export class Player {
     this.counterT = Math.max(0, this.counterT - dt);
     this.staggerCd = Math.max(0, this.staggerCd - dt);
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
-    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen + this.mods.staminaRegen) * dt);
+    else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 12 : 34) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen + this.mods.staminaRegen) * dt);
     this.mana = Math.min(this.maxMana, this.mana + MANA_REGEN * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen + this.mods.manaRegen) * dt);
     this.hp = Math.min(this.hp, this.maxHp);
     // Armour: what you put on arrives whole, what you take off goes with it; out of
@@ -1858,7 +1885,15 @@ export class Player {
     const it = this.equip.get(uid);
     if (!it || it.def.kind !== 'consumable' || this.dead) return;
     const st = it.def.stats;
-    if (st.heal) this.hot = { rate: (st.heal * this.paths.healPower) / 1.2, left: 1.2 };
+    // Potions and meals heal at once; a snack (an apple, a handful of berries) is eaten, not drunk:
+    // it heals over six seconds, and another bite only tops that up, it doesn't stack.
+    if (st.heal) {
+      const snack = st.heal <= 12;
+      const sec = snack ? 6 : 1.2;
+      const total = st.heal * this.paths.healPower;
+      if (snack && this.hot.left > 0) this.hot = { rate: Math.max(this.hot.rate, total / sec), left: sec };
+      else this.hot = { rate: total / sec, left: sec };
+    }
     if (st.restoreMana) this.mana = Math.min(this.maxMana, this.mana + st.restoreMana);
     if (st.restoreStamina) this.stamina = Math.min(this.maxStamina, this.stamina + st.restoreStamina);
     // A Repair Kit mends half your armour on the spot.

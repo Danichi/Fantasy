@@ -523,8 +523,15 @@ export function buildKingsRoad(scene: THREE.Scene, m: WorldMats, fx: FX): KingsR
       look: { body: 'female', outfit: 'ranger', hair: 'buns', hairColor: 0x3a2618, skin: 0xa8744e, cloth: 0x3a5f9e, pauldron: true, height: 1.74 } },
     { id: 'ilse', name: 'Ilse Vantara', title: 'Travelling Fencer · Cross Style', post: v(W.x + 9, W.z + 12), yaw: Math.PI * 0.75, activity: 'idle', hours: [7, 22], evening: fire(W, -4, 17), lines: { any: ['Two blades, one rhythm. Left, right, left. Hear it?', 'I teach the cross to anyone who can keep the beat. Most can\'t.', 'Lose the rhythm and you\'re just a person holding two swords.'] },
       look: { body: 'female', outfit: 'ranger', hair: 'long', hairColor: 0x2a1c14, skin: 0xd8a682, cloth: 0x7a2a2a, height: 1.74 } },
+  ]);
+  // Old Garth and Brother Aldous each have their own place: they used to be
+  // counted as Wayfarer's Rest folk, and people only come to life near their
+  // settlement, so standing at the chapel (700 m from the inn) you never met them.
+  mk('millbrookFold', v(MILLBROOK.x - 20, MILLBROOK.z - 26), 30, [
     { id: 'garth', name: 'Old Garth', title: 'Shepherd of Millbrook', post: v(MILLBROOK.x - 24, MILLBROOK.z - 30), activity: 'idle', hours: [6, 19], lines: { any: ['Something big has been at the flock. Bigger than any wolf I\'ve seen.'] },
       look: { body: 'male', outfit: 'ranger', hair: 'simpleparted', beard: true, hairColor: 0xb8b4ae, skin: 0xe0b894, cloth: 0x6a7f3a, hood: true, height: 1.72 } },
+  ]);
+  mk('chapelOfDawn', v(CHAPEL.x, CHAPEL.z - 4), 30, [
     { id: 'aldous', name: 'Brother Aldous', title: 'Keeper of the Chapel of the Dawn', post: v(CHAPEL.x - 2, CHAPEL.z - 12), activity: 'idle', hours: [6, 21], lines: { any: ['The Dawn watches over travellers. So do I, when my knees allow.'] },
       look: { body: 'male', outfit: 'peasant', hair: 'buzzed', beard: false, hairColor: 0xe6e2da, skin: 0xfff0e6, linen: 0xe8d8b8, height: 1.7 } },
   ]);

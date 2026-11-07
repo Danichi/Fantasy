@@ -87,8 +87,8 @@ export const DISCIPLINES: DisciplineDef[] = [
     flavour: 'Steel that burns the dark.', how: 'Land holy strikes while Dawnblade is active.',
   },
   {
-    id: 'warbreaker', fam: 'combat', name: 'Warbreaker', color: '--c-blood', mentor: 'Kaela Voss, once you know Gale Style', mentorNpc: 'kaela', requires: ['gale', 5], res: 'Rage',
-    flavour: 'Swing like a falling tree. Grukk\'s people remember how.', how: 'Deal and take damage with greatswords while Warbreaker is active.',
+    id: 'warbreaker', fam: 'combat', name: 'Warbreaker', color: '--c-blood', mentor: 'Ilse Vantara, once you know Cross Style', mentorNpc: 'ilse', requires: ['cross', 5], res: 'Rage', core: 'War Cleave',
+    flavour: 'Cross Style with all the weight of war behind it. Keep the beat, and let it turn to rage.', how: 'Fight with a weapon in each hand, keep the left-right rhythm to build Rage, and spend it on huge blows.',
   },
   {
     id: 'oathbreaker', fam: 'combat', name: 'Oathbreaker', color: '--c-gold', mentor: 'Ser Corvin, if you break your word', res: 'Guilt', secret: true,
@@ -111,7 +111,7 @@ export const DISCIPLINES: DisciplineDef[] = [
     ],
   },
   {
-    id: 'windcaller', fam: 'magic', name: 'Windcaller', color: '--c-wind', mentor: 'Magus Orren, the tower', mentorNpc: 'magus', res: 'Mana',
+    id: 'windcaller', fam: 'magic', name: 'Windcaller', color: '--c-wind', mentor: 'Archmage Isolde Venn, the Collegium in the Capital', mentorNpc: 'archmage', res: 'Mana',
     flavour: 'The air is never empty. It is waiting.', how: 'Knock enemies around and move with wind magic.',
     branches: [
       { name: 'Gust', sub: 'Force', tiers: [['Breeze', 'Pressure'], ['*Gust', 'Push Back', 'Whistle'], ['*Updraft', '?Downburst|Lift', 'Buffet'], ['*Cyclone Bolt', '!Eye of Calm', 'Shear'], ['Gale Force', 'Squallborn']], cap: 'Tempest Crown' },
@@ -129,7 +129,7 @@ export const DISCIPLINES: DisciplineDef[] = [
     ],
   },
   {
-    id: 'cryomancer', fam: 'magic', name: 'Cryomancer', color: '--c-frost', mentor: 'Magus Orren, once you know the wind', mentorNpc: 'magus', requires: ['windcaller', 5],
+    id: 'cryomancer', fam: 'magic', name: 'Cryomancer', color: '--c-frost', mentor: 'Archmage Isolde Venn, once you know the wind', mentorNpc: 'archmage', requires: ['windcaller', 5],
     flavour: 'Stillness, made into a weapon.', how: 'Chill, freeze and shatter.',
   },
   {

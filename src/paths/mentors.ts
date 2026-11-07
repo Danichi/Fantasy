@@ -10,6 +10,13 @@ import type { Paths } from './paths';
  */
 export const lessonHook: { start?: (d: DisciplineDef, wait?: boolean) => boolean; has?: (id: string) => boolean } = {};
 
+/**
+ * What mentors have told you (saved world flags, set by main). A mentor who
+ * teaches more than one class offers only the first; the others come up when
+ * you ask whether there is anything else (`mentorAsked:<npc>`).
+ */
+export const mentorMemory: { flags: Record<string, unknown> } = { flags: {} };
+
 // What a mentor can do for you, as extra dialogue replies: teach their
 // disciplines, make one of their combat classes your active one, or undo
 // your training (respec, 75% of the XP back). Classes with a trial quest are
@@ -25,8 +32,15 @@ export interface Trials {
 
 export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: string) => void, notify: (msg: string) => void, trials?: Trials): DialogueOption[] {
   const out: DialogueOption[] = [];
-  for (const d of DISCIPLINES) {
-    if (d.mentorNpc !== s.id || d.secret) continue;
+  const mine = DISCIPLINES.filter((d) => d.mentorNpc === s.id && !d.secret);
+  // The one they offer up front: the first you haven't learned that needs nothing
+  // else first (or whose groundwork you have). The rest wait until you ask.
+  const unlearned = mine.filter((d) => !paths.learned(d.id));
+  const first = unlearned.find((d) => !d.requires) ?? unlearned.find((d) => paths.canTeach(d.id));
+  const asked = !!mentorMemory.flags['mentorAsked:' + s.id];
+  const held = unlearned.filter((d) => d !== first && !asked);
+  for (const d of mine) {
+    if (!paths.learned(d.id) && held.includes(d)) continue;
     if (!paths.learned(d.id)) {
       out.push({
         label: `Teach me ${d.name}.`,
@@ -84,5 +98,27 @@ export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: 
       });
     }
   }
+  if (held.length) {
+    out.push({
+      label: 'Is there anything else you could teach me?',
+      run: () => {
+        mentorMemory.flags['mentorAsked:' + s.id] = 1;
+        say(askReply(paths, held, !!first && !paths.learned(first.id)));
+      },
+    });
+  }
   return out;
+}
+
+/** A mentor owning up to the other classes they teach, in plain words. */
+function askReply(paths: Paths, held: DisciplineDef[], firstPending: boolean) {
+  const names = held.map((d) => d.name);
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+  const notYet = held.filter((d) => !paths.canTeach(d.id) && d.requires);
+  const lead = firstPending ? 'I do. But one thing at a time.' : 'I do, as it happens.';
+  let text = `${lead} I also teach ${list}. ${held.map((d) => `${d.name}: ${d.how.charAt(0).toLowerCase()}${d.how.slice(1)}`).join(' ')}`;
+  if (notYet.length) {
+    text += ' ' + notYet.map((d) => `For ${d.name} you need ${DISC[d.requires![0]].name} at level ${d.requires![1]} first.`).join(' ');
+  }
+  return text;
 }

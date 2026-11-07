@@ -5,7 +5,7 @@ import { combatFeedback } from './combat/feedback';
 import { TrainingYard } from './combat/trainingYard';
 import { EAST_GATE } from './world/desert/ghagrabbaPlaces';
 import { Lessons } from './story/lessons';
-import { lessonHook } from './paths/mentors';
+import { lessonHook, mentorMemory } from './paths/mentors';
 import type { StationKind } from './crafting/recipes';
 import { Mastery, wireMastery } from './paths/mastery';
 import { CombatDebug } from './combat/debugOverlay';
@@ -160,6 +160,7 @@ import { Grass } from './world/grass';
 import { River } from './world/water';
 import { Foliage } from './world/foliage';
 import { StylizedNature } from './world/stylizedNature';
+import { DarkRealm } from './world/darkRealm';
 import { Flowers } from './world/flowers';
 import { Rewards, XP_FOR_KIND } from './progression/progression';
 import { levelScale } from './creatures/creature';
@@ -1111,7 +1112,11 @@ async function boot() {
   folkServices.set('bladesmith', () => [{ label: 'Browse capital blades', run: () => shop('bladesmith', 'Every edge here was folded under the royal charter.', withArms('bladesmith', [['knightSword', 115], ['bastardSword', 150], ['claymore', 280], ['estoc', 260], ['frostbite', 340], ['emberbrand', 340]])) }]);
   folkServices.set('capAlchemist', () => [{ label: 'Browse court draughts', run: () => shop('capAlchemist', 'Brewed to the Collegium\u2019s own recipes.', withArms('capAlchemist', [['healthPotion', 16], ['manaPotion', 20], ['greaterHealthPotion', 50], ['greaterManaPotion', 55]])) }]);
   folkServices.set('capJeweller', () => [{ label: 'Browse court jewellery', run: () => shop('capJeweller', 'Garnets, gold, and a little protective enchantment.', [['garnetAmulet', 260], ['ringVigor', 220], ['ringSage', 200], ['warriorBelt', 180]]) }]);
-  folkServices.set('archmage', () => [{ label: 'Study at the Collegium (spell tomes)', run: () => shop('archmage', 'The first grammar of magic: fire, and its opposite.', withArms('archmage', [['fireball', 140], ['healingLight', 155], ['manaPotion', 22], ['greaterManaPotion', 60]])) }]);
+  folkServices.set('archmage', (show, back) => [
+    { label: 'Study at the Collegium (spell tomes)', run: () => shop('archmage', 'The first grammar of magic: fire, and its opposite.', withArms('archmage', [['fireball', 140], ['healingLight', 155], ['manaPotion', 22], ['greaterManaPotion', 60]])) },
+    // The Archmage teaches wind (and frost after it).
+    ...mentorOptions(player.paths, { id: 'archmage' }, (t) => show(t, [{ label: 'Go on.', run: back }]), (m) => hud.toast(m), trials),
+  ]);
   folkServices.set('cartographer', (show) => [{
     label: 'Buy a map of the Crown lands \u2014 40g',
     run: () => {
@@ -1667,6 +1672,7 @@ async function boot() {
     return quests.markers().filter((m) => m.quest === tracked).map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label, tracked: true }));
   };
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
+  mentorMemory.flags = worldFlags; // which mentors you've asked about their other classes
   // Kaela Voss's drill yard (combat rework): a drill for each part of the fighting.
   const kaelaSpec = NPCS.find((n) => n.id === 'kaela');
   const yard = new TrainingYard(r.scene, encounters.bolts, player, new THREE.Vector3(kaelaSpec?.pos[0] ?? -13.5, 0, kaelaSpec?.pos[1] ?? 0.5), worldFlags, (m) => hud.toast(m), (n) => player.prog.addXp(n));
@@ -1838,6 +1844,28 @@ async function boot() {
     saved: saveData?.world?.story,
   });
   const story = main.story;
+  // ---- The Dark beyond the Gravewood's wheel: the same land, rotted; no people, no village ----
+  const darkRealm = new DarkRealm({
+    scene: r.scene, fx,
+    treesNear: (x, z, rr) => stylizedNature.treesNear(x, z, rr),
+    say: (line) => hud.toast(line),
+    hide: (h) => {
+      npcs.setVisible(!h);
+      fauna.setVisible(!h);
+      horses?.setVisible(!h);
+      roadLife.setVisible(!h);
+      caravans?.setVisible(!h);
+      encounters?.setVisible(!h);
+      riverLife?.setVisible(!h);
+      foraging?.setVisible(!h);
+      arms.gathering.setVisible(!h);
+      herbFolk.setVisible(!h);
+      flowers.mesh.visible = !h;
+      foliage?.setVisible(!h);
+      stylizedNature.setVisible(!h && stylizedNature.loaded);
+      town.setVisible(!h);
+    },
+  });
   // ---- Lessons: a mentor teaching you plays a scene and walks you through it step by step ----
   const lessons = new Lessons({
     player, dialogue, flags: worldFlags,
@@ -2347,6 +2375,8 @@ async function boot() {
       frontier.update(STEP);
       encounters.update(STEP, time.hour, weather.p.rain);
       main.step(STEP);
+      // (Indoors the overworld is hidden anyway: leave it be until you're back out.)
+      if (realm.mode === 'overworld' && !realm.interior) darkRealm.update(STEP, story.darkness, player);
       crownRoad.update(STEP, player, time.state.night);
       roadLife.step(STEP, player);
       duel.update(STEP);

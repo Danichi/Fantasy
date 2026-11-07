@@ -7,6 +7,7 @@ import type { Look } from '../npc/charBuilder';
 import type { Player } from '../player/player';
 import type { FX } from '../fx/particles';
 import { heightAt } from '../world/terrainHeight';
+import { IronMagic } from './malricMagic';
 
 // The Champions' Game (main story). The Hollow King, who has ruled the Dark
 // for thousands of years, is dying, and seven great powers each want his
@@ -226,6 +227,15 @@ export class Champion extends Bandit {
   /** at the floor: the scene takes over */
   onFloor?: () => void;
   private floored = false;
+  /** Malric's magic (the fight outside the crypt): gravity, vines, lances */
+  magic: IronMagic | null = null;
+  /** far beyond you: your blows barely mark him, and he ends it when he's made his point */
+  overwhelm = false;
+  /** the overwhelming fight is over: he has shown you how far you have to go */
+  onShown?: () => void;
+  private spellN = 0;
+  private lastSpell = '';
+  private shownDone = false;
   /** a level the hit points are scaled for */
   constructor(def: ChampionDef, at: THREE.Vector3, scene: THREE.Scene, bolts: Bolts, private hooks: ChampionHooks, scale = 1) {
     super('sword', at, scene, bolts, at.clone(), def.look);
@@ -249,7 +259,23 @@ export class Champion extends Bandit {
     return true;
   }
 
+  /** Give him the Iron Below's magic, and make the fight one you can't win. */
+  overwhelming() {
+    this.overwhelm = true;
+    this.specialT = 2.2;
+    this.magic = new IronMagic(this.hooks.scene, this.hooks.fx, {
+      shake: (n) => this.hooks.shake(n),
+      say: (line) => this.hooks.say(this.def.name, line),
+      damage: (p, n, from, knock) => p.receiveAttack({ damage: n, from, parryable: false, poise: 200, kind: 'unblockable', knock, attacker: this }),
+    });
+  }
+
   takeHit(h: HitInfo) {
+    if (this.overwhelm) {
+      // Twenty years of the Iron Below: a scratch, and he doesn't even flinch.
+      h = { ...h, damage: h.damage * 0.06, poise: 0, react: 'none' as const };
+      if (Math.random() < 0.25) this.hooks.fx.add.spawn({ pos: this.center.clone(), spread: 0.4, count: 6, life: [0.2, 0.4], size: [0.12, 0.03], color: 0xb080ff, color2: 0x200030 });
+    }
     const s = AGE_STATS[this.def.age];
     // Old champions barely notice a blow.
     const hh = { ...h, poise: h.poise * s.poiseK, react: s.poiseK < 0.2 ? 'none' as const : h.react };
@@ -282,9 +308,39 @@ export class Champion extends Bandit {
       this.tauntT = 14 + Math.random() * 10;
       if (Math.random() < 0.5) this.hooks.say(this.def.name, this.def.taunts[Math.floor(Math.random() * this.def.taunts.length)]);
     }
+    if (this.magic) {
+      const was = this.magic.busy;
+      this.magic.update(dt, player, this.position);
+      if (this.magic.busy) {
+        // He stands and works the spell, one hand raised.
+        this.yaw = Math.atan2(player.pos.x - this.position.x, player.pos.z - this.position.z);
+        this.play('sword_idle');
+        this.built?.mixer.update(dt);
+        if (Math.random() < 0.5) this.hooks.fx.add.spawn({ pos: this.center.clone().setY(this.center.y + 0.5), spread: 0.5, count: 2, life: [0.3, 0.6], size: [0.14, 0.03], color: 0xa070ff, color2: 0x200030, gravity: -1 });
+        this.sync();
+        return;
+      }
+      if (was) {
+        // Held fast by the vines: he closes and cuts.
+        if (this.lastSpell === 'vines' && this.position.distanceTo(player.pos) > 3) this.startSurge(player);
+        // He has made his point.
+        if (!this.shownDone && (this.magic.casts >= 6 || player.hp <= player.maxHp * 0.15)) {
+          this.shownDone = true;
+          this.onShown?.();
+        }
+      }
+    }
     if (this.surge) return this.runSurge(dt, player);
     if (this.nova) return this.runNova(dt, player);
     const d = this.position.distanceTo(player.pos);
+    if (this.magic && this.specialT <= 0 && !this.brain.attacking) {
+      const order = ['lift', 'vines', 'lances', 'pull', 'lift', 'lances'] as const;
+      const kind = order[this.spellN++ % order.length];
+      this.lastSpell = kind;
+      this.magic.cast(kind, player, this.position.clone());
+      this.specialT = 2.4 + Math.random() * 1.6;
+      return super.update(dt, player);
+    }
     if (this.specialT <= 0 && !this.brain.attacking) {
       this.specialT = AGE_STATS[this.def.age].special * (0.8 + Math.random() * 0.5);
       const age = this.def.age;
@@ -379,6 +435,8 @@ export class Champion extends Bandit {
   }
 
   dispose() {
+    this.magic?.dispose();
+    this.magic = null;
     for (const s of this.shades) s.dispose();
     this.shades = [];
     super.dispose();

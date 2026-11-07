@@ -20,6 +20,7 @@ import { BOUNDARY_SKILLS } from './classes/boundary';
 import { CROSS_SKILLS } from './classes/cross';
 import { LIGHT_SKILLS } from './classes/light';
 import { FORGED_SKILLS, FORGED_BUFFS } from './classes/forge';
+import { WAR_SKILLS } from './classes/warbreaker';
 
 // The skill runtime: turns learned tree nodes into combat. It
 //  - sums passive node effects into the player's combat modifiers each step,
@@ -464,7 +465,7 @@ export class SkillRuntime {
     if (def.flow && this.flow < def.flow) return `Needs ${def.flow} Flow`;
     if (def.tempo && this.cc.tempo < def.tempo) return `Needs ${def.tempo} Tempo`;
     if (def.focus && this.cc.focus < def.focus) return `Needs ${def.focus} Focus`;
-    if (def.needDual && !p.equip.dualWield) return `${s.n.name} needs a sword in each hand`;
+    if (def.needDual && !p.equip.dualWield) return `${s.n.name} needs a weapon in each hand`;
     if (def.needTarget && !this.aim(def.needTarget).target) return 'No target in range';
     // Attack spells go where you lock on (middle mouse or Q), like Fireball.
     if ((def.action === 'sk_cast' || def.action === 'sk_castBig') && !def.freeAim) {
@@ -1207,4 +1208,6 @@ export const SKILLS: Record<string, SkillDef> = {
   ...FIRE_SKILLS,
   ...LIGHT_SKILLS,
   ...FORGED_SKILLS,
+  // (hand-made, over the forged ones)
+  ...WAR_SKILLS,
 };

@@ -213,11 +213,13 @@ export class QuestUI {
     const active = this.quests.active();
     const done = this.quests.completed();
     // Open on the shelf of whatever's selected.
-    const selQ = this.selected && this.selected !== '__story' ? this.quests.defs.get(this.selected) ?? null : null;
+    const selQ = this.selected && this.selected !== '__story' ? this.quests.defs.get(this.selected.replace(/^lead:/, '')) ?? null : null;
+    // Chapters of the story waiting on a conversation are main quests too.
+    const leads = this.quests.leads();
     if (!this.catPicked && selQ) this.cat = this.quests.state[selQ.id]?.status === 'done' ? 'done' : this.catOf(selQ);
     this.catPicked = true;
     const shelves = {
-      main: active.filter((q) => q.main),
+      main: [...leads.map((l) => l.quest), ...active.filter((q) => q.main)],
       side: active.filter((q) => !q.main && !q.contract),
       contract: active.filter((q) => q.contract),
       done: done.slice().reverse(),
@@ -229,26 +231,22 @@ export class QuestUI {
       const isDone = st?.status === 'done';
       const pct = Math.round(this.progressOf(q) * 100);
       const giver = this.giverName?.(q.giver);
-      const tracked = this.quests.tracked === q.id && !isDone;
+      const tracked = (this.quests.tracked === q.id || this.quests.tracked === 'lead:' + q.id) && !isDone;
       return `<button class="jq-card cat-${this.catOf(q)} ${this.selected === q.id ? 'sel' : ''} ${tracked ? 'tracked' : ''} ${isDone ? 'done' : ''}" data-quest="${q.id}">
         <i class="jq-crest">${isDone ? CREST.done : CREST[this.catOf(q)]}</i>
         <span class="jq-mid"><b>${esc(q.title)}</b><small>${esc(this.regionName(q.region))}${giver ? ` · ${esc(giver)}` : ''}</small>
-        ${isDone ? '' : `<span class="jq-prog"><i style="width:${pct}%"></i></span>`}</span>
+        ${isDone ? '' : st ? `<span class="jq-prog"><i style="width:${pct}%"></i></span>` : '<em class="jq-new">New</em>'}</span>
         ${tracked ? '<span class="jq-pin" title="Tracked">◆</span>' : ''}</button>`;
     };
     const list = shelves[this.cat];
     let nav = '';
     if (this.cat === 'main' && this.storyRecap) nav += `<button class="jq-card story ${this.selected === '__story' ? 'sel' : ''}" data-quest="__story"><i class="jq-crest">${CREST.story}</i><span class="jq-mid"><b>The Story So Far</b><small>Everything that has happened to you</small></span></button>`;
-    // Between chapters, the main shelf says who has the story's next step.
-    const leads = this.cat === 'main' && !list.length ? this.quests.leads() : [];
-    nav += list.length ? list.map(card).join('')
-      : leads.length ? leads.map((l) => `<p class="jq-empty">Next chapter: <b>${esc(l.quest.title)}</b>. Speak with ${esc(l.name)}.</p>`).join('')
-      : `<p class="jq-empty">${EMPTY[this.cat]}</p>`;
+    nav += list.length ? list.map(card).join('') : `<p class="jq-empty">${EMPTY[this.cat]}</p>`;
 
     let detail = `<div class="jq-blank">${CREST.story}<p>Pick a quest from the list.</p></div>`;
     if (this.selected === '__story' && this.storyRecap) detail = `<div class="jq-recap">${this.storyRecap()}</div>`;
     if (selQ) detail = this.detail(selQ);
-    const tracked = active.find((x) => x.id === this.quests.tracked);
+    const tracked = active.find((x) => x.id === this.quests.tracked) ?? leads.find((l) => 'lead:' + l.quest.id === this.quests.tracked)?.quest;
     this.journal.innerHTML = `<header><span>JOURNAL</span><div class="jq-sum"><b>${active.length}</b> active · <b>${done.length}</b> completed${tracked ? ` · tracking <i>${esc(tracked.title)}</i>` : ''}</div><button data-close>✕</button></header>
       <div class="jq-tabs">${tabs}</div>
       <div class="j-body"><nav>${nav}</nav><section>${detail}</section></div><footer><span>Click a quest to read it · Track one to follow its beacon</span><span>J · close</span></footer>`;
@@ -262,7 +260,7 @@ export class QuestUI {
     const giver = this.giverName?.(q.giver);
     const stageN = q.stages.length;
     const cur = st ? Math.min(st.stage, stageN - 1) : 0;
-    const kicker = `${cat === 'main' ? 'MAIN QUEST' : cat === 'contract' ? 'GUILD CONTRACT' : 'SIDE QUEST'} · ${isDone ? 'COMPLETED' : 'IN PROGRESS'}`;
+    const kicker = `${cat === 'main' ? 'MAIN QUEST' : cat === 'contract' ? 'GUILD CONTRACT' : 'SIDE QUEST'} · ${isDone ? 'COMPLETED' : st ? 'IN PROGRESS' : 'NEW'}`;
     const initial = giver ? giver.replace(/^(Elder|Magus|Master|Ser|Sister|Brother|Captain|Lady|Lord|Old)\s+/, '').charAt(0) : '';
     const chips = [
       giver ? `<span class="jq-chip giver"><i>${esc(initial)}</i>${esc(giver)}</span>` : '',
@@ -272,7 +270,11 @@ export class QuestUI {
     const steps = `<div class="jq-steps">${q.stages.map((_s, i) => `<i class="${isDone || i < cur ? 'past' : i === cur ? 'now' : ''}"></i>`).join('')}</div>`;
     // What to do now.
     let now = '';
-    if (!isDone && st) {
+    const lead = !st ? this.quests.leads().find((l) => l.quest.id === q.id) : undefined;
+    if (lead) {
+      now = `<div class="jq-now"><h4>Now</h4><p class="jq-note">${esc(q.summary)}</p><ul class="jq-objs"><li><i class="jq-box"></i><div><span>Speak with ${esc(lead.name)} to begin</span></div></li></ul>
+        ${lead.away ? `<p class="j-away">☾ ${esc(lead.away.charAt(0).toUpperCase() + lead.away.slice(1))}</p>` : ''}</div>`;
+    } else if (!isDone && st) {
       const objs = this.quests.lines(q.id).map(([t, p, n]) => {
         const opt = t.startsWith('Optional: ');
         const alt = /^(Either|Or): /.exec(t);
@@ -301,7 +303,10 @@ export class QuestUI {
     const last = isDone ? stageN - 1 : cur;
     const shown = st ? q.stages.map((s, i) => ({ i, when: s.when })).filter((x) => x.i <= last && (!x.when || this.quests.test(q.id, x.when) || x.i === cur)) : [];
     const log = shown.map(({ i }) => `<div class="${isDone || i < cur ? 'past' : 'now'}"><b>${i + 1}</b><span>${esc(this.quests.note(q, i))}</span></div>`).join('');
-    const actions = st?.status === 'active'
+    const lid = 'lead:' + q.id;
+    const actions = lead
+      ? `<div class="jq-actions">${this.quests.tracked !== lid ? `<button class="jq-btn primary" data-track="${lid}">◆ Track this quest</button>` : '<span class="jq-tracking">◆ Tracking</span>'}${this.quests.markers().some((m) => m.quest === lid) ? `<button class="jq-btn" data-map="${lid}">⌖ Show on map</button>` : ''}</div>`
+      : st?.status === 'active'
       ? `<div class="jq-actions">${this.quests.tracked !== q.id ? `<button class="jq-btn primary" data-track="${q.id}">◆ Track this quest</button>` : '<span class="jq-tracking">◆ Tracking</span>'}${this.quests.markers().some((m) => m.quest === q.id) ? `<button class="jq-btn" data-map="${q.id}">⌖ Show on map</button>` : ''}</div>`
       : '';
     return `<div class="jq-page cat-${cat} ${isDone ? 'is-done' : ''}">
@@ -338,12 +343,13 @@ export class QuestUI {
     if (this.dirty) {
       this.dirty = false;
       const act = this.quests.active();
-      const tracked = act.find((q) => q.id === this.quests.tracked) ?? act[0];
+      const leads = this.quests.leads();
+      // A chapter waiting on a conversation shows first when it's tracked, or when no chapter is under way.
+      const showLeads = leads.length > 0 && (this.quests.tracked?.startsWith('lead:') || !act.some((q) => q.main));
+      const tracked = act.find((q) => q.id === this.quests.tracked) ?? (showLeads ? undefined : act[0]);
       const others = act.filter((q) => q !== tracked).slice(0, 2);
       let html = '';
-      // Between chapters: who has the story's next step.
-      const leads = this.quests.leads();
-      if (leads.length) {
+      if (showLeads) {
         html += `<span class="q-kicker q-mainq">MAIN QUEST · NEXT</span>` +
           leads.slice(0, 3).map((l) => `<b>${esc(l.quest.title.toUpperCase())}</b><small>◇ Speak with ${esc(l.name)}</small>`).join('');
       }
@@ -419,7 +425,10 @@ export class QuestUI {
       return;
     }
     const lead = this.quests.leads()[0];
-    const tracked = this.quests.tracked ?? this.quests.active()[0]?.id ?? (lead ? 'lead:' + lead.quest.id : undefined);
+    // (A quest you were tracking that has finished no longer counts.)
+    const t0 = this.quests.tracked;
+    const live = t0 && (t0.startsWith('lead:') ? this.quests.leads().some((l) => 'lead:' + l.quest.id === t0) : this.quests.isActive(t0));
+    const tracked = (live ? t0 : null) ?? this.quests.active()[0]?.id ?? (lead ? 'lead:' + lead.quest.id : undefined);
     let best: QuestUI['target'] = null;
     for (const m of this.quests.markers()) {
       if (m.quest !== tracked) continue;
