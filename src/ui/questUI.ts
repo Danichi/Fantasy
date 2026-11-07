@@ -239,7 +239,11 @@ export class QuestUI {
     const list = shelves[this.cat];
     let nav = '';
     if (this.cat === 'main' && this.storyRecap) nav += `<button class="jq-card story ${this.selected === '__story' ? 'sel' : ''}" data-quest="__story"><i class="jq-crest">${CREST.story}</i><span class="jq-mid"><b>The Story So Far</b><small>Everything that has happened to you</small></span></button>`;
-    nav += list.length ? list.map(card).join('') : `<p class="jq-empty">${EMPTY[this.cat]}</p>`;
+    // Between chapters, the main shelf says who has the story's next step.
+    const leads = this.cat === 'main' && !list.length ? this.quests.leads() : [];
+    nav += list.length ? list.map(card).join('')
+      : leads.length ? leads.map((l) => `<p class="jq-empty">Next chapter: <b>${esc(l.quest.title)}</b>. Speak with ${esc(l.name)}.</p>`).join('')
+      : `<p class="jq-empty">${EMPTY[this.cat]}</p>`;
 
     let detail = `<div class="jq-blank">${CREST.story}<p>Pick a quest from the list.</p></div>`;
     if (this.selected === '__story' && this.storyRecap) detail = `<div class="jq-recap">${this.storyRecap()}</div>`;
