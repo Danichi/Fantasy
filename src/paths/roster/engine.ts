@@ -53,7 +53,7 @@ export class RosterEngine {
   /** How much a class counts right now (0: not in play). */
   weight(id: string) {
     const P = this.rt.paths, s = ROSTER_BY_ID[id];
-    if (!s || !P.learned(id)) return 0;
+    if (!s || s.noEngine || !P.learned(id)) return 0;
     if (s.fam === 'magic') return 1;
     return P.active === id ? 1 : P.secondary === id ? 0.5 : 0;
   }

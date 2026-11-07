@@ -157,6 +157,8 @@ export interface ClassSpec {
   overlay?: boolean;
   /** a hidden teacher waiting somewhere in the world */
   teacher?: TeacherSpec;
+  /** its mechanic lives elsewhere (Voidwalker's Entropy, classes/kits.ts): only the teacher comes from here */
+  noEngine?: boolean;
 }
 
 export interface TeacherSpec {

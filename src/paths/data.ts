@@ -5,7 +5,7 @@
 //   no prefix: tier 1 and last-in-row are minor, the rest notable.
 
 import { EXPANDED_TREES } from './expandedTrees';
-import { ROSTER_DEFS } from './roster';
+import { ROSTER_DEFS, ROSTER_OVERLAYS } from './roster';
 
 export type Family = 'combat' | 'magic' | 'calling' | 'legacy';
 
@@ -257,6 +257,12 @@ export const DISCIPLINES: DisciplineDef[] = [
 for (const d of DISCIPLINES) if (!d.branches && EXPANDED_TREES[d.id]) d.branches = EXPANDED_TREES[d.id];
 // The classes update (paths/roster): the new classes join the list. Gateway classes are now taught by hidden teachers.
 for (const d of ROSTER_DEFS) DISCIPLINES.push(d);
+for (const s of ROSTER_OVERLAYS) {
+  const d = DISCIPLINES.find((x) => x.id === s.id);
+  if (!d) continue;
+  Object.assign(d, { mentor: s.mentor, mentorNpc: s.mentorNpc, res: s.mech.res, core: s.core, how: s.how, tier: 'hidden' as const });
+  if (s.requires) d.requires = s.requires;
+}
 
 export const DISC: Record<string, DisciplineDef> = Object.fromEntries(DISCIPLINES.map((d) => [d.id, d]));
 

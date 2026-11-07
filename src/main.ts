@@ -111,6 +111,7 @@ import { setupHerbalismQuests } from './quests/herbalismQuests';
 import type { NpcSpec } from './npc/npc';
 import { ReagentDrops } from './world/herbs/reagentDrops';
 import { buildHerbFolk } from './world/herbs/herbFolk';
+import { buildHiddenTeachers } from './world/hiddenTeachers';
 import { RoadToRiches, MEADOW_CLEARING } from './world/roadToRiches';
 import { GravewoodKey } from './world/gravewoodKey';
 import { CorruptedBrother } from './enemies/corruptedBrother';
@@ -1985,7 +1986,19 @@ async function boot() {
   repPanel.codex = () => story.state.codex();
   repPanel.onName = (id, power) => story.state.nameAs(id, power as never);
   const baseSiteMarks = worldMap.siteMarkers;
-  worldMap.siteMarkers = () => [...baseSiteMarks(), ...story.wheel.markers()];
+  // The hidden teachers (paths/roster): one for each hidden class; a gateway shows you where.
+  const teachers = buildHiddenTeachers(r.scene, worldFlags);
+  for (const s of teachers.settlements) npcs.addSettlement(s);
+  for (const rec of teachers.records) npcs.add(rec);
+  hideHooks.push((h) => teachers.setVisible(!h));
+  events.on('gatewayOpened', ({ id }) => {
+    const where = teachers.reveal(id);
+    if (!where) return;
+    hud.regionCard('A Gateway Opens', where, true);
+    hud.toast(where);
+    save();
+  });
+  worldMap.siteMarkers = () => [...baseSiteMarks(), ...story.wheel.markers(), ...teachers.markers()];
 
   // ---- the item catalog (items/catalog): gear effects, set bonuses, one-use items, and where it all comes from ----
   const hereRegion = () => (realm.mode === 'dungeon' ? 'cresha' : realm.interior ? regionAt(realm.interior.door.pos.x, realm.interior.door.pos.z) : regionAt(player.pos.x, player.pos.z));
@@ -2609,6 +2622,7 @@ async function boot() {
       caravans.update(dt, player.pos);
       if (worldRunning) roadLife.update(dt, player, ts.night);
       herbFolk.update(player.pos);
+      teachers.update(player.pos);
       riches.update(dt);
       if (worldRunning) {
         ghLife.update(dt);

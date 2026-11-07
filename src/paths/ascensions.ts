@@ -195,4 +195,4 @@ export const ASCENSIONS: Record<string, [AscensionDef, AscensionDef]> = {
 };
 
 // The roster's classes (paths/roster): their Ascensions are made from their mechanics.
-Object.assign(ASCENSIONS, ROSTER_ASC);
+for (const [id, a] of Object.entries(ROSTER_ASC)) ASCENSIONS[id] ??= a;

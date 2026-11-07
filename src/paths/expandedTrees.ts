@@ -117,7 +117,7 @@ export const EXPANDED_TREES: Record<string, BranchDef[]> = {
 
   // ---- hidden classes: Pyromancer gateways ------------------------------------------------
   sunbreaker: br([
-    ['Corona', 'Break the sun', [['Solar Wind', 'Flare'], ['*Solar Flare', 'Corona', 'Prominence'], ['*Sunspot', '?Dark Spot|Bright Spot', 'Photon'], ['*Supernova', '!Dying Star', 'Solar Mass'], ['Red Giant Heart', 'White Dwarf']], 'Sunbreak'],
+    ['Corona', 'Break the sun', [['Sunwind', 'Flare'], ['*Solar Flare', 'Corona', 'Prominence'], ['*Sunspot', '?Dark Spot|Bright Spot', 'Photon'], ['*Supernova', '!Dying Star', 'Solar Mass'], ['Red Giant Heart', 'White Dwarf']], 'Sunbreak'],
     ['Plasma', 'Fire past fire', [['Ionised', 'Charged'], ['*Plasma Lance', 'Arc Fire', 'Superheat'], ['*Plasma Chain', '?Arcing|Fusing', 'Hot Core'], ['*Fusion', '!Critical Mass', 'Reactor'], ['Star Core', 'Starforge']], 'Birth of a Star'],
     ['Eclipse', 'The sun swallowed', [['Shade of the Sun', 'Black Fire'], ['*Black Sun', 'Umbral Flame', 'Cold Fire'], ['*Solar Wind', '?Gale|Breeze', 'Drift'], ['*Corona Shield', '!Eclipsed', 'Halo of Fire'], ['Night Sun', 'Two Suns']], 'Sun Swallower'],
   ]),

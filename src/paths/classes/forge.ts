@@ -552,6 +552,10 @@ const SPECS: Record<string, Record<string, S>> = {
     Sentinel: k('buff', 'steel', 20, 'The old watch, kept again.', { c: 15, t: 12, m: { crit: 0.1, parryWindow: 0.3 } }),
     Ambush: k('dash', 'shadow', 10, 'Out of the dark, through them.', { d: 34, c: 20, fx: 'bleed' }),
     'Hold the Road': k('nova', 'steel', 18, 'None shall pass.', { d: 24, c: 26, r: 5, fx: 'stun' }),
+    // the capstones (the classes update: they had none)
+    'The Knight Who Fell': k('buff', 'shadow', 60, 'Wear the fall like armour.', { c: 35, t: 15, m: { melee: 0.35, dmgTaken: -0.35, poise: 0.4 }, big: true }),
+    Absolution: k('heal', 'light', 75, 'Forgiven, for a moment.', { d: 70, c: 35, t: 4, big: true }),
+    'None Shall Pass': k('nova', 'steel', 50, 'Plant your feet on the road and let nothing through.', { d: 80, c: 40, r: 7, big: true, fx: 'stun' }),
   },
 
   // ---- magic classes ---------------------------------------------------------------------
