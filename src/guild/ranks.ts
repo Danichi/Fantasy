@@ -25,10 +25,10 @@ export const RANKS: RankDef[] = [
   { name: 'D', rep: 0, color: '#a9b3ba', slots: 2, discount: 0, marksBonus: 0, perks: ['Two contracts at once', 'The D-rank column of the Quest Wall'] },
   { name: 'C', rep: 150, color: '#9fb6c4', slots: 3, discount: 0.05, marksBonus: 0, perks: ['Three contracts at once', '5% off at the guild\'s partner shops', 'Port Aurelle\'s hall opens its wall to you'] },
   { name: 'B', rep: 400, color: '#8fb0c6', slots: 4, discount: 0.08, marksBonus: 1, perks: ['Four contracts at once', '8% off at partner shops', '+1 Mark on every contract', 'The Grand Hall in the Capital opens its wall to you'] },
-  { name: 'A', rep: 900, color: '#d9a650', slots: 4, discount: 0.1, marksBonus: 2, perks: ['10% off at partner shops', '+2 Marks on every contract', 'A-rank gear at the Quartermaster'] },
+  { name: 'A', rep: 900, color: '#d9a650', slots: 4, discount: 0.1, marksBonus: 2, perks: ['10% off at partner shops', '+2 Marks on every contract', 'A-rank arms, rings and charms at the Quartermaster'] },
   { name: 'S', rep: 1800, color: '#f0c24a', slots: 5, discount: 0.12, marksBonus: 3, perks: ['Five contracts at once', '12% off at partner shops', '+3 Marks on every contract'] },
-  { name: 'SS', rep: 3600, color: '#7fb0ee', slots: 5, discount: 0.15, marksBonus: 4, perks: ['15% off at partner shops', '+4 Marks on every contract', 'Your banner hangs in every hall'] },
-  { name: 'SSS', rep: 7500, color: '#c08af0', slots: 6, discount: 0.2, marksBonus: 5, perks: ['Six contracts at once', '20% off at partner shops', '+5 Marks on every contract', 'A statue on the plaza'] },
+  { name: 'SS', rep: 3600, color: '#7fb0ee', slots: 5, discount: 0.15, marksBonus: 4, perks: ['15% off at partner shops', '+4 Marks on every contract', 'Masterwork blades at the Quartermaster'] },
+  { name: 'SSS', rep: 7500, color: '#c08af0', slots: 6, discount: 0.2, marksBonus: 5, perks: ['Six contracts at once', '20% off at partner shops', '+5 Marks on every contract'] },
 ];
 
 export const rankIndex = (r: GuildRank) => RANKS.findIndex((x) => x.name === r);

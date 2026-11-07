@@ -19,9 +19,9 @@ Named beasts that keep a territory somewhere in Cresha. Code: `src/bosses/`.
   home and heals to full.
 - **Rewards.** First kill: a unique item, Renown (a deed) and a line. Later
   kills: gold and a trophy. It is replaced 7 game days after it dies.
-- **Bounties.** The Adventurer's Guild board has a Bounties section (wanted
-  posters). A bounty counts as one of your four contracts and pays out when
-  the boss dies.
+- **Bounties.** The Quest Wall in a guild hall has a Wanted section. A bounty
+  takes one of your contract slots; killing the boss gives you its trophy,
+  and the bounty pays out when you bring the trophy to a hall (`guild.md`).
 - **Lore hook.** The bosses are bigger and meaner than nature because the Dark
   is leaking through as its ruler dies (`lore-dark-dimension.md`). Some show
   it when hard pressed (a violet eye, a smouldering coat).

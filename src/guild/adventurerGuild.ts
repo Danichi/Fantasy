@@ -459,6 +459,8 @@ export class AdventurerGuild {
       ['healthPotion', 3, 'D'], ['manaPotion', 3, 'D'], ['lockpicks', 4, 'D'], ['arrowIron', 2, 'D'], ['minersLantern', 6, 'D'],
       ['greaterHealthPotion', 8, 'C'], ['greaterManaPotion', 8, 'C'],
       ['knightSword', 30, 'B'], ['kiteShield', 26, 'B'],
+      ['claymore', 45, 'A'], ['towerShield', 36, 'A'], ['ringSage', 40, 'A'], ['watchBanner', 40, 'A'],
+      ['estoc', 80, 'SS'], ['frostbite', 80, 'SS'], ['emberbrand', 80, 'SS'],
     ];
     return list.filter(([id]) => ITEMS[id]).map(([id, marks, rank]) => ({ id, marks, rank }));
   }
