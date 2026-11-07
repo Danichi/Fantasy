@@ -98,6 +98,7 @@ function opts(disc: string, sp: Spec, extra: Partial<HitOpts> = {}): HitOpts {
     type: m && (sp.k === 'strike' || sp.k === 'whirl' || sp.k === 'dash' || sp.k === 'cone') ? undefined : DTYPE[sp.s],
     stun: sp.fx === 'stun',
     fire: sp.s === 'fire',
+    school: sp.s,
     ...extra,
   };
 }

@@ -83,8 +83,8 @@ export const DISCIPLINES: DisciplineDef[] = [
     ],
   },
   {
-    id: 'dawnblade', fam: 'combat', name: 'Dawnblade', color: '--c-light', mentor: 'Brother Aldous, once you know the light', mentorNpc: 'aldous', requires: ['lightbinder', 5], res: 'Radiance',
-    flavour: 'Steel that burns the dark.', how: 'Land holy strikes while Dawnblade is active.',
+    id: 'dawnblade', fam: 'combat', name: 'Dawnblade', color: '--c-light', mentor: 'Brother Aldous, once you know the light', mentorNpc: 'aldous', requires: ['lightbinder', 5], res: 'Radiance', core: 'Sunlit Edge',
+    flavour: 'Steel that burns the dark.', how: 'Fight with Dawnblade as your style to build Radiance, then let it out as Sunfire.',
   },
   {
     id: 'warbreaker', fam: 'combat', name: 'Warbreaker', color: '--c-blood', mentor: 'Ilse Vantara, once you know Cross Style', mentorNpc: 'ilse', requires: ['cross', 5], res: 'Rage', core: 'War Cleave',
@@ -129,16 +129,16 @@ export const DISCIPLINES: DisciplineDef[] = [
     ],
   },
   {
-    id: 'cryomancer', fam: 'magic', name: 'Cryomancer', color: '--c-frost', mentor: 'Archmage Isolde Venn, once you know the wind', mentorNpc: 'archmage', requires: ['windcaller', 5],
-    flavour: 'Stillness, made into a weapon.', how: 'Chill, freeze and shatter.',
+    id: 'cryomancer', fam: 'magic', name: 'Cryomancer', color: '--c-frost', mentor: 'Archmage Isolde Venn, once you know the wind', mentorNpc: 'archmage', requires: ['windcaller', 5], res: 'Chill', core: 'Deep Chill',
+    flavour: 'Stillness, made into a weapon.', how: 'Chill enemies with frost until they freeze solid, then shatter them.',
   },
   {
-    id: 'shadowcaller', fam: 'magic', name: 'Shadowcaller', color: '--c-shadow', mentor: 'Magus Orren, once you know the flame', mentorNpc: 'magus', requires: ['pyromancer', 10],
-    flavour: 'Something beneath the crypt is teaching.', how: 'Curse and harvest souls.',
+    id: 'shadowcaller', fam: 'magic', name: 'Shadowcaller', color: '--c-shadow', mentor: 'Magus Orren, once you know the flame', mentorNpc: 'magus', requires: ['pyromancer', 10], res: 'Souls', core: 'Soul Harvest',
+    flavour: 'Something beneath the crypt is teaching.', how: 'Curse enemies with shadow and take the souls of the cursed dead.',
   },
   {
-    id: 'voidwalker', fam: 'magic', name: 'Voidwalker', color: '--c-shadow', mentor: 'Unknown', secret: true,
-    flavour: 'Between the stars there is a hunger.', how: 'Pull and crush.',
+    id: 'voidwalker', fam: 'magic', name: 'Voidwalker', color: '--c-shadow', mentor: 'Unknown', secret: true, res: 'Entropy', core: 'Entropy',
+    flavour: 'Between the stars there is a hunger.', how: 'Build Entropy with void spells until it collapses on everything near.',
   },
 
   // ---- callings -----------------------------------------------------------------
