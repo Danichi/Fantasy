@@ -17,6 +17,7 @@ import { SkillFx, PALETTE } from './skillFx';
 import { FIRE_SKILLS } from './classes/fire';
 import { CombatClasses } from './classes/combat';
 import { ClassKits } from './classes/kits';
+import { RosterEngine } from './roster/engine';
 import { GALE_SKILLS } from './classes/gale';
 import { BOUNDARY_SKILLS } from './classes/boundary';
 import { CROSS_SKILLS } from './classes/cross';
@@ -95,6 +96,8 @@ export type Status = {
   freezeCd?: number;
   /** Shadowcaller curse (seconds) */
   curse?: number;
+  /** the roster classes' marks (paths/roster/engine.ts): class id -> stacks and seconds left */
+  marks?: Record<string, { n: number; left: number }>;
 };
 export interface HitOpts {
   poise?: number;
@@ -111,6 +114,8 @@ export interface HitOpts {
   school?: Style;
   /** dealt by a class kit itself (Sunfire, a shatter, a collapse): doesn't feed the kits again */
   kit?: boolean;
+  /** the discipline whose technique dealt it (the forge tags its own) */
+  disc?: string;
   /** damage type (default: fire if fire, the weapon's for melee, arcane for spells) */
   type?: DmgType;
 }
@@ -123,6 +128,8 @@ export class SkillRuntime {
   readonly cc: CombatClasses;
   /** the later classes' mechanics: Sunfire, Chill, souls, Entropy */
   readonly kits: ClassKits;
+  /** every roster class's mechanic (paths/roster) */
+  readonly roster: RosterEngine;
   private cds = new Map<string, number>();
   private uses = new Map<string, number>();
   buffs = new Map<string, Buff>();
@@ -161,6 +168,7 @@ export class SkillRuntime {
     this.vfx = new SkillFx(scene, fx);
     this.cc = new CombatClasses(this, scene);
     this.kits = new ClassKits(this);
+    this.roster = new RosterEngine(this);
     player.onDodged = (att) => this.cc.onDodged(att);
     player.onSkillEvent = (n) => this.onEvent(n);
     player.defend = (att, facing) => this.defend(att, facing);
@@ -183,6 +191,7 @@ export class SkillRuntime {
     this.heat = this.radiance = 0;
     this.cc.reset();
     this.kits.reset();
+    this.roster.reset();
     this.halo = 0;
     this.chain = [];
     this.buffs.clear();
@@ -278,7 +287,7 @@ export class SkillRuntime {
   /** Weapon damage the way the blade computes it (attributes, gear, passives). */
   weapon() {
     const p = this.player, w = p.equip.mainWeapon;
-    return (w?.def.stats.damage ?? 10) * (1 + p.equip.bonus('damagePct')) * p.paths.meleePower(w?.def.stats.speed ?? 1) * p.mods.melee;
+    return (w?.def.stats.damage ?? p.fistDamage?.() ?? 10) * (1 + p.equip.bonus('damagePct')) * p.paths.meleePower(w?.def.stats.speed ?? 1) * p.mods.melee;
   }
   /** Spell damage: Heat adds 0.5% fire damage per point; Vow of Mercy turns holy damage off. */
   spell(base: number, school: 'fire' | 'wind' | 'holy') {
@@ -315,12 +324,13 @@ export class SkillRuntime {
     // Through the combat core (combat/core.ts): damage type, play-made crits, posture and stagger.
     const src = o.source ?? 'spell';
     const type: DmgType = o.type ?? (o.fire ? 'fire' : src === 'melee' ? this.player.weaponDmgType() : 'arcane');
-    const r = strike(t, { base: amount * this.targetMult(t, o.fire) * this.kits.mult(t, o), type, poise: (o.poise ?? 20) * this.player.mods.poise, from: this.player.pos.clone().sub(dir), source: src, forceCrit: !!o.crit, noCrit: !!o.chained, keen: this.player.mods.crit });
+    const r = strike(t, { base: amount * this.targetMult(t, o.fire) * this.kits.mult(t, o) * this.roster.mult(t), type, poise: (o.poise ?? 20) * this.player.mods.poise, from: this.player.pos.clone().sub(dir), source: src, forceCrit: !!o.crit, noCrit: !!o.chained, keen: this.player.mods.crit });
     const dmg = r.damage;
     if (o.stun && t.alive) t.stunned = true;
     events.emit('enemyHit', { at: t.center.clone(), amount: dmg, crit: r.crit, enemyId: t.id });
     if (!o.noVerdict) this.addVerdict(t);
     this.kits.onHit(t, dmg, o);
+    this.roster.onHit(t, dmg, o);
     // Chains of Dawn: the others feel 30% of it.
     if (!o.chained && this.chain.includes(t)) {
       for (const c of this.chain) if (c !== t && c.alive) this.hit(c, dmg * 0.3, { poise: 0, chained: true, noVerdict: true, dir: o.dir });
@@ -546,6 +556,7 @@ export class SkillRuntime {
       this.uses.set(s.key, 0);
     } else this.uses.set(s.key, used);
     this.kits.onUse(s.key);
+    this.roster.onUse(s.key);
     events.emit('spellCast', { spell: s.key });
     return null;
   }
@@ -718,6 +729,7 @@ export class SkillRuntime {
     void P;
     this.cc.onMeleeHit(t, action);
     this.kits.onMeleeHit(t, amount);
+    this.roster.onMeleeHit(t, crit, action);
     if (crit && this.x('critStamina') > 0) this.player.stamina = Math.min(this.player.maxStamina, this.player.stamina + this.x('critStamina'));
     if (crit && this.has('critBleed')) this.bleed(t, this.weapon() * 0.12);
     this.addVerdict(t);
@@ -759,6 +771,7 @@ export class SkillRuntime {
     const burning = (s?.burn?.left ?? 0) > 0;
     this.cc.onKill();
     this.kits.onKill(at, s);
+    this.roster.onKill(at, s);
     if (this.x('killHealPct') > 0 && !this.player.dead) this.player.hp = Math.min(this.player.maxHp, this.player.hp + this.player.maxHp * this.x('killHealPct'));
     if (burning && this.has('inferno')) {
       this.vfx.burst(at, 'fire', 1.5, 6);
@@ -834,6 +847,7 @@ export class SkillRuntime {
     // Resources.
     this.cc.update(dt);
     this.kits.update(dt);
+    this.roster.update(dt);
     // Heat cools after 2 seconds without fire (never, with Pure Flame). Above 80 it burns you.
     if (!P.learned('pyromancer')) this.heat = 0;
     else {
@@ -899,6 +913,7 @@ export class SkillRuntime {
         if (Math.random() < dt * 14) this.vfx.fx.add.spawn({ pos: s.t.center, spread: 1.2, count: 1, life: [0.3, 0.6], size: [0.25, 0.03], color: 0xffd080, color2: 0xff3000, upBias: 1.5, jitter: s.t.radius * 0.8 });
       }
       this.kits.tickStatus(s, dt);
+      this.roster.tickStatus(s, dt);
       if (s.bleed && s.bleed.left > 0) {
         s.bleed.left -= dt;
         s.bleed.acc += dt;
@@ -1026,6 +1041,7 @@ export class SkillRuntime {
     const p = this.player;
     this.cc.applyMods(m);
     this.kits.applyMods(m);
+    this.roster.applyMods(m);
     if (this.x('lowHpDmg') > 0 && p.hp < p.maxHp * 0.35) (m.melee += this.x('lowHpDmg')), (m.spell += this.x('lowHpDmg'));
     if (this.has('emberShield') && this.buff('firebrand')) m.dmgTaken -= 0.15;
     if (this.has('deflectAir') && this.buff('windwall')) m.dmgTaken -= 0.2;
@@ -1072,6 +1088,7 @@ export class SkillRuntime {
     void a;
     this.cc.resources(out);
     this.kits.resources(out);
+    this.roster.resources(out);
     if (this.paths.learned('pyromancer')) out.push({ name: this.buff('overheat') ? 'OVERHEAT' : 'HEAT', value: this.heat, max: 100, kind: 'bar', color: this.heat > 80 || this.buff('overheat') ? '#ff3b1f' : '#ff8a3a', hot: this.heat > 80 });
     if (this.paths.learned('lightbinder')) out.push({ name: 'RADIANCE', value: this.radiance, max: 100, kind: 'bar', color: '#ffd86a', hot: this.kits.sunfireLit });
     return out;

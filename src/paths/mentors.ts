@@ -32,7 +32,8 @@ export interface Trials {
 
 export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: string) => void, notify: (msg: string) => void, trials?: Trials): DialogueOption[] {
   const out: DialogueOption[] = [];
-  const mine = DISCIPLINES.filter((d) => d.mentorNpc === s.id && !d.secret);
+  // Hidden classes only come up once their way is open (a gateway, your people's blood).
+  const mine = DISCIPLINES.filter((d) => d.mentorNpc === s.id && (!d.secret || paths.learned(d.id) || paths.canTeach(d.id)));
   // The one they offer up front: the first you haven't learned that needs nothing
   // else first (or whose groundwork you have). The rest wait until you ask.
   const unlearned = mine.filter((d) => !paths.learned(d.id));
@@ -56,8 +57,7 @@ export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: 
             return;
           }
           if (!paths.canTeach(d.id)) {
-            const [req, lv] = d.requires!;
-            say(`Not yet. Come back when your ${DISC[req].name} has reached level ${lv}.`);
+            say(`Not yet. ${paths.teachWhyNot(d.id) ?? 'You are not ready.'}. Come back when you are.`);
             return;
           }
           // The lesson teaches it, one step at a time (the tree opens at the end).
@@ -114,11 +114,11 @@ export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: 
 function askReply(paths: Paths, held: DisciplineDef[], firstPending: boolean) {
   const names = held.map((d) => d.name);
   const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
-  const notYet = held.filter((d) => !paths.canTeach(d.id) && d.requires);
+  const notYet = held.filter((d) => !paths.canTeach(d.id) && (d.requires || d.also));
   const lead = firstPending ? 'I do. But one thing at a time.' : 'I do, as it happens.';
   let text = `${lead} I also teach ${list}. ${held.map((d) => `${d.name}: ${d.how.charAt(0).toLowerCase()}${d.how.slice(1)}`).join(' ')}`;
   if (notYet.length) {
-    text += ' ' + notYet.map((d) => `For ${d.name} you need ${DISC[d.requires![0]].name} at level ${d.requires![1]} first.`).join(' ');
+    text += ' ' + notYet.map((d) => `For ${d.name}: ${(paths.teachWhyNot(d.id) ?? '').replace(/^Needs /, 'you need ')} first.`).join(' ');
   }
   return text;
 }

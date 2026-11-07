@@ -1,6 +1,7 @@
 import type { DisciplineDef } from '../paths/data';
 import { NODE_COST, TIER_GATE, treeOf, type Paths, type Tree, type TreeNode } from '../paths/paths';
 import { TREE_SHAPES, along, smooth } from './treeShapes';
+import { ROSTER } from '../paths/roster';
 import { emblemIcon } from './icons';
 import { EMBLEMS } from './art/emblems';
 
@@ -48,10 +49,14 @@ export const ICONS: Record<string, string> = {
   legendaryHero: 'M3 18h18M4 18l-1-10 5 4 4-8 4 8 5-4-1 10M12 13v2',
 };
 
+// The roster's classes carry their own emblems.
+for (const s of ROSTER) if (s.icon) ICONS[s.id] = s.icon;
+
 /** Hex values of the discipline colour tokens (the canvas and HUD can't read CSS variables). */
 export const HEX: Record<string, string> = {
   '--c-gale': '#6fd6c6', '--c-fire': '#ff8246', '--c-frost': '#9cc8ff', '--c-wind': '#b7e38a', '--c-herb': '#8fcf6a',
   '--c-steel': '#aeb8cc', '--c-ward': '#5fa8ff', '--c-light': '#ffe08a', '--c-shadow': '#b48cff', '--c-blood': '#d8574a', '--c-gold': '#d9b15a',
+  '--c-earth': '#d09a5a', '--c-tide': '#4fc3e0', '--c-storm': '#b0a4ff',
 };
 
 /** Hotbar icon for a skill: its painted emblem (ui/art/emblems.ts) with the rank as pips. */

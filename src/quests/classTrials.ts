@@ -4,6 +4,7 @@ import { DISC } from '../paths/data';
 import { lessonHook } from '../paths/mentors';
 import { CRYPT } from '../world/terrainHeight';
 import { CHAPEL } from '../world/kingsRoad';
+import { ROSTER } from '../paths/roster';
 
 // Class trials: nobody starts with a class. Each mentor sets a short trial,
 // and finishing it teaches the class (Skills screen, K). Asking the mentor to
@@ -79,6 +80,22 @@ export const CLASS_TRIALS: QuestDef[] = [
   },
 ];
 
+// The roster's foundation classes (paths/roster): one trial each, from the class's own spec.
+export const ROSTER_TRIALS: QuestDef[] = ROSTER.filter((s) => s.trial && s.mentorNpc).map((s) => {
+  const t = s.trial!, who = s.mentor.split(',')[0];
+  return {
+    id: `trial-${s.id}`, title: `Trial of the ${s.name}`, giver: s.mentorNpc!, region: t.region ?? 'cresha',
+    summary: `${who} will teach ${s.name} to anyone who passes a trial first.`,
+    offer: t.offer, acceptLabel: t.accept,
+    stages: [
+      { note: `${t.text}.`, objectives: [t.kill ? { type: 'kill', kind: t.kill, count: t.count, text: t.text } : { type: 'signal', id: t.signal ?? `trial-${s.id}`, count: t.count, text: t.text }] },
+      { note: `Return to ${who}.`, objectives: [{ type: 'talk', npc: s.mentorNpc!, text: `Return to ${who}`, reply: t.reply, say: t.say }] },
+    ],
+    done: `${s.name} is yours. Open your Skills (K) and put XP into it.`,
+    rewards: { gold: 0, xp: 60 },
+  } as QuestDef;
+});
+
 const VIGILS = [
   { id: 'vigil-pyro', at: () => [CRYPT.x, CRYPT.y] as const, r: 16, from: 20, to: 4, wait: 'The crypt mouth is just stone by daylight. Come back after 20:00 and keep the vigil.', start: 'You settle at the crypt mouth. The dark leans in. Stay.' },
   { id: 'vigil-light', at: () => [CHAPEL.x, CHAPEL.z] as const, r: 18, from: 5, to: 8, wait: 'The dawn vigil is kept between 5:00 and 8:00. Come back at first light.', start: 'You kneel by the chapel as the sky begins to pale. Stay.' },
@@ -86,10 +103,13 @@ const VIGILS = [
 const inHours = (h: number, from: number, to: number) => (from <= to ? h >= from && h < to : h >= from || h < to);
 
 /** Which class each trial teaches. */
-const TEACHES: Record<string, string> = { 'trial-gale': 'gale', 'trial-boundary': 'boundary', 'trial-cross': 'cross', 'trial-pyro': 'pyromancer', 'trial-light': 'lightbinder' };
+const TEACHES: Record<string, string> = {
+  'trial-gale': 'gale', 'trial-boundary': 'boundary', 'trial-cross': 'cross', 'trial-pyro': 'pyromancer', 'trial-light': 'lightbinder',
+  ...Object.fromEntries(ROSTER_TRIALS.map((q) => [q.id, q.id.slice('trial-'.length)])),
+};
 
 export function setupClassTrials(o: { quests: QuestLog; paths: Paths; toast: (m: string) => void }) {
-  o.quests.add(...CLASS_TRIALS);
+  o.quests.add(...CLASS_TRIALS, ...ROSTER_TRIALS);
   for (const [quest, disc] of Object.entries(TEACHES)) {
     o.quests.hooks.set(quest + ':done', () => {
       if (o.paths.learned(disc)) return; // already taught (or re-run on load)

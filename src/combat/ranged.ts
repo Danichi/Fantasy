@@ -376,6 +376,7 @@ export class Ranged {
     if (as.bleed && t.alive) this.hooks.bleed(t, as.bleed);
     events.emit('enemyHit', { at, amount: dmg, crit, enemyId: t.id });
     this.hooks.onShotHit?.(t, dmg);
+    events.emit('shotHit', { target: t, amount: dmg });
     // Shot from range: beasts charge, bandits break for cover.
     (t as Target & { onRangedHit?(from: THREE.Vector3): void }).onRangedHit?.(p.pos.clone());
     if (s.returning) this.refund(s.ammo);

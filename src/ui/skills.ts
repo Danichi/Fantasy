@@ -340,14 +340,20 @@ export class SkillsUI {
   /** Every class there is: what you have, what's out there, and the hidden ones as silhouettes. */
   private renderClassAtlas() {
     const P = this.paths;
+    const tierOf = (d: DisciplineDef) => d.tier ?? (d.gateFrom || d.secret ? 'hidden' : d.requires ? 'advanced' : 'foundation');
     const tiers: [string, string, (d: DisciplineDef) => boolean][] = [
-      ['Foundation classes', 'Taught by mentors in the towns', (d) => !d.requires && !d.secret && !d.gateFrom],
-      ['Advanced classes', 'A foundation class at the right level, and a master to teach you', (d) => !!d.requires && !d.secret],
-      ['Hidden classes', 'Behind a capstone gateway, a secret or the story', (d) => !!d.secret || !!d.gateFrom],
+      ['Foundation classes', 'Taught by mentors in the towns, after a trial', (d) => tierOf(d) === 'foundation'],
+      ['Advanced classes', 'A foundation class at the right level, and a master to teach you', (d) => tierOf(d) === 'advanced'],
+      ['Hybrid classes', 'Two classes at level 15, and a teacher who knows both', (d) => tierOf(d) === 'hybrid'],
+      ['Hidden classes', 'Behind a capstone gateway in another tree, and a teacher you have to find', (d) => tierOf(d) === 'hidden'],
+      ['Origin classes', 'Only for those born to a people, when their blood wakes (Legendary Hero level 2)', (d) => tierOf(d) === 'origin'],
     ];
     const card = (d: DisciplineDef) => {
       const L = P.level(d.id), known = L > 0 || !d.secret;
-      const how = d.gateFrom ? `A gateway capstone in ${esc(DISC[d.gateFrom]?.name ?? d.gateFrom)}'s tree` : d.requires ? `${esc(DISC[d.requires[0]].name)} at level ${d.requires[1]}, then ${esc(d.mentor.split(',')[0])}` : esc(d.mentor);
+      const req = [d.requires, d.also].filter((r): r is [string, number] => !!r && !!DISC[r[0]] && r[0] !== 'legendaryHero').map(([r, lv]) => `${esc(DISC[r].name)} at level ${lv}`).join(' and ');
+      const how = d.origin ? `Born ${esc(d.origin === 'elf' ? 'an elf' : d.origin === 'dwarf' ? 'a dwarf' : d.origin === 'demon' ? 'a demon' : d.origin)}, at Legendary Hero level 2`
+        : d.gateFrom ? `A gateway capstone in ${esc(DISC[d.gateFrom]?.name ?? d.gateFrom)}'s tree${known && d.mentorNpc ? `, then ${esc(d.mentor.split(',')[0])}` : ''}`
+        : req ? `${req}, then ${esc(d.mentor.split(',')[0])}` : esc(d.mentor);
       const asc = P.ascension(d.id) >= 0 ? ` · ${esc(ASCENSIONS[d.id][P.ascension(d.id)].name)}` : '';
       return `<div class="sk-atlas-card${L ? ' got' : ''}${known ? '' : ' hidden'}" style="--c:var(${d.color})" ${known ? `data-open="${d.id}"` : ''}>
         <b>${known ? esc(d.name) : '???'}</b><span>${L ? `Level ${L}${P.active === d.id ? ' · Active' : P.secondary === d.id ? ' · Second' : ''}${asc}` : 'Not learned'}</span>

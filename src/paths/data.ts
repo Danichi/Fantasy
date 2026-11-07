@@ -5,6 +5,7 @@
 //   no prefix: tier 1 and last-in-row are minor, the rest notable.
 
 import { EXPANDED_TREES } from './expandedTrees';
+import { ROSTER_DEFS } from './roster';
 
 export type Family = 'combat' | 'magic' | 'calling' | 'legacy';
 
@@ -43,6 +44,12 @@ export interface DisciplineDef {
   gateFrom?: string;
   /** discipline id and level required before the mentor will teach it */
   requires?: [string, number];
+  /** a second class and level required too (hybrid classes) */
+  also?: [string, number];
+  /** only someone of this people can learn it (origin classes) */
+  origin?: string;
+  /** where it sits among the classes (the Class Atlas): set for the roster's classes */
+  tier?: 'foundation' | 'advanced' | 'hybrid' | 'hidden' | 'origin';
   branches?: BranchDef[];
 }
 
@@ -248,6 +255,8 @@ export const DISCIPLINES: DisciplineDef[] = [
 
 // The later and hidden classes get their trees from expandedTrees.ts.
 for (const d of DISCIPLINES) if (!d.branches && EXPANDED_TREES[d.id]) d.branches = EXPANDED_TREES[d.id];
+// The classes update (paths/roster): the new classes join the list. Gateway classes are now taught by hidden teachers.
+for (const d of ROSTER_DEFS) DISCIPLINES.push(d);
 
 export const DISC: Record<string, DisciplineDef> = Object.fromEntries(DISCIPLINES.map((d) => [d.id, d]));
 

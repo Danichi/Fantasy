@@ -23,6 +23,10 @@ export const PALETTE: Record<Style, { hot: number; cool: number; body: THREE.Col
   blood: { hot: 0xffd4d4, cool: 0xff0a2a, body: new THREE.Color(4.4, 0.2, 0.45) },
   void: { hot: 0xff9cff, cool: 0x5a10ff, body: new THREE.Color(1.8, 0.15, 4.6) },
   nature: { hot: 0xf4ffb0, cool: 0x00e04a, body: new THREE.Color(0.9, 4.0, 0.45) },
+  // the classes update: stone, sea and storm
+  earth: { hot: 0xffe2b0, cool: 0xb06a1e, body: new THREE.Color(3.2, 1.7, 0.5) },
+  water: { hot: 0xe0fbff, cool: 0x10a8e8, body: new THREE.Color(0.2, 2.6, 4.0) },
+  storm: { hot: 0xffffff, cool: 0x8a7aff, body: new THREE.Color(2.4, 2.4, 4.6) },
 };
 
 // Shared sprite textures (a soft glow and a four-point flare), drawn once.

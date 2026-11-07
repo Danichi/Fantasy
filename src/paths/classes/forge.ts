@@ -6,6 +6,7 @@ import type { DmgType } from '../../combat/core';
 import type { Target } from '../../combat/targets';
 import type { NumMod } from '../effects';
 import { physics } from '../../physics/physics';
+import { ROSTER_SPECS } from '../roster';
 
 // The skill forge: one place that builds a working, flashy skill from a short
 // spec, so every tree (the later classes, the hidden ones, Oathbreaker's) gets
@@ -21,8 +22,10 @@ export type Kind =
   | 'bolt' | 'lance' | 'volley' | 'chain' | 'drain'
   | 'nova' | 'cone' | 'smite' | 'meteor' | 'zone'
   | 'dash' | 'blink' | 'strike' | 'whirl'
-  | 'buff' | 'ward' | 'heal' | 'spirit';
-export type Rider = 'burn' | 'bleed' | 'stun' | 'pull' | 'brand' | 'leech';
+  | 'buff' | 'ward' | 'heal' | 'spirit'
+  // the classes update (paths/roster): a snare that waits, a leap that lands hard, a hook that drags
+  | 'trap' | 'leap' | 'grab';
+export type Rider = 'burn' | 'bleed' | 'stun' | 'pull' | 'brand' | 'leech' | 'mark' | 'root' | 'chill' | 'curse' | 'venom';
 type Mods = Partial<Record<NumMod, number>>;
 
 export interface Spec {
@@ -45,22 +48,41 @@ export interface Spec {
   /** a capstone ultimate: bigger cast, bigger show */
   big?: boolean;
   say: string;
+  /** class resource it gives when used (paths/roster) */
+  gain?: number;
+  /** class resource it spends ('all': everything there is): more damage the more it spends */
+  spend?: number | 'all';
 }
+
+/**
+ * The class roster's engine plugs in here (paths/roster/engine.ts), so forged
+ * techniques can feed and spend a class's resource and lay its mark.
+ */
+export const FORGE_HOOKS: {
+  gain?: (disc: string, n: number) => void;
+  /** spend; returns the damage multiplier it buys */
+  spend?: (disc: string, n: number | 'all') => number;
+  mark?: (disc: string, t: Target, n: number) => void;
+  /** the resource's name, for text */
+  res?: (disc: string) => string | undefined;
+  markName?: (disc: string) => string | undefined;
+} = {};
 
 /** Buff key -> the mods it adds while running (read by SkillRuntime.applyMods). */
 export const FORGED_BUFFS: Record<string, Mods> = {};
 
 const DTYPE: Record<Style, DmgType> = {
   fire: 'fire', frost: 'frost', light: 'holy', steel: 'slash', blood: 'slash', gale: 'slash',
-  wind: 'blunt', shadow: 'arcane', void: 'arcane', nature: 'pierce',
+  wind: 'blunt', shadow: 'arcane', void: 'arcane', nature: 'pierce', earth: 'blunt', water: 'blunt', storm: 'arcane',
 };
 const SCHOOL: Record<Style, string> = {
   fire: 'fire', frost: 'frost', light: 'holy', steel: 'steel', blood: 'blood', gale: 'wind',
-  wind: 'wind', shadow: 'shadow', void: 'void', nature: 'nature',
+  wind: 'wind', shadow: 'shadow', void: 'void', nature: 'nature', earth: 'earth', water: 'water', storm: 'lightning',
 };
 const RIDER: Record<Rider, string> = {
   burn: ' Sets them burning.', bleed: ' Opens bleeding wounds.', stun: ' Stuns what it hits.',
   pull: ' Drags enemies into the middle.', brand: ' Brands them with light.', leech: ' Heals you for a quarter of the damage.',
+  mark: ' Marks them.', root: ' Roots them where they stand.', chill: ' Chills them to the bone.', curse: ' Curses them.', venom: ' Poisons them.',
 };
 const MOD_TEXT: Partial<Record<NumMod, string>> = {
   melee: 'damage', spell: 'spell damage', attackSpeed: 'attack speed', moveSpeed: 'movement speed', castSpeed: 'cast speed',
@@ -93,31 +115,38 @@ function dmgText(disc: string, sp: Spec, r: number, k = 1) {
 function opts(disc: string, sp: Spec, extra: Partial<HitOpts> = {}): HitOpts {
   const m = melee(disc);
   return {
+    disc,
     poise: (sp.big ? 160 : 70) * (sp.fx === 'stun' ? 1.5 : 1),
     source: m ? 'melee' : 'spell',
     type: m && (sp.k === 'strike' || sp.k === 'whirl' || sp.k === 'dash' || sp.k === 'cone') ? undefined : DTYPE[sp.s],
-    stun: sp.fx === 'stun',
+    stun: sp.fx === 'stun' || sp.fx === 'root',
     fire: sp.s === 'fire',
     school: sp.s,
     ...extra,
   };
 }
 /** What lingers after a hit lands. */
-function rider(rt: SkillRuntime, sp: Spec, t: Target, dealt: number) {
+function rider(rt: SkillRuntime, sp: Spec, t: Target, dealt: number, disc = '') {
   if (!t.alive && sp.fx !== 'leech') return;
-  if (sp.fx === 'burn') rt.burn(t, 2);
+  if (sp.fx === 'mark') FORGE_HOOKS.mark?.(disc, t, 1);
+  else if (sp.fx === 'chill') rt.kits.chill(t, rt.st(t), 2);
+  else if (sp.fx === 'curse') rt.st(t).curse = 6 * pl(rt).mods.duration;
+  else if (sp.fx === 'venom') {
+    rt.bleed(t, Math.max(2, dealt * 0.15));
+    rt.vfx.burst(t.center, 'nature', 0.4, 2);
+  } else if (sp.fx === 'burn') rt.burn(t, 2);
   else if (sp.fx === 'bleed') rt.bleed(t, Math.max(2, dealt * 0.12));
   else if (sp.fx === 'brand') rt.brand(t);
   else if (sp.fx === 'leech') pl(rt).heal(dealt * 0.25);
 }
 function hitOne(rt: SkillRuntime, disc: string, sp: Spec, t: Target, amount: number, dir?: THREE.Vector3) {
   const dealt = rt.hit(t, amount, opts(disc, sp, dir ? { dir } : {}));
-  rider(rt, sp, t, dealt);
+  rider(rt, sp, t, dealt, disc);
   return dealt;
 }
 function hitArea(rt: SkillRuntime, disc: string, sp: Spec, at: THREE.Vector3, r: number, amount: number, extra: Parameters<SkillRuntime['area']>[3] = {}) {
   const list = rt.area(at, r, amount, { ...opts(disc, sp), pull: sp.fx === 'pull', ...extra });
-  for (const t of list) rider(rt, sp, t, amount);
+  for (const t of list) rider(rt, sp, t, amount, disc);
   return list;
 }
 /** Where a targeted spell lands: the locked foe, or the ground ahead. */
@@ -130,6 +159,9 @@ function actionFor(disc: string, sp: Spec): string | undefined {
   const m = melee(disc);
   switch (sp.k) {
     case 'blink': return undefined;
+    case 'trap': return m ? 'sk_bash' : 'sk_castSelf';
+    case 'leap': return 'sk_quake';
+    case 'grab': return m ? 'sk_bash' : 'sk_cast';
     case 'strike': return 'sk_quake';
     case 'whirl': return 'sk_crescent';
     case 'dash': return m ? 'sk_bullRush' : 'sk_dash';
@@ -146,7 +178,7 @@ type Run = { skip?: Set<number> };
 /** Do the thing. Called on the action's events (or at once for blinks). */
 function fire(rt: SkillRuntime, disc: string, key: string, sp: Spec, p: Pending & Run) {
   const P = pl(rt), V = rt.vfx, s = sp.s;
-  const amt = power(rt, disc, sp, p.rank);
+  const amt = power(rt, disc, sp, p.rank) * (p.k ?? 1);
   const big = sp.big ? 1.5 : 1;
   switch (sp.k) {
     case 'bolt':
@@ -320,6 +352,54 @@ function fire(rt: SkillRuntime, disc: string, key: string, sp: Spec, p: Pending 
       });
       return;
     }
+    case 'trap': {
+      // Set at your feet (or the target spot): the first foe to step in springs it.
+      const at = melee(disc) ? P.pos.clone().addScaledVector(P.forward, 1.5) : landing(p), r = sp.r ?? 3, life = (sp.t ?? 20) * P.mods.duration;
+      V.groundCircle(at, s, 1.2, 0.6);
+      V.zone({
+        pos: at, radius: 1.2, life, style: s, every: 0.2, motes: 6,
+        onTick: (z) => {
+          if (!V.near(z.pos, 1.6).length) return;
+          z.done = true;
+          hitArea(rt, disc, sp, z.pos, r, amt);
+          V.nova(z.pos, s, r);
+          V.impact(z.pos.clone().setY(z.pos.y + 0.4), s, 1.1 * big);
+          P.onShake?.(0.25);
+        },
+      });
+      return;
+    }
+    case 'leap': {
+      // Up, across and down on the spot (as far as 12 m), landing hard.
+      const want = landing(p), from = P.pos.clone();
+      const off = want.clone().sub(from).setY(0);
+      if (off.length() > 12) off.setLength(12);
+      const wall = off.lengthSq() > 0.01 ? physics.castRay(P.center, off.clone().normalize(), off.length() + 0.6) : null;
+      if (wall !== null) off.setLength(Math.max(0, wall - 0.7));
+      const at = from.clone().add(off);
+      V.groundCircle(at, s, (sp.r ?? 3.5) * 2, 0.5);
+      V.spiral(from, s, 2.4, 0.8, 18);
+      rt.later(0.22, () => {
+        P.teleport(at.clone().setY(at.y + 0.2));
+        const r = sp.r ?? 3.5;
+        hitArea(rt, disc, sp, P.pos, r, amt);
+        V.nova(P.pos, s, r);
+        V.pillar(P.pos, s, 0.8, 5);
+        P.onShake?.(0.45);
+      });
+      return;
+    }
+    case 'grab': {
+      // A hook, a chain or a hand: drag the foe to you and hit it.
+      const t = p.target?.alive ? p.target : rt.nearestEnemy(P.center, sp.r ?? 10);
+      if (!t) return;
+      const toMe = P.pos.clone().sub(t.position).setY(0).normalize();
+      V.beam(() => P.center, () => t.center, s, (() => { const end = performance.now() + 300; return () => performance.now() < end; })(), 0.07);
+      hitOne(rt, disc, sp, t, amt, toMe);
+      rt.hit(t, 1, { poise: 260, dir: toMe, noVerdict: true, kit: true });
+      V.burst(t.center, s, 0.7, 3);
+      return;
+    }
     case 'spirit': {
       // A spectral familiar circles you and strikes the nearest foe every second.
       const life = (sp.t ?? 15) * P.mods.duration;
@@ -371,8 +451,14 @@ function text(disc: string, sp: Spec): SkillDef['text'] {
       case 'ward': what = `A barrier soaks up ${Math.round((sp.d ?? 40) * R(r))} damage for ${t(sp.t ?? 8)}.`; break;
       case 'heal': what = `Restores ${Math.round((sp.d ?? 30) * R(r))}% of your health over ${t(sp.t ?? 4)}.`; break;
       case 'spirit': what = `For ${t(sp.t ?? 15)} it strikes the nearest enemy every second for ${dmgText(disc, sp, r, 0.45)}.`; break;
+      case 'trap': what = `Set a trap that waits ${t(sp.t ?? 20)}; the first enemy to step on it springs it for ${d} across ${sp.r ?? 3} m.`; break;
+      case 'leap': what = `Leap up to 12 m onto the target spot and land for ${d} across ${sp.r ?? 3.5} m.`; break;
+      case 'grab': what = `Drag an enemy up to ${sp.r ?? 10} m away to you, hitting it for ${d}.`; break;
     }
-    return `${sp.say} ${what}${fx}`;
+    const res = FORGE_HOOKS.res?.(disc);
+    const eco = res ? `${sp.gain ? ` Gives ${sp.gain} ${res}.` : ''}${sp.spend ? (sp.spend === 'all' ? ` Spends all your ${res}: up to twice the damage at full.` : ` Spends ${sp.spend} ${res} for half again the damage, if you have it.`) : ''}` : '';
+    const fxText = sp.fx === 'mark' && FORGE_HOOKS.markName?.(disc) ? ` Lays ${FORGE_HOOKS.markName(disc)} on them.` : fx;
+    return `${sp.say} ${what}${fxText}${eco}`;
   };
 }
 
@@ -393,15 +479,27 @@ export function forge(disc: string, specs: Record<string, Spec>): Record<string,
       range: sp.k === 'chain' ? 18 : 22,
       text: text(disc, sp),
     };
+    // The class economy: spend before the first blow lands, gain when it's used.
+    const economy = (p: Pending) => {
+      if (p.n > 0 || (p as Pending & { paid?: boolean }).paid) return;
+      (p as Pending & { paid?: boolean }).paid = true;
+      if (sp.spend) p.k *= FORGE_HOOKS.spend?.(disc, sp.spend) ?? 1;
+      if (sp.gain) FORGE_HOOKS.gain?.(disc, sp.gain);
+    };
     if (action) {
       def.action = action;
       def.on = (rt, p, ev) => {
         if (!every && p.n > 0) return;
         void ev;
+        economy(p);
         fire(rt, disc, key, sp, p);
       };
     } else {
-      def.now = (rt, p) => (pl(rt).canAct ? fire(rt, disc, key, sp, p) : false);
+      def.now = (rt, p) => {
+        if (!pl(rt).canAct) return false;
+        economy(p);
+        return fire(rt, disc, key, sp, p);
+      };
     }
     out[key] = def;
   }
@@ -729,4 +827,4 @@ const SPECS: Record<string, Record<string, S>> = {
   },
 };
 
-export const FORGED_SKILLS: Record<string, SkillDef> = Object.assign({}, ...Object.entries(SPECS).map(([d, s]) => forge(d, s)));
+export const FORGED_SKILLS: Record<string, SkillDef> = Object.assign({}, ...Object.entries({ ...SPECS, ...ROSTER_SPECS }).map(([d, s]) => forge(d, s)));

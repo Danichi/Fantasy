@@ -446,6 +446,12 @@ export class Player {
   fieldAirJumps?: () => number;
   fieldGlide?: () => boolean;
   onAirJump?: () => void;
+  /** A Brawler fights with bare fists (paths/roster): set by main. */
+  canFightUnarmed?: () => boolean;
+  /** what a bare fist hits for */
+  fistDamage?: () => number;
+  /** a class's swimming (Tidecaller): multiplies swim speed */
+  fieldSwim?: () => number;
   private airJumps = 0;
   /** Height of the walkable surface (terrain, bridges, floors) under (x, z) near the player's feet. */
   private probeGround(x: number, z: number) {
@@ -731,7 +737,7 @@ export class Player {
         this.useOriginAbility();
         return;
       }
-      if (b.a === 'attack' && eq.mainWeapon) next = !this.grounded ? 'airAttack' : this.sprinting ? 'sprintAttack' : this.opener();
+      if (b.a === 'attack' && (eq.mainWeapon || this.canFightUnarmed?.())) next = !this.grounded ? 'airAttack' : this.sprinting ? 'sprintAttack' : this.opener();
       else if (b.a === 'offhand' && eq.dualWield) next = 'offslash1';
       else if (b.a === 'kick') next = shove();
       // A dodge is always a roll: the way you push, or the way you face (no little backstep on its own).
@@ -744,7 +750,7 @@ export class Player {
       const comboOpen = d.combo && a.t >= d.combo.from;
       // Hit-confirm: a blow that connected can be cancelled sooner; a whiff leaves you open longer.
       const cancelAt = d.cancel + (a.connected ? -HIT_CONFIRM : d.hit ? WHIFF_LAG : 0);
-      if (b.a === 'attack' && eq.mainWeapon && comboOpen) {
+      if (b.a === 'attack' && (eq.mainWeapon || this.canFightUnarmed?.()) && comboOpen) {
         const c = d.combo!;
         // A broken enemy in reach: the string ends in a finisher.
         const fin = this.finisherTarget();
@@ -1050,7 +1056,7 @@ export class Player {
       // Wading slows you down; deep water means swimming.
       const wade = waterDepthAt(this.pos.x, this.pos.z);
       if (wade > 0.25 && !(this.waterWalk > 0)) targetSpeed *= 0.5;
-      if (this.swimming) targetSpeed = (this.sprinting ? 3.6 : 2.3) * this.swimSpeedMul;
+      if (this.swimming) targetSpeed = (this.sprinting ? 3.6 : 2.3) * this.swimSpeedMul * (this.fieldSwim?.() ?? 1);
     }
     // Swimming: float with the chest at the waterline, tire, and drown if spent.
     // (At sea you float on the waves themselves.)
@@ -1599,7 +1605,9 @@ export class Player {
   private detectHits(a: ActiveAction, at: number) {
     if (!a.def.hit) return;
     const h = a.def.hit;
-    const sweep = a.def.sweep;
+    // Bare fists have no blade to trace: they hit by reach in front of you.
+    const fists = !this.equip.model(h.hand) && !!this.canFightUnarmed?.();
+    const sweep = a.def.sweep ?? (fists ? { reach: 1.7, arc: 0.35 } : undefined);
     const fin = a.def.id === 'finisher';
     const seg = sweep ? null : this.bladeSegment(h.hand);
     const prev = this.bladePrev[h.hand];
@@ -1611,7 +1619,7 @@ export class Player {
     if ((!seg && !sweep && !fin) || at < h.from || before > h.to) return;
     const from = prev ?? seg;
     const weapon = h.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
-    const base = weapon?.def.stats.damage ?? 10;
+    const base = weapon?.def.stats.damage ?? this.fistDamage?.() ?? 10;
     const b = new THREE.Vector3(), t = new THREE.Vector3();
     const fwd = this.forward;
     for (const tg of targets) {

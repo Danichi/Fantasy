@@ -1,4 +1,5 @@
 import type { NodeEffect } from './effects';
+import { ROSTER_ASC } from './roster';
 
 // Ascensions (docs/design/classes.md): at level 30 a combat or magic class
 // chooses one of two Ascensions, a specialisation that reshapes it. Each has
@@ -192,3 +193,6 @@ export const ASCENSIONS: Record<string, [AscensionDef, AscensionDef]> = {
     ] },
   ],
 };
+
+// The roster's classes (paths/roster): their Ascensions are made from their mechanics.
+Object.assign(ASCENSIONS, ROSTER_ASC);

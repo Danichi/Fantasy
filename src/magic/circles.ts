@@ -3,9 +3,9 @@ import * as THREE from 'three';
 // Procedural magic circles (runes drawn on a canvas) and expanding shockwave
 // rings. Both are additive, emissive-bright planes that fade over their life.
 
-export type Style = 'fire' | 'light' | 'gale' | 'wind' | 'frost' | 'steel' | 'shadow' | 'blood' | 'void' | 'nature';
+export type Style = 'fire' | 'light' | 'gale' | 'wind' | 'frost' | 'steel' | 'shadow' | 'blood' | 'void' | 'nature' | 'earth' | 'water' | 'storm';
 /** which rune figure each style draws: hexagram (fire) or eight-point star (light) */
-const FIGURE: Record<Style, 'fire' | 'light'> = { fire: 'fire', blood: 'fire', light: 'light', gale: 'light', wind: 'light', frost: 'light', steel: 'fire', shadow: 'fire', void: 'fire', nature: 'light' };
+const FIGURE: Record<Style, 'fire' | 'light'> = { fire: 'fire', blood: 'fire', light: 'light', gale: 'light', wind: 'light', frost: 'light', steel: 'fire', shadow: 'fire', void: 'fire', nature: 'light', earth: 'fire', water: 'light', storm: 'light' };
 
 function drawCircle(style: 'fire' | 'light') {
   const S = 512;
@@ -100,6 +100,9 @@ const COLORS: Record<Style, THREE.Color> = {
   blood: new THREE.Color(4.4, 0.2, 0.45),
   void: new THREE.Color(1.8, 0.15, 4.6),
   nature: new THREE.Color(0.9, 4.0, 0.45),
+  earth: new THREE.Color(3.2, 1.7, 0.5),
+  water: new THREE.Color(0.2, 2.6, 4.0),
+  storm: new THREE.Color(2.4, 2.4, 4.6),
 };
 
 export class MagicCircles {

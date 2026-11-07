@@ -151,7 +151,8 @@ import { SeamanshipPanel } from './ui/seamanshipPanel';
 import { buildIslandPorts } from './world/sea/islandPorts';
 import { GroundWindow } from './world/groundWindow';
 import { SkillsUI } from './ui/skills';
-import { DISC } from './paths/data';
+import { DISC, DISCIPLINES } from './paths/data';
+import { ROSTER_HOOKS } from './paths/roster/engine';
 import { mentorOptions } from './paths/mentors';
 import { SkillRuntime } from './paths/skills';
 import { skillIcon } from './ui/skillTree';
@@ -1538,13 +1539,18 @@ async function boot() {
   bosses.fromJSON(saveData?.world?.bosses);
   if (TEST_MODE) bosses.enabled = false;
   // ---- Field abilities (paths/fieldAbilities.ts): Wind Step, Glide, Lantern Soul ----
-  player.fieldAirJumps = () => (player.paths.learned('gale') ? 1 : 0);
-  player.fieldGlide = () => player.paths.learned('windcaller');
+  // (and the roster's classes: paths/roster, `field` in each class)
+  player.fieldAirJumps = () => (player.paths.learned('gale') || skillRt.roster.field('airJump') ? 1 : 0);
+  player.fieldGlide = () => player.paths.learned('windcaller') || skillRt.roster.field('glide');
+  player.fieldSwim = () => (skillRt.roster.field('swim') ? 1.6 : 1);
+  // A Brawler fights bare-handed, and a fist grows heavier with the class.
+  player.canFightUnarmed = () => skillRt.roster.weight('brawler') > 0 || quests.status('trial-brawler') === 'active';
+  player.fistDamage = () => (player.paths.learned('brawler') ? 14 + player.paths.level('brawler') * 0.6 : 10);
   player.onAirJump = () => fx.add.spawn({ pos: player.pos.clone().setY(player.pos.y + 0.2), spread: 0.6, count: 14, life: [0.2, 0.45], size: [0.16, 0.02], color: 0xe8fffb, color2: 0x6fd6c6, drag: 3 });
   const lantern = { light: null as THREE.PointLight | null };
   const lanternSoul = () => {
     const dark = realm.mode === 'dungeon' || story.darkness > 0.5 || (realm.mode === 'overworld' && time.state.night > 0.55);
-    const want = player.paths.learned('lightbinder') && dark && !player.dead;
+    const want = (player.paths.learned('lightbinder') || skillRt.roster.field('light')) && dark && !player.dead;
     if (want && !lantern.light) lantern.light = spells.borrowLight(lantern);
     if (!want && lantern.light) (spells.returnLight(lantern.light), (lantern.light = null));
     if (lantern.light) {
@@ -1880,6 +1886,15 @@ async function boot() {
     const prev = folkServices.get(id);
     folkServices.set(id, (show, back) => [...(prev?.(show, back) ?? []), ...herbalism.serviceOptions(id, show, back)]);
   }
+  // Every other mentor out in the world teaches their classes too (the roster's mentors among them).
+  {
+    const already = new Set(['bruni', 'archmage', 'aldous', 'ilse', 'wenna']);
+    const ids = new Set(DISCIPLINES.filter((d) => d.mentorNpc && !already.has(d.mentorNpc)).map((d) => d.mentorNpc!));
+    for (const id of ids) {
+      const prev = folkServices.get(id);
+      folkServices.set(id, (show, back) => [...(prev?.(show, back) ?? []), ...mentorOptions(player.paths, { id }, (t) => show(t, [{ label: 'Go on.', run: back }]), (m) => hud.toast(m), trials)]);
+    }
+  }
   // ---- The main story: the Fifth Summon (src/story) ----
   const main = setupMainStory({
     scene: r.scene, camera: r.camera, cam, input, dialogue, player, fx, bolts: encounters.bolts, quests, flags: worldFlags,
@@ -2053,7 +2068,9 @@ async function boot() {
     }
   };
   // Locks on chests, caches and hatches: picked with lockpicks, or forced with something heavy.
-  const locks = new Locks(player, worldFlags, (m) => hud.toast(m), () => player.paths.level('dungeoneering'));
+  // (a Rogue's light fingers count as fifteen levels of Dungeoneering at the lock)
+  const locks = new Locks(player, worldFlags, (m) => hud.toast(m), () => player.paths.level('dungeoneering') + (skillRt.roster.field('locks') ? 15 : 0));
+  locks.forceAny = () => skillRt.roster.field('force');
   GEAR.locks = locks;
   locks.onToggle = (open) => {
     input.uiMode = open || inv.open || skills.open || mapUI.open || dialogue.open || shopUI.open;
@@ -2073,6 +2090,11 @@ async function boot() {
     },
   });
   gearRt.specials = specials;
+  // The roster's classes (paths/roster/engine.ts): summoned allies, trial counts, the blood of your people.
+  ROSTER_HOOKS.summon = (kind, n, sec, dmg) => void specials.allies.summon(kind, n, sec, Math.round(dmg));
+  ROSTER_HOOKS.signal = (id) => quests.signal(id);
+  ROSTER_HOOKS.toast = (m) => hud.toast(m);
+  ROSTER_HOOKS.origin = () => player.prog.origin;
   // The Golden Expanse wears you down: heat, thirst, the sandstorm.
   gearRt.exposure = new Exposure({
     player, arms: arms.runtime, toast: (m) => hud.toast(m), region: hereRegion, hour: () => time.hour,

@@ -189,7 +189,32 @@ export class Paths {
   canTeach(id: string) {
     const d = DISC[id];
     if (!d || this.learned(id) || d.fam === 'legacy') return false;
+    if (d.origin && this.prog.origin !== d.origin) return false;
+    if (d.gateFrom && !this.gateOpen(id)) return false;
+    if (d.also && this.level(d.also[0]) < d.also[1]) return false;
     return !d.requires || this.level(d.requires[0]) >= d.requires[1];
+  }
+  /** What still stands between you and a class, in words (null: nothing). */
+  teachWhyNot(id: string): string | null {
+    const d = DISC[id];
+    if (!d) return 'No such class';
+    if (this.learned(id)) return null;
+    if (d.origin && this.prog.origin !== d.origin) return `Only the ${d.origin === 'beastfolk' ? 'beastfolk' : d.origin === 'dwarf' ? 'dwarves' : d.origin === 'elf' ? 'elves' : d.origin === 'demon' ? 'demonkind' : 'dragonkin'} can learn it`;
+    if (d.gateFrom && !this.gateOpen(id)) return `Open its gateway in ${DISC[d.gateFrom]?.name ?? d.gateFrom}'s tree first`;
+    const need = [d.requires, d.also].filter((r): r is [string, number] => !!r && this.level(r[0]) < r[1]);
+    if (need.length) return `Needs ${need.map(([r, lv]) => `${DISC[r]?.name ?? r} at level ${lv}`).join(' and ')}`;
+    return null;
+  }
+  /** A hidden class's gateway capstone has been opened. */
+  gateOpen(id: string) {
+    const d = DISC[id];
+    if (!d?.gateFrom) return false;
+    const host = DISC[d.gateFrom], t = treeOf(host);
+    if (!t) return false;
+    return Object.keys(this.nodes[d.gateFrom] ?? {}).some((nid) => {
+      const n = t.map[nid];
+      return n?.type === 'cap' && host.branches?.[n.branch]?.gate === id;
+    });
   }
   teach(id: string) {
     if (!this.canTeach(id)) return false;
@@ -378,8 +403,9 @@ export class Paths {
   learn(id: string, n: TreeNode, pick = 0) {
     if (!this.canLearn(id, n)) return false;
     this.nodes[id][n.id] = n.type === 'choice' ? { r: 1, pick } : { r: 1 };
+    // A gateway no longer teaches at once: it shows you where the hidden teacher waits.
     const g = this.gate(id, n);
-    if (g && !this.learned(g)) this.teach(g);
+    if (g && !this.learned(g)) events.emit('gatewayOpened', { id: g });
     events.emit('pathsChanged', {});
     return true;
   }
