@@ -6,6 +6,7 @@ import type { Player } from '../player/player';
 import { targets } from '../combat/targets';
 import { events } from '../core/events';
 import { iconFor, wideIconFor } from './icons';
+import { ArmourBar } from './armourBar';
 
 // Heads-up display: vitals (top right); bottom left, the two big hand frames
 // (main / off hand) beside a bar that Tab flips between quick items (keys 1-4)
@@ -33,6 +34,7 @@ interface BarEls {
 export class HUD {
   readonly root: HTMLElement;
   private bars: Record<'hp' | 'st' | 'mp', BarEls>;
+  private armourBar: ArmourBar;
   private slots: HTMLDivElement[] = [];
   private hands: Record<'main' | 'off', HTMLDivElement>;
   private barTitle: HTMLDivElement;
@@ -51,6 +53,8 @@ export class HUD {
   private vignette: HTMLDivElement;
   private death: HTMLDivElement;
   private tmp = new THREE.Vector3();
+  private tmp2 = new THREE.Vector3();
+  private ehpSeen = new Set<number>();
   private hotbarDirty = true;
   private xpFill!: HTMLElement;
   private lvEl!: HTMLElement;
@@ -66,6 +70,8 @@ export class HUD {
   private questEl: HTMLDivElement;
   /** side quests shown under the main quest (set by the quest UI) */
   sideQuestHtml = '';
+  private questHtmlShown: string | null = null;
+  private xpShown = '';
   onSlotDrop?: (mode: 'items' | 'moves', slot: number, ref: number | string) => void;
   /** class skills on the moves bar: how to draw one, and its live cooldown (0..1) */
   skillSlot?: (ref: string) => { svg: string; name: string; cost: string; cd: number; ready: boolean } | null;
@@ -87,6 +93,8 @@ export class HUD {
       return { root, fill, trail, num, trailV: 1, trailHold: 0, last: 1 };
     };
     this.bars = { hp: mk('hp', 'HEALTH'), st: mk('st', 'STAMINA'), mp: mk('mp', 'MANA') };
+    // Armour: a grey plate over the red (ui/armourBar.ts).
+    this.armourBar = new ArmourBar(this.bars.hp.root, player);
     const xpRow = el('div', 'xprow', vit);
     xpRow.innerHTML = '<span class="lv">LV 1</span><div class="xpbar" title="Unspent XP towards your active class\'s next level"><i></i></div><span class="xpv">0</span><span class="gold">0</span>';
     this.xpFill = xpRow.querySelector('.xpbar i')!;
@@ -370,6 +378,7 @@ export class HUD {
     const p = this.player;
     // Bar length grows with the stat's maximum, Souls-style.
     this.updateBar(this.bars.hp, p.hp, p.maxHp, dt, 120 + p.maxHp * 1.6);
+    this.armourBar.update(dt);
     this.updateBar(this.bars.st, p.stamina, p.maxStamina, dt, 110 + p.maxStamina * 1.5);
     this.updateBar(this.bars.mp, p.mana, p.maxMana, dt, 100 + p.maxMana * 1.5);
     if (this.hotbarDirty) {
@@ -384,7 +393,11 @@ export class HUD {
         const s = this.slots[i];
         const cd = s?.querySelector<HTMLElement>('.cd');
         if (!sk || !cd) return;
-        cd.style.background = sk.cd > 0 ? `conic-gradient(rgba(0,0,0,0.72) ${sk.cd * 360}deg, transparent 0)` : '';
+        const bg = sk.cd > 0 ? `conic-gradient(rgba(0,0,0,0.72) ${Math.round(sk.cd * 360)}deg, transparent 0)` : '';
+        if (cd.dataset.bg !== bg) {
+          cd.dataset.bg = bg;
+          cd.style.background = bg;
+        }
         s.classList.toggle('dim', !sk.ready);
       });
     }
@@ -409,16 +422,22 @@ export class HUD {
     const pr = p.prog;
     // The tracked quest (the old "study the three schools" starter quest is gone:
     // classes are learned from mentors and levelled on the Skills screen).
-    this.questEl.innerHTML = this.sideQuestHtml;
+    // (Written only when something changed: re-parsing this HTML and re-setting
+    // the texts every frame invalidated layout for the whole HUD each frame.)
+    if (this.questHtmlShown !== this.sideQuestHtml) this.questEl.innerHTML = this.questHtmlShown = this.sideQuestHtml;
     // XP is spent, not auto-levelled: the bar fills towards the active class's next level.
     const xpFor = p.paths.active || DISCIPLINES.find((d) => p.paths.learned(d.id))?.id;
     const need = xpFor ? p.paths.nextCost(xpFor) : 150;
     const ready = pr.xp >= need;
-    this.xpFill.style.transform = `scaleX(${Math.min(1, pr.xp / need)})`;
-    this.xpBar.classList.toggle('ready', ready);
-    this.xpVal.textContent = `${pr.xp.toLocaleString()} XP`;
-    this.lvEl.textContent = `LV ${pr.level}`;
-    this.goldEl.textContent = `${pr.gold}`;
+    const xpKey = `${pr.xp}|${need}|${pr.level}|${pr.gold}`;
+    if (xpKey !== this.xpShown) {
+      this.xpShown = xpKey;
+      this.xpFill.style.transform = `scaleX(${Math.min(1, pr.xp / need)})`;
+      this.xpBar.classList.toggle('ready', ready);
+      this.xpVal.textContent = `${pr.xp.toLocaleString()} XP`;
+      this.lvEl.textContent = `LV ${pr.level}`;
+      this.goldEl.textContent = `${pr.gold}`;
+    }
     if (this.boss) {
       const f = Math.max(0, this.boss.hp / this.boss.maxHp);
       this.bossTrail = Math.max(f, this.bossTrail - dt * 0.35);
@@ -458,10 +477,15 @@ export class HUD {
     } else this.reticle.style.display = 'none';
 
     // Enemy health bars: shown for a while after damage, or while locked.
-    const seen = new Set<number>();
+    // (Bars are built the first time a foe is hurt or locked, and only shown
+    // bars are projected and styled: every creature in the world used to get
+    // its own bar elements, re-positioned each frame while hidden.)
+    const seen = this.ehpSeen;
+    seen.clear();
     for (const t of targets) {
       seen.add(t.id);
       let h = this.ehp.get(t.id);
+      if (!h && !(t.alive && (t.id === lockTargetId || t.hp < t.maxHp * 0.999))) continue;
       if (!h) {
         const e = el('div', 'ehp', this.root);
         const b = el('b', '', e);
@@ -481,9 +505,10 @@ export class HUD {
       h.shown -= dt;
       h.trail = Math.max(frac, h.trail - dt * 0.5);
       const visible = t.alive && (h.shown > 0 || t.id === lockTargetId) && frac < 1.001;
-      const s = this.project(t.center.clone().add(new THREE.Vector3(0, t.radius + 0.45, 0)));
-      h.e.style.display = visible && s.on ? 'block' : 'none';
-      if (visible && s.on) {
+      const s = visible ? this.project(this.tmp2.copy(t.center).setY(this.tmp2.y + t.radius + 0.45)) : null;
+      const show = !!s?.on;
+      if (h.e.style.display !== (show ? 'block' : 'none')) h.e.style.display = show ? 'block' : 'none';
+      if (s && show) {
         h.e.style.left = `${s.x}px`;
         h.e.style.top = `${s.y}px`;
         h.i.style.width = `${frac * 100}%`;

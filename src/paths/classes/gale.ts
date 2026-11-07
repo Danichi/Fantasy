@@ -89,7 +89,7 @@ export const GALE_SKILLS: Record<string, SkillDef> = {
       P.yaw = Math.atan2(-dir.x, -dir.z); // turn to face back the way you came
       rt.hit(t, rt.weapon() * 1.4 * R(p.rank), { poise: 90, source: 'melee', dir });
       rt.vfx.slash(from.clone().lerp(P.center, 0.5), Math.atan2(dir.x, dir.z), 2.4, 'frost', 0.4, 0.1);
-      rt.vfx.fx.add.spawn({ pos: from, vel: dir.clone().multiplyScalar(14), spread: 1, count: 24, life: [0.15, 0.3], size: [0.12, 0.01], color: 0xeef6ff, color2: 0x5a9cff, drag: 4 });
+      rt.vfx.fx.add.spawn({ pos: from, vel: dir.clone().multiplyScalar(14), spread: 1, count: 24, life: [0.15, 0.3], size: [0.12, 0.01], color: 0xeef6ff, color2: 0x1e8cff, drag: 4 });
       P.onHitStop?.(0.08);
     },
   },

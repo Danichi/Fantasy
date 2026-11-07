@@ -23,6 +23,7 @@ import { waveAt } from '../world/sea/seaState';
 import { Progression } from '../progression/progression';
 import { Paths } from '../paths/paths';
 import { baseMods, type CombatMods } from '../combat/mods';
+import { ARMOUR, armourBlow, armourCut, maxArmourOf } from './armour';
 
 /** The enemy a blow most likely came from (attacks that don't name their attacker). */
 function nearestAttacker(from: THREE.Vector3): Target | undefined {
@@ -164,6 +165,27 @@ export class Player {
   hp = 120;
   stamina = 100;
   mana = 80;
+  /** The armour pool laid over health (see player/armour.ts): worn down by blows, mends out of combat. */
+  armour = 0;
+  /** seconds since a blow last wore the armour */
+  armourIdle = 99;
+  /** the pool's size last step: armour you put on arrives whole */
+  private armourMaxSeen = 0;
+  get maxArmour() {
+    return maxArmourOf(this.equip?.armorValue ?? 0);
+  }
+  /** The share of a blow your armour turns aside right now (0 when it is broken). */
+  get armourCutNow() {
+    const max = this.maxArmour;
+    if (this.armour <= 0 || max <= 0) return 0;
+    return armourCut(this.equip.armorValue) * (ARMOUR.floor + (1 - ARMOUR.floor) * Math.min(1, this.armour / max));
+  }
+  /** Rest, respawn, load: the armour is whole again. */
+  restoreArmour(frac = 1) {
+    const max = this.maxArmour;
+    this.armourMaxSeen = max;
+    this.armour = Math.min(max, this.armour + max * frac);
+  }
   readonly prog = new Progression();
   /** disciplines, attributes and the active combat class */
   readonly paths = new Paths(this.prog);
@@ -1719,8 +1741,16 @@ export class Player {
     // Unblockables and grabs go straight through a guard or a parry: dodge them.
     if (!answerable && (this.blocking || a?.def.parry)) events.emit('unblockable', { kind, from: att.from.clone() });
     else if (this.blocking && this.equip.hasShield) events.emit('guardMissed', { from: att.from.clone() });
-    const armor = this.equip.armorValue;
-    const dmg = att.damage * (100 / (100 + armor * 5)) * (att.burn ? 1 - this.fireResist : 1);
+    // Armour takes the blow first (player/armour.ts): while it holds, part of the hit is
+    // turned aside and the plates wear; once it breaks, the whole blow lands.
+    const raw = att.damage * (att.burn ? 1 - this.fireResist : 1);
+    const crushing = kind === 'heavy' || kind === 'unblockable' || kind === 'grab' || att.poise >= 70;
+    const ab = armourBlow(this.armour, this.maxArmour, this.equip.armorValue, { damage: raw, projectile: att.projectile, elemental: !!att.burn, crushing });
+    if (ab.wear > 0 && !this.invulnerable) {
+      this.armour = ab.broke ? 0 : Math.max(0, this.armour - ab.wear);
+      this.armourIdle = 0;
+    }
+    const dmg = ab.toHealth;
     this.applyDamage(dmg);
     if (att.poison) this.poison = { dps: Math.max(att.poison, this.poison.left > 0 ? this.poison.dps : 0), left: 4 };
     if (att.web) this.webbed = Math.max(this.webbed, att.web);
@@ -1746,7 +1776,7 @@ export class Player {
       this.vel.y = Math.max(this.vel.y, att.knock * 0.4);
     }
     // The body gives with the blow, away from where it came from.
-    if (!this.dead) this.flinch = { t: 0, x: toAtt.x, z: toAtt.z, amt: clamp(dmg / 25, 0.45, 1) };
+    if (!this.dead) this.flinch = { t: 0, x: toAtt.x, z: toAtt.z, amt: clamp(raw / 30, 0.45, 1) };
     this.onShake?.(0.3);
     return 'hit';
   }
@@ -1781,6 +1811,7 @@ export class Player {
     this.hp = this.maxHp;
     this.stamina = this.maxStamina;
     this.mana = this.maxMana;
+    this.restoreArmour();
     this.burn.left = 0;
     this.poison.left = 0;
     this.webbed = 0;
@@ -1797,6 +1828,14 @@ export class Player {
     else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 16 : 46) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen + this.mods.staminaRegen) * dt);
     this.mana = Math.min(this.maxMana, this.mana + MANA_REGEN * (1 + this.equip.bonus('manaRegen') + this.paths.manaRegen + this.mods.manaRegen) * dt);
     this.hp = Math.min(this.hp, this.maxHp);
+    // Armour: what you put on arrives whole, what you take off goes with it; out of
+    // the fight a while, the straps and plates settle back into place.
+    const amax = this.maxArmour;
+    if (amax > this.armourMaxSeen) this.armour += amax - this.armourMaxSeen;
+    this.armourMaxSeen = amax;
+    this.armourIdle += dt;
+    if (this.armourIdle > ARMOUR.regenDelay && !this.dead) this.armour += amax * ARMOUR.regenRate * dt;
+    this.armour = Math.max(0, Math.min(amax, this.armour));
     if (this.hot.left > 0 && !this.dead) {
       this.hot.left -= dt;
       const want = this.hp + this.hot.rate * dt;
@@ -1822,6 +1861,8 @@ export class Player {
     if (st.heal) this.hot = { rate: (st.heal * this.paths.healPower) / 1.2, left: 1.2 };
     if (st.restoreMana) this.mana = Math.min(this.maxMana, this.mana + st.restoreMana);
     if (st.restoreStamina) this.stamina = Math.min(this.maxStamina, this.stamina + st.restoreStamina);
+    // A Repair Kit mends half your armour on the spot.
+    if (it.def.id === 'repairKit') this.restoreArmour(0.5);
     if (st.waterBreathing) {
       this.waterBreathT = st.waterBreathing;
       this.breath = 1;

@@ -4,6 +4,7 @@ import { REAGENT_MODELS } from '../../items/reagents';
 import { ITEMS } from '../../items/itemDefs';
 import type { FX } from '../../fx/particles';
 import { gatherMods, bonusYield } from './gatherMods';
+import { addDropGlow, removeDropGlow, rarityOf } from '../dropGlow';
 
 // Beast reagents: wolves leave fangs, slimes gel, venomous things their sacs,
 // the restless dead their bone dust and fire creatures their ember ash. A
@@ -64,6 +65,14 @@ interface Drop {
   pos: THREE.Vector3;
   t: number;
   pulse: number;
+  /** still tumbling out of the corpse */
+  vel: THREE.Vector3 | null;
+  /** where it is in the air while falling */
+  air: THREE.Vector3;
+  /** kill loot (the catalog's drops), not a reagent: picking it up isn't gathering */
+  loot?: boolean;
+  /** never lost: if it's left lying (or cleared), it goes into the bag anyway (a boss's unique) */
+  keep?: boolean;
 }
 
 const LIFE = 150; // seconds a drop lies before it is lost
@@ -107,21 +116,37 @@ export class ReagentDrops {
   }
 
   /** Lay a reagent on the ground (also usable by other systems: chests, quests). */
-  spawn(item: string, qty: number, at: THREE.Vector3) {
+  spawn(item: string, qty: number, at: THREE.Vector3, opts: { loot?: boolean; keep?: boolean } = {}): boolean {
     const build = REAGENT_MODELS[item] ?? ITEMS[item]?.build;
-    if (!build) return;
-    const obj = build();
-    obj.scale.setScalar(1.6);
+    if (!build) return false;
+    let obj: THREE.Object3D;
+    try {
+      obj = build();
+    } catch {
+      return false;
+    }
+    if (REAGENT_MODELS[item]) obj.scale.setScalar(1.6);
+    else {
+      // Gear and parts come at their own size (a greatsword is long): fit them to a pickup's size.
+      const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
+      const m = Math.max(size.x, size.y, size.z);
+      obj.scale.setScalar(m > 0 && isFinite(m) ? THREE.MathUtils.clamp(0.6 / m, 0.3, 2.5) : 1);
+    }
     const a = Math.random() * Math.PI * 2, d = 0.3 + Math.random() * 0.5;
     const pos = new THREE.Vector3(at.x + Math.cos(a) * d, 0, at.z + Math.sin(a) * d);
     pos.y = this.h.groundAt(pos.x, pos.z);
     // A dungeon floor may sit far above or below the overworld ground: trust the corpse then.
     if (Math.abs(pos.y - at.y) > 3) pos.y = at.y - 0.6;
-    obj.position.copy(pos);
     obj.traverse((o) => ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
+    // It tumbles out of the corpse in a little arc and lands where it lies, glowing its rarity.
+    const air = new THREE.Vector3(at.x, Math.max(pos.y, at.y) + 0.6, at.z);
+    const vel = new THREE.Vector3((pos.x - at.x) * 1.6, 3.2 + Math.random() * 1.2, (pos.z - at.z) * 1.6);
+    obj.position.copy(air);
+    addDropGlow(obj, rarityOf(item), 0.06);
     this.h.scene.add(obj);
-    this.drops.push({ item, qty, obj, pos, t: 0, pulse: Math.random() * 6 });
+    this.drops.push({ item, qty, obj, pos, t: 0, pulse: Math.random() * 6, vel, air, loot: opts.loot, keep: opts.keep });
     this.h.fx.add.spawn({ pos: pos.clone().setY(pos.y + 0.3), spread: 1.4, count: 12, life: [0.3, 0.7], size: [0.06, 0.01], color: 0xfff0c0, color2: 0x9ad06a, upBias: 1, drag: 2 });
+    return true;
   }
 
   update(dt: number, player: THREE.Vector3) {
@@ -129,6 +154,26 @@ export class ReagentDrops {
       const d = this.drops[i];
       d.t += dt;
       d.pulse += dt;
+      if (d.vel) {
+        // Falling: arc out, bounce once, settle.
+        d.vel.y -= 14 * dt;
+        d.air.addScaledVector(d.vel, dt);
+        const floor = d.pos.y + 0.12;
+        if (d.air.y <= floor && d.vel.y < 0) {
+          d.air.y = floor;
+          if (d.vel.y < -2.2) d.vel.set(d.vel.x * 0.35, -d.vel.y * 0.3, d.vel.z * 0.35);
+          else {
+            d.vel = null;
+            d.pos.x = d.air.x;
+            d.pos.z = d.air.z;
+          }
+        }
+        d.obj.position.copy(d.air);
+        d.obj.rotation.y += dt * 6;
+        d.obj.rotation.x += dt * 5;
+        continue;
+      }
+      d.obj.rotation.x *= Math.max(0, 1 - dt * 8);
       // Bob and turn so it catches the eye; blink out over its last seconds.
       d.obj.position.y = d.pos.y + 0.12 + Math.sin(d.pulse * 2.4) * 0.05;
       d.obj.rotation.y += dt * 1.2;
@@ -139,14 +184,18 @@ export class ReagentDrops {
         this.collect(i);
         continue;
       }
-      if (d.t > LIFE) this.remove(i);
+      if (d.t > LIFE) {
+        if (d.keep) this.h.give(d.item, d.qty);
+        this.remove(i);
+      }
     }
   }
 
   private collect(i: number) {
     const d = this.drops[i];
     this.h.give(d.item, d.qty);
-    events.emit('herbGathered', { id: d.item, qty: d.qty, at: d.pos.clone(), source: 'drop' });
+    if (!d.loot) events.emit('herbGathered', { id: d.item, qty: d.qty, at: d.pos.clone(), source: 'drop' });
+    else this.h.toast?.(`Picked up ${ITEMS[d.item]?.name ?? d.item}${d.qty > 1 ? ` ×${d.qty}` : ''}`);
     this.h.fx.add.spawn({ pos: d.obj.position.clone(), spread: 1.6, count: 14, life: [0.3, 0.6], size: [0.06, 0.01], color: 0xfff4c8, color2: 0xc8a040, upBias: 1.4, drag: 2 });
     this.remove(i);
   }
@@ -154,6 +203,7 @@ export class ReagentDrops {
   private remove(i: number) {
     const d = this.drops[i];
     this.h.scene.remove(d.obj);
+    removeDropGlow(d.obj); // shared glow meshes: never disposed
     d.obj.traverse((o) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
@@ -170,7 +220,11 @@ export class ReagentDrops {
 
   /** Clear every drop (leaving a dungeon, loading a save). */
   clear() {
-    for (let i = this.drops.length - 1; i >= 0; i--) this.remove(i);
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i];
+      if (d.keep) this.h.give(d.item, d.qty);
+      this.remove(i);
+    }
   }
 
   dispose() {

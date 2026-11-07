@@ -2,13 +2,41 @@ import * as THREE from 'three';
 import type { QuestDef, QuestLog } from '../quests/questLog';
 import type { HUD } from './hud';
 import { heightAt } from '../world/terrainHeight';
+import { ITEMS } from '../items/itemDefs';
+import { iconFor } from './icons';
+import './journal.css';
 
 // Quest presentation (World Expansion §46): side quests under the main quest
 // in the HUD tracker, a journal (J) with active and completed quests, gold
 // ❗ / ❓ markers over the heads of NPCs with something for you, and a compass
 // strip at the top of the screen pointing to the tracked quest's next step.
+// The journal is shelved (Main Story / Side Quests / Contracts / Completed):
+// a card per quest with its progress, and a page that leads with what to do
+// now and what it pays; the summary and the stage-by-stage log fold away.
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+type Shelf = 'main' | 'side' | 'contract' | 'done';
+const svg = (body: string) => `<svg viewBox="0 0 32 32" aria-hidden="true">${body}</svg>`;
+/** The crest on each shelf's tab, card and page. */
+const CREST: Record<Shelf | 'story', string> = {
+  // a sun-crown
+  main: svg('<circle cx="16" cy="18" r="6.5"/><path d="M16 3l2 6h-4zM5 9l5 4-3 2zM27 9l-5 4 3 2zM3 20h6v2H3zM23 20h6v2h-6zM8 27h16v2H8z"/>'),
+  // a scroll
+  side: svg('<path d="M8 5h15a4 4 0 0 1 0 8h-2v12a4 4 0 0 1-4 4H8a4 4 0 0 1 0-8h2V9a4 4 0 0 0-2-4z"/><path d="M13 13h6M13 17h6M13 21h4" class="ln"/>'),
+  // a guild shield
+  contract: svg('<path d="M16 3l11 4v8c0 7-5 12-11 14C10 27 5 22 5 15V7z"/><path d="M16 9v14M10 14h12" class="ln"/>'),
+  // a wax seal with a tick
+  done: svg('<circle cx="16" cy="16" r="12"/><path d="M10 16l4 4 8-9" class="ln"/>'),
+  // an open book
+  story: svg('<path d="M4 7c4-1.5 8-1 12 1.5C20 6 24 5.5 28 7v18c-4-1.5-8-1-12 1.5C12 24 8 23.5 4 25z"/><path d="M16 8.5v18" class="ln"/>'),
+};
+const EMPTY: Record<Shelf, string> = {
+  main: 'The story will find you.',
+  side: 'No side quests. Townsfolk with a gold ❗ over their heads have work for you.',
+  contract: 'No guild contracts. The Adventurer\'s Guild board has them.',
+  done: 'Nothing finished yet.',
+};
 
 export class QuestUI {
   open = false;
@@ -33,6 +61,11 @@ export class QuestUI {
   storyRecap?: () => string;
   /** "Show on map" in the journal */
   onShowOnMap?: (x: number, z: number) => void;
+  /** an NPC id's name (the quest giver on cards and pages) */
+  giverName?: (id: string) => string | undefined;
+  /** the journal's shelf, and whether the player picked it (else it follows the selection) */
+  private cat: Shelf = 'main';
+  private catPicked = false;
 
   constructor(
     private quests: QuestLog,
@@ -67,12 +100,24 @@ export class QuestUI {
     this.wp.innerHTML = '<i class="wp-arrow"></i><b>◆</b><span></span>';
     root.appendChild(this.wp);
     this.journal.addEventListener('click', (e) => {
-      const t = e.target as HTMLElement;
-      const pick = t.closest('[data-quest]') as HTMLElement | null;
+      const t0 = e.target as HTMLElement;
+      const cat = t0.closest('[data-cat]') as HTMLElement | null;
+      if (cat) {
+        this.cat = cat.dataset.cat as Shelf;
+        this.catPicked = true;
+        // Show the first quest on that shelf.
+        const first = this.cat === 'done' ? this.quests.completed().slice(-1)[0] : this.quests.active().find((q) => (this.cat === 'main' ? q.main : this.cat === 'contract' ? q.contract && !q.main : !q.main && !q.contract));
+        this.selected = first?.id ?? (this.cat === 'main' && this.storyRecap ? '__story' : null);
+        this.render();
+        return;
+      }
+      const pick = t0.closest('[data-quest]') as HTMLElement | null;
       if (pick) {
         this.selected = pick.dataset.quest!;
         this.render();
       }
+      // (Buttons hold an icon glyph; act on the button, not the glyph clicked.)
+      const t = (t0.closest('[data-track],[data-map],[data-close]') as HTMLElement | null) ?? t0;
       if (t.dataset.track) {
         this.quests.tracked = t.dataset.track;
         this.dirty = true;
@@ -139,40 +184,130 @@ export class QuestUI {
     this.journal.classList.toggle('hidden', !open);
     if (open) {
       this.selected ??= this.quests.tracked ?? this.quests.active()[0]?.id ?? this.quests.completed()[0]?.id ?? null;
+      this.catPicked = false; // open on the shelf of what's selected
       this.render();
     }
     this.onToggle?.(open);
   }
 
+  /** Which shelf of the journal a quest sits on. */
+  private catOf(q: QuestDef): 'main' | 'side' | 'contract' {
+    return q.main ? 'main' : q.contract ? 'contract' : 'side';
+  }
+
+  /** How far along a quest is, 0..1: its stages, and the objectives of the current one. */
+  private progressOf(q: QuestDef) {
+    const st = this.quests.state[q.id];
+    if (!st) return 0;
+    if (st.status === 'done') return 1;
+    const lines = this.quests.lines(q.id).filter(([t]) => !t.startsWith('Optional: '));
+    const inStage = lines.length ? lines.reduce((a, [, p, n]) => a + Math.min(1, p / Math.max(1, n)), 0) / lines.length : 0;
+    return Math.min(1, (st.stage + inStage) / Math.max(1, q.stages.length));
+  }
+
+  private regionName(r: string) {
+    return r === 'cresha' ? 'Elder Glen' : r;
+  }
+
   private render() {
     const active = this.quests.active();
     const done = this.quests.completed();
-    const item = (id: string, title: string, sub: string, cls: string) =>
-      `<button class="j-item ${cls} ${this.selected === id ? 'sel' : ''}" data-quest="${id}"><b>${esc(title)}</b><small>${esc(sub)}</small></button>`;
-    const list =
-      (this.storyRecap ? `<button class="j-item ${this.selected === '__story' ? 'sel' : ''}" data-quest="__story"><b>The Story So Far</b><small>Everything that has happened to you</small></button>` : '') +
-      `<div class="j-group">ACTIVE · ${active.length}</div>` +
-      (active.length ? active.map((q) => item(q.id, q.title, this.quests.note(q, this.quests.state[q.id].stage), this.quests.tracked === q.id ? 'tracked' : '')).join('') : '<p class="j-empty">No active quests. Townsfolk with a gold ❗ over their heads have work for you.</p>') +
-      `<div class="j-group">COMPLETED · ${done.length}</div>` +
-      done.map((q) => item(q.id, q.title, 'Complete', 'done')).join('');
-    let detail = '<p class="j-empty">Select a quest.</p>';
-    if (this.selected === '__story' && this.storyRecap) detail = this.storyRecap();
-    const q = this.selected && this.selected !== '__story' ? this.quests.defs.get(this.selected) : null;
-    if (q) {
+    // Open on the shelf of whatever's selected.
+    const selQ = this.selected && this.selected !== '__story' ? this.quests.defs.get(this.selected) ?? null : null;
+    if (!this.catPicked && selQ) this.cat = this.quests.state[selQ.id]?.status === 'done' ? 'done' : this.catOf(selQ);
+    this.catPicked = true;
+    const shelves = {
+      main: active.filter((q) => q.main),
+      side: active.filter((q) => !q.main && !q.contract),
+      contract: active.filter((q) => q.contract),
+      done: done.slice().reverse(),
+    };
+    const tabs = ([['main', 'Main Story'], ['side', 'Side Quests'], ['contract', 'Contracts'], ['done', 'Completed']] as const)
+      .map(([k, label]) => `<button class="jq-tab cat-${k} ${this.cat === k ? 'on' : ''}" data-cat="${k}">${CREST[k]}<span>${label}</span><em>${shelves[k].length}</em></button>`).join('');
+    const card = (q: QuestDef) => {
       const st = this.quests.state[q.id];
-      const stages = st ? q.stages.slice(0, st.status === 'done' ? q.stages.length : st.stage + 1) : [];
-      const lines = this.quests.lines(q.id);
-      detail =
-        `<h2>${esc(q.title)}</h2><div class="j-region">${st?.status === 'done' ? 'COMPLETED' : 'IN PROGRESS'} · ${q.region === 'cresha' ? 'Elder Glen, Kingdom of Cresha' : esc(q.region)}</div>` +
-        `<p class="j-summary">${esc(q.summary)}</p>` +
-        this.quests.awayNotes(q.id).map((n) => `<p class="j-away">☾ ${esc(n)}</p>`).join('') +
-        (lines.length ? `<div class="j-objs">${lines.map(([t, p, n]) => `<div class="${p >= n ? 'ok' : ''}"><i>${p >= n ? '✔' : '◇'}</i>${esc(t)}${n > 1 ? ` <span>${p}/${n}</span>` : ''}</div>`).join('')}</div>` : '') +
-        `<div class="j-log">${stages.map((_s, i) => ({ i, when: q.stages[i].when })).filter((x) => !x.when || this.quests.test(q.id, x.when) || (st && x.i === st.stage)).map(({ i }) => `<div class="${st && (st.status === 'done' || i < st.stage) ? 'past' : ''}">${esc(this.quests.note(q, i))}</div>`).join('')}</div>` +
-        this.choices(q) +
-        `<div class="j-rewards">Rewards · ${q.rewards.gold} gold · ${q.rewards.xp} XP${q.rewards.guildRep ? ` · ${q.rewards.guildRep} guild rep` : ''}${q.rewards.items?.length ? ' · items' : ''}</div>` +
-        (st?.status === 'active' ? `<div class="j-actions">${this.quests.tracked !== q.id ? `<button class="j-track" data-track="${q.id}">Track this quest</button>` : ''}${this.quests.markers().some((m) => m.quest === q.id) ? `<button class="j-track" data-map="${q.id}">Show on map</button>` : ''}</div>` : '');
+      const isDone = st?.status === 'done';
+      const pct = Math.round(this.progressOf(q) * 100);
+      const giver = this.giverName?.(q.giver);
+      const tracked = this.quests.tracked === q.id && !isDone;
+      return `<button class="jq-card cat-${this.catOf(q)} ${this.selected === q.id ? 'sel' : ''} ${tracked ? 'tracked' : ''} ${isDone ? 'done' : ''}" data-quest="${q.id}">
+        <i class="jq-crest">${isDone ? CREST.done : CREST[this.catOf(q)]}</i>
+        <span class="jq-mid"><b>${esc(q.title)}</b><small>${esc(this.regionName(q.region))}${giver ? ` · ${esc(giver)}` : ''}</small>
+        ${isDone ? '' : `<span class="jq-prog"><i style="width:${pct}%"></i></span>`}</span>
+        ${tracked ? '<span class="jq-pin" title="Tracked">◆</span>' : ''}</button>`;
+    };
+    const list = shelves[this.cat];
+    let nav = '';
+    if (this.cat === 'main' && this.storyRecap) nav += `<button class="jq-card story ${this.selected === '__story' ? 'sel' : ''}" data-quest="__story"><i class="jq-crest">${CREST.story}</i><span class="jq-mid"><b>The Story So Far</b><small>Everything that has happened to you</small></span></button>`;
+    nav += list.length ? list.map(card).join('') : `<p class="jq-empty">${EMPTY[this.cat]}</p>`;
+
+    let detail = `<div class="jq-blank">${CREST.story}<p>Pick a quest from the list.</p></div>`;
+    if (this.selected === '__story' && this.storyRecap) detail = `<div class="jq-recap">${this.storyRecap()}</div>`;
+    if (selQ) detail = this.detail(selQ);
+    const tracked = active.find((x) => x.id === this.quests.tracked);
+    this.journal.innerHTML = `<header><span>JOURNAL</span><div class="jq-sum"><b>${active.length}</b> active · <b>${done.length}</b> completed${tracked ? ` · tracking <i>${esc(tracked.title)}</i>` : ''}</div><button data-close>✕</button></header>
+      <div class="jq-tabs">${tabs}</div>
+      <div class="j-body"><nav>${nav}</nav><section>${detail}</section></div><footer><span>Click a quest to read it · Track one to follow its beacon</span><span>J · close</span></footer>`;
+  }
+
+  /** One quest's page: what to do now, what it pays, and the story so far tucked away below. */
+  private detail(q: QuestDef) {
+    const st = this.quests.state[q.id];
+    const isDone = st?.status === 'done';
+    const cat = this.catOf(q);
+    const giver = this.giverName?.(q.giver);
+    const stageN = q.stages.length;
+    const cur = st ? Math.min(st.stage, stageN - 1) : 0;
+    const kicker = `${cat === 'main' ? 'MAIN QUEST' : cat === 'contract' ? 'GUILD CONTRACT' : 'SIDE QUEST'} · ${isDone ? 'COMPLETED' : 'IN PROGRESS'}`;
+    const initial = giver ? giver.replace(/^(Elder|Magus|Master|Ser|Sister|Brother|Captain|Lady|Lord|Old)\s+/, '').charAt(0) : '';
+    const chips = [
+      giver ? `<span class="jq-chip giver"><i>${esc(initial)}</i>${esc(giver)}</span>` : '',
+      `<span class="jq-chip">⌖ ${esc(this.regionName(q.region))}</span>`,
+      isDone ? '<span class="jq-chip ok">✔ Done</span>' : `<span class="jq-chip">Step ${cur + 1} of ${stageN}</span>`,
+    ].join('');
+    const steps = `<div class="jq-steps">${q.stages.map((_s, i) => `<i class="${isDone || i < cur ? 'past' : i === cur ? 'now' : ''}"></i>`).join('')}</div>`;
+    // What to do now.
+    let now = '';
+    if (!isDone && st) {
+      const objs = this.quests.lines(q.id).map(([t, p, n]) => {
+        const opt = t.startsWith('Optional: ');
+        const alt = /^(Either|Or): /.exec(t);
+        const text = t.replace(/^(Optional|Either|Or): /, '');
+        const ok = p >= n;
+        return `<li class="${ok ? 'ok' : ''} ${opt ? 'opt' : ''}"><i class="jq-box">${ok ? '✔' : ''}</i><div><span>${alt ? `<em class="jq-tag">${alt[1]}</em>` : ''}${opt ? '<em class="jq-tag opt">Optional</em>' : ''}${esc(text)}</span>${n > 1 ? `<div class="jq-obar"><i style="width:${Math.min(100, (p / n) * 100)}%"></i><b>${Math.min(p, n)} / ${n}</b></div>` : ''}</div></li>`;
+      }).join('');
+      now = `<div class="jq-now"><h4>Now</h4><p class="jq-note">${esc(this.quests.note(q, cur))}</p>${objs ? `<ul class="jq-objs">${objs}</ul>` : ''}
+        ${this.quests.awayNotes(q.id).map((n) => `<p class="j-away">☾ ${esc(n)}</p>`).join('')}</div>`;
+    } else if (isDone) {
+      now = `<blockquote class="jq-done-line">“${esc(this.quests.doneFor(q))}”${giver ? `<cite>${esc(giver)}</cite>` : ''}</blockquote>`;
     }
-    this.journal.innerHTML = `<header><span>JOURNAL</span><button data-close>✕</button></header><div class="j-body"><nav>${list}</nav><section>${detail}</section></div><footer>J · close</footer>`;
+    // Rewards as chips.
+    const r = q.rewards;
+    const rew = [
+      r.gold ? `<span class="jq-rw gold"><i>●</i>${r.gold} gold</span>` : '',
+      r.xp ? `<span class="jq-rw xp"><i>✦</i>${r.xp} XP</span>` : '',
+      r.guildRep ? `<span class="jq-rw rep"><i>⚑</i>${r.guildRep} guild rep</span>` : '',
+      ...(r.items ?? []).map(([id, n]) => {
+        const d = ITEMS[id];
+        const ic = d ? iconFor(id) : '';
+        return `<span class="jq-rw item r-${d?.rarity ?? 'common'}"><i class="ic">${ic ? `<img src="${ic}" alt="">` : '◆'}</i>${esc(d?.name ?? id)}${n > 1 ? ` ×${n}` : ''}</span>`;
+      }),
+    ].join('');
+    // The story of it so far, folded away.
+    const last = isDone ? stageN - 1 : cur;
+    const shown = st ? q.stages.map((s, i) => ({ i, when: s.when })).filter((x) => x.i <= last && (!x.when || this.quests.test(q.id, x.when) || x.i === cur)) : [];
+    const log = shown.map(({ i }) => `<div class="${isDone || i < cur ? 'past' : 'now'}"><b>${i + 1}</b><span>${esc(this.quests.note(q, i))}</span></div>`).join('');
+    const actions = st?.status === 'active'
+      ? `<div class="jq-actions">${this.quests.tracked !== q.id ? `<button class="jq-btn primary" data-track="${q.id}">◆ Track this quest</button>` : '<span class="jq-tracking">◆ Tracking</span>'}${this.quests.markers().some((m) => m.quest === q.id) ? `<button class="jq-btn" data-map="${q.id}">⌖ Show on map</button>` : ''}</div>`
+      : '';
+    return `<div class="jq-page cat-${cat} ${isDone ? 'is-done' : ''}">
+      <div class="jq-head"><div class="jq-seal">${isDone ? CREST.done : CREST[cat]}</div><div class="jq-head-txt"><div class="jq-kicker">${kicker}</div><h2>${esc(q.title)}</h2><div class="jq-meta">${chips}</div></div></div>
+      ${steps}${actions}${now}
+      ${rew ? `<div class="jq-rewards"><h4>Rewards</h4><div>${rew}</div></div>` : ''}
+      ${this.choices(q)}
+      <details class="jq-more" ${isDone ? 'open' : ''}><summary>About this quest</summary><p>${esc(q.summary)}</p></details>
+      ${log ? `<details class="jq-more"><summary>Journal entries · ${shown.length}</summary><div class="jq-log">${log}</div></details>` : ''}
+    </div>`;
   }
 
   /** The decisions you made and the extra things you did, in this quest. */

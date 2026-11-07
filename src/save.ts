@@ -228,4 +228,5 @@ export function applySave(player: Player, d: SaveData) {
   player.hp = player.maxHp;
   player.mana = player.maxMana;
   player.stamina = player.maxStamina;
+  player.restoreArmour();
 }

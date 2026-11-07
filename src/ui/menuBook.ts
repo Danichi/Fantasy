@@ -10,6 +10,8 @@ export interface BookPage {
   isOpen(): boolean;
   open(): void;
   close(): void;
+  /** a page you haven't been given yet (the Bestiary before Rook hands it over): its tab stays hidden */
+  hidden?(): boolean;
 }
 
 const BOOK_ICON = `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 6.5c3.8-1.4 7.4-1 11 1.2 3.6-2.2 7.2-2.6 11-1.2v19c-3.8-1.4-7.4-1-11 1.2-3.6-2.2-7.2-2.6-11-1.2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M16 7.7v19" stroke="currentColor" stroke-width="1.6"/><path d="M8.5 11.5c2-.5 3.9-.3 5.6.5M8.5 15.5c2-.5 3.9-.3 5.6.5M18 12c1.7-.8 3.6-1 5.6-.5M18 16c1.7-.8 3.6-1 5.6-.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`;
@@ -19,6 +21,7 @@ export class MenuBook {
   private strip: HTMLDivElement;
   private last: string;
   private shown = '';
+  private hiddenNow = new Map<string, boolean>();
 
   constructor(private pages: BookPage[]) {
     const root = document.getElementById('ui')!;
@@ -60,6 +63,14 @@ export class MenuBook {
 
   /** Per frame: show the tab strip while a page is open, and mark it. */
   update() {
+    for (const p of this.pages) {
+      if (!p.hidden) continue;
+      const h = p.hidden();
+      if (h === this.hiddenNow.get(p.id)) continue;
+      this.hiddenNow.set(p.id, h);
+      const b = this.strip.querySelector<HTMLButtonElement>(`[data-page="${p.id}"]`);
+      if (b) b.style.display = h ? 'none' : '';
+    }
     const open = this.pages.find((p) => p.isOpen())?.id ?? '';
     if (open === this.shown) return;
     this.shown = open;

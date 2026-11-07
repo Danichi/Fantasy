@@ -7,6 +7,7 @@ import { iconFor, wideIconFor } from './icons';
 import type { CharPreview } from './charPreview';
 import { DISC } from '../paths/data';
 import { qualityLine, runeOf } from '../crafting/quality';
+import { armourCut } from '../player/armour';
 
 const SLOT_LABEL: Record<Slot, string> = {
   main: 'Main hand', off: 'Off hand', head: 'Head', shoulders: 'Shoulders', chest: 'Chest', cloak: 'Cloak',
@@ -198,7 +199,7 @@ export class InventoryUI {
     const block = eq.hasShield ? `${eq.offItem!.def.stats.block ?? 0}%` : '—';
     this.summary.innerHTML = `
       <span><b>${eq.mainWeapon?.def.stats.damage ?? 0}${eq.dualWield ? ' + ' + (eq.offItem?.def.stats.damage ?? 0) : ''}</b>Attack</span>
-      <span><b>${eq.armorValue}</b>Armour</span>
+      <span title="Your armour pool sits over your health. While it holds it turns aside ${Math.round(armourCut(eq.armorValue) * 100)}% of each blow (less as it wears); once broken, blows land in full. It mends after a few seconds out of the fight."><b>${Math.ceil(p.armour)}/${p.maxArmour}</b>Armour</span>
       <span><b>${eq.poise}</b>Poise</span>
       <span><b>${block}</b>Block</span>
       <span><b>${Math.ceil(p.hp)}/${p.maxHp}</b>Health</span>
@@ -382,6 +383,8 @@ export class InventoryUI {
       ['Mana', `${Math.ceil(p.mana)} / ${p.maxMana}`],
       ['Attack', `${eq.mainWeapon?.def.stats.damage ?? 0}`],
       ['Armour', `${eq.armorValue}`],
+      ['Armour pool', `${Math.ceil(p.armour)} / ${p.maxArmour}`],
+      ['Blow turned aside', `${Math.round(p.armourCutNow * 100)}% now (${Math.round(armourCut(eq.armorValue) * 100)}% whole)`],
       ['Poise', `${eq.poise}`],
       ['Stamina regen', `+${Math.round(eq.bonus('staminaRegen') * 100)}%`],
       ['Mana regen', `+${Math.round(eq.bonus('manaRegen') * 100)}%`],

@@ -216,6 +216,8 @@ test('the Orc Warlord fights with blade and bow, and drops his loot', async ({ p
     inst.orcs = [];
     const o = inst.bossTarget;
     const p = g.player;
+    const pooled: any[] = [];
+    g.events.on('poolDrop', (e: any) => pooled.push(e));
     const f = new T.Vector3(Math.sin(o.yaw), 0, Math.cos(o.yaw));
     // Melee: stand close and wait to be hit.
     p.teleport(o.position.clone().addScaledVector(f, 2.2).setY(0.3));
@@ -239,23 +241,28 @@ test('the Orc Warlord fights with blade and bow, and drops his loot', async ({ p
     o.takeHit({ damage: 99999, poise: 0, dir: f.clone().negate(), at: o.center.clone(), crit: true, source: 'melee' });
     await new Promise((r) => setTimeout(r, 300));
     const ids = p.equip.items.map((i: any) => i.def.id);
-    return { melee, ranged, sawArrow, bossDead: g.realm.progress.bossDead, tusk: ids.includes('warlordTusk'), odachi: ids.includes('orcOdachi'), portal: inst.interactables.some((i: any) => i.label().includes('portal')) };
+    void ids;
+    return { melee, ranged, sawArrow, bossDead: g.realm.progress.bossDead, grukkDrops: pooled.filter((d) => d.kind === 'grukk').length, hoard: pooled[0]?.total ?? 0, portal: inst.interactables.some((i: any) => i.label().includes('portal')) };
   });
   expect(res.melee).toBeGreaterThan(0);
   expect(res.sawArrow).toBe(true);
   expect(res.ranged).toBeGreaterThan(0);
   expect(res.bossDead).toBe(true);
-  expect(res.tusk).toBe(true);
-  expect(res.odachi).toBe(true);
+  // One piece of his hoard a kill (it lands on the floor, glowing), not the whole hoard at once.
+  expect(res.grukkDrops).toBe(1);
+  expect(res.hoard).toBeGreaterThan(3);
   expect(res.portal).toBe(true);
 });
 
-test('bosses hold their halls again on every visit; their unique loot drops once', async ({ page }) => {
+test('bosses hold their halls again on every visit; each kill drops one piece of their hoard', async ({ page }) => {
   await boot(page);
   const res = await page.evaluate(async () => {
     const g = (window as any).__game;
     const T = g.THREE;
-    const count = (id: string) => g.player.equip.items.filter((i: any) => i.def.id === id).reduce((n: number, i: any) => n + (i.qty ?? 1), 0);
+    const pooled: any[] = [];
+    g.events.on('poolDrop', (e: any) => pooled.push(e));
+    // Walk over whatever he dropped, so it's in the bag before the next run.
+    const pickUp = () => g.reagentDrops.clear();
     const killGrukk = async () => {
       await g.realm.enter(2, 'entrance');
       await g.realm.instance.ready;
@@ -267,9 +274,13 @@ test('bosses hold their halls again on every visit; their unique loot drops once
       return there;
     };
     const first = await killGrukk();
-    const tusks1 = count('warlordTusk');
+    pickUp();
+    const drops1 = pooled.length;
     const again = await killGrukk();
-    const tusks2 = count('warlordTusk');
+    pickUp();
+    const drops2 = pooled.length;
+    const distinct = new Set(pooled.map((d) => d.item)).size;
+    const owned = pooled.every((d) => g.player.equip.items.some((i: any) => i.def.id === d.item));
     // The mine: the Warden is back too, and from the entrance you can walk on into the tunnels.
     g.realm.mineProgress.guardianDead = true;
     await g.realm.enterMine();
@@ -281,12 +292,15 @@ test('bosses hold their halls again on every visit; their unique loot drops once
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
     const walkedOut = g.player.pos.z < -9 && g.player.pos.y > -1;
     await g.realm.leave();
-    return { first, again, tusks1, tusks2, bossDead: g.realm.progress.bossDead, warden, walkedOut, z0 };
+    return { first, again, drops1, drops2, distinct, owned, bossDead: g.realm.progress.bossDead, warden, walkedOut, z0 };
   });
   expect(res.first).toBe(true);
   expect(res.again).toBe(true);
-  expect(res.tusks1).toBe(1);
-  expect(res.tusks2).toBe(1);
+  // One piece of the hoard per kill, a different one each time, and never lost.
+  expect(res.drops1).toBe(1);
+  expect(res.drops2).toBe(2);
+  expect(res.distinct).toBe(2);
+  expect(res.owned).toBe(true);
   expect(res.bossDead).toBe(true);
   expect(res.warden).toBe(true);
   expect(res.walkedOut).toBe(true);

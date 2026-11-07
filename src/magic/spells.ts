@@ -130,7 +130,7 @@ export class Spells {
     this.circles = new MagicCircles(scene);
     this.lights = new LightPool(scene, Math.max(1, Q.maxDynamicLights));
     this.fireMat = new THREE.ShaderMaterial({ vertexShader: FIRE_VERT, fragmentShader: FIRE_FRAG, uniforms: { uTime: { value: 0 } } });
-    this.glowMat = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffa050, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+    this.glowMat = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xff7414, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
     this.ringMat = new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
 
     player.onSpell = (spell, from, dir, target) => {
@@ -157,7 +157,7 @@ export class Spells {
     }
     this.balls.push({ phase: Math.random() * 6, group, vel: dir.clone().normalize().multiplyScalar(17), life: 3, target, light, splash, hooks, damage: damage ?? (ITEMS.fireball.stats.damage ?? 40) * this.player.paths.spellPower });
     group.scale.setScalar(scale);
-    this.fx.add.spawn({ pos: from, spread: 3, count: 18, life: [0.15, 0.35], size: [0.15, 0.02], color: 0xffe0a0, color2: 0xff4000 });
+    this.fx.add.spawn({ pos: from, spread: 3, count: 18, life: [0.15, 0.35], size: [0.18, 0.02], color: 0xfff05a, color2: 0xff2200 });
   }
 
   private explode(fb: Fireball, at: THREE.Vector3, direct: Target | null) {
@@ -185,7 +185,7 @@ export class Spells {
     const fx = this.fx;
     // Hot core flash, then a wide fire burst.
     fx.add.spawn({ pos: at, spread: 1.5, count: 14, life: [0.12, 0.22], size: [1.6, 0.6], color: 0xfff6d8, color2: 0xffa040, jitter: 0.2 });
-    fx.add.spawn({ pos: at, spread: 7, count: 90, life: [0.25, 0.7], size: [0.7, 0.08], color: 0xffe0a0, color2: 0xff3000, drag: 3, jitter: 0.4 });
+    fx.add.spawn({ pos: at, spread: 7, count: 110, life: [0.25, 0.75], size: [0.8, 0.08], color: 0xfff05a, color2: 0xff1e00, drag: 3, jitter: 0.4 });
     fx.add.spawn({ pos: at, spread: 9, count: 40, life: [0.4, 1.1], size: [0.06, 0.01], color: 0xffd080, color2: 0xff2000, gravity: 9, drag: 1, upBias: 0.4 });
     fx.alpha.spawn({ pos: at.clone().setY(at.y + 0.4), spread: 1.4, count: 10, life: [1.0, 2.0], size: [0.5, 1.8], color: 0x6b625a, alpha: 0.28, drag: 2, upBias: 1.4, jitter: 0.8 });
     const light = this.lights.acquire({});
@@ -254,7 +254,7 @@ export class Spells {
       }
     }
     if (a && a.def.id === 'castHeal' && !a.fired) {
-      this.fx.add.spawn({ pos: p.center.clone().setY(p.pos.y + 1.9), spread: 0.6, count: 2, life: [0.4, 0.7], size: [0.06, 0.01], color: 0xfff2c0, color2: 0xffc050, gravity: 1 });
+      this.fx.add.spawn({ pos: p.center.clone().setY(p.pos.y + 1.9), spread: 0.6, count: 2, life: [0.4, 0.7], size: [0.06, 0.01], color: 0xfff2c0, color2: 0xffc400, gravity: 1 });
     }
 
     for (const fb of this.balls) {

@@ -571,6 +571,13 @@ export class NpcManager {
       // Out of the scene until someone uses it: parked actors (dozens, one per
       // look baked for its sprite) otherwise cost a matrix update per bone every frame.
       this.bakeSprite(key, built);
+      // Townsfolk behind the camera (or outside the sun's shadow box) were still
+      // skinned and drawn in both passes: frustum culling was off for want of a
+      // bounding sphere. They have a bind-pose one now (charBuilder), so cull.
+      built.root.traverse((o) => {
+        const m = o as THREE.SkinnedMesh;
+        if (m.isSkinnedMesh && m.boundingSphere) m.frustumCulled = true;
+      });
       built.root.visible = false;
       const list = this.pool.get(key) ?? [];
       list.push(actor);

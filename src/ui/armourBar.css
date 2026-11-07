@@ -1,0 +1,40 @@
+/* The armour plate over the health bar (ui/armourBar.ts). */
+.bar.hp.has-armour { overflow: visible; }
+.bar.hp .arm-chip,
+.bar.hp .arm-plate {
+  position: absolute; top: 1px; bottom: 1px; left: 1px; right: 1px;
+  pointer-events: none;
+}
+/* what the last blow took: pale steel, drains after a moment */
+.bar.hp .arm-chip {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(214, 222, 232, 0.85));
+  clip-path: inset(0 100% 0 0);
+}
+/* the plate itself: brushed steel, plate seams and rivets */
+.bar.hp .arm-plate {
+  clip-path: inset(0 100% 0 0);
+  background:
+    radial-gradient(circle at 7px 50%, rgba(255, 255, 255, 0.85) 0 1px, rgba(40, 44, 52, 0.7) 1.3px, transparent 1.9px) 0 0 / 22px 100% repeat-x,
+    repeating-linear-gradient(90deg, transparent 0 21px, rgba(20, 22, 28, 0.55) 21px 22px),
+    linear-gradient(180deg, #eef1f5 0%, #b9c0ca 38%, #8a929e 52%, #a5adb8 78%, #6e7682 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+}
+.bar.hp .num { z-index: 3; }
+.bar.hp.has-armour .num { color: #fff; text-shadow: 0 0 2px #000, 0 1px 2px #000; }
+/* the badge: a small shield and what is left of the pool */
+.bar.hp .arm-badge {
+  position: absolute; right: 3px; top: 50%; transform: translateY(-50%); z-index: 3;
+  display: flex; align-items: center; gap: 3px;
+  font: 700 9px/1 var(--sans, sans-serif); color: #eef2f7; text-shadow: 0 0 2px #000, 0 1px 2px #000;
+  pointer-events: none;
+}
+.bar.hp .arm-badge .arm-ico { display: inline-flex; width: 11px; height: 11px; color: #dfe5ee; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.8)); }
+.bar.hp .arm-badge .arm-ico svg { width: 100%; height: 100%; }
+.bar.hp .arm-badge.broken { color: #ff9a8a; }
+.bar.hp .arm-badge.broken .arm-ico { color: #ff7a66; }
+/* shards thrown off when it breaks */
+.bar.hp .arm-shard {
+  position: absolute; top: 2px; width: 6px; height: 7px; z-index: 4; pointer-events: none;
+  background: linear-gradient(160deg, #ffffff, #9aa3ae 60%, #5a616b);
+  clip-path: polygon(0 0, 100% 30%, 70% 100%, 10% 75%);
+}

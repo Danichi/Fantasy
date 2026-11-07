@@ -110,10 +110,10 @@ const TIDE_WARDEN: BossDef = {
   loot(f: BossFight, first, at) {
     const h = f.c.hooks;
     f.s.target = WATER[0];
+    // (Its heart, and the rest of what it carries, come from its drop pool: CatalogSources.poolDrop.)
     if (first) {
       h.giveGold(at, 380);
-      const a = h.giveItem('tidewardenHeart');
-      return `The Tide-Warden kneels and is still. Found: ${a}`;
+      return 'The Tide-Warden kneels and is still.';
     }
     h.giveGold(at, 180);
     return 'The Warden falls again, and the basin drains.';

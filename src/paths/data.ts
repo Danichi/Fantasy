@@ -4,6 +4,8 @@
 //   '*' skill (goes on the bar, ranks I-V)   '!' keystone   '?' choice "A|B"
 //   no prefix: tier 1 and last-in-row are minor, the rest notable.
 
+import { EXPANDED_TREES } from './expandedTrees';
+
 export type Family = 'combat' | 'magic' | 'calling' | 'legacy';
 
 export interface BranchDef {
@@ -81,11 +83,11 @@ export const DISCIPLINES: DisciplineDef[] = [
     ],
   },
   {
-    id: 'dawnblade', fam: 'combat', name: 'Dawnblade', color: '--c-light', mentor: 'Sister Maren, the chapel', res: 'Radiance',
+    id: 'dawnblade', fam: 'combat', name: 'Dawnblade', color: '--c-light', mentor: 'Brother Aldous, once you know the light', mentorNpc: 'aldous', requires: ['lightbinder', 5], res: 'Radiance',
     flavour: 'Steel that burns the dark.', how: 'Land holy strikes while Dawnblade is active.',
   },
   {
-    id: 'warbreaker', fam: 'combat', name: 'Warbreaker', color: '--c-blood', mentor: 'The orc exile, Orc House', res: 'Rage',
+    id: 'warbreaker', fam: 'combat', name: 'Warbreaker', color: '--c-blood', mentor: 'Kaela Voss, once you know Gale Style', mentorNpc: 'kaela', requires: ['gale', 5], res: 'Rage',
     flavour: 'Swing like a falling tree. Grukk\'s people remember how.', how: 'Deal and take damage with greatswords while Warbreaker is active.',
   },
   {
@@ -131,7 +133,7 @@ export const DISCIPLINES: DisciplineDef[] = [
     flavour: 'Stillness, made into a weapon.', how: 'Chill, freeze and shatter.',
   },
   {
-    id: 'shadowcaller', fam: 'magic', name: 'Shadowcaller', color: '--c-shadow', mentor: 'A voice in the lower crypt',
+    id: 'shadowcaller', fam: 'magic', name: 'Shadowcaller', color: '--c-shadow', mentor: 'Magus Orren, once you know the flame', mentorNpc: 'magus', requires: ['pyromancer', 10],
     flavour: 'Something beneath the crypt is teaching.', how: 'Curse and harvest souls.',
   },
   {
@@ -243,6 +245,9 @@ export const DISCIPLINES: DisciplineDef[] = [
   { id: 'ashwalker', fam: 'magic', name: 'Ashwalker', color: '--c-fire', mentor: 'Unknown', secret: true, gateFrom: 'pyromancer', flavour: 'Where they walk, nothing grows for a year.', how: '' },
   { id: 'phoenix', fam: 'magic', name: 'Phoenix', color: '--c-fire', mentor: 'Unknown', secret: true, gateFrom: 'pyromancer', flavour: 'Every ending is kindling.', how: '' },
 ];
+
+// The later and hidden classes get their trees from expandedTrees.ts.
+for (const d of DISCIPLINES) if (!d.branches && EXPANDED_TREES[d.id]) d.branches = EXPANDED_TREES[d.id];
 
 export const DISC: Record<string, DisciplineDef> = Object.fromEntries(DISCIPLINES.map((d) => [d.id, d]));
 

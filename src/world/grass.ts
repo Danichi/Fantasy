@@ -129,9 +129,10 @@ class GrassLayer {
           float inner = uFadeIn > 0.0 ? smoothstep(uFadeIn, uFadeIn * 1.4, dist) : 1.0;
           vec4 patchN = texture2D(uNoise, world * 0.004);
           float keep = step(aOff.w, dens) * outer * inner;
-          // Height: knee-high, taller in patches, shorter where it's thin.
+          // Height: ankle-to-shin high (cut down so herbs, flowers and drops show above it),
+          // taller in patches, shorter where it's thin.
           // Blades shorten toward path and plaza edges instead of stopping as a wall.
-          float height = mix(1.0, 0.6, smoothstep(0.2, 0.4, tintK) * (1.0 - smoothstep(0.5, 0.6, tintK))) * mix(1.0, 1.35, smoothstep(0.55, 0.7, tintK) * (1.0 - smoothstep(0.8, 0.95, tintK))) * mix(0.34, 0.74, patchN.g) * mix(0.75, 1.15, fract(aOff.w * 13.7)) * mix(0.25, 1.0, smoothstep(0.1, 0.75, dens)) * keep;
+          float height = mix(1.0, 0.6, smoothstep(0.2, 0.4, tintK) * (1.0 - smoothstep(0.5, 0.6, tintK))) * mix(1.0, 1.25, smoothstep(0.55, 0.7, tintK) * (1.0 - smoothstep(0.8, 0.95, tintK))) * mix(0.17, 0.4, patchN.g) * mix(0.75, 1.15, fract(aOff.w * 13.7)) * mix(0.25, 1.0, smoothstep(0.1, 0.75, dens)) * keep;
           float width = uWidth * mix(0.8, 1.25, fract(aOff.w * 5.3)) * keep;
           // Gusts: a scrolling low-frequency field along the wind.
           vec2 gp = world * 0.018 - uWindDir * uTime * 0.09;

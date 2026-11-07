@@ -3,6 +3,7 @@ import { combat } from './combat/core';
 import { director } from './combat/ai';
 import { combatFeedback } from './combat/feedback';
 import { TrainingYard } from './combat/trainingYard';
+import { EAST_GATE } from './world/desert/ghagrabbaPlaces';
 import { Lessons } from './story/lessons';
 import { lessonHook } from './paths/mentors';
 import type { StationKind } from './crafting/recipes';
@@ -27,7 +28,7 @@ import { loadWorldMap } from './world/worldMap';
 import { Input } from './core/input';
 import { Player } from './player/player';
 import { ThirdPersonCamera } from './player/camera';
-import { DEBUG, TEST_MODE, LEAN_TEST, Q } from './core/settings';
+import { DEBUG, TEST_MODE, LEAN_TEST, Q, quality } from './core/settings';
 import { setupLoadout } from './items/loadout';
 import { FX } from './fx/particles';
 import { BeastSpawner } from './enemies/beastSpawner';
@@ -123,6 +124,8 @@ import { buildCrownRoad, type CrownRoadHooks } from './world/crownRoad';
 import { CROWN_ROAD_QUESTS } from './quests/crownRoadQuests';
 import { QuestUI } from './ui/questUI';
 import { MenuBook } from './ui/menuBook';
+import { Bestiary } from './progression/bestiary';
+import { BestiaryUI } from './ui/bestiaryUI';
 import { glenNamedFolk } from './npc/glenNamed';
 import { ITEMS } from './items/itemDefs';
 import { buildGlenDressing, MARKET_SPOTS, NOTICEBOARD, WELL } from './world/glenDressing';
@@ -329,8 +332,8 @@ async function boot() {
     give: (id, n) => giveItem(id, n),
     gold: (n) => player.prog.addGold(n),
     xp: (n) => player.prog.addXp(n),
-    rest: () => { player.hp = player.maxHp; player.stamina = player.maxStamina; player.mana = player.maxMana; save(); hud.toast('You rest by the fire a while. Your wounds feel better, and your progress is saved.'); },
-    sleep: () => { time.skipTo(7); player.hp = player.maxHp; player.stamina = player.maxStamina; player.mana = player.maxMana; save(); hud.toast('You sleep by the fire until morning.'); },
+    rest: () => { player.hp = player.maxHp; player.restoreArmour(); player.stamina = player.maxStamina; player.mana = player.maxMana; save(); hud.toast('You rest by the fire a while. Your wounds feel better, and your progress is saved.'); },
+    sleep: () => { time.skipTo(7); player.hp = player.maxHp; player.restoreArmour(); player.stamina = player.maxStamina; player.mana = player.maxMana; save(); hud.toast('You sleep by the fire until morning.'); },
     save: () => save(),
     reveal: (x, z, rr) => discovery.revealAround(x, z, rr),
     bless: (b) => { arms.runtime.buffs.set(b.id, { id: b.id, label: b.label, left: b.sec, m: b.m }); hud.toast(`${b.label} for ${Math.round(b.sec / 60)} min`); },
@@ -487,6 +490,7 @@ async function boot() {
   events.on('bossSlam', ({ at }) => cam.shake(Math.max(0.15, 0.6 - at.distanceTo(player.pos) * 0.04)));
   events.on('levelUp', () => {
     player.hp = player.maxHp;
+    player.restoreArmour();
     player.mana = player.maxMana;
     player.stamina = player.maxStamina;
     fx.add.spawn({ pos: player.center, spread: 3, count: 60, life: [0.6, 1.3], size: [0.1, 0.01], color: 0xcfe8ff, color2: 0x5a9cff, upBias: 1.5, drag: 1.5, jitter: 0.6 });
@@ -1541,6 +1545,8 @@ async function boot() {
     { id: 'people', label: 'People', key: 'P', isOpen: () => repPanel.open, open: () => repPanel.toggle(true), close: () => repPanel.toggle(false) },
     { id: 'herbal', label: 'Herbal', key: 'O', isOpen: () => herbalism.isOpen, open: () => herbalism.openCodex(), close: () => herbalism.ui.close() },
     { id: 'seamanship', label: 'Seamanship', key: 'N', isOpen: () => seaPanel.open, open: () => seaPanel.toggle(true), close: () => seaPanel.toggle(false) },
+    // The Wardens' Bestiary (progression/bestiary.ts): its tab appears once Rook hands it over.
+    { id: 'bestiary', label: 'Bestiary', key: 'L', isOpen: () => bestiaryUI.open, open: () => bestiaryUI.toggle(true), close: () => bestiaryUI.toggle(false), hidden: () => !bestiary.unlocked },
     {
       id: 'map', label: 'Map', key: 'M',
       isOpen: () => worldMap.open || mapUI.open,
@@ -1829,6 +1835,7 @@ async function boot() {
   lessonHook.has = (id) => lessons.has(id);
   realm.overworldInteractables.push(...main.interactables);
   questUI.storyRecap = () => story.state.recap();
+  questUI.giverName = (id) => serviceNpc(id)?.spec.name ?? npcs.find(id)?.rec.name;
   repPanel.codex = () => story.state.codex();
   repPanel.onName = (id, power) => story.state.nameAs(id, power as never);
   const baseSiteMarks = worldMap.siteMarkers;
@@ -1889,7 +1896,31 @@ async function boot() {
     toast: (m) => hud.toast(m), region: hereRegion, day: () => time.day, playerLevel: () => player.prog.level,
     playerPos: () => player.pos as unknown as { distanceTo(v: unknown): number }, flags: worldFlags, gear: gearRt,
     owns: (id) => player.equip.items.some((it) => it.def.id === id),
+    // Kill loot lands on the ground where the foe fell, glowing its rarity (not at sea: it would sink).
+    drop: (id, n, at, keep) => !sailing.aboard && reagentDrops.spawn(id, n, at, { loot: true, keep }),
   });
+  // ---- The Wardens' Bestiary: kills by kind, revealed drops, and the hunter's edge on them ----
+  const bestiary = new Bestiary(worldFlags);
+  bestiary.onNews = (m) => hud.toast(m);
+  const bestiaryUI = new BestiaryUI(bestiary, { has: (id) => !!worldFlags['cat:' + id] || player.equip.items.some((it) => it.def.id === id) });
+  bestiaryUI.onToggle = (open) => {
+    input.uiMode = open || inv.open || mapUI.open || dialogue.open;
+    if (open) input.exitLock();
+    else if (!inv.open && !mapUI.open && !dialogue.open && !questUI.open) input.requestLock();
+  };
+  // Rook hands it over in "Lights on the Hill" (talking to him moves mq-crypt past its first stage);
+  // a save already past that gets it on load.
+  let bestiaryT = 0;
+  const bestiaryTick = (dt: number) => {
+    bestiaryUI.update(dt);
+    if (bestiary.unlocked || (bestiaryT += dt) < 0.5) return;
+    bestiaryT = 0;
+    const st = quests.state['mq-crypt'];
+    if (st && (st.status === 'done' || st.stage >= 1) && bestiary.unlock()) {
+      hud.toast('Rook gave you the Wardens\' Bestiary. Press L to read it.');
+      save();
+    }
+  };
   // Locks on chests, caches and hatches: picked with lockpicks, or forced with something heavy.
   const locks = new Locks(player, worldFlags, (m) => hud.toast(m), () => player.paths.level('dungeoneering'));
   GEAR.locks = locks;
@@ -2008,9 +2039,32 @@ async function boot() {
   let pausedByUser = false;
   let hadLock = false;
   const music = new Music();
+  // Where a saved game picks up: where you left off, or at the front gate of
+  // Ghagrabba (a setting on the title card, kept in this browser/app).
+  const LOAD_KEY = 'fantasy.loadInto';
+  const loadInto = () => {
+    try {
+      return localStorage.getItem(LOAD_KEY) ?? 'ghagrabba';
+    } catch {
+      return 'saved';
+    }
+  };
+  let arrived = false;
   const overlays = buildOverlays((origin) => {
     if (origin) player.prog.origin = origin;
     started = true;
+    // (A new game always begins in the wheat: the story starts there.)
+    if (!arrived && saveData && !TEST_MODE && loadInto() === 'ghagrabba' && realm.mode === 'overworld' && !realm.interior) {
+      const [gx, gz] = EAST_GATE;
+      const at = new THREE.Vector3(gx + 6, heightAt(gx + 6, gz) + 0.5, gz);
+      if (player.mounted) horses.dismount();
+      player.teleport(at);
+      player.yaw = -Math.PI / 2; // facing the gate (west)
+      cam.yaw = -Math.PI / 2;
+      cam.snapTo(at);
+      hud.toast('Ghagrabba, the east gate');
+    }
+    arrived = true;
     music.start();
     ambience.start();
     pausedByUser = false;
@@ -2027,6 +2081,36 @@ async function boot() {
   });
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
   if (TEST_MODE) overlays.start.classList.add('hidden');
+  {
+    const row = overlays.start.querySelector('.desk-row');
+    const b = document.createElement('button');
+    const label = () => (loadInto() === 'ghagrabba' ? 'Load into: the gate of Ghagrabba' : 'Load into: where you left off');
+    b.textContent = label();
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      try {
+        localStorage.setItem(LOAD_KEY, loadInto() === 'ghagrabba' ? 'saved' : 'ghagrabba');
+      } catch { /* (no storage: stays as it is) */ }
+      b.textContent = label();
+    });
+    if (saveData) row?.appendChild(b);
+    // Graphics quality: low, medium, high (it applies on a reload; the game is saved first).
+    const gq = document.createElement('button');
+    const NAMES: Record<string, string> = { low: 'Low', balanced: 'Balanced', medium: 'Medium', high: 'High' };
+    gq.textContent = `Graphics: ${NAMES[quality]}`;
+    gq.title = 'Balanced looks good and stays smooth; Low is smoothest. Changing it saves and reloads the game.';
+    gq.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const order = ['low', 'balanced', 'medium', 'high'];
+      const next = order[(order.indexOf(quality) + 1) % order.length];
+      try {
+        localStorage.setItem('quality', next);
+      } catch { /* (no storage) */ }
+      if (started && !TEST_MODE) save();
+      location.reload();
+    });
+    row?.appendChild(gq);
+  }
   // ---- Origins (feat/origins): a new game opens the character creator ----
   const creator = new CharacterCreator(origins);
   overlays.creator = (begin) => creator.show(begin);
@@ -2187,6 +2271,12 @@ async function boot() {
     if (input.wasPressed('inventory')) inv.toggle();
     if (input.wasPressed('skills')) skills.toggle();
     if (input.pressedKey('KeyN')) seaPanel.toggle();
+    // L: the Wardens' Bestiary (L is the ship's lantern only when aboard).
+    if (input.pressedKey('KeyL') && !sailing.aboard) {
+      if (!bestiary.unlocked) hud.toast('You have no bestiary yet. The Glen Wardens keep one.');
+      else if (bestiaryUI.open) bestiaryUI.toggle(false);
+      else book.show('bestiary');
+    }
     if (input.wasPressed('help')) overlays.toggleHelp();
     if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
     if (input.wasPressed('map')) {
@@ -2235,10 +2325,13 @@ async function boot() {
     let best: (typeof realm.interactables)[number] | null = null;
     let bestD = Infinity;
     if (!player.dead && !player.act) {
+      // (Distance first, then the enabled() check, which may consult quests and
+      // flags: hundreds of them used to run sixty times a second.)
+      const px = player.pos.x, pz = player.pos.z;
       for (const it of realm.interactables) {
-        if (!it.enabled()) continue;
-        const d = it.pos.distanceTo(player.pos.clone().setY(it.pos.y));
-        if (d < it.radius && d < bestD) {
+        const d = Math.hypot(it.pos.x - px, it.pos.z - pz);
+        if (d >= it.radius || d >= bestD || !it.enabled()) continue;
+        {
           bestD = d;
           best = it;
         }
@@ -2394,6 +2487,7 @@ async function boot() {
         glenLife.update(dt, player.pos);
       }
       questUI.update(player.pos);
+      bestiaryTick(dt);
       sailing.frame(dt);
       folkTalk.npc = npcs.nearest(player.pos);
       if (folkTalk.npc) folkTalk.pos.copy(folkTalk.npc.pos);
@@ -2544,6 +2638,7 @@ async function boot() {
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       yard, combatDebug, // combat rework: the drill yard and the F9 overlay
+      bestiary, bestiaryUI, reagentDrops, // the Wardens' Bestiary; kill loot on the ground
       ghLife, outcast, ghSide, scrapTowns,
       wilds, roadLife, herbalism, riches, gwKey, sanctum, lessons,
       origins, creator, // ---- Origins (feat/origins) ----

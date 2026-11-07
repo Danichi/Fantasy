@@ -165,8 +165,10 @@ export class Renderer {
     if (now - this.lastDynAdjust < 2000 || this.frameTimes.length < 60) return;
     const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
     let next = this.dynScale;
-    if (avg > 30) next = Math.max(0.75, this.dynScale - 0.08);
-    else if (avg < 24) next = Math.min(1, this.dynScale + 0.05);
+    // (Balanced holds a steadier rate: it gives way sooner and may go a little lower.)
+    const target = Q.targetMs ?? 30, floor = Q.minScale ?? 0.75;
+    if (avg > target) next = Math.max(floor, this.dynScale - 0.08);
+    else if (avg < target * 0.78) next = Math.min(1, this.dynScale + 0.05);
     if (next !== this.dynScale) {
       this.dynScale = next;
       this.resize();

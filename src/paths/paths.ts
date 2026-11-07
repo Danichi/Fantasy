@@ -315,6 +315,8 @@ export class Paths {
   learn(id: string, n: TreeNode, pick = 0) {
     if (!this.canLearn(id, n)) return false;
     this.nodes[id][n.id] = n.type === 'choice' ? { r: 1, pick } : { r: 1 };
+    const g = this.gate(id, n);
+    if (g && !this.learned(g)) this.teach(g);
     events.emit('pathsChanged', {});
     return true;
   }

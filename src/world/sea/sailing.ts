@@ -2,6 +2,7 @@ import { GEAR } from '../../items/catalog/hooks';
 import * as THREE from 'three';
 import { events } from '../../core/events';
 import { heightAt } from '../terrainHeight';
+import { addDropGlow, bestRarity } from '../dropGlow';
 import { SEA_LEVEL } from '../worldMap';
 import { waterSurfaceAt } from '../waterLevel';
 import { QUAY_X } from '../portCity';
@@ -1218,6 +1219,8 @@ export class Sailing {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 0.8, 1), new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.9 }));
     mesh.position.copy(at).setY(SEA_LEVEL);
     mesh.castShadow = true;
+    // Glows its best find's rarity, so cargo can be spotted among the waves.
+    addDropGlow(mesh, bestRarity(items.map(([id]) => id)), 0.5);
     this.scene.add(mesh);
     this.loot.push({ pos: at, mesh, gold, items });
   }

@@ -562,11 +562,11 @@ export class DungeonInstance {
             const first = !this.progress.bossDead;
             this.progress.bossDead = true;
             events.emit('deed', { id: 'boss:grukk', renown: 2, label: 'Grukk the Orc Warlord' });
+            // (His hoard drops one piece a kill from his pool: CatalogSources.poolDrop,
+            // keyed on the 'grukk' kind the kit crypt uses.)
             if (first) {
               this.hooks.giveGold(dead.center, 300);
-              const a = this.hooks.giveItem('warlordTusk');
-              const b = this.hooks.giveItem('orcOdachi');
-              this.hooks.toast(`Grukk falls. Found: ${a} and ${b}`);
+              this.hooks.toast('Grukk falls. His war-chest spills open.');
             } else {
               this.hooks.giveGold(dead.center, 150);
               this.hooks.toast('Grukk falls again. His war-chest has refilled a little.');

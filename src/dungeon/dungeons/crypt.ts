@@ -113,15 +113,11 @@ const GRUKK_BOSS: BossDef = {
   },
   loot(f: BossFight, first, at) {
     const h = f.c.hooks;
-    // His hoard (the tusk and the odachi) is only won once; later a lesser purse.
-    if (first) {
-      h.giveGold(at, 300);
-      const a = h.giveItem('warlordTusk');
-      const b = h.giveItem('orcOdachi');
-      return `Grukk falls. Found: ${a} and ${b}`;
-    }
-    h.giveGold(at, 150);
-    return 'Grukk falls again. His war-chest has refilled a little.';
+    // Gold here; his hoard (the tusk, the odachi, the spoon, the pouch, the pick and the
+    // Warlord's plate) comes one piece a kill from his pool (CatalogSources.poolDrop),
+    // so you come back down for the rest.
+    h.giveGold(at, first ? 300 : 150);
+    return first ? 'Grukk falls. His war-chest spills open.' : 'Grukk falls again. His war-chest has refilled a little.';
   },
 };
 

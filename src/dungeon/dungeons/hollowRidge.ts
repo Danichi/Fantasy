@@ -144,10 +144,10 @@ const VESS: BossDef = {
     const h = f.c.hooks;
     for (const fire of (f.s.fires ?? []) as { mesh: THREE.Mesh }[]) fire.mesh.removeFromParent();
     f.s.fires = [];
+    // (Her bandolier comes from her drop pool, CatalogSources.poolDrop.)
     if (first) {
       h.giveGold(at, 260);
-      const a = h.giveItem('vessBandolier');
-      return `Captain Vess falls. Found: ${a}`;
+      return 'Captain Vess falls.';
     }
     h.giveGold(at, 120);
     return 'Vess is down again. Someone always takes her place, and her purse.';

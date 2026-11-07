@@ -37,13 +37,16 @@ const VERT = /* glsl */ `
 const FRAG = /* glsl */ `
   varying vec4 vColor;
   uniform float uSoft;
+  uniform float uCore;
   #include <fog_pars_fragment>
   void main() {
     vec2 d = gl_PointCoord - 0.5;
     float r = length(d) * 2.0;
     float a = smoothstep(1.0, uSoft, r);
     if (a <= 0.001) discard;
-    gl_FragColor = vec4(vColor.rgb, vColor.a * a);
+    // Additive sparks burn white-hot in the middle, their colour toward the rim.
+    vec3 col = mix(vColor.rgb, vec3(1.0), uCore * (1.0 - smoothstep(0.0, 0.45, r)));
+    gl_FragColor = vec4(col * (1.0 + uCore * 0.6), vColor.a * a);
     #include <fog_fragment>
   }
 `;
@@ -67,7 +70,7 @@ class Pool {
   private cursor = 0;
   private geo: THREE.BufferGeometry;
 
-  constructor(n: number, blending: THREE.Blending, soft: number) {
+  constructor(n: number, blending: THREE.Blending, soft: number, core = 0) {
     this.n = n;
     this.pos = new Float32Array(n * 3);
     this.vel = new Float32Array(n * 3);
@@ -89,7 +92,7 @@ class Pool {
     const mat = new THREE.ShaderMaterial({
       vertexShader: VERT,
       fragmentShader: FRAG,
-      uniforms: { uScale: { value: 800 }, uSoft: { value: soft }, ...THREE.UniformsLib.fog },
+      uniforms: { uScale: { value: 800 }, uSoft: { value: soft }, uCore: { value: core }, ...THREE.UniformsLib.fog },
       transparent: true,
       depthWrite: false,
       blending,
@@ -234,7 +237,7 @@ export class FX {
   readonly drops: Droplets;
 
   constructor(scene: THREE.Scene, groundAt: (x: number, z: number) => number) {
-    this.add = new Pool(1800, THREE.AdditiveBlending, 0.0);
+    this.add = new Pool(2000, THREE.AdditiveBlending, 0.0, 0.55);
     this.alpha = new Pool(900, THREE.NormalBlending, 0.3);
     this.drops = new Droplets(groundAt);
     scene.add(this.add.points, this.alpha.points, this.drops.mesh);

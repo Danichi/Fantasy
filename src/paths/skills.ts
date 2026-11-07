@@ -19,6 +19,7 @@ import { GALE_SKILLS } from './classes/gale';
 import { BOUNDARY_SKILLS } from './classes/boundary';
 import { CROSS_SKILLS } from './classes/cross';
 import { LIGHT_SKILLS } from './classes/light';
+import { FORGED_SKILLS, FORGED_BUFFS } from './classes/forge';
 
 // The skill runtime: turns learned tree nodes into combat. It
 //  - sums passive node effects into the player's combat modifiers each step,
@@ -372,7 +373,7 @@ export class SkillRuntime {
       }
       s.verdict = (s.verdict ?? 0) + 1;
       this.gainRadiance(2 + this.x('witness'));
-      this.vfx.fx.add.spawn({ pos: t.center.clone().setY(t.center.y + (t.halfHeight ?? 0.5) + 0.5), spread: 1.2, count: 6 + s.verdict * 3, life: [0.3, 0.6], size: [0.18, 0.02], color: 0xfff6d0, color2: 0xffc050, jitter: 0.15 });
+      this.vfx.fx.add.spawn({ pos: t.center.clone().setY(t.center.y + (t.halfHeight ?? 0.5) + 0.5), spread: 1.2, count: 6 + s.verdict * 3, life: [0.3, 0.6], size: [0.18, 0.02], color: 0xfff6d0, color2: 0xffc400, jitter: 0.15 });
     }
   }
 
@@ -866,7 +867,7 @@ export class SkillRuntime {
         if (s.bleed.acc >= 0.5) {
           s.bleed.acc -= 0.5;
           this.tick(s.t, s.bleed.dps * 0.5);
-          this.vfx.fx.add.spawn({ pos: s.t.center, spread: 2, count: 3, life: [0.3, 0.6], size: [0.06, 0.01], color: 0xc02010, color2: 0x400000, gravity: 9 });
+          this.vfx.fx.add.spawn({ pos: s.t.center, spread: 2, count: 3, life: [0.3, 0.6], size: [0.06, 0.01], color: 0xff0a2a, color2: 0x400000, gravity: 9 });
         }
       }
       if (s.brand && s.brand > 0) {
@@ -874,7 +875,7 @@ export class SkillRuntime {
         if (s.brand <= 0) s.verdict = 0;
         // The mark burns brighter with each Verdict stack.
         const v = s.verdict ?? 0;
-        if (Math.random() < dt * (6 + v * 5)) this.vfx.fx.add.spawn({ pos: s.t.center.clone().setY(s.t.center.y + (s.t.halfHeight ?? 0.5) + 0.4), spread: 0.4 + v * 0.15, count: 1, life: [0.4, 0.7], size: [0.14 + v * 0.05, 0.01], color: 0xfff6d0, color2: 0xffc050, jitter: 0.2 + v * 0.06 });
+        if (Math.random() < dt * (6 + v * 5)) this.vfx.fx.add.spawn({ pos: s.t.center.clone().setY(s.t.center.y + (s.t.halfHeight ?? 0.5) + 0.4), spread: 0.4 + v * 0.15, count: 1, life: [0.4, 0.7], size: [0.14 + v * 0.05, 0.01], color: 0xfff6d0, color2: 0xffc400, jitter: 0.2 + v * 0.06 });
       }
       // Light Tether: stray too far and you're yanked back.
       if (s.tether) {
@@ -907,9 +908,9 @@ export class SkillRuntime {
     }
     if (this.buff('firebrand') || this.buff('blessed')) {
       const tip = this.hand(), fire = this.buff('firebrand');
-      this.vfx.fx.add.spawn({ pos: tip, spread: 0.6, count: 1, life: [0.2, 0.4], size: [0.12, 0.01], color: fire ? 0xffd080 : 0xfff6d0, color2: fire ? 0xff3000 : 0xffc050, upBias: 1, jitter: 0.15 });
+      this.vfx.fx.add.spawn({ pos: tip, spread: 0.6, count: 1, life: [0.2, 0.4], size: [0.12, 0.01], color: fire ? 0xffd080 : 0xfff6d0, color2: fire ? 0xff3000 : 0xffc400, upBias: 1, jitter: 0.15 });
     }
-    if (this.buff('haste') || this.buff('windwalk')) this.vfx.fx.add.spawn({ pos: p.pos.clone().setY(p.pos.y + 0.2), spread: 1, count: 1, life: [0.2, 0.4], size: [0.1, 0.01], color: 0xf2ffe0, color2: 0x7ac050, jitter: 0.3 });
+    if (this.buff('haste') || this.buff('windwalk')) this.vfx.fx.add.spawn({ pos: p.pos.clone().setY(p.pos.y + 0.2), spread: 1, count: 1, life: [0.2, 0.4], size: [0.1, 0.01], color: 0xf2ffe0, color2: 0x2bff5e, jitter: 0.3 });
     if (this.buff('cathedral')) {
       const b = this.buffs.get('cathedral')!;
       b.v = (b.v ?? 0) + dt;
@@ -1004,6 +1005,11 @@ export class SkillRuntime {
     if (this.buff('reflect')) m.dmgTaken -= 0.6;
     if (this.buff('dome')) m.dmgTaken -= 0.3;
     if (this.buff('cathedral')) m.dmgTaken -= 0.4;
+    // Buffs from the forged skills (classes/forge.ts) carry their own mods.
+    for (const k of this.buffs.keys()) {
+      const f = FORGED_BUFFS[k];
+      if (f) for (const [mk, v] of Object.entries(f)) (m as unknown as Record<string, number>)[mk] += v ?? 0;
+    }
     if (this.buff('shieldWall')) {
       m.blockCost = 0;
       if (p.blocking) m.dmgTaken = 0;
@@ -1048,7 +1054,7 @@ export const SKILLS: Record<string, SkillDef> = {
     on: (rt, p) => {
       const pl = rt['player'];
       rt.area(pl.pos, 6 * (1 + rt.x('gustRange')), rt.spell(15, 'wind') * R(p.rank), { poise: 150 * (1 + rt.x('gustPoise')), cone: cone(rt, 0.5) });
-      for (let i = 0; i < 30; i++) rt.vfx.fx.add.spawn({ pos: pl.center.addScaledVector(pl.forward, 0.8), vel: pl.forward.multiplyScalar(14).add(new THREE.Vector3((Math.random() - 0.5) * 6, (Math.random() - 0.3) * 2, (Math.random() - 0.5) * 6)), spread: 1, count: 1, life: [0.3, 0.5], size: [0.2, 0.02], color: 0xf2ffe0, color2: 0x7ac050, drag: 2 });
+      for (let i = 0; i < 30; i++) rt.vfx.fx.add.spawn({ pos: pl.center.addScaledVector(pl.forward, 0.8), vel: pl.forward.multiplyScalar(14).add(new THREE.Vector3((Math.random() - 0.5) * 6, (Math.random() - 0.3) * 2, (Math.random() - 0.5) * 6)), spread: 1, count: 1, life: [0.3, 0.5], size: [0.2, 0.02], color: 0xf2ffe0, color2: 0x2bff5e, drag: 2 });
       rt.vfx.slash(pl.center.addScaledVector(pl.forward, 1.2), pl.yaw, 2.4, 'wind', 0.5);
     },
   },
@@ -1063,7 +1069,7 @@ export const SKILLS: Record<string, SkillDef> = {
       for (const e of list) rt.hit(e, dmg, { poise: 220, dir: new THREE.Vector3(0, 0, 0.01) });
       for (let i = 0; i < 40; i++) {
         const a = i * 0.5;
-        rt.vfx.fx.add.spawn({ pos: t.position.clone().add(new THREE.Vector3(Math.cos(a) * 0.9, i * 0.07, Math.sin(a) * 0.9)), vel: new THREE.Vector3(0, 5, 0), spread: 0.5, count: 1, life: [0.3, 0.6], size: [0.14, 0.01], color: 0xf2ffe0, color2: 0x7ac050 });
+        rt.vfx.fx.add.spawn({ pos: t.position.clone().add(new THREE.Vector3(Math.cos(a) * 0.9, i * 0.07, Math.sin(a) * 0.9)), vel: new THREE.Vector3(0, 5, 0), spread: 0.5, count: 1, life: [0.3, 0.6], size: [0.14, 0.01], color: 0xf2ffe0, color2: 0x2bff5e });
       }
       rt.vfx.ring(t.position, 'wind', 4);
       if (rt.has('downburst')) rt.later(0.7, () => list.forEach((e) => e.alive && (rt.hit(e, dmg * 0.6, { poise: 60 }), rt.vfx.ring(e.position, 'wind', 5))));
@@ -1151,7 +1157,7 @@ export const SKILLS: Record<string, SkillDef> = {
       for (let i = 0; i < 50; i++) {
         const a = Math.random() * 6.28, r = 3 + Math.random() * 2;
         const from = at.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.3 + Math.random() * 1.5, Math.sin(a) * r));
-        rt.vfx.fx.add.spawn({ pos: from, vel: at.clone().setY(at.y + 0.8).sub(from).multiplyScalar(2.5), spread: 0.2, count: 1, life: [0.35, 0.4], size: [0.12, 0.01], color: 0xf2ffe0, color2: 0x7ac050 });
+        rt.vfx.fx.add.spawn({ pos: from, vel: at.clone().setY(at.y + 0.8).sub(from).multiplyScalar(2.5), spread: 0.2, count: 1, life: [0.35, 0.4], size: [0.12, 0.01], color: 0xf2ffe0, color2: 0x2bff5e });
       }
       rt.later(0.3, () => {
         rt.area(at, 5, rt.spell(20, 'wind') * R(p.rank) * (rt.has('suffocate') ? 1.6 : 1), { poise: 160, pull: true, stun: rt.has('crush') });
@@ -1200,4 +1206,5 @@ export const SKILLS: Record<string, SkillDef> = {
   ...CROSS_SKILLS,
   ...FIRE_SKILLS,
   ...LIGHT_SKILLS,
+  ...FORGED_SKILLS,
 };

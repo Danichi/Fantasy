@@ -3,9 +3,9 @@ import * as THREE from 'three';
 // Procedural magic circles (runes drawn on a canvas) and expanding shockwave
 // rings. Both are additive, emissive-bright planes that fade over their life.
 
-export type Style = 'fire' | 'light' | 'gale' | 'wind' | 'frost' | 'steel' | 'shadow' | 'blood';
+export type Style = 'fire' | 'light' | 'gale' | 'wind' | 'frost' | 'steel' | 'shadow' | 'blood' | 'void' | 'nature';
 /** which rune figure each style draws: hexagram (fire) or eight-point star (light) */
-const FIGURE: Record<Style, 'fire' | 'light'> = { fire: 'fire', blood: 'fire', light: 'light', gale: 'light', wind: 'light', frost: 'light', steel: 'fire', shadow: 'fire' };
+const FIGURE: Record<Style, 'fire' | 'light'> = { fire: 'fire', blood: 'fire', light: 'light', gale: 'light', wind: 'light', frost: 'light', steel: 'fire', shadow: 'fire', void: 'fire', nature: 'light' };
 
 function drawCircle(style: 'fire' | 'light') {
   const S = 512;
@@ -88,15 +88,18 @@ interface Live {
   spin: number;
 }
 
+// Saturated and over-bright, so the bloom pass makes them glow rather than wash out.
 const COLORS: Record<Style, THREE.Color> = {
-  fire: new THREE.Color(3.2, 1.3, 0.35),
-  light: new THREE.Color(2.8, 2.3, 1.2),
-  gale: new THREE.Color(0.7, 2.6, 2.2),
-  wind: new THREE.Color(1.4, 2.6, 0.9),
-  frost: new THREE.Color(1.2, 1.9, 3.2),
-  steel: new THREE.Color(1.9, 2.0, 2.4),
-  shadow: new THREE.Color(1.6, 0.8, 2.8),
-  blood: new THREE.Color(3.0, 0.5, 0.35),
+  fire: new THREE.Color(4.0, 1.2, 0.12),
+  light: new THREE.Color(3.6, 2.8, 0.7),
+  gale: new THREE.Color(0.25, 3.4, 2.9),
+  wind: new THREE.Color(0.7, 3.6, 0.8),
+  frost: new THREE.Color(0.5, 2.1, 4.4),
+  steel: new THREE.Color(1.6, 2.6, 4.2),
+  shadow: new THREE.Color(2.6, 0.35, 4.4),
+  blood: new THREE.Color(4.4, 0.2, 0.45),
+  void: new THREE.Color(1.8, 0.15, 4.6),
+  nature: new THREE.Color(0.9, 4.0, 0.45),
 };
 
 export class MagicCircles {
@@ -121,6 +124,13 @@ export class MagicCircles {
     m.renderOrder = 5;
     this.scene.add(m);
     this.live.push({ mesh: m, t: 0, life, kind: 'circle', size, spin: 0.9 });
+    // A second, smaller figure turning the other way, a hair above, in the other rune.
+    const inner = new THREE.Mesh(this.geo, this.material(this.tex[FIGURE[style] === 'fire' ? 'light' : 'fire'], COLORS[style].clone().multiplyScalar(0.8)));
+    inner.rotation.x = -Math.PI / 2;
+    inner.position.copy(pos).setY(pos.y + 0.07);
+    inner.renderOrder = 5;
+    this.scene.add(inner);
+    this.live.push({ mesh: inner, t: 0, life, kind: 'circle', size: size * 0.55, spin: -2.1 });
   }
 
   /** Circle standing upright, facing `dir`, that tracks a moving anchor. */
@@ -139,6 +149,12 @@ export class MagicCircles {
     m.renderOrder = 5;
     this.scene.add(m);
     this.live.push({ mesh: m, t: 0, life: 0.55, kind: 'ring', size, spin: 0 });
+    const fast = new THREE.Mesh(this.geo, this.material(this.ringTex, COLORS[style].clone().lerp(new THREE.Color(3, 3, 3), 0.35)));
+    fast.rotation.x = -Math.PI / 2;
+    fast.position.copy(pos).setY(pos.y + 0.02);
+    fast.renderOrder = 5;
+    this.scene.add(fast);
+    this.live.push({ mesh: fast, t: 0, life: 0.3, kind: 'ring', size: size * 0.6, spin: 0 });
   }
 
   update(dt: number) {

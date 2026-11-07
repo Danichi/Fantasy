@@ -31,6 +31,7 @@ export class Figure {
   pos = new THREE.Vector3();
   yaw = 0;
   disposed = false;
+  private mixAcc = 0;
 
   constructor(private scene: THREE.Scene, readonly look: Look, prop?: Prop, propColor = 0x2f5f9a) {
     scene.add(this.root);
@@ -78,7 +79,13 @@ export class Figure {
     this.root.position.set(this.pos.x, this.pos.y + this.lift, this.pos.z);
     this.root.rotation.y = this.yaw;
     if (!this.built) return;
-    this.built.mixer.update(full ? dt : dt * 0.5);
+    // Far: every third frame on the time owed (not every frame at half speed).
+    this.mixAcc += dt;
+    // (Riders every frame: ridePose turns bones from wherever the clip left them.)
+    if (full || this.ride > 0 || this.mixAcc >= dt * 2.5) {
+      this.built.mixer.update(this.mixAcc);
+      this.mixAcc = 0;
+    }
     if (this.ride > 0) {
       this.root.updateMatrixWorld(true);
       ridePose(this.built, this.root.quaternion, this.ride);

@@ -35,7 +35,7 @@ export const LIGHT_SKILLS: Record<string, SkillDef> = {
       const hurt = P.hp < P.maxHp;
       P.heal(6 * R(p.rank) * p.k);
       if (hurt) rt.gainRadiance(3);
-      rt.vfx.fx.add.spawn({ pos: P.center.clone().setY(P.pos.y + 1.2), spread: 1.5, count: 14, life: [0.4, 0.8], size: [0.1, 0.01], color: 0xfff6d0, color2: 0xffc050, upBias: 1.4, jitter: 0.5 });
+      rt.vfx.fx.add.spawn({ pos: P.center.clone().setY(P.pos.y + 1.2), spread: 1.5, count: 14, life: [0.4, 0.8], size: [0.1, 0.01], color: 0xfff6d0, color2: 0xffc400, upBias: 1.4, jitter: 0.5 });
     },
   },
   'lightbinder:Lightwell': {

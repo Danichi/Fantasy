@@ -336,7 +336,7 @@ WHET.forEach((w, i) => {
   one(id, `${w} Whetstone`, n >= 7 ? 'epic' : n >= 4 ? 'rare' : n >= 2 ? 'fine' : 'common', `A whetstone for ${w.toLowerCase()} and finer edges: sharpen without a station.`, {}, n <= 6 ? [`shop:smith:${n}`, `shop:trader:${n}`] : [`chest:${n}`], rune({ kind: 'ingot', color: '#7a7a72', accent: WHET_COL[i] }), { buff: b('whetstone', `${w} Edge`, 300, { melee: 0.03 + 0.012 * n }), lvl: n * 5 - 4 });
   recipe(id, 'workbench', 'smithing', [1, 5, 10, 15, 20, 25, 30, 35][i], [[['ironIngot', 'steelIngot', 'silversteelIngot', 'deepsteelIngot', 'sunbrassIngot', 'tideglassIngot', 'starmetalIngot', 'duskironIngot'][i], 1]], i >= 6 ? `book:${i === 6 ? 'bookStarfall' : 'bookIronBelow'}` : 'basic', { quality: false });
 });
-one('repairKit', 'Repair Kit', 'fine', 'Rivets, thread and patches: mend your armour in the field.', {}, ['shop:smith:1', 'shop:tailor:1', 'shop:trader:2'], rune({ kind: 'satchel', color: '#8a5a32' }), { buff: b('patch', 'Patched Armour', 600, { dmgTaken: -0.06 }) });
+one('repairKit', 'Repair Kit', 'fine', 'Rivets, thread and patches: mend your armour in the field. Restores half your armour on the spot.', {}, ['shop:smith:1', 'shop:tailor:1', 'shop:trader:2'], rune({ kind: 'satchel', color: '#8a5a32' }), { buff: b('patch', 'Patched Armour', 600, { dmgTaken: -0.06 }) });
 recipe('repairKit', 'loom', 'tailoring', 3, [['leather', 1], ['ironIngot', 1]], 'basic');
 one('torch', 'Torch', 'common', 'Pitch on a stick: light for 5 minutes.', {}, ['shop:trader:1', 'shop:inn:1'], trink({ kind: 'rod', color: '#ff9a3a' }), { use: { kind: 'light', sec: 300 } });
 recipe('torch', 'workbench', undefined, 0, [['planks', 1], ['coal', 1]], 'basic', { quality: false });

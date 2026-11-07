@@ -379,5 +379,17 @@ export async function buildCharacter(look: Look, clips: string[] = ['idle', 'tal
   await addClips(clips);
   const bones = new Map<string, THREE.Bone>();
   for (const b of anchor.skeleton.bones) bones.set(b.name, b);
+  // A SkinnedMesh with no bounding sphere gets one on its first render (three
+  // sorts by it even with frustum culling off) by skinning every vertex on the
+  // CPU: a stall each time a townsperson is built or baked for a sprite. The
+  // bind-pose sphere of the (shared, cheap to measure) geometry, a little
+  // inflated for limbs in motion, does the same job.
+  model.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh || m.boundingSphere) return;
+    if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+    const s = m.geometry.boundingSphere;
+    if (s) m.boundingSphere = new THREE.Sphere(s.center.clone(), s.radius * 1.5);
+  });
   return { root, model, mixer, bones, skeleton: anchor.skeleton, addClips };
 }

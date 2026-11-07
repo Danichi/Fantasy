@@ -20,6 +20,8 @@ export interface GameEvents {
   /** field bosses: first seen, and killed */
   bossFound: { id: string };
   bossSlain: { id: string; first: boolean };
+  /** a named foe dropped a piece of its own pool (items/catalog/sources.ts poolDrop) */
+  poolDrop: { kind: string; item: string; left: number; total: number };
   /** a boss says something (shown as a toast) */
   bossSpeaks: { id: string; line: string };
   /** a site (sites/): first seen within sight, and finished (looted, read, cleared, lit) */

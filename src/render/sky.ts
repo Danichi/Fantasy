@@ -208,16 +208,32 @@ export class Sky {
   }
 
   /** Blurred capture of the sky (no clouds) for image-based ambient light. */
+  // One generator, scene and material for every capture: a fresh PMREMGenerator
+  // each time (every 20 s) disposed its blur shader, which then recompiled:
+  // a periodic hitch while playing.
+  private env?: { pmrem: THREE.PMREMGenerator; scene: THREE.Scene; mat: THREE.ShaderMaterial };
   environment(renderer: THREE.WebGLRenderer) {
-    const scene = new THREE.Scene();
-    const m = new THREE.Mesh(this.mesh.geometry, this.mat.clone());
-    (m.material as THREE.ShaderMaterial).uniforms.uClouds.value = 0.4;
-    scene.add(m);
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    const env = pmrem.fromScene(scene, 0.06, 1, 2000).texture;
-    pmrem.dispose();
-    return env;
+    if (!this.env) {
+      const mat = this.mat.clone();
+      const scene = new THREE.Scene();
+      scene.add(new THREE.Mesh(this.mesh.geometry, mat));
+      this.env = { pmrem: new THREE.PMREMGenerator(renderer), scene, mat };
+    }
+    // Copy the sky's current state into the capture material.
+    const src = this.mat.uniforms, dst = this.env.mat.uniforms;
+    for (const k in src) {
+      const v = src[k].value as { copy?: (o: unknown) => void } | number;
+      if (typeof v === 'object' && v && typeof (v as { copy?: unknown }).copy === 'function' && !(v as THREE.Texture).isTexture) (dst[k].value as { copy: (o: unknown) => void }).copy(v);
+      else dst[k].value = src[k].value;
+    }
+    dst.uClouds.value = 0.4;
+    // (The caller swaps scene.environment straight after; free the last capture's
+    // framebuffers too, not just its texture.)
+    this.envTarget?.dispose();
+    this.envTarget = this.env.pmrem.fromScene(this.env.scene, 0.06, 1, 2000);
+    return this.envTarget.texture;
   }
+  private envTarget?: THREE.WebGLRenderTarget;
 
   /** Time of day and weather (colours are copied; directions are unit vectors). */
   setState(zenith: THREE.Color, horizon: THREE.Color, sunGlow: THREE.Color, sunDir: THREE.Vector3, moonDir: THREE.Vector3, night: number, overcast: number, flash: number, moonPhase = 0) {

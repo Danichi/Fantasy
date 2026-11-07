@@ -1,8 +1,9 @@
 import { ITEMS, itemValue, type ItemDef } from '../itemDefs';
 import { isWeaponKind } from '../weapons/kinds';
 import { events } from '../../core/events';
-import { SOURCES } from './kit';
+import { SOURCES, source } from './kit';
 import { FACTIONS } from './factions';
+import { bestiaryHook } from '../../progression/bestiary';
 import { tierOfLevel, tierOfRegion } from './tiers';
 import { familyOf } from './gearFx';
 import type { GearRuntime } from './gearRuntime';
@@ -26,6 +27,12 @@ export interface SourceDeps {
   gear: GearRuntime;
   /** does the player own this item already */
   owns: (id: string) => boolean;
+  /**
+   * Lay kill loot on the ground where the foe fell, glowing its rarity, to be
+   * walked over (ReagentDrops.spawn). False when it can't (no model): then it
+   * goes straight into the bag. keep: it is never lost if left lying.
+   */
+  drop?: (id: string, n: number, at: import('three').Vector3, keep?: boolean) => boolean;
 }
 
 /** The shop kinds a keeper's name, title and greeting suggest. */
@@ -126,7 +133,7 @@ export function withTag(tag: string): string[] {
   return l;
 }
 /** Items with a tag of this shape: drop:beast:3 matches drop:beast:0..3 when `upTo`. */
-function withTier(prefix: string, tier: number, from = 0): string[] {
+export function withTier(prefix: string, tier: number, from = 0): string[] {
   const out: string[] = [];
   for (let t = from; t <= tier; t++) out.push(...withTag(`${prefix}:${t}`));
   return out;
@@ -135,16 +142,47 @@ function withTier(prefix: string, tier: number, from = 0): string[] {
 const ARMED = new Set(['bandit', 'orc', 'goblin', 'undead', 'gloam', 'desert', 'scrap']);
 const CASTER = new Set(['undead', 'gloam']);
 
+// The dungeon bosses' old first-kill hoards join their pools, so they come one
+// at a time like everything else a boss carries (a farmed boss, not a piñata).
+source('warlordTusk', 'kill:grukk');
+source('orcOdachi', 'kill:grukk');
+source('vessBandolier', 'kill:captainVess');
+source('tidewardenHeart', 'kill:tideWarden');
+
+/** Everything a named foe can drop of its own: its uniques, boss, lair and sea-beast pieces. */
+export function poolOf(kind: string): string[] {
+  return [...new Set([...withTag(`kill:${kind}`), ...withTag(`boss:${kind}`), ...withTag(`lair:${kind}`), ...withTag(`beast:${kind}`)])];
+}
+/** What a foe of this kind may drop, by kind of drop (the bestiary's pages). */
+export function dropTable(kind: string, tier: number) {
+  const fam = familyOf(kind);
+  const t = Math.max(1, Math.min(8, tier));
+  return {
+    parts: withTier(`drop:${fam}`, t).filter((id) => ITEMS[id].kind === 'material'),
+    gear: [
+      ...withTier(`drop:${fam}`, t, Math.max(1, t - 1)).filter((id) => ITEMS[id].kind !== 'material'),
+      ...(ARMED.has(fam) ? withTier('drop:armed', t, Math.max(1, t - 1)) : []),
+      ...(CASTER.has(fam) ? withTier('drop:caster', t, Math.max(1, t - 1)) : []),
+    ],
+    supplies: withTier('drop:any', t, 1),
+    trophies: withTag(`trophy:${fam}`),
+    uniques: poolOf(kind),
+  };
+}
+/** How likely each rarity is to come out of a boss's pool; luck (the bestiary) leans it toward the rare end. */
+const POOL_W: Record<string, number> = { common: 10, fine: 8, rare: 5, epic: 3, legendary: 1.5 };
+
 export class CatalogSources {
   /** numbers for tests */
   readonly stats = { drops: 0, rewards: 0 };
+  /** pool pieces dropped on the ground and not picked up yet */
+  private lying = new Set<string>();
 
   constructor(private d: SourceDeps) {
+    // (Bosses, lairs and sea beasts drop from their pools on the kill itself: one piece
+    // each time, in onKill. They used to hand over the whole pool on the first kill.)
     events.on('enemyDied', (e) => this.onKill(e.kind, e.level, e.at));
-    events.on('bossSlain', ({ id }) => this.reward(`boss:${id}`, 'all'));
     events.on('deed', ({ id }) => {
-      if (id.startsWith('wilds:')) this.reward(`lair:${id.slice(6)}`, 'all');
-      if (id.startsWith('beast:')) this.reward(`beast:${id.slice(6)}`, 'all');
       for (const [k, f] of Object.entries(FACTIONS)) if (f.deed?.test(id)) this.factionPiece(k);
     });
     events.on('questChanged', ({ id, status }) => {
@@ -172,6 +210,46 @@ export class CatalogSources {
     if (!list.length) return [];
     const pick = how === 'all' ? list : [list[Math.floor(Math.random() * list.length)]];
     for (const id of pick) this.grant(id, 1, 'Found');
+    return pick;
+  }
+
+  /**
+   * One piece from a named foe's pool, picked at random among those you don't
+   * have yet; rarer pieces weigh more the better you know the foe (`lore`, the
+   * bestiary's luck). When you hold the lot, it says so: farm something else.
+   */
+  poolDrop(kind: string, lore = 0, at?: import('three').Vector3): string | null {
+    const all = poolOf(kind);
+    // (A piece already lying on the floor counts as taken: it's coming to you either way.)
+    for (const id of this.lying) if (this.d.owns(id)) this.lying.delete(id);
+    const left = all.filter((id) => !this.given(id) && !this.lying.has(id));
+    const who = bestiaryHook.name?.(kind) ?? kind;
+    if (!left.length) {
+      if (all.length) this.d.toast(`${who}: you already hold everything it carries.`);
+      return null;
+    }
+    const luck = lore + (this.d.gear.fx.luck ?? 0);
+    const w = left.map((id) => {
+      const r = ITEMS[id].rarity;
+      return (POOL_W[r] ?? 5) * (1 + luck * (RAR_RANK[r] ?? 0));
+    });
+    let x = Math.random() * w.reduce((a, b) => a + b, 0);
+    let pick = left[left.length - 1];
+    for (let i = 0; i < left.length; i++) {
+      x -= w[i];
+      if (x <= 0) {
+        pick = left[i];
+        break;
+      }
+    }
+    // It falls where the foe did, glowing, and is never lost if left lying. (Not
+    // flagged as given: owning it is what counts, so a piece you sell can drop again.)
+    if (at && this.d.drop?.(pick, 1, at, true)) this.lying.add(pick);
+    else this.d.give(pick, 1);
+    this.d.toast(`${who} dropped: ${ITEMS[pick].name}${left.length > 1 ? ` (${all.length - left.length + 1} of ${all.length})` : all.length > 1 ? ' (the last of its hoard)' : ''}`);
+    this.stats.rewards++;
+    this.stats.drops++;
+    events.emit('poolDrop', { kind, item: pick, left: left.length - 1, total: all.length });
     return pick;
   }
 
@@ -209,11 +287,16 @@ export class CatalogSources {
 
   /** A foe fell: its family's parts, sometimes its gear, rarely a trophy. Some kinds give a unique. */
   private onKill(kind: string, level: number | undefined, at: unknown) {
-    if (this.d.playerPos().distanceTo(at) > 40) return;
-    for (const id of withTag(`kill:${kind}`)) if (!this.given(id)) this.grant(id, 1, 'Taken from the fallen');
+    const dist = this.d.playerPos().distanceTo(at);
+    // The bestiary's hunting lore: the more of a kind you've killed, the better its drops.
+    const lore = bestiaryHook.luck?.(kind) ?? 0;
+    // A named foe's own pool: one piece a kill (sea beasts can die a long way off the bow).
+    const where = at as import('three').Vector3;
+    if (dist <= 250 && poolOf(kind).length) this.poolDrop(kind, lore, dist <= 40 ? where : undefined);
+    if (dist > 40) return;
     const fam = familyOf(kind);
     const tier = level ? Math.max(1, Math.min(8, tierOfLevel(level))) : Math.max(1, tierOfRegion(this.d.region()));
-    const luck = 1 + (this.d.gear.fx.luck ?? 0);
+    const luck = 1 + (this.d.gear.fx.luck ?? 0) + lore;
     const roll = (p: number) => Math.random() < p;
     const one = (pool: string[]) => (pool.length ? pool[Math.floor(Math.random() * pool.length)] : null);
     const drops: string[] = [];
@@ -231,11 +314,16 @@ export class CatalogSources {
     if (roll(0.06 * luck)) { const id = one(withTier('drop:any', tier, 1)); if (id) drops.push(id); }
     // A trophy of the hunt (Prospecting's finds help).
     if (roll(0.015 * luck)) { const id = one(withTag(`trophy:${fam}`)); if (id) drops.push(id); }
+    // On the ground where it fell, glowing its rarity; straight into the bag if it can't lie there.
+    const bagged: string[] = [];
     for (const id of drops) {
-      this.d.give(id, 1);
+      if (!this.d.drop?.(id, 1, where)) {
+        this.d.give(id, 1);
+        bagged.push(id);
+      }
       this.stats.drops++;
     }
-    if (drops.length) this.d.toast(`Loot: ${drops.map((id) => ITEMS[id].name).join(', ')}`);
+    if (bagged.length) this.d.toast(`Loot: ${bagged.map((id) => ITEMS[id].name).join(', ')}`);
   }
 
   // ---- shops -------------------------------------------------------------------------------------

@@ -10,16 +10,73 @@ import { segmentPointDistance } from '../core/math';
 // lightning. Gameplay (what a hit does) is passed in as callbacks, so this
 // file only moves things, detects contact and draws.
 
+// Vivid on purpose: each school owns one saturated hue (cool) with a white-hot
+// centre (hot), and an over-bright body colour that the bloom pass turns into glow.
 export const PALETTE: Record<Style, { hot: number; cool: number; body: THREE.Color }> = {
-  fire: { hot: 0xfff1c8, cool: 0xff4a10, body: new THREE.Color(3.2, 1.2, 0.3) },
-  light: { hot: 0xfff8e0, cool: 0xffc050, body: new THREE.Color(3.0, 2.5, 1.3) },
-  gale: { hot: 0xe8fffb, cool: 0x2fc8b0, body: new THREE.Color(0.9, 2.8, 2.4) },
-  wind: { hot: 0xf2ffe0, cool: 0x7ac050, body: new THREE.Color(1.6, 2.6, 1.1) },
-  frost: { hot: 0xeef6ff, cool: 0x5a9cff, body: new THREE.Color(1.3, 2.0, 3.2) },
-  steel: { hot: 0xffffff, cool: 0x8a9ab8, body: new THREE.Color(2.0, 2.1, 2.5) },
-  shadow: { hot: 0xe8d8ff, cool: 0x7a3ad0, body: new THREE.Color(1.7, 0.9, 3.0) },
-  blood: { hot: 0xffd0c0, cool: 0xc02010, body: new THREE.Color(3.0, 0.6, 0.4) },
+  fire: { hot: 0xfff05a, cool: 0xff2a00, body: new THREE.Color(4.0, 1.1, 0.1) },
+  light: { hot: 0xffffff, cool: 0xffc400, body: new THREE.Color(3.6, 2.9, 0.8) },
+  gale: { hot: 0xe6fffb, cool: 0x00e8cc, body: new THREE.Color(0.25, 3.4, 2.9) },
+  wind: { hot: 0xecffd8, cool: 0x2bff5e, body: new THREE.Color(0.7, 3.6, 0.8) },
+  frost: { hot: 0xf2fbff, cool: 0x1e8cff, body: new THREE.Color(0.5, 2.1, 4.4) },
+  steel: { hot: 0xffffff, cool: 0x4ab4ff, body: new THREE.Color(1.6, 2.6, 4.2) },
+  shadow: { hot: 0xffd2ff, cool: 0xa21cff, body: new THREE.Color(2.6, 0.35, 4.4) },
+  blood: { hot: 0xffd4d4, cool: 0xff0a2a, body: new THREE.Color(4.4, 0.2, 0.45) },
+  void: { hot: 0xff9cff, cool: 0x5a10ff, body: new THREE.Color(1.8, 0.15, 4.6) },
+  nature: { hot: 0xf4ffb0, cool: 0x00e04a, body: new THREE.Color(0.9, 4.0, 0.45) },
 };
+
+// Shared sprite textures (a soft glow and a four-point flare), drawn once.
+let TEX: { glow: THREE.Texture; flare: THREE.Texture } | null = null;
+function textures() {
+  if (TEX) return TEX;
+  const make = (draw: (g: CanvasRenderingContext2D) => void) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    draw(c.getContext('2d')!);
+    return new THREE.CanvasTexture(c);
+  };
+  const glowT = make((g) => {
+    const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,255,255,1)');
+    gr.addColorStop(0.22, 'rgba(255,255,255,0.65)');
+    gr.addColorStop(0.55, 'rgba(255,255,255,0.18)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 128, 128);
+  });
+  const flareT = make((g) => {
+    g.translate(64, 64);
+    const ray = (len: number, w: number, a: number) => {
+      g.save();
+      g.rotate(a);
+      const gr = g.createLinearGradient(-len, 0, len, 0);
+      gr.addColorStop(0, 'rgba(255,255,255,0)');
+      gr.addColorStop(0.5, 'rgba(255,255,255,1)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr;
+      g.beginPath();
+      g.ellipse(0, 0, len, w, 0, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+    };
+    ray(63, 4, 0);
+    ray(63, 4, Math.PI / 2);
+    ray(38, 2.5, Math.PI / 4);
+    ray(38, 2.5, -Math.PI / 4);
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, 24);
+    gr.addColorStop(0, 'rgba(255,255,255,1)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr;
+    g.fillRect(-24, -24, 48, 48);
+  });
+  return (TEX = { glow: glowT, flare: flareT });
+}
+const sprite = (map: THREE.Texture, color: THREE.ColorRepresentation, opacity = 1) => {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map, color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false }));
+  s.renderOrder = 11;
+  return s;
+};
+const FLAT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
 
 const glow = (color: THREE.Color, opacity = 1) =>
   new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(1.6), transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
@@ -98,11 +155,17 @@ export class SkillFx {
     sphere: new THREE.SphereGeometry(1, 32, 20),
     pillar: new THREE.CylinderGeometry(1, 1, 1, 24, 1, true).translate(0, 0.5, 0),
     arc: new THREE.RingGeometry(0.6, 1.0, 40, 1, -1.2, 2.4).rotateX(-Math.PI / 2),
+    edge: new THREE.RingGeometry(0.97, 1.02, 48, 1, -1.25, 2.5).rotateX(-Math.PI / 2),
     wall: new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0),
   };
 
   constructor(private scene: THREE.Scene, readonly fx: FX) {
     this.circles = new MagicCircles(scene);
+  }
+
+  /** A school's saturated colour (particle tails). */
+  color(style: Style) {
+    return PALETTE[style].cool;
   }
 
   // ---- one-shot flourishes ---------------------------------------------------------
@@ -117,15 +180,25 @@ export class SkillFx {
     const outer = new THREE.Mesh(this.geo.arc, glow(PALETTE[style].body, 0.9));
     const core = new THREE.Mesh(this.geo.bladeCore, solid(PALETTE[style].hot, 0.75));
     core.scale.setScalar(1.1);
-    m.add(outer, core);
+    const edge = new THREE.Mesh(this.geo.edge, glow(new THREE.Color(2.2, 2.2, 2.2), 1));
+    edge.scale.setScalar(1.12);
+    m.add(outer, core, edge);
     m.position.copy(pos);
     m.rotation.set(tilt, yaw - Math.PI / 2, 0, 'YXZ');
     m.scale.set(radius, 1, radius * spread);
-    this.addTimed(m, 0.36, (o, u) => {
-      o.scale.set(radius * (0.8 + u * 0.5), 1, radius * spread * (0.8 + u * 0.5));
-      (outer.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - u);
-      (core.material as THREE.MeshBasicMaterial).opacity = 0.75 * (1 - u) * (1 - u);
+    this.addTimed(m, 0.38, (o, u) => {
+      o.scale.set(radius * (0.8 + u * 0.55), 1, radius * spread * (0.8 + u * 0.55));
+      (outer.material as THREE.MeshBasicMaterial).opacity = 0.95 * (1 - u);
+      (core.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - u) * (1 - u);
+      (edge.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - u * 2.2);
     });
+    // Sparks flung off along the arc.
+    const c = PALETTE[style];
+    for (let i = 0; i < 7; i++) {
+      const a = yaw + (i / 6 - 0.5) * 2.2;
+      const dir = new THREE.Vector3(Math.sin(a), 0.15, Math.cos(a));
+      this.fx.add.spawn({ pos: pos.clone().addScaledVector(dir, radius * 0.95), vel: dir.multiplyScalar(5), spread: 1.5, count: 3, life: [0.15, 0.35], size: [0.14, 0.01], color: c.hot, color2: c.cool, drag: 3 });
+    }
   }
 
   /** Full-circle sweep (spins, novas). */
@@ -138,12 +211,98 @@ export class SkillFx {
     this.circles.shockwave(pos.clone().setY(pos.y + 0.08), style, size);
   }
 
+  /** A bright pop of light: a soft glow that swells and a white star flare that spins away. */
+  flash(pos: THREE.Vector3, style: Style, size = 1) {
+    const t = textures();
+    const g = new THREE.Group();
+    const soft = sprite(t.glow, PALETTE[style].body, 1);
+    const star = sprite(t.flare, new THREE.Color(2.4, 2.4, 2.4), 1);
+    g.add(soft, star);
+    g.position.copy(pos);
+    const rot = Math.random() * Math.PI;
+    const s0 = Math.min(size, 3);
+    this.addTimed(g, 0.3, (_o, u) => {
+      soft.scale.setScalar(s0 * (0.7 + 1.5 * Math.sqrt(u)));
+      soft.material.opacity = 0.85 * (1 - u) * (1 - u);
+      star.scale.setScalar(s0 * (2.4 - 1.2 * u));
+      star.material.rotation = rot + u * 1.2;
+      star.material.opacity = Math.max(0, 1 - u * 1.8);
+    });
+  }
+
+  /** Everything a spell does when it lands: flash, burst, shockwaves, sparks and rising embers. */
+  impact(pos: THREE.Vector3, style: Style, size = 1) {
+    const c = PALETTE[style];
+    this.flash(pos, style, 1.2 * size);
+    this.fx.add.spawn({ pos, spread: 6 * size, count: Math.round(45 * size), life: [0.25, 0.6], size: [0.45 * size, 0.04], color: c.hot, color2: c.cool, drag: 3, jitter: 0.3 * size });
+    this.fx.add.spawn({ pos, spread: 11 * size, count: Math.round(30 * size), life: [0.2, 0.5], size: [0.07, 0.01], color: 0xffffff, color2: c.cool, gravity: 9, drag: 1.5, upBias: 0.5 });
+    this.fx.add.spawn({ pos, vel: new THREE.Vector3(0, 2.2, 0), spread: 1.6 * size, count: Math.round(14 * size), life: [0.6, 1.2], size: [0.12, 0.01], color: c.hot, color2: c.cool, drag: 1, jitter: 0.8 * size });
+    this.ring(pos.clone().setY(pos.y - 0.6), style, 4.5 * size);
+  }
+
+  /** An exploding shell of light around `pos`: novas, war cries, ultimates. */
+  nova(pos: THREE.Vector3, style: Style, radius: number) {
+    const c = PALETTE[style];
+    const wall = new THREE.Mesh(this.geo.pillar, glow(c.body.clone().multiplyScalar(0.4), 0.55));
+    wall.position.copy(pos).setY(pos.y + 0.05);
+    this.addTimed(wall, 0.45, (o, u) => {
+      const s = radius * (0.15 + 0.9 * (1 - Math.pow(1 - u, 3)));
+      o.scale.set(s, 1.3 * (1 - u * 0.6), s);
+      ((o as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.55 * (1 - u);
+    });
+    this.flash(pos.clone().setY(pos.y + 1), style, 1.1 + Math.min(radius, 8) * 0.12);
+    this.ring(pos, style, radius * 2.4);
+    this.spinSlash(pos, radius * 0.8, style);
+    // Jets thrown outward along the ground.
+    for (let i = 0; i < 20; i++) {
+      const a = (i / 20) * Math.PI * 2;
+      const dir = new THREE.Vector3(Math.cos(a), 0.12, Math.sin(a));
+      this.fx.add.spawn({ pos: pos.clone().setY(pos.y + 0.5), vel: dir.multiplyScalar(radius * 3.2), spread: 1, count: 2, life: [0.25, 0.45], size: [0.32, 0.02], color: c.hot, color2: c.cool, drag: 3 });
+    }
+  }
+
+  /** A helix of motes climbing around `pos` (casting, buffs, summons). */
+  spiral(pos: THREE.Vector3, style: Style, height = 2.4, radius = 0.9, count = 28) {
+    const c = PALETTE[style];
+    for (let i = 0; i < count; i++) {
+      const k = i / count, a = k * Math.PI * 6;
+      for (const s of [0, Math.PI]) {
+        this.fx.add.spawn({ pos: pos.clone().add(new THREE.Vector3(Math.cos(a + s) * radius * (1 - k * 0.4), k * height, Math.sin(a + s) * radius * (1 - k * 0.4))), vel: new THREE.Vector3(0, 1.4, 0), spread: 0.15, count: 1, life: [0.4, 0.8], size: [0.16, 0.01], color: c.hot, color2: c.cool, drag: 1 });
+      }
+    }
+  }
+
+  /** Motes rushing into the hand before a spell leaves it. */
+  gather(at: THREE.Vector3, style: Style, size = 1) {
+    const c = PALETTE[style];
+    for (let i = 0; i < 18; i++) {
+      const off = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.3, Math.random() - 0.5).normalize().multiplyScalar(1.4 * size);
+      this.fx.add.spawn({ pos: at.clone().add(off), vel: off.clone().multiplyScalar(-4), spread: 0.1, count: 1, life: [0.22, 0.28], size: [0.14, 0.03], color: c.hot, color2: c.cool });
+    }
+    this.flash(at, style, 0.6 * size);
+  }
+
+  /** A turning circle and rising motes that follow `anchor` for `life` seconds (buffs, auras). */
+  aura(anchor: () => THREE.Vector3, style: Style, radius: number, life: number) {
+    const c = PALETTE[style];
+    this.circles.facing(() => ({ pos: anchor().clone().setY(anchor().y + 0.06), quat: FLAT }), style, radius * 2, life);
+    this.addTimed(new THREE.Group(), life, (_o, u, dt) => {
+      const p = anchor();
+      const n = dt * 26;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2;
+        this.fx.add.spawn({ pos: new THREE.Vector3(p.x + Math.cos(a) * radius, p.y + 0.1, p.z + Math.sin(a) * radius), vel: new THREE.Vector3(-Math.sin(a) * 1.2, 2.2, Math.cos(a) * 1.2), spread: 0.2, count: 1, life: [0.4, 0.7], size: [0.14 * (1 - u * 0.3), 0.01], color: c.hot, color2: c.cool });
+      }
+    });
+  }
+
   groundCircle(pos: THREE.Vector3, style: Style, size: number, life: number) {
     this.circles.ground(pos, style, size, life);
   }
 
   burst(pos: THREE.Vector3, style: Style, amount = 1, spread = 5) {
     const c = PALETTE[style];
+    this.flash(pos, style, 0.5 + amount * 0.6);
     this.fx.add.spawn({ pos, spread, count: Math.round(55 * amount), life: [0.3, 0.7], size: [0.5, 0.05], color: c.hot, color2: c.cool, drag: 3, jitter: 0.3 });
     this.fx.add.spawn({ pos, spread: spread * 1.4, count: Math.round(20 * amount), life: [0.4, 0.9], size: [0.06, 0.01], color: c.hot, color2: c.cool, gravity: 6, drag: 1, upBias: 0.4 });
   }
@@ -164,21 +323,50 @@ export class SkillFx {
     });
     this.fx.add.spawn({ pos: pos.clone().setY(pos.y + 0.3), spread: radius * 3, count: 50, life: [0.3, 0.8], size: [0.2, 0.02], color: PALETTE[style].hot, color2: PALETTE[style].cool, upBias: 2.5, drag: 2, jitter: radius * 0.5 });
     this.ring(pos, style, radius * 4);
+    this.flash(pos.clone().setY(pos.y + 0.6), style, radius * 2.2);
+    this.flash(pos.clone().setY(pos.y + height * 0.8), style, radius * 1.4);
+    this.spiral(pos, style, height * 0.7, radius * 1.2, 30);
   }
 
   /** Jagged bolt between two points. */
-  lightning(a: THREE.Vector3, b: THREE.Vector3, style: Style) {
-    const pts: THREE.Vector3[] = [];
-    const n = 10;
-    for (let i = 0; i <= n; i++) {
-      const p = a.clone().lerp(b, i / n);
-      if (i > 0 && i < n) p.add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(0.5));
-      pts.push(p);
-    }
-    const g = new THREE.BufferGeometry().setFromPoints(pts);
-    const line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: PALETTE[style].body, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-    this.addTimed(line, 0.22, (o, u) => (((o as THREE.Line).material as THREE.LineBasicMaterial).opacity = 1 - u));
-    for (const p of pts) this.fx.add.spawn({ pos: p, spread: 1, count: 2, life: [0.1, 0.25], size: [0.12, 0.01], color: PALETTE[style].hot, color2: PALETTE[style].cool });
+  lightning(a: THREE.Vector3, b: THREE.Vector3, style: Style, width = 1) {
+    const g = new THREE.Group();
+    const core = solid(0xffffff, 1);
+    const aura = glow(PALETTE[style].body, 0.75);
+    const up = new THREE.Vector3(0, 1, 0);
+    const bolt = (from: THREE.Vector3, to: THREE.Vector3, n: number, jag: number, w: number, branch: boolean) => {
+      let prev = from.clone();
+      for (let i = 1; i <= n; i++) {
+        const p = from.clone().lerp(to, i / n);
+        if (i < n) p.add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(jag));
+        const d = p.clone().sub(prev);
+        const len = d.length();
+        if (len > 1e-3) {
+          const q = new THREE.Quaternion().setFromUnitVectors(up, d.divideScalar(len));
+          for (const [mat, k] of [[core, 1], [aura, 4.5]] as const) {
+            const seg = new THREE.Mesh(this.geo.pillar, mat);
+            seg.position.copy(prev);
+            seg.quaternion.copy(q);
+            seg.scale.set(w * k, len, w * k);
+            g.add(seg);
+          }
+        }
+        if (branch && i > 1 && i < n - 1 && Math.random() < 0.3) {
+          const off = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.7, Math.random() - 0.5).multiplyScalar(2.2);
+          bolt(p, p.clone().add(off), 3, jag * 0.6, w * 0.55, false);
+        }
+        prev = p;
+      }
+    };
+    bolt(a, b, Math.max(6, Math.min(16, Math.round(a.distanceTo(b) * 1.2))), 0.7, 0.035 * width, true);
+    this.addTimed(g, 0.3, (_o, u) => {
+      const f = (1 - u) * (Math.random() < 0.25 ? 0.35 : 1);
+      core.opacity = f;
+      aura.opacity = 0.75 * f;
+    });
+    this.flash(a, style, 0.9);
+    this.flash(b, style, 1.6);
+    this.fx.add.spawn({ pos: b, spread: 5, count: 26, life: [0.15, 0.4], size: [0.12, 0.01], color: PALETTE[style].hot, color2: PALETTE[style].cool, gravity: 6, drag: 2 });
   }
 
   /** A falling star that calls `land` when it hits the ground at `to`. */
@@ -187,7 +375,9 @@ export class SkillFx {
     const core = new THREE.Mesh(this.geo.orb, solid(PALETTE[style].hot, 1));
     const halo = new THREE.Mesh(this.geo.sphere, glow(PALETTE[style].body.clone().multiplyScalar(0.4), 0.35));
     halo.scale.setScalar(1.3);
-    g.add(core, halo);
+    const flare = sprite(textures().glow, PALETTE[style].body, 0.9);
+    flare.scale.setScalar(4);
+    g.add(core, halo, flare);
     g.scale.setScalar(size);
     const from = to.clone().add(new THREE.Vector3(3, 18, -2));
     g.position.copy(from);
@@ -199,6 +389,7 @@ export class SkillFx {
       this.fx.alpha.spawn({ pos: o.position, spread: 0.5, count: 1, life: [0.8, 1.4], size: [0.6, 1.5], color: 0x4a403a, alpha: 0.3, drag: 2 });
       if (u > 0.97 && !landed) {
         landed = true;
+        this.impact(to, style, 1.4 * size);
         land();
       }
     });
@@ -298,6 +489,10 @@ export class SkillFx {
       g.children[1].scale.setScalar(0.8);
       mesh = g;
     }
+    const halo = sprite(textures().glow, PALETTE[o.style].body.clone().multiplyScalar(0.5), 0.9);
+    halo.scale.setScalar(o.shape === 'tornado' ? 3.2 : o.shape === 'spear' ? 1.6 : 2.4);
+    if (o.shape === 'tornado') halo.position.y = 1.2;
+    mesh.add(halo);
     mesh.scale.setScalar(size);
     const dir = o.dir.clone().normalize();
     mesh.position.copy(o.from);
@@ -352,7 +547,9 @@ export class SkillFx {
         this.fx.add.spawn({ pos: p.pos.clone().setY(p.pos.y + Math.random() * 2.4), spread: 2, count: 3, life: [0.2, 0.5], size: [0.12, 0.01], color: c.hot, color2: c.cool, jitter: 0.6 });
         this.fx.alpha.spawn({ pos: p.pos, spread: 1.5, count: 1, life: [0.5, 0.9], size: [0.4, 1.0], color: 0x8a8070, alpha: 0.2, drag: 3, upBias: 0.8 });
       } else {
-        this.fx.add.spawn({ pos: p.pos, spread: 0.6, count: p.shape === 'blade' ? 3 : 2, life: [0.12, 0.3], size: [0.22 * (p.size ?? 1), 0.02], color: c.hot, color2: c.cool, jitter: 0.3 * (p.size ?? 1) });
+        // A comet tail: hot sparks at the head fading to the school's colour behind.
+        this.fx.add.spawn({ pos: p.pos, spread: 0.6, count: p.shape === 'blade' ? 4 : 3, life: [0.18, 0.42], size: [0.3 * (p.size ?? 1), 0.02], color: c.hot, color2: c.cool, jitter: 0.3 * (p.size ?? 1) });
+        this.fx.add.spawn({ pos: p.pos, vel: p.dir.clone().multiplyScalar(-2), spread: 0.4, count: 1, life: [0.3, 0.6], size: [0.5 * (p.size ?? 1), 0.05], color: c.cool, color2: c.cool, drag: 2, jitter: 0.2 });
       }
       const r = p.radius ?? 0.8;
       for (const t of targets) {
@@ -375,7 +572,7 @@ export class SkillFx {
       if (p.done) {
         this.scene.remove(p.mesh);
         p.mesh.traverse((o) => ((o as THREE.Mesh).material as THREE.Material | undefined)?.dispose?.());
-        this.burst(p.pos, p.style, 0.5, 3);
+        this.impact(p.pos, p.style, 0.55 * (p.size ?? 1));
         p.onEnd?.(p.pos.clone());
       }
     }

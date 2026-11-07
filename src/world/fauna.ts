@@ -74,6 +74,8 @@ export interface Animal {
   state: 'idle' | 'eat' | 'walk' | 'flee' | 'sleep';
   timer: number;
   seed: number;
+  /** animation time owed to a distant actor's mixer (it updates at a low rate) */
+  mixAcc?: number;
   actor: { root: THREE.Object3D; mixer: THREE.AnimationMixer; actions: Map<string, THREE.AnimationAction>; clip: string } | null;
   wildTile?: number;
   /** quest animals: trail this point (the player) instead of grazing */
@@ -352,7 +354,13 @@ export class Fauna {
       a.actor.root.rotation.y = a.yaw;
       const clip = a.state === 'walk' ? def.walkClip : a.state === 'flee' ? def.runClip : a.state === 'eat' ? def.eat ?? def.idle[0] : def.idle[a.seed % def.idle.length];
       this.play(a, clip, a.state === 'sleep' ? 0.35 : 1);
-      a.actor.mixer.update(d > 50 ? dt * 0.5 : dt);
+      // Far off, the mixer runs every third frame on the time it is owed (it
+      // used to run every frame at half speed: the same cost, sliding feet).
+      a.mixAcc = (a.mixAcc ?? 0) + dt;
+      if (d <= 50 || a.mixAcc >= dt * 2.5) {
+        a.actor.mixer.update(a.mixAcc);
+        a.mixAcc = 0;
+      }
     }
   }
 

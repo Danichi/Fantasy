@@ -225,6 +225,10 @@ export function mergeParts(model: THREE.Object3D, anchor: THREE.SkinnedMesh, at:
     mesh.bind(anchor.skeleton, anchor.bindMatrix);
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.frustumCulled = false;
+    // A bind-pose sphere (inflated for limbs in motion): without one three skins
+    // every vertex on the CPU to measure it on the first render.
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    if (g.boundingSphere) mesh.boundingSphere = new THREE.Sphere(g.boundingSphere.center.clone(), g.boundingSphere.radius * 1.5);
     return mesh;
   };
   const hi = skinned(geo.hi, 'character');
