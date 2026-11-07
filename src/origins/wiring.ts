@@ -92,9 +92,8 @@ export function wireOrigins(w: OriginsWiring) {
     };
   };
 
-  // People react to what you are: a first line, and a little on the price.
-  const show = w.dialogue.show.bind(w.dialogue);
-  w.dialogue.show = (name, title, text, opts) => show(name, title, w.dialogue.open ? text : origins.greet(name, text), opts);
+  // People react to what you are: a little on the price here; what they say
+  // about it is part of their own greeting (social/conversation.ts, originLines.ts).
   const shop = w.shopUI.show.bind(w.shopUI);
   w.shopUI.show = (o) => {
     const k = origins.priceFactor();

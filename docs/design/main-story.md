@@ -115,6 +115,18 @@ Attuned wheels show on the world map.
 **Next (with the regions):** the elven woods, the mountains and the sea hold
 the remaining spokes; Act IV is the chair.
 
+## How chapters hand on
+
+- **Every chapter ends in a conversation.** Where one ended on a scene or a trigger, a last stage sends you back:
+  - after the Sunwheel wakes, back to Magus Orren;
+  - after the index, and after Dorian, back to Archivist Mell;
+  - after the Feast, and after the duel, back to the King.
+- **The closing words point onward.** Orren sends you to Maud about the crypt lights. The King hands you Malric's letter, then sends you to Master Quill.
+- **No chapter starts behind your back.** The next one is put to you by its giver. When you report to the person who also has the next chapter, their offer follows straight on in the same conversation ("What now?").
+- **A chapter only starts by itself when nobody could offer it:** there is no offer text (the Outcast Sands chain, the Turning of the Wheel).
+- **Between chapters,** `QuestLog.leads()` names who has the next one. The tracker shows "MAIN QUEST · NEXT: speak with ...", and the compass, waypoint and map point to them while you're not tracking anything else.
+- **Order fixes:** the Road to Port Aurelle waits for the Night of Bells, and the Entrance Trial waits for the Road.
+
 ## Falling in a story fight
 
 If you die in a story fight, the story's fighters leave and that beat resets:

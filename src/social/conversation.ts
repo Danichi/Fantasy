@@ -1,6 +1,7 @@
 import type { DialogueOption, DialogueUI, Tone } from '../ui/dialogue';
 import { CAST, type PersonalTopic } from './cast';
 import { greetFor, LINES, pickLine, type LineCtx } from './lines';
+import { NOTICE } from './originLines';
 import type { People } from './people';
 import { giftKind, type GiftKind, type Profile } from './profile';
 import { MOOD_NAME, type Mood } from './reputation';
@@ -79,6 +80,9 @@ export class Conversation {
   private cur: { id: string; text: string } | null = null;
   /** a refusal got past (a bribe), for this conversation only */
   private served = new Set<string>();
+  /** the last few stock introductions people gave (so the next stranger doesn't repeat them) */
+  private recentIntros: string[] = [];
+  private recentReacts: string[] = [];
 
   constructor(private h: ConvoHost) {}
 
@@ -139,7 +143,21 @@ export class Conversation {
     m.met++;
     m.lastDay = today;
     if (this.rep.fears(p.id) && !this.rep.refuses(p.id)) return this.line('bark.fear', p);
-    if (first) return spec.intro ?? this.line('greet.first', p);
+    if (first) {
+      // Some people remark on what you are, each in their own way; most just say hello.
+      const react = this.reaction(p, c);
+      // A stock introduction someone else has only just given you is left out: they say hello in their own voice instead.
+      let intro = spec.intro;
+      if (intro && !CAST[p.id]) {
+        if (this.recentIntros.includes(intro)) intro = undefined;
+        else {
+          this.recentIntros.push(intro);
+          if (this.recentIntros.length > 6) this.recentIntros.shift();
+        }
+      }
+      if (react) return intro ? `${react} ${intro}` : react;
+      return intro ?? this.line('greet.first', p);
+    }
     const mood = this.rep.moodOf(p.id);
     // Written characters have their own words for the people they adore, and despise.
     const cast = CAST[p.id];
@@ -174,6 +192,34 @@ export class Conversation {
       }
     }
     return parts.filter(Boolean).join(' ');
+  }
+
+  /**
+   * A first-meeting remark about your origin, or null. Whether they say
+   * anything is fixed per person (the same people always notice), and more
+   * people notice horns and wings than ears.
+   */
+  private reaction(p: Profile, c: LineCtx) {
+    const o = c.origin;
+    if (!o || !NOTICE[o]) return null;
+    // (A well-mixed hash: ids like glen-farmer-3 and glen-farmer-4 must land far apart.)
+    const mix = (salt: number) => {
+      let h = 2166136261 ^ salt;
+      for (const ch of p.id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+      h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; h = Math.imul(h, 0x297a2d39); h ^= h >>> 15;
+      return h >>> 0;
+    };
+    if ((mix(1) % 1000) / 1000 >= NOTICE[o]) return null;
+    // Their own remark, and not the one the last few people made (if they have another).
+    let line = '';
+    for (let k = 0; k < 6; k++) {
+      line = pickLine('react.' + o, p, c, undefined, {}, mix(2 + k));
+      if (!this.recentReacts.includes(line)) break;
+    }
+    if (!line) return null;
+    this.recentReacts.push(line);
+    if (this.recentReacts.length > 5) this.recentReacts.shift();
+    return line;
   }
 
   /** Something a friend presses into your hands (by what they do for a living). */

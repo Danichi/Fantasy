@@ -41,7 +41,7 @@ const EMPTY: Record<Shelf, string> = {
 export class QuestUI {
   open = false;
   onToggle?: (open: boolean) => void;
-  private journal: HTMLDivElement;
+  readonly journal: HTMLDivElement;
   private marks = new Map<string, HTMLDivElement>();
   private selected: string | null = null;
   private tmp = new THREE.Vector3();
@@ -337,6 +337,12 @@ export class QuestUI {
       const tracked = act.find((q) => q.id === this.quests.tracked) ?? act[0];
       const others = act.filter((q) => q !== tracked).slice(0, 2);
       let html = '';
+      // Between chapters: who has the story's next step.
+      const leads = this.quests.leads();
+      if (leads.length) {
+        html += `<span class="q-kicker q-mainq">MAIN QUEST · NEXT</span>` +
+          leads.slice(0, 3).map((l) => `<b>${esc(l.quest.title.toUpperCase())}</b><small>◇ Speak with ${esc(l.name)}</small>`).join('');
+      }
       if (tracked) {
         const lines = this.quests.lines(tracked.id);
         html += `<span class="q-kicker ${tracked.main ? 'q-mainq' : tracked.contract ? 'q-contract' : 'q-side'}">${tracked.main ? 'MAIN QUEST' : tracked.contract ? 'GUILD CONTRACT' : 'SIDE QUEST'}</span><b>${esc(tracked.title.toUpperCase())}</b>` +
@@ -408,7 +414,8 @@ export class QuestUI {
       this.target = { ...this.urgent, d: Math.hypot(this.urgent.x - player.x, this.urgent.z - player.z) };
       return;
     }
-    const tracked = this.quests.tracked ?? this.quests.active()[0]?.id;
+    const lead = this.quests.leads()[0];
+    const tracked = this.quests.tracked ?? this.quests.active()[0]?.id ?? (lead ? 'lead:' + lead.quest.id : undefined);
     let best: QuestUI['target'] = null;
     for (const m of this.quests.markers()) {
       if (m.quest !== tracked) continue;

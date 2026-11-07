@@ -180,6 +180,11 @@ export class Origins {
     this.faction = f;
   }
 
+  /** The faction of the region you're in now (who people are, for their reactions). */
+  factionNow() {
+    return this.faction();
+  }
+
   /** The first time someone speaks to you, they may react to what you are. */
   greet(speaker: string, text: string) {
     const r = REACTIONS[this.origin];

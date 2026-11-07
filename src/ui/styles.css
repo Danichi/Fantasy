@@ -814,25 +814,76 @@ body.book-open .bossbar { display: none; }
 .book-button span { font: 700 9px/1 var(--sans); letter-spacing: .22em; }
 .book-button:hover { transform: translateY(-2px); border-color: var(--gold-bright); box-shadow: 0 14px 30px rgba(0,0,0,.55), 0 0 18px rgba(240,210,138,.18); }
 .book-button.hidden { display: none; }
-.book-tabs {
-  position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 90;
-  display: flex; gap: 4px; padding: 5px; pointer-events: auto;
-  background: linear-gradient(180deg, rgba(16, 25, 44, .96), rgba(8, 13, 24, .97));
-  border: 1px solid rgba(213, 177, 88, .5); border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,.5);
+/* The book's frame: four tabs, sub-tabs beneath, and every page seated in the
+   same content area below them (ui/menuBook.ts). */
+:root { --bk-x: max(16px, calc((100vw - 1480px) / 2)); --bk-top: 114px; }
+body.book-one { --bk-top: 76px; }
+.book-veil { position: absolute; inset: 0; z-index: 24; pointer-events: auto; background: radial-gradient(120% 90% at 50% 40%, rgba(5, 8, 14, .5), rgba(5, 8, 14, .86)); }
+.book-veil.hidden, .book-frame.hidden { display: none; }
+.book-frame {
+  position: absolute; top: 14px; bottom: 14px; left: var(--bk-x); right: var(--bk-x); z-index: 25;
+  display: flex; flex-direction: column; pointer-events: auto;
+  background: linear-gradient(180deg, rgba(17, 25, 43, .985), rgba(8, 12, 22, .985));
+  border: 1px solid rgba(213, 177, 88, .5); border-radius: 14px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .7), inset 0 1px 0 rgba(255, 255, 255, .05);
 }
-.book-tabs.hidden { display: none; }
-.book-tabs button {
-  display: flex; align-items: center; gap: 8px; padding: 8px 16px; cursor: pointer;
-  background: transparent; border: 1px solid transparent; border-radius: 8px; color: rgba(234, 227, 207, .72);
-  font: 700 12px/1 var(--serif); letter-spacing: .16em; text-transform: uppercase;
+.book-frame { isolation: isolate; }
+.book-frame.free { bottom: auto; z-index: 80; }
+.bk-head { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px 0 18px; border-bottom: 1px solid rgba(213, 177, 88, .22); }
+.bk-tabs { display: flex; gap: 2px; flex: 1; }
+.bk-tabs button {
+  display: flex; align-items: center; gap: 9px; padding: 10px 20px 12px; cursor: pointer; position: relative;
+  background: none; border: 0; color: rgba(234, 227, 207, .62);
+  font: 700 14px/1 var(--serif); letter-spacing: .18em; text-transform: uppercase;
 }
-.book-tabs button kbd { font: 700 9px/1 var(--sans); padding: 3px 5px; border-radius: 4px; border: 1px solid rgba(213,177,88,.35); color: rgba(240,210,138,.8); }
-.book-tabs button:hover { color: #f7efd9; background: rgba(255,255,255,.04); }
-.book-tabs button.on { color: var(--gold-bright); border-color: rgba(240,210,138,.6); background: rgba(240,210,138,.09); }
-.book-tabs .book-close { padding: 8px 12px; margin-left: 6px; border-left: 1px solid rgba(213,177,88,.2); border-radius: 0 8px 8px 0; }
-/* Pages sit below the tab strip. */
-body.book-open .inventory, body.book-open .journal, body.book-open .sk { margin-top: 28px; max-height: calc(100vh - 84px); }
-body.book-open .wmap-frame { margin-top: 40px; height: min(82vh, 920px); }
+.bk-tabs button kbd { font: 700 9px/1 var(--sans); padding: 3px 5px; border-radius: 4px; border: 1px solid rgba(213, 177, 88, .3); color: rgba(240, 210, 138, .65); letter-spacing: 0; }
+.bk-tabs button:hover { color: #f7efd9; }
+.bk-tabs button.on { color: var(--gold-bright); }
+.bk-tabs button.on::after { content: ''; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 2px; background: linear-gradient(90deg, transparent, var(--gold-bright), transparent); }
+.bk-close { align-self: center; width: 34px; height: 34px; margin-bottom: 6px; border-radius: 8px; cursor: pointer; border: 1px solid rgba(213, 177, 88, .35); background: rgba(0, 0, 0, .3); color: rgba(240, 210, 138, .85); font-size: 15px; }
+.bk-close:hover { border-color: var(--gold-bright); color: #fff3d1; }
+.bk-subs { display: flex; gap: 6px; padding: 8px 18px; border-bottom: 1px solid rgba(213, 177, 88, .14); }
+.book-frame.one .bk-subs { display: none; }
+.bk-subs button {
+  display: flex; align-items: center; gap: 7px; padding: 6px 14px; cursor: pointer; border-radius: 999px;
+  background: rgba(255, 255, 255, .03); border: 1px solid rgba(213, 177, 88, .18); color: rgba(234, 227, 207, .7);
+  font: 600 12px/1 var(--sans); letter-spacing: .04em;
+}
+.bk-subs button kbd { font: 700 9px/1 var(--sans); color: rgba(240, 210, 138, .55); }
+.bk-subs button:hover { color: #f7efd9; border-color: rgba(213, 177, 88, .4); }
+.bk-subs button.on { color: #1a1206; background: linear-gradient(180deg, #f2d68a, #cfa955); border-color: #f2d68a; }
+.bk-subs button.on kbd { color: rgba(26, 18, 6, .6); }
+
+/* A page in the book fills the frame's content area, with the frame's look around it. */
+#ui .bk-page {
+  position: absolute !important; top: var(--bk-top) !important; bottom: 24px !important;
+  left: calc(var(--bk-x) + 10px) !important; right: calc(var(--bk-x) + 10px) !important;
+  width: auto !important; height: auto !important; max-width: none !important; max-height: none !important;
+  transform: none !important; margin: 0 !important; z-index: 26 !important;
+  border: 0 !important; border-radius: 3px !important; box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 2px 10px rgba(0, 0, 0, .5) !important;
+}
+body.book-open .sk-backdrop { display: none !important; }
+/* What the book's header already says: titles, close buttons, inner tab rows, key hints. */
+#ui .bk-page .sk-close, #ui .bk-page.sk:not(.tree) .sk-title, #ui .bk-page .sk-tabs, #ui .bk-page .sk-corner,
+#ui .bk-page .inv-view, #ui .bk-page .inv-help,
+#ui .bk-page.journal > header, #ui .bk-page.journal > footer,
+#ui .bk-page .bw-book > header > button { display: none !important; }
+#ui .bk-page.sk::before { display: none; }
+#ui .bk-page.sk:not(.tree) .sk-top { justify-content: flex-end; padding-top: 12px; }
+#ui .bk-page.journal { background-clip: padding-box; }
+/* The inventory: one quiet frame instead of two floating cards. */
+#ui .bk-page.inv2 { padding: 0; gap: 10px; background: transparent; grid-template-columns: minmax(500px, 40%) minmax(0, 1fr); }
+#ui .bk-page.inv2 .grid { grid-auto-rows: 118px; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+#ui .bk-page.inv2 .grid .item { aspect-ratio: auto; height: 100%; }
+#ui .bk-page.inv2 > section { box-shadow: none; border-color: rgba(213, 177, 88, .2); }
+/* The herbal: the parchment page fills the frame instead of sitting on its own board. */
+#ui .bk-page.bw { background: none; display: flex; padding: 12px; }
+#ui .bk-page .bw-book { width: 100%; height: 100%; box-shadow: inset 0 0 0 2px var(--parch-edge), inset 0 0 60px rgba(120, 80, 30, .3); }
+/* Long card text: two lines until you point at it. */
+#ui .bk-page .sea-node p, #ui .bk-page .bw-card.unk small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#ui .bk-page .sea-node:hover p, #ui .bk-page .bw-card.unk:hover small { -webkit-line-clamp: unset; }
+#ui .bk-page .sea-col .blurb { min-height: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+body.book-open .wmap-frame { margin-top: 64px; height: min(84vh, 920px); }
 body.book-open .inv-open .loadout-wrap { display: none; }
 
 /* ===== Quest compass (ui/questUI.ts) ===== */

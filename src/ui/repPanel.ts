@@ -11,7 +11,7 @@ const BAR_MIN = -1000, BAR_MAX = 1000;
 export class RepPanel {
   open = false;
   onToggle?: (open: boolean) => void;
-  private el: HTMLDivElement;
+  readonly el: HTMLDivElement;
   private tab: 'places' | 'people' | 'codex' = 'places';
   /** the main story's Powers & Champions page, and naming a champion's patron */
   codex?: () => string;

@@ -194,3 +194,18 @@ unwanted item back into some of its materials at a station.
    or from the capital's master weaver.
 5. **Mixamo downloads:** default: Malachi grabs the four packs listed in §3;
    until then the UAL clips stand in.
+
+## Finding a station
+
+- **Elder Glen's open forge:** a hearth, anvil and quench barrel beside Fröst Forge, on the plaza side (`GLEN_FORGE` in `crafting/arms.ts`). Walk up to it and work it at any hour.
+- **Asking the owner:** the Glen's tradespeople open their stations for you from conversation:
+
+  | Person | Asks to use |
+  |---|---|
+  | Fröst | his forge, his runestone |
+  | Mara Bell | the Wayfarer's kitchen |
+  | Vela | her loom |
+  | Bram | his workbench |
+  | Ilyra | the alchemy table (already offered) |
+
+- **Indoors:** the stations inside the shops (the smithy's forge and runestone, and the rest) are unchanged.

@@ -1,6 +1,7 @@
 import type { Profile, Voice } from './profile';
 import type { Memory, Mood } from './reputation';
 import { MORE_LINES } from './voices';
+import { ORIGIN_LINES } from './originLines';
 
 // The line library (NPC overhaul, phases 1-2). Every situation has a pool of
 // lines, many written per way of speaking (a gruff guard and a cheery baker
@@ -26,6 +27,9 @@ export interface LineCtx {
   region?: string;
   job?: string;
   hard?: boolean;
+  /** the hero's origin and the faction whose lands these are (first meetings: originLines.ts) */
+  origin?: string;
+  faction?: string;
 }
 
 type Cond = (p: Profile) => boolean;
@@ -346,7 +350,7 @@ let roll = 0;
  * A line for a person to say, from a pool. Avoids what they've said lately
  * (remembered in `mem.said`), varies per person and per moment.
  */
-export function pickLine(cat: string, p: Profile, c: LineCtx, mem?: Memory, extra: Record<string, string> = {}): string {
+export function pickLine(cat: string, p: Profile, c: LineCtx, mem?: Memory, extra: Record<string, string> = {}, seed?: number): string {
   const pool = poolFor(cat, c);
   if (!pool.length) return '';
   const opts = eligible(pool, p);
@@ -356,7 +360,8 @@ export function pickLine(cat: string, p: Profile, c: LineCtx, mem?: Memory, extr
   const fresh = opts.filter((o) => !said.includes(key(o)));
   const from = fresh.length ? fresh : opts;
   roll = (roll + 1) >>> 0;
-  const h = (p.id.length * 7 + roll * 31 + Math.floor(c.hour * 3)) >>> 0;
+  // (A seed fixes the pick for this person: their own remark, not the next one in line.)
+  const h = seed !== undefined ? seed >>> 0 : (p.id.length * 7 + roll * 31 + Math.floor(c.hour * 3)) >>> 0;
   const o = from[h % from.length];
   if (mem) {
     mem.said.push(key(o));
@@ -372,11 +377,11 @@ export function pickLine(cat: string, p: Profile, c: LineCtx, mem?: Memory, extr
  */
 let ALL: Record<string, Pool> | null = null;
 export function poolFor(cat: string, c: LineCtx): Pool {
-  const all = (ALL ??= { ...LINES, ...(MORE_LINES as Record<string, Pool>) });
+  const all = (ALL ??= { ...LINES, ...(MORE_LINES as Record<string, Pool>), ...(ORIGIN_LINES as Record<string, Pool>) });
   const out: Pool = [...(all[cat] ?? [])];
   // (A child doesn't talk about the year's work like a grown-up does.)
   const hard = c.hard && !(c.job === 'child' && cat === 'small.work');
-  const extra = [c.region && `${cat}.${c.region}`, c.job && `${cat}.${c.job}`, hard && `${cat}.hard`];
+  const extra = [c.region && `${cat}.${c.region}`, c.job && `${cat}.${c.job}`, hard && `${cat}.hard`, c.faction && `${cat}.${c.faction}`];
   for (const k of extra) if (k && all[k]) out.push(...all[k], ...all[k]);
   return out;
 }

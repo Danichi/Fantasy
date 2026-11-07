@@ -125,6 +125,8 @@ export interface QuestContext {
   itemName?(id: string): string;
   /** a quest NPC who isn't where you'd expect (asleep, indoors, off their post), and when they're back */
   npcAway?(id: string): Away | null;
+  /** an NPC's name as the player knows it (for "speak with..." leads) */
+  npcName?(id: string): string;
 }
 
 export interface Away {
@@ -339,7 +341,7 @@ export class QuestLog {
               run: () => {
                 this.setFlag(q.id, o.key, c.id);
                 const finishing = this.bump(q, i, 1);
-                show(finishing ? `${c.say}\n\n${this.doneFor(q)}` : c.say, [{ label: finishing ? 'Glad to help.' : 'On it.', run: back }]);
+                show(finishing ? `${c.say}\n\n${this.doneFor(q)}` : c.say, this.afterWord(q, npc, finishing, show, back));
               },
             })),
             { label: 'Let me think about it.', run: back },
@@ -364,11 +366,12 @@ export class QuestLog {
           }
           const said = o.type === 'talk' ? this.sayFor(q, o) : o.say;
           const finishing = this.bump(q, i, this.target(o));
-          show(finishing ? `${said}\n\n${this.doneFor(q)}` : said, [{ label: finishing ? 'Glad to help.' : 'On it.', run: back }]);
+          show(finishing ? `${said}\n\n${this.doneFor(q)}` : said, this.afterWord(q, npc, finishing, show, back));
         },
       });
     });
-    for (const q of this.offers(npc)) {
+    // (The story's next chapter comes before any side work they have.)
+    for (const q of this.offers(npc).sort((a, b) => Number(!!b.main) - Number(!!a.main))) {
       const no = q.main || q.contract ? null : this.offerGate?.(npc, q) ?? null;
       if (no) {
         out.push({ label: `❗ ${q.title}`, run: () => show(no, [{ label: 'Back.', run: back }]) });
@@ -376,10 +379,37 @@ export class QuestLog {
       }
       out.push({
         label: `❗ ${q.title}`,
+        // The story's next chapter is what they want to talk about.
+        auto: !!q.main,
         run: () => this.offerTalk(q, show, back),
       });
     }
     return out;
+  }
+
+  /**
+   * What you can say once they've finished speaking. When that conversation
+   * finished a chapter of the story and the same person has the next one,
+   * the talk goes straight on into it (the story never moves on behind your
+   * back: the next chapter is always put to you by someone).
+   */
+  private afterWord(q: QuestDef, npc: string, finishing: boolean, show: (text: string, opts: DialogueOption[]) => void, back: () => void): DialogueOption[] {
+    if (!finishing) return [{ label: 'On it.', run: back }];
+    const next = q.main ? this.offers(npc).find((n) => n.main && n.offer) : undefined;
+    if (next) return [{ label: 'What now?', run: () => this.offerTalk(next, show, back) }];
+    return [{ label: 'Glad to help.', run: back }];
+  }
+
+  /**
+   * The story's next steps while no chapter of it is under way: each main
+   * quest that's ready, and who will put it to you. (Shown in the tracker and
+   * on the map, so the story always has somewhere to point you.)
+   */
+  leads(): { quest: QuestDef; npc: string; name: string }[] {
+    if (this.active().some((q) => q.main)) return [];
+    return [...this.defs.values()]
+      .filter((q) => q.main && !!q.offer && this.canOffer(q) && !this.offerHidden?.(q.giver, q))
+      .map((q) => ({ quest: q, npc: q.giver, name: this.ctx.npcName?.(q.giver) ?? q.giver }));
   }
 
   /**
@@ -653,6 +683,10 @@ export class QuestLog {
       else if ('at' in o && o.at) p = o.at;
       if (p) out.push({ x: p[0], z: p[1], label: o.text, quest: q.id });
     });
+    for (const l of this.leads()) {
+      const v = this.ctx.npcPos(l.npc);
+      if (v) out.push({ x: v.x, z: v.z, label: `Speak with ${l.name}`, quest: 'lead:' + l.quest.id });
+    }
     return out;
   }
 

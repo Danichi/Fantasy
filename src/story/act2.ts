@@ -33,8 +33,9 @@ export const ACT2_QUESTS: QuestDef[] = [
     acceptLabel: 'Show me.',
     stages: [
       { note: 'Read Archivist Mell\'s index.', hook: 'archive:read', objectives: [{ type: 'signal', id: 'archive-read', text: 'Read the index of the summoned with Archivist Mell' }] },
+      { note: 'Close the index with Archivist Mell.', objectives: [{ type: 'talk', npc: 'mell', text: 'Speak with Archivist Mell', reply: 'You went quiet just then.', say: 'Did I? I was watching your face while you read. You looked like someone hearing a voice. ...Don\'t tell me. An archivist should only keep what\'s written down.' }] },
     ],
-    done: 'Four names. Four graves, somewhere. And every one of them died with another power\'s champion close by. I am sorry. I thought you should know.',
+    done: 'Four names. Four graves, somewhere. And every one of them died with another power\'s champion close by. I am sorry. I thought you should know. Come back when you\'ve settled in at the Academy: there is a classmate of yours I would like you to watch.',
     rewards: { gold: 60, xp: 200 },
   },
   {
@@ -47,6 +48,7 @@ export const ACT2_QUESTS: QuestDef[] = [
       { note: 'Watch Dorian write his letter.', hook: 'dorian:noon', objectives: [{ type: 'signal', id: 'dorian-watched', text: 'Watch Dorian at noon (the Academy ring)' }] },
       { note: 'Work out whose champion Dorian writes to (Powers & Champions, P).', objectives: [{ type: 'signal', id: 'named-dorian', text: 'Name the patron of the master Dorian writes to (the Powers & Champions page, P)' }] },
       { note: 'Confront Dorian.', hook: 'dorian:confront', objectives: [{ type: 'signal', id: 'dorian-faced', text: 'Talk to Dorian about who he answers to' }] },
+      { note: 'Tell Archivist Mell what Dorian is.', objectives: [{ type: 'talk', npc: 'mell', text: 'Tell Archivist Mell what you learned about Dorian', reply: 'Dorian answers to Master Veyr. The Dragon King.', say: 'The Dragon King. Then the letters to your Glen were going to Veyr himself, and Veyr has been living next to you the whole time, sharpening a sword nobody taught him in Cresha. ...I will add a line to the index. Not a name. A question mark, under the mountains.' }] },
     ],
     done: 'Claw-sworn. Not a champion: a squire, for one. And his master\'s real Fifth is still up in the mountains.',
     rewards: { gold: 80, xp: 320 },
@@ -80,14 +82,16 @@ export const ACT2_QUESTS: QuestDef[] = [
         { type: 'craft', calling: 'herbalism', count: 2, optional: true, flag: 'feast:antidote', bonus: { xp: 120 }, text: 'Brew two draughts against poison, in case (Herbalism)' },
       ] },
       { note: 'Go to the palace forecourt.', hook: 'feast:hall', objectives: [{ type: 'signal', id: 'feast-done', text: 'Attend the Feast of the Dawn (the palace)', at: [FEAST_XZ[0], FEAST_XZ[1]] }] },
+      { note: 'See the King, now the hall is quiet.', objectives: [{ type: 'talk', npc: 'king', text: 'See King Aldric after the Feast', reply: 'How is the wound?', say: 'Deep, and clean, and I will live, which is more than she intended. Every envoy at that table saw a knife come for the King of Cresha and saw who stopped it. By morning that story will be in seven languages.' }] },
     ],
-    done: 'Cresha owes you a king. I will not forget it, and neither will Valoria, I suspect.',
+    done: 'Cresha owes you a king. I will not forget it, and neither will Valoria, I suspect. ...But you should see this before you go to bed. It was nailed to the palace door while we were still mopping up the hall.',
     rewards: { gold: 400, xp: 700, guildRep: 50 },
   },
   {
     id: 'mq-wheelbreaker', title: 'The Wheelbreaker', giver: 'king', region: 'royalCapital', main: true, requires: ['mq-feast'],
     summary: 'A letter nailed to the palace door, sealed in black iron: "Plaza of Crowns. Dawn. Come alone. M."',
-    offer: '',
+    offer: 'Black iron, for a seal. "Plaza of Crowns. Dawn. Come alone. M." Malric, then: the champion who took what Grukk dug up under your crypt. Thorne wants to fill the plaza with crossbows. I told him that a man who nails his challenges to a king\'s door wants to be seen, and that the city should see him lose. Will you meet him?',
+    acceptLabel: 'I\'ll meet him at dawn.',
     stages: [
       { note: 'Meet Ser Malric on the Plaza of Crowns at dawn. Come ready.', anyOrder: true, objectives: [
         { type: 'hour', from: 5, to: 8, text: 'Be on the Plaza of Crowns at dawn (5:00 to 8:00)' },
@@ -95,6 +99,7 @@ export const ACT2_QUESTS: QuestDef[] = [
         { type: 'craft', gear: 'armor', minQ: 2, count: 1, optional: true, flag: 'duel:armour', bonus: { xp: 100 }, text: 'Make yourself Fine armour or better for the duel' },
       ] },
       { note: 'Face Ser Malric Dane.', hook: 'wheelbreaker:duel', objectives: [{ type: 'signal', id: 'malric-beaten', text: 'Face Ser Malric on the Plaza of Crowns', at: [PLAZA_XZ[0], PLAZA_XZ[1]] }] },
+      { note: 'Bring the black iron box to the King.', objectives: [{ type: 'talk', npc: 'king', text: 'Bring Malric\'s box to King Aldric', reply: 'Malric yielded. He threw me this.', say: 'A box with the Sunwheel on its lid, from the hand of the man who stole it. And a Legate of Valoria toasting you from a balcony, Thorne tells me. ...Take it to Master Quill at the Royal Library. If anyone in my kingdom knows what goes in a box like that, it is that old man.' }] },
     ],
     done: 'You beat a Fourth Age champion in front of half the city. They\'ll be singing it in the Gilded Stag by tonight.',
     rewards: { gold: 500, xp: 1000, items: [['knightSword', 1]], guildRep: 60 },

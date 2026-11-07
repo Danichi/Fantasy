@@ -354,20 +354,37 @@
 }
 #ui .book-button span { font: 700 9px/1 var(--serif); letter-spacing: .24em; }
 #ui .book-button:hover { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6), inset 0 0 0 4px rgba(241, 211, 138, .4), 0 14px 26px rgba(0, 0, 0, .55), 0 0 18px rgba(241, 211, 138, .25); }
-#ui .book-tabs {
-  gap: 6px; padding: 6px 8px;
-  border: 0; border-radius: 4px;
-  background: var(--wood-noise), linear-gradient(180deg, #4e2a14, #2e1709);
-  box-shadow: inset 0 0 0 1px #140a03, inset 0 0 0 3px rgba(241, 211, 138, .3), 0 12px 30px rgba(0, 0, 0, .55);
+/* Oak only where it shows: the header band and a rim round the page (the
+   middle stays open, so the inventory's character preview, drawn on the game
+   canvas beneath, can be seen through its window). */
+#ui .book-frame { border: 0; border-radius: 6px; background: none; box-shadow: 0 30px 90px rgba(0, 0, 0, .6); }
+#ui .book-frame::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: calc(var(--bk-top) - 14px); z-index: -1;
+  border-radius: 6px 6px 0 0;
+  background: var(--wood-noise), linear-gradient(180deg, #4e2a14, #2f1709);
 }
-#ui .book-tabs button { color: rgba(243, 230, 196, .75); border-radius: 3px; }
-#ui .book-tabs button:hover { color: var(--brass-hi); background: rgba(241, 211, 138, .08); }
-#ui .book-tabs button.on {
+#ui .book-frame::after {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: 6px;
+  box-shadow: inset 0 0 0 10px #2f1709, inset 0 0 0 11px rgba(241, 211, 138, .3), inset 0 0 0 1px #140a03;
+}
+#ui .book-frame.free::after { display: none; }
+#ui .book-frame.free::before { height: 100%; border-radius: 6px; }
+#ui .book-frame .bk-head { border-bottom: 1px solid rgba(241, 211, 138, .25); }
+#ui .book-frame .bk-tabs button { color: rgba(243, 230, 196, .75); border-radius: 4px 4px 0 0; font-family: var(--serif); }
+#ui .book-frame .bk-tabs button:hover { color: var(--brass-hi); background: rgba(241, 211, 138, .07); }
+#ui .book-frame .bk-tabs button.on {
   color: var(--ink-dark);
   background: var(--paper-noise), linear-gradient(180deg, var(--parch-hi), var(--parch-lo));
-  border-color: #8a6431;
+  box-shadow: inset 0 0 0 1px #8a6431;
 }
-#ui .book-tabs button.on kbd { color: var(--ink-red); border-color: rgba(122, 31, 18, .4); }
+#ui .book-frame .bk-tabs button.on::after { display: none; }
+#ui .book-frame .bk-tabs button.on kbd { color: var(--ink-red); border-color: rgba(122, 31, 18, .4); }
+#ui .book-frame .bk-close { border-color: rgba(241, 211, 138, .35); background: rgba(0, 0, 0, .25); color: var(--brass-hi); border-radius: 4px; }
+#ui .book-frame .bk-subs { border-bottom: 0; }
+#ui .book-frame .bk-subs button { border-radius: 3px; border-color: rgba(241, 211, 138, .22); background: rgba(0, 0, 0, .22); color: rgba(243, 230, 196, .8); font-family: var(--sans); }
+#ui .book-frame .bk-subs button:hover { color: var(--brass-hi); border-color: rgba(241, 211, 138, .5); }
+#ui .book-frame .bk-subs button.on { color: var(--ink-dark); border-color: #8a6431; background: var(--paper-noise), linear-gradient(180deg, var(--parch-hi), var(--parch-lo)); }
+#ui .book-frame .bk-subs button.on kbd { color: var(--ink-red); }
 
 /* ===== Sandstorm (world/desert/goldenExpanse.ts) ===== */
 #ui .sandstorm {

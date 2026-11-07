@@ -13,7 +13,7 @@ export const PORT_QUESTS: QuestDef[] = [
   // ---- Main story -------------------------------------------------------------------------
   {
     id: 'road-to-port', title: 'The Road to Port Aurelle', giver: 'maud', region: 'cresha', main: true,
-    requires: ['mq-gravewood'],
+    requires: ['mq-bells'],
     summary: 'Elder Maud believes the Knight\'s Academy in Port Aurelle can teach a summoned hero what they need to survive this world.',
     offer: 'You didn\'t come to Elder Glen by any road I know of, and you fight like someone half-remembering a dream. The Knight\'s Academy in Port Aurelle trains the realm\'s best. Follow the King\'s Road east to the sea — ten minutes\' walk for young legs — and present yourself to Ser Elian Marrow. Tell him Elder Glen sent you.',
     acceptLabel: 'I\'ll go to Port Aurelle.',
@@ -25,7 +25,7 @@ export const PORT_QUESTS: QuestDef[] = [
     rewards: { gold: 50, xp: 150 },
   },
   {
-    id: 'academy-trial', title: 'The Entrance Trial', giver: 'marrow', region: 'portAurelle', main: true,
+    id: 'academy-trial', title: 'The Entrance Trial', giver: 'marrow', region: 'portAurelle', main: true, requires: ['road-to-port'],
     summary: 'To enter the Knight\'s Academy you must hold your own in a sparring bout with Ser Hadrik Vane.',
     offer: 'The entrance trial is simple: step into the ring with Ser Hadrik and last. Beat him and you are a cadet. No one dies in my ring — the instructors call the bout before that — but pride has been known to.',
     acceptLabel: 'I\'m ready.',

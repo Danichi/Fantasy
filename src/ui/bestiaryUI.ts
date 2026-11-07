@@ -42,7 +42,7 @@ export interface BestiaryUIHooks {
 export class BestiaryUI {
   open = false;
   onToggle?: (open: boolean) => void;
-  private el: HTMLDivElement;
+  readonly el: HTMLDivElement;
   private tab: 'creatures' | 'bosses' = 'creatures';
   private selected: string | null = null;
   private missingIcons = false;

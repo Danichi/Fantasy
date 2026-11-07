@@ -13,6 +13,8 @@ import { events } from '../core/events';
 import { ITEMS } from '../items/itemDefs';
 import { stationHook } from '../world/interior';
 import { forgeAt } from '../world/portAurelle';
+import { heightAt } from '../world/terrainHeight';
+import { physics } from '../physics/physics';
 import { GatheringNodes } from '../world/gatheringNodes';
 import { CraftUI } from '../ui/craftUI';
 import { Crafter } from './crafter';
@@ -93,6 +95,15 @@ export function setupArms(ctx: ArmsContext) {
     enabled: () => forgeAt.lengthSq() > 1,
     action: () => craft.show('forge', 'the Dwarven Quarter forge', 0.5),
   };
+  // Elder Glen's open forge, under the eaves beside Fröst Forge: the Glen's
+  // smithing station out on the street, where you can see it (and its glow).
+  const glenForge = buildGlenForge(ctx.scene);
+  const glenForgeUse: Interactable = {
+    pos: glenForge, radius: 2.4,
+    label: () => `${VERB.forge} · Fröst's open forge`,
+    enabled: () => true,
+    action: () => craft.show('forge', 'Fröst\'s open forge', 0),
+  };
   // Eating, drinking and reading: buffs, and the recipe books.
   player.onConsume = (def) => {
     runtime.consume(def);
@@ -144,7 +155,7 @@ export function setupArms(ctx: ArmsContext) {
     practice,
     gathering,
     /** interactables out in the world (the port's forge, the gathering prompt) */
-    interactables: [portForge, gathering.interactable] as Interactable[],
+    interactables: [portForge, glenForgeUse, gathering.interactable] as Interactable[],
     /** resolves once the library clips are on the hero */
     clips,
     /** per simulation step, after the skill runtime */
@@ -182,3 +193,40 @@ export function setupArms(ctx: ArmsContext) {
   };
 }
 export type Arms = ReturnType<typeof setupArms>;
+
+/** Where Elder Glen's open forge stands (beside Fröst Forge, on the plaza side). */
+export const GLEN_FORGE: [number, number] = [19, 22];
+
+/** A hearth of glowing coals, an anvil on its stump and a quench barrel. Returns where to stand. */
+function buildGlenForge(scene: THREE.Scene) {
+  const [x, z] = GLEN_FORGE;
+  const y = heightAt(x, z);
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  g.rotation.y = Math.PI / 2;
+  const stone = new THREE.MeshStandardMaterial({ color: 0x6f6a62, roughness: 0.95 });
+  const iron = new THREE.MeshStandardMaterial({ color: 0x2c2f35, metalness: 0.75, roughness: 0.45 });
+  const wood = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.9 });
+  const coal = new THREE.MeshStandardMaterial({ color: 0x3a1a0a, emissive: 0xff5a10, emissiveIntensity: 1.8 });
+  const add = (geo: THREE.BufferGeometry, mat: THREE.Material, px: number, py: number, pz: number) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(px, py, pz);
+    m.castShadow = m.receiveShadow = true;
+    g.add(m);
+    return m;
+  };
+  add(new THREE.BoxGeometry(1.9, 0.85, 1.3), stone, 0, 0.42, -0.9);
+  add(new THREE.BoxGeometry(1.5, 0.12, 0.9), coal, 0, 0.9, -0.9);
+  add(new THREE.BoxGeometry(0.5, 1.9, 0.5), stone, 0.55, 1.8, -1.3);
+  add(new THREE.CylinderGeometry(0.28, 0.32, 0.6, 10), wood, -0.2, 0.3, 0.55);
+  add(new THREE.BoxGeometry(0.7, 0.24, 0.3), iron, -0.2, 0.72, 0.55);
+  add(new THREE.CylinderGeometry(0.32, 0.32, 0.7, 12), wood, 1.25, 0.35, 0.4);
+  const light = new THREE.PointLight(0xff7a30, 3, 10, 1.6);
+  light.position.set(0, 1.6, -0.6);
+  g.add(light);
+  scene.add(g);
+  g.updateMatrixWorld(true);
+  const hearth = new THREE.Vector3(0, 0.42, -0.9).applyMatrix4(g.matrixWorld);
+  physics.addBox(hearth, new THREE.Vector3(0.95, 0.45, 0.65), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, g.rotation.y, 0)));
+  return new THREE.Vector3(x, y, z);
+}

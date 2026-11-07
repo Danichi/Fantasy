@@ -103,6 +103,15 @@ export class SkillsUI {
     this.onToggle?.(next);
   }
 
+  /** The tab showing (the book's sub-tabs switch it). */
+  get tabId(): Tab {
+    return this.tab;
+  }
+  setTab(t: Tab) {
+    this.tab = t;
+    if (this.open) this.closeTree();
+  }
+
   /** Open straight to one discipline's tree (used by mentors). */
   show(id?: string) {
     this.tab = 'disc';
@@ -146,6 +155,7 @@ export class SkillsUI {
 
   private render() {
     this.purse();
+    this.el.classList.toggle('tree', !!this.openId);
     if (this.openId) return this.renderTree();
     this.crumbEl.textContent = 'SKILLS';
     this.titleEl.textContent = { disc: 'Disciplines', attr: 'Attributes', mast: 'Mastery' }[this.tab];

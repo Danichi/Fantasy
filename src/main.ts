@@ -696,6 +696,9 @@ async function boot() {
     save: saveData?.world?.social,
     // Elder Glen's hard year lasts until the Night of Bells is won.
     hard: () => quests.status('mq-bells') !== 'done',
+    // What you are, and whose lands these are: a few people remark on it when you first meet.
+    origin: () => player.prog.origin,
+    faction: () => origins.factionNow(),
     activityOf: (id) => npcs.activityOf(id),
   });
   town.converse = (spec) => social.talk(spec);
@@ -816,6 +819,7 @@ async function boot() {
     toast: (m) => hud.toast(m),
     npcPos: (id) => serviceNpc(id)?.pos ?? npcs.find(id)?.pos ?? roadLife.npcPos(id) ?? null,
     npcAway: (id) => (serviceNpc(id) ? null : npcs.whereabouts(id)),
+    npcName: (id) => serviceNpc(id)?.spec.name ?? (npcs.find(id)?.rec as { name?: string } | undefined)?.name ?? id,
     hour: () => time.hour,
     itemName: (id) => ITEMS[id]?.name ?? id,
   });
@@ -1537,21 +1541,48 @@ async function boot() {
     if (open) input.exitLock();
     else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
   };
-  // The book: the menus as tabbed pages, opened from the corner button or their keys.
+  // The book: every menu in one window, four tabs with sub-tabs (ui/menuBook.ts).
+  const skillsSub = (id: 'disc' | 'attr' | 'mast', label: string, key?: string) => ({
+    id: 'skills-' + id, label, key, el: () => skills.el,
+    isOpen: () => skills.open && skills.tabId === id,
+    open: () => { skills.setTab(id); skills.toggle(true); },
+    close: () => skills.toggle(false),
+  });
   const book = new MenuBook([
-    { id: 'inventory', label: 'Inventory', key: 'I', isOpen: () => inv.open, open: () => inv.toggle(true), close: () => inv.toggle(false) },
-    { id: 'skills', label: 'Skills', key: 'K', isOpen: () => skills.open, open: () => skills.toggle(true), close: () => skills.toggle(false) },
-    { id: 'journal', label: 'Journal', key: 'J', isOpen: () => questUI.open, open: () => questUI.toggle(true), close: () => questUI.toggle(false) },
-    { id: 'people', label: 'People', key: 'P', isOpen: () => repPanel.open, open: () => repPanel.toggle(true), close: () => repPanel.toggle(false) },
-    { id: 'herbal', label: 'Herbal', key: 'O', isOpen: () => herbalism.isOpen, open: () => herbalism.openCodex(), close: () => herbalism.ui.close() },
-    { id: 'seamanship', label: 'Seamanship', key: 'N', isOpen: () => seaPanel.open, open: () => seaPanel.toggle(true), close: () => seaPanel.toggle(false) },
-    // The Wardens' Bestiary (progression/bestiary.ts): its tab appears once Rook hands it over.
-    { id: 'bestiary', label: 'Bestiary', key: 'L', isOpen: () => bestiaryUI.open, open: () => bestiaryUI.toggle(true), close: () => bestiaryUI.toggle(false), hidden: () => !bestiary.unlocked },
+    {
+      id: 'character', label: 'Character', key: 'I',
+      subs: [
+        { id: 'inventory', label: 'Gear & Bag', key: 'I', see: true, el: () => inv.el, isOpen: () => inv.open && inv.viewId === 'items', open: () => { inv.setView('items'); inv.toggle(true); }, close: () => inv.toggle(false) },
+        { id: 'stats', label: 'Stats', see: true, el: () => inv.el, isOpen: () => inv.open && inv.viewId === 'stats', open: () => { inv.setView('stats'); inv.toggle(true); }, close: () => inv.toggle(false) },
+      ],
+    },
+    {
+      id: 'skills', label: 'Skills', key: 'K',
+      subs: [
+        skillsSub('disc', 'Disciplines', 'K'),
+        skillsSub('attr', 'Attributes'),
+        skillsSub('mast', 'Mastery'),
+        { id: 'herbal', label: 'Herbal', key: 'O', el: () => herbalism.ui.el, isOpen: () => herbalism.isOpen, open: () => herbalism.openCodex(), close: () => herbalism.ui.close() },
+        { id: 'seamanship', label: 'Seamanship', key: 'N', el: () => seaPanel.el, isOpen: () => seaPanel.open, open: () => seaPanel.toggle(true), close: () => seaPanel.toggle(false) },
+      ],
+    },
+    {
+      id: 'journal', label: 'Journal', key: 'J',
+      subs: [
+        { id: 'quests', label: 'Quests', key: 'J', el: () => questUI.journal, isOpen: () => questUI.open, open: () => questUI.toggle(true), close: () => questUI.toggle(false) },
+        { id: 'people', label: 'People', key: 'P', el: () => repPanel.el, isOpen: () => repPanel.open, open: () => repPanel.toggle(true), close: () => repPanel.toggle(false) },
+        // The Wardens' Bestiary (progression/bestiary.ts): its sub-tab appears once Rook hands it over.
+        { id: 'bestiary', label: 'Bestiary', key: 'L', el: () => bestiaryUI.el, isOpen: () => bestiaryUI.open, open: () => bestiaryUI.toggle(true), close: () => bestiaryUI.toggle(false), hidden: () => !bestiary.unlocked },
+      ],
+    },
     {
       id: 'map', label: 'Map', key: 'M',
-      isOpen: () => worldMap.open || mapUI.open,
-      open: () => (realm.mode === 'dungeon' ? mapUI.toggle(true) : realm.mode === 'interior' ? hud.toast('Step outside to read the map.') : worldMap.toggle(true)),
-      close: () => (worldMap.open ? worldMap.toggle(false) : mapUI.toggle(false)),
+      subs: [{
+        id: 'map', label: 'Map', see: true, el: () => null,
+        isOpen: () => worldMap.open || mapUI.open,
+        open: () => (realm.mode === 'dungeon' ? mapUI.toggle(true) : realm.mode === 'interior' ? hud.toast('Step outside to read the map.') : worldMap.toggle(true)),
+        close: () => (worldMap.open ? worldMap.toggle(false) : mapUI.toggle(false)),
+      }],
     },
   ]);
   questUI.onShowOnMap = (x, z) => {
@@ -1641,8 +1672,16 @@ async function boot() {
   const yard = new TrainingYard(r.scene, encounters.bolts, player, new THREE.Vector3(kaelaSpec?.pos[0] ?? -13.5, 0, kaelaSpec?.pos[1] ?? 0.5), worldFlags, (m) => hud.toast(m), (n) => player.prog.addXp(n));
   yard.close = () => dialogue.close();
   const baseServices = town.serviceOptions;
+  // The Glen's tradespeople let you work at their stations: ask the smith for his forge.
+  const STATION_KEEPERS: Record<string, [StationKind, string, string][]> = {
+    froest: [['forge', 'Can I use your forge?', 'Fröst\'s forge'], ['runestone', 'Can I use your runestone?', 'Fröst\'s runestone']],
+    innkeeper: [['kitchen', 'Could I use your kitchen?', 'the Wayfarer\'s kitchen']],
+    tailor: [['loom', 'Could I use your loom?', 'Vela\'s loom']],
+    carpenter: [['workbench', 'Could I use your bench?', 'Bram\'s workbench']],
+  };
   town.serviceOptions = (id, show, back) => [
     ...(id === 'kaela' ? [{ label: 'Teach me to fight.', run: () => yard.menu(show, back) }] : []),
+    ...(STATION_KEEPERS[id] ?? []).map(([kind, label, where]) => ({ label, run: () => { dialogue.close(); arms.craft.show(kind, where, 0); } })),
     ...(baseServices?.(id, show, back) ?? []),
   ];
   microDiscoveries = new MicroDiscoveries(
