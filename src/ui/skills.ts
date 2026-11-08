@@ -20,7 +20,7 @@ import { legacyCardInfo, renderLegacy } from '../origins/legacyUI';
 // XP and attribute points can be spent anywhere. Learning a class, switching
 // the active combat class and respeccing happen at mentors (npc/town.ts).
 
-type Tab = 'disc' | 'attr' | 'mast' | 'atlas';
+type Tab = 'disc' | 'attr' | 'mast' | 'atlas' | 'load';
 const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
 const TYPE_LABEL: Record<TreeNode['type'], string> = { center: 'Foundation', minor: 'Minor', notable: 'Notable', active: 'Skill', keystone: 'Keystone', choice: 'Choice', cap: 'Capstone' };
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -101,7 +101,7 @@ export class SkillsUI {
     this.el.classList.toggle('hidden', !next);
     this.backdrop.classList.toggle('hidden', !next);
     if (next) this.render();
-    else this.disposeTree();
+    else (this.disposeTree(), (this.loadoutOpen = false));
     this.onToggle?.(next);
   }
 
@@ -138,7 +138,7 @@ export class SkillsUI {
     set('lv', String(P.charLevel));
     set('ap', String(P.attrFree));
     const ap = P.attrFree;
-    this.tabsEl.innerHTML = ([['disc', 'Disciplines'], ['attr', 'Attributes'], ['mast', 'Mastery'], ['atlas', 'Class Atlas']] as [Tab, string][])
+    this.tabsEl.innerHTML = ([['disc', 'Disciplines'], ['load', 'Loadout'], ['attr', 'Attributes'], ['mast', 'Mastery'], ['atlas', 'Class Atlas']] as [Tab, string][])
       .map(([id, l]) => `<button class="sk-tab${this.tab === id && !this.openId ? ' on' : ''}" type="button" data-tab="${id}">${l}${id === 'attr' && ap > 0 ? `<span class="n">${ap}</span>` : ''}</button>`)
       .join('');
     this.tabsEl.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) =>
@@ -161,10 +161,11 @@ export class SkillsUI {
     this.el.classList.toggle('tree', !!this.openId);
     if (this.openId) return this.renderTree();
     this.crumbEl.textContent = 'SKILLS';
-    this.titleEl.textContent = { disc: 'Disciplines', attr: 'Attributes', mast: 'Mastery', atlas: 'Class Atlas' }[this.tab];
+    this.titleEl.textContent = { disc: 'Disciplines', attr: 'Attributes', mast: 'Mastery', atlas: 'Class Atlas', load: 'Loadout' }[this.tab];
     if (this.tab === 'disc') this.renderAtlas();
     else if (this.tab === 'attr') this.renderAttrs();
     else if (this.tab === 'atlas') this.renderClassAtlas();
+    else if (this.tab === 'load') this.renderLoadout();
     else this.renderMastery();
   }
 
@@ -221,6 +222,14 @@ export class SkillsUI {
     const attr = t.closest<HTMLElement>('[data-attr]');
     if (attr) {
       if (this.paths.raise(attr.dataset.attr as (typeof ATTRS)[number]['id'])) this.render();
+      return;
+    }
+    const lo = t.closest<HTMLElement>('[data-primary],[data-second2]');
+    if (lo) {
+      const P = this.paths;
+      if (lo.dataset.primary) P.setActive(lo.dataset.primary);
+      else P.setSecondary(lo.dataset.second2 ?? '');
+      this.render();
       return;
     }
     const op = t.closest<HTMLElement>('[data-open]');
@@ -330,11 +339,48 @@ export class SkillsUI {
     const P = this.paths, k = P.ascension(d.id), L = P.level(d.id);
     const nodeList = (a: (typeof A)[number], got: number, live: boolean) => a.nodes.map((n, i) => `<li class="${i < got ? 'on' : ''}"><b>${esc(n.name)}</b> <small>level ${ASC_LEVEL[i]} · ${ASC_COST[i]} pts</small><br>${esc(n.text)}${live && i === got ? (P.ascWhyNot(d.id) ? ` <em>(${esc(P.ascWhyNot(d.id)!)})</em>` : ' <button class="sk-btn primary" type="button" data-ascnode>Learn</button>') : ''}</li>`).join('');
     if (k < 0) {
-      const cards = A.map((a, i) => `<div class="sk-asc"><h4>${esc(a.name)}</h4><p>${esc(a.flavour)}</p><ul>${nodeList(a, 0, false)}</ul>${P.canAscend(d.id) ? `<button class="sk-btn primary" type="button" data-ascend="${i}">Ascend: ${esc(a.name)}</button>` : ''}</div>`).join('');
-      return `<div class="sk-sep"></div><div class="sk-note"><b>Ascension.</b> ${L >= ASC_LEVEL[0] ? 'Choose one of two paths. It reshapes the class for good (a respec undoes it).' : `At level ${ASC_LEVEL[0]} this class can ascend, down one of two paths.`}</div><div class="sk-ascs">${cards}</div>`;
+      // A class with a mentor ascends in a ceremony with them; the others here.
+      const mentor = d.mentorNpc ? d.mentor.split(',')[0] : '';
+      const cards = A.map((a, i) => `<div class="sk-asc"><h4>${esc(a.name)}</h4><p>${esc(a.flavour)}</p><ul>${nodeList(a, 0, false)}</ul>${P.canAscend(d.id) && !mentor ? `<button class="sk-btn primary" type="button" data-ascend="${i}">Ascend: ${esc(a.name)}</button>` : ''}</div>`).join('');
+      const lead = L >= ASC_LEVEL[0] ? (mentor ? `You are ready. Go to ${esc(mentor)} to ascend: one of two paths, for good (a respec undoes it).` : 'Choose one of two paths. It reshapes the class for good (a respec undoes it).') : `At level ${ASC_LEVEL[0]} this class can ascend, down one of two paths${mentor ? `, in a ceremony with ${esc(mentor)}` : ''}.`;
+      return `<div class="sk-sep"></div><div class="sk-note"><b>Ascension.</b> ${lead}</div><div class="sk-ascs">${cards}</div>`;
     }
     const a = A[k];
     return `<div class="sk-sep"></div><div class="sk-asc chosen"><h4>Ascension: ${esc(a.name)}</h4><p>${esc(a.flavour)}</p><ul>${nodeList(a, P.ascNodes(d.id), true)}</ul></div>`;
+  }
+
+  /** A guild Registrar lets you change your loadout here (until the screen closes). */
+  loadoutOpen = false;
+  /** Open on the Loadout, with changes allowed (a Registrar's desk). */
+  showLoadout() {
+    this.setTab('load');
+    this.loadoutOpen = true;
+    this.toggle(true);
+    this.render();
+  }
+
+  /** Your loadout: the fighting class, the second class, and the magic you carry. */
+  private renderLoadout() {
+    const P = this.paths, edit = this.loadoutOpen;
+    const combat = DISCIPLINES.filter((d) => d.fam === 'combat' && P.learned(d.id));
+    const magic = DISCIPLINES.filter((d) => d.fam === 'magic' && P.learned(d.id));
+    const res = (d: DisciplineDef) => (d.res ? ` · ${esc(d.res)}` : '');
+    const card = (d: DisciplineDef, role: string, btn: string) => `<div class="sk-atlas-card got" style="--c:var(${d.color})" data-open="${d.id}"><b>${esc(d.name)}</b><span>Level ${P.level(d.id)}${role ? ` · ${role}` : ''}${res(d)}</span><small>${esc(d.how || d.flavour)}</small>${btn}</div>`;
+    const primary = DISC[P.active];
+    const pick = combat.map((d) => {
+      const role = d.id === P.active ? 'Primary' : d.id === P.secondary ? 'Second' : '';
+      const btns = !edit ? '' : d.id === P.active ? '' : `<div class="sk-lo-btns"><button class="sk-btn" type="button" data-primary="${d.id}">Make primary</button>${d.id === P.secondary ? '<button class="sk-btn" type="button" data-second2="">No second</button>' : `<button class="sk-btn" type="button" data-second2="${d.id}">Make second</button>`}</div>`;
+      return card(d, role, btns);
+    }).join('');
+    const note = edit
+      ? 'Choose your primary class (its whole kit) and a second (half its nodes, its techniques a quarter slower).'
+      : 'Change these at any guild hall\'s Registrar, or with a class\'s mentor. Your primary class gives its whole kit; your second, half its nodes and its techniques a quarter slower.';
+    this.body.innerHTML = `<div class="sk-view sk-atlas">
+      <section class="sk-atlas-tier"><h3>Fighting classes <span>${primary ? esc(primary.name) : 'None'}${P.secondary && DISC[P.secondary] ? ` + ${esc(DISC[P.secondary].name)}` : ''}</span></h3><p>${note}</p>
+      <div class="sk-atlas-grid">${pick || '<p class="sk-foot">No fighting class yet. A mentor will teach you one.</p>'}</div></section>
+      <section class="sk-atlas-tier"><h3>Magic you carry <span>${magic.length}</span></h3><p>Every magic class you know is always with you: its techniques on your bar, its resource on your HUD.</p>
+      <div class="sk-atlas-grid">${magic.map((d) => card(d, '', '')).join('') || '<p class="sk-foot">No magic yet.</p>'}</div></section>
+    </div>`;
   }
 
   /** Every class there is: what you have, what's out there, and the hidden ones as silhouettes. */

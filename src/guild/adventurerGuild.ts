@@ -1,3 +1,4 @@
+import { DISC } from '../paths/data';
 import * as THREE from 'three';
 import { events } from '../core/events';
 import type { Progression } from '../progression/progression';
@@ -51,6 +52,8 @@ export interface GuildQuest {
   exam?: GuildRank;
   /** exam counts: named kills since the exam was set */
   named?: number;
+  /** classes the job suits: a quarter more gold when one of them is how you fight */
+  suits?: string[];
 }
 
 export interface GuildSaveData {
@@ -151,6 +154,8 @@ export class AdventurerGuild {
   onTrophies?: (ids: string[]) => void;
   /** a message for the HUD (set by main) */
   toast?: (m: string) => void;
+  /** which of these classes is how you fight (your fighting class, or a magic class you know), if any (set by main) */
+  classFits?: (ids: string[]) => string | null;
   /** a parcel to carry (deliveries): give and take it from the bag (set by main) */
   parcel?: { give(): void; take(): void };
 
@@ -252,7 +257,7 @@ export class AdventurerGuild {
     return {
       id: 'guild-' + this.nextId++, templateId: hall + ':' + s.kind, title: s.title, description: s.description, objective: s.kind, hall, client: s.client, stars: s.stars,
       targetItem: s.targetItem, targetKind: s.targetKind, targetFamily: s.targetFamily, targetCount: s.targetCount, targetName: s.targetName, target: s.target, radius: s.radius,
-      progress: 0, rewardGold: s.rewardGold, rewardXp: s.rewardXp, rewardRep: s.rewardRep, rewardMarks: s.rewardMarks, minRank: s.minRank, expires: s.expires,
+      progress: 0, rewardGold: s.rewardGold, rewardXp: s.rewardXp, rewardRep: s.rewardRep, rewardMarks: s.rewardMarks, minRank: s.minRank, expires: s.expires, suits: s.suits,
     };
   }
   /** Whether a hall's wall is open to you (the port at C, the capital at B). */
@@ -352,7 +357,11 @@ export class AdventurerGuild {
     this._rep += q.rewardRep;
     const marks = (q.rewardMarks ?? 0) + (q.exam ? 0 : this.rankDef.marksBonus);
     this._marks += marks;
-    this.progression.addGold(q.rewardGold);
+    // The right class for the job: a quarter more pay.
+    const fit = q.suits ? this.classFits?.(q.suits) : null;
+    const bonus = fit ? Math.round(q.rewardGold * 0.25) : 0;
+    if (fit) this.toast?.(`A job for a ${fit}: +${bonus} gold`);
+    this.progression.addGold(q.rewardGold + bonus);
     this.progression.addXp(q.rewardXp);
     if (q.templateId.startsWith('bounty:')) {
       this.trophies = [q.templateId.slice(7), ...this.trophies.filter((t) => t !== q.templateId.slice(7))].slice(0, 12);
@@ -500,7 +509,7 @@ export class AdventurerGuild {
     const urgent = q.expires ? '<span class="quest-urgent">' + (q.exam ? 'TIMED' : 'URGENT') + ' · until day ' + q.expires + '</span>' : '';
     const pay = q.exam ? 'Pass: promotion to ' + q.exam + '-rank' : '+' + q.rewardGold + ' gold · +' + q.rewardXp + ' XP · +' + q.rewardRep + ' rep · +' + ((q.rewardMarks ?? 0) + this.rankDef.marksBonus) + ' Marks';
     return '<article class="guild-quest ' + cls + (q.expires ? ' urgent' : '') + '"><div class="quest-top"><span class="quest-rank">' + (q.exam ? 'EXAM' : q.templateId.startsWith('bounty:') ? 'BOUNTY · RANK ' + RANKS[q.minRank].name : 'RANK ' + RANKS[Math.min(q.minRank, RANKS.length - 1)].name) + '</span>' + stars + '<h3>' + esc(q.title) + '</h3>' + urgent + '</div>' +
-      (q.client ? '<small class="quest-client">Posted by ' + esc(q.client) + '</small>' : '') + '<p>' + esc(q.description) + '</p><b class="quest-progress">' + progressText(q) + '</b><div class="quest-reward">' + pay + '</div>' + button + '</article>';
+      (q.client ? '<small class="quest-client">Posted by ' + esc(q.client) + '</small>' : '') + '<p>' + esc(q.description) + '</p>' + suitsLine(q, this.classFits) + '<b class="quest-progress">' + progressText(q) + '</b><div class="quest-reward">' + pay + '</div>' + button + '</article>';
   }
 
   private renderBoard() {
@@ -579,4 +588,13 @@ export class AdventurerGuild {
     this.onTrophies?.(this.trophies);
     this.render();
   }
+}
+
+/** "Suits a Ranger, Woodsman or Druid: +25% pay" (lit when you are one). */
+function suitsLine(q: GuildQuest, fits?: (ids: string[]) => string | null) {
+  const names = (q.suits ?? []).map((id) => DISC[id]?.name).filter(Boolean) as string[];
+  if (!names.length) return '';
+  const list = names.length > 1 ? names.slice(0, -1).join(', ') + ' or ' + names[names.length - 1] : names[0];
+  const you = fits?.(q.suits!);
+  return '<small class="quest-suits' + (you ? ' fit' : '') + '">' + (you ? 'Suits you, ' + esc(you) + ': +25% pay' : 'Suits a ' + esc(list) + ': +25% pay') + '</small>';
 }

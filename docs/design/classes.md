@@ -183,6 +183,31 @@ Swimmer (swim 60% faster), Light Fingers and Ghost Hands (easier
 lockpicking), Iron Knuckles, Stone Fist, Lockbreaker, Stone Shoulder and Rune
 Fist (break locks without a heavy weapon).
 
+## Class quests, the Ascension ceremony and the rest
+
+- **Mastery quests** (`quests/classTrials.ts`, `masteryQuests`). At level 20
+  every class with a mentor in the world gets one last task from them:
+  combat classes, 30 kills with the class as your fighting class; magic
+  classes, 40 uses of its techniques. Finishing it gives the mentor's
+  keepsake (`items/catalog/classKeepsakes.ts`): a trinket in the class's
+  colour, with health or mana and one small bonus.
+- **The Ascension ceremony.** At level 30 a class with a mentor ascends in a
+  ceremony with them: the mentor sets out the two paths, you choose, and
+  light rises around you. The Skills screen sends you to them. Classes with no
+  mentor (the origin classes) still ascend from the Skills screen.
+- **The look of a class.** Sparks gather at your weapon hand as your class's
+  resource fills, and an aura in its colour wraps you while it is full.
+- **The world notices.** Now and then someone who knows you remarks on how
+  you fight instead of saying hello (`npc/classRemarks.ts`): lines of their
+  own for many classes, and general ones by tier.
+- **Guild jobs that suit a class.** Most contracts name three classes they
+  suit (beasts: Ranger, Woodsman, Druid...; the dead: Templar, Paladin,
+  Inquisitor...). If one of them is how you fight, the job pays a quarter
+  more gold, and the notice says so.
+- **The Loadout** (Skills, Loadout). Your primary and second class and the
+  magic you carry. Change them at any guild hall's Registrar ("Change my
+  fighting classes"), or with a class's mentor.
+
 ## Still to come
 
 The callings plan (37 callings) is not built yet. Techniques are still made

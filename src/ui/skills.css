@@ -240,3 +240,5 @@
 .sk-atlas-card.hidden span { color: var(--sk-dim); }
 .sk-atlas-card small { font-size: 11px; color: var(--sk-muted); }
 .sk-atlas-card em { font-size: 10px; color: var(--sk-dim); }
+.sk-lo-btns { display: flex; gap: 6px; margin-top: 6px; }
+.sk-lo-btns .sk-btn { font-size: 10px; padding: 3px 8px; }

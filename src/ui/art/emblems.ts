@@ -1,5 +1,6 @@
 import { light, dark, rgba, glow, sparkle, mix, type G } from './kit';
 import { GLYPHS, STROKED } from './glyphs';
+import { ROSTER } from '../../paths/roster';
 
 // Skill, spell and origin-ability emblems: a medallion in the class's colours
 // with a metal rim, and an illustrated motif built from a few shapes (a slash,
@@ -321,6 +322,47 @@ export const EMBLEMS: Record<string, EmblemSpec> = {
   'origin:fireBreath': E('dragonkin', { m: 'flame', s: 1.15 }, { m: 'horns', s: 0.4, y: 26 }),
 };
 
+const RIMS: Record<string, string> = { combat: '#c4ccd6', magic: '#d9a83a', calling: '#b8783a', legacy: '#e0ac34' };
+
+// Hand-made ones the forge's work left without (Warbreaker's core, Oathbreaker's capstones).
+EMBLEMS['warbreaker:War Cleave'] = E('cross', { m: 'axe', s: 0.8, x: -10, r: -0.4 }, { m: 'axe', s: 0.8, x: 10, r: 0.4 }, { m: 'crescent', s: 0.6, y: -20 });
+EMBLEMS['oathbreaker:The Knight Who Fell'] = E('human', { m: 'shield', s: 1.0 }, { m: 'crossSlash', s: 0.7 });
+EMBLEMS['oathbreaker:Absolution'] = Es('human', 2, { m: 'halo', s: 1.0, y: -6 }, { m: 'hand', s: 0.6, y: 14 });
+EMBLEMS['oathbreaker:None Shall Pass'] = E('human', { m: 'wall', s: 1.0, y: 8 }, { m: 'sword', s: 0.6, y: -18 });
+
+// The roster's classes (paths/roster): an emblem for every technique from what
+// it does (its archetype) and its element, in the class's own colours, turned
+// and placed by its name so no two match.
+const KIND_MOTIF: Record<string, string> = {
+  bolt: 'fireball', drain: 'drop', lance: 'spear', volley: 'slashes', chain: 'chain', nova: 'burst', cone: 'gust', smite: 'arrowDown',
+  meteor: 'meteor', zone: 'ripple', dash: 'dash', blink: 'figure', strike: 'sword', whirl: 'tornado', buff: 'halo', ward: 'shield',
+  heal: 'fountain', spirit: 'wolf', trap: 'target', leap: 'arrowUp', grab: 'hand',
+};
+const STYLE_MOTIF: Record<string, string> = {
+  fire: 'flame', frost: 'flake', light: 'sun', shadow: 'moon', void: 'eye', blood: 'drop', nature: 'leaf', steel: 'dagger',
+  gale: 'feather', wind: 'cloud', earth: 'mountain', water: 'drop', storm: 'bolt',
+};
+const COLOR_HEX: Record<string, string> = {
+  '--c-gale': '#6fd6c6', '--c-fire': '#ff8246', '--c-frost': '#9cc8ff', '--c-wind': '#b7e38a', '--c-herb': '#8fcf6a', '--c-steel': '#aeb8cc',
+  '--c-ward': '#5fa8ff', '--c-light': '#ffe08a', '--c-shadow': '#b48cff', '--c-blood': '#d8574a', '--c-gold': '#d9b15a', '--c-earth': '#d09a5a',
+  '--c-tide': '#4fc3e0', '--c-storm': '#b0a4ff',
+};
+const nameHash = (s: string) => [...s].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 11);
+/** Emblems for a discipline's forged techniques (classes/forge.ts calls this for every class it builds). */
+export function forgedEmblems(disc: string, color: string | undefined, fam: string | undefined, skills: Record<string, { k: string; s: string; big?: boolean }>) {
+  const hex = COLOR_HEX[color ?? ''] ?? '#d9b15a';
+  const pal: Palette = { bg: [mix(hex, '#000000', 0.4), mix(hex, '#000000', 0.85)], fg: light(hex, 0.8), glow: hex, rim: RIMS[fam ?? ''] ?? '#c4ccd6' };
+  for (const [name, sp] of Object.entries(skills)) {
+    const key = `${disc}:${name}`;
+    if (EMBLEMS[key]) continue;
+    const h = nameHash(key);
+    const main: Layer = { m: KIND_MOTIF[sp.k] ?? 'star', s: sp.big ? 1.15 : 1.0, r: ((h % 7) - 3) * 0.08, x: ((h >>> 3) % 5) - 2, y: sp.big ? 4 : 6 };
+    const side: Layer = { m: STYLE_MOTIF[sp.s] ?? 'star', s: 0.42, x: (h >>> 6) % 2 ? 20 : -20, y: -20, c: light(hex, 0.6) };
+    EMBLEMS[key] = { pal, layers: sp.big ? [main, side, { m: 'crown', s: 0.38, x: -side.x!, y: -22 }] : [main, side], sparkles: sp.big ? 3 : (h >>> 9) % 2 };
+  }
+}
+for (const cls of ROSTER) forgedEmblems(cls.id, cls.color, cls.fam, cls.skills);
+
 /** An emblem for any move: a written one, or a fallback from the discipline's sigil glyph. */
 export function emblemFor(key: string): EmblemSpec {
   if (EMBLEMS[key]) return EMBLEMS[key];
@@ -328,7 +370,6 @@ export function emblemFor(key: string): EmblemSpec {
   return E(PALETTES[disc] ? disc : 'human', { m: 'star', s: 0.9 });
 }
 
-const RIMS: Record<string, string> = { combat: '#c4ccd6', magic: '#d9a83a', calling: '#b8783a', legacy: '#e0ac34' };
 
 /** A class's medallion: its own colour and its sigil (ui/skillTree.ts ICONS). */
 export function classEmblem(hex: string, sigil: string, family: string): EmblemSpec {

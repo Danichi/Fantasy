@@ -154,7 +154,9 @@ import { GroundWindow } from './world/groundWindow';
 import { SkillsUI } from './ui/skills';
 import { DISC, DISCIPLINES } from './paths/data';
 import { ROSTER_HOOKS } from './paths/roster/engine';
-import { mentorOptions } from './paths/mentors';
+import { mentorOptions, ascendHook } from './paths/mentors';
+import { classRemark } from './npc/classRemarks';
+import { styleOfColor } from './paths/roster/engine';
 import { SkillRuntime } from './paths/skills';
 import { skillIcon } from './ui/skillTree';
 import { CharPreview } from './ui/charPreview';
@@ -744,7 +746,8 @@ async function boot() {
         id: n.rec.id, name: n.rec.name, title,
         // Their own words the first time you meet; a story beat after that, if they have one.
         intro: greetingFor(n.rec.id, npcs.lineFor(n), { ...ctx, met: false }, 0),
-        story: storyGreeting(n.rec.id, ctx),
+        // (or, now and then, a word about how you fight: npc/classRemarks.ts)
+        story: storyGreeting(n.rec.id, ctx) ?? classRemark(n.rec.id, player.paths.active, time.day) ?? undefined,
         services: [
           ...(requests.prepare(n.rec.id), quests.options(n.rec.id, show, back)),
           ...story.optionsFor(n.rec.id),
@@ -1568,6 +1571,13 @@ async function boot() {
   for (const d of BOSS_DEFS) NAMED_KINDS.add(d.kind);
   town.guild.day = () => time.day;
   town.guild.toast = (m) => hud.toast(m);
+  // Jobs that suit a class pay a quarter more when it's how you fight (your fighting class, or a magic class you know).
+  town.guild.classFits = (ids) => {
+    const a = player.paths.active;
+    if (ids.includes(a)) return DISC[a].name;
+    const m = ids.find((id) => DISC[id]?.fam === 'magic' && player.paths.learned(id));
+    return m ? DISC[m].name : null;
+  };
   town.guild.huntMarks = () => bosses.markers();
   town.guild.onTrophies = (ids) => world.guildHall.setTrophies(ids);
   world.guildHall.setTrophies(town.guild.trophyIds);
@@ -1605,6 +1615,8 @@ async function boot() {
   const guildDesk = (hall: HallId, show: (text: string, opts: DialogueOption[]) => void, back: () => void): DialogueOption[] => [
     ...town.guild.registrarOptions((t) => show(t, [{ label: 'Go on.', run: back }])),
     { label: 'Show me the Quest Wall.', run: () => { dialogue.close(); town.guild.open('board', hall); } },
+    // Any guild hall's Registrar keeps your papers: change your fighting classes here.
+    ...(DISCIPLINES.some((d) => d.fam === 'combat' && player.paths.learned(d.id)) ? [{ label: 'Change my fighting classes.', run: () => { dialogue.close(); skills.showLoadout(); } }] : []),
   ];
   folkServices.set('registrar', (show, back) => guildDesk('glen', show, back));
   let shutters = 1;
@@ -1617,7 +1629,7 @@ async function boot() {
     else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
   };
   // The book: every menu in one window, four tabs with sub-tabs (ui/menuBook.ts).
-  const skillsSub = (id: 'disc' | 'attr' | 'mast' | 'atlas', label: string, key?: string) => ({
+  const skillsSub = (id: 'disc' | 'attr' | 'mast' | 'atlas' | 'load', label: string, key?: string) => ({
     id: 'skills-' + id, label, key, el: () => skills.el,
     isOpen: () => skills.open && skills.tabId === id,
     open: () => { skills.setTab(id); skills.toggle(true); },
@@ -1637,6 +1649,7 @@ async function boot() {
         skillsSub('disc', 'Disciplines', 'K'),
         skillsSub('attr', 'Attributes'),
         skillsSub('mast', 'Mastery'),
+        skillsSub('load', 'Loadout'),
         skillsSub('atlas', 'Class Atlas'),
         { id: 'herbal', label: 'Herbal', key: 'O', el: () => herbalism.ui.el, isOpen: () => herbalism.isOpen, open: () => herbalism.openCodex(), close: () => herbalism.ui.close() },
         { id: 'seamanship', label: 'Seamanship', key: 'N', el: () => seaPanel.el, isOpen: () => seaPanel.open, open: () => seaPanel.toggle(true), close: () => seaPanel.toggle(false) },
@@ -2108,6 +2121,15 @@ async function boot() {
   ROSTER_HOOKS.signal = (id) => quests.signal(id);
   ROSTER_HOOKS.toast = (m) => hud.toast(m);
   ROSTER_HOOKS.origin = () => player.prog.origin;
+  // The Ascension ceremony: light rises around you, and the new path is named.
+  ascendHook.ceremony = (d, a) => {
+    const st = styleOfColor(d.color);
+    hud.regionCard(`${d.name}: ${a.name}`, a.flavour, true);
+    skillRt.vfx.pillar(player.pos.clone(), st, 1.4, 12);
+    skillRt.vfx.nova(player.pos.clone(), st, 6);
+    skillRt.vfx.spiral(player.pos.clone(), st, 3.2, 1.2, 40);
+    save();
+  };
   // The Golden Expanse wears you down: heat, thirst, the sandstorm.
   gearRt.exposure = new Exposure({
     player, arms: arms.runtime, toast: (m) => hud.toast(m), region: hereRegion, hour: () => time.hour,

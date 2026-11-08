@@ -347,6 +347,7 @@ export class RosterEngine {
         if (r.v < this.max(s.id)) r.ready = false;
       }
     }
+    this.look(dt);
     // Field: a long stride when nothing hostile is near.
     if ((this.strideT -= dt) <= 0) {
       this.strideT = 0.5;
@@ -359,6 +360,29 @@ export class RosterEngine {
         if (s.tier !== 'origin' || P.learned(s.id) || !P.canTeach(s.id)) continue;
         if (P.teach(s.id)) ROSTER_HOOKS.toast?.(`The blood of your people wakes: you have learned ${s.name}. Open Skills (K).`);
       }
+    }
+  }
+
+  private lookT = 0;
+  /**
+   * The class you can see: sparks gather at your weapon hand as your class's
+   * resource fills, and an aura of its colour wraps you when it is full.
+   */
+  private look(dt: number) {
+    if ((this.lookT -= dt) > 0) return;
+    this.lookT = 0.06;
+    const p = this.p;
+    if (p.dead) return;
+    for (const s of this.live()) {
+      const r = this.res.get(s.id);
+      if (!r) continue;
+      const fill = r.v / this.max(s.id), color = parseInt(s.mech.color.slice(1), 16);
+      if (r.ready || (fill >= 1 && !s.mech.full)) {
+        this.rt.vfx.fx.add.spawn({ pos: p.pos.clone().setY(p.pos.y + 0.2), spread: 0.9, count: 3, life: [0.6, 1.1], size: [0.18, 0.03], color, color2: color, upBias: 2.2, jitter: 0.6 });
+      } else if (fill > 0.3 && Math.random() < fill) {
+        this.rt.vfx.fx.add.spawn({ pos: this.rt.hand(), spread: 0.2, count: 1, life: [0.25, 0.5], size: [0.09, 0.01], color: 0xffffff, color2: color, upBias: 0.6, jitter: 0.12 });
+      }
+      if (this.weight(s.id) === 1) break; // the primary's look only, when there is one
     }
   }
 
@@ -408,6 +432,11 @@ export class RosterEngine {
       out.push({ name: s.mech.res.toUpperCase(), value: r?.v ?? 0, max: this.max(s.id), kind: s.mech.pips ? 'pips' : 'bar', color: s.mech.color, hot: !!r?.ready });
     }
   }
+}
+
+/** The effect style that goes with a class's colour token. */
+export function styleOfColor(color: string): import('../../magic/circles').Style {
+  return ({ '--c-fire': 'fire', '--c-frost': 'frost', '--c-light': 'light', '--c-shadow': 'shadow', '--c-blood': 'blood', '--c-herb': 'nature', '--c-earth': 'earth', '--c-tide': 'water', '--c-storm': 'storm', '--c-gale': 'gale', '--c-wind': 'wind', '--c-gold': 'light', '--c-ward': 'frost' } as const)[color as '--c-fire'] ?? 'steel';
 }
 
 /** A class that sounds right: "a Ranger" / "an Earthshaper". */

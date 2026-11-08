@@ -95,6 +95,8 @@ export interface QuestDef {
   offerHours?: [number, number];
   /** main story quests sort first */
   main?: boolean;
+  /** only offered while this holds (a class's level, say) */
+  offerIf?: () => boolean;
   /** an Adventurer's Guild contract mirrored from the board (the guild owns its progress and pay) */
   contract?: boolean;
 }
@@ -215,6 +217,7 @@ export class QuestLog {
     if (this.state[q.id]) return false;
     if (q.requires?.some((r) => !this.isDone(r))) return false;
     if (q.offerHours && !inHours(this.ctx.hour(), q.offerHours[0], q.offerHours[1])) return false;
+    if (q.offerIf && !q.offerIf()) return false;
     return true;
   }
 

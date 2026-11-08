@@ -814,3 +814,6 @@ body.book-open #ui .lesson-panel, #ui .lesson-panel.corner { top: auto; bottom: 
 #ui .save-slots input:focus { outline: 2px solid rgba(176, 51, 31, .45); outline-offset: 1px; }
 #ui .overlay.paused .save-slots { display: none; }
 #ui .save-slots .ss-list { max-height: min(272px, 34vh); overflow-y: auto; padding-right: 2px; }
+/* Guild contracts that suit a class (paths/roster): lit when you are one. */
+#ui .quest-suits { display: block; margin: 2px 0 4px; color: #6a5a3a; font: italic 400 12px/1.3 var(--fell); }
+#ui .quest-suits.fit { color: #2f6a2a; font-weight: 700; }

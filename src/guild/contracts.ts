@@ -78,6 +78,31 @@ export interface ContractSpec {
   minRank: number;
   /** urgent: the day it comes down */
   expires?: number;
+  /** classes the job suits (a quarter more pay when one of them is how you fight) */
+  suits?: string[];
+}
+
+/** Which classes a job suits, by what it asks for. */
+const SUITS: Record<string, string[]> = {
+  beast: ['ranger', 'woodsman', 'beastmaster', 'druid', 'wildheart', 'shapeshifter'],
+  undead: ['templar', 'paladin', 'inquisitor', 'lightbinder', 'dawnblade', 'shieldwarden'],
+  bandit: ['lancer', 'rogue', 'assassin', 'arbalest', 'boundary', 'nightblade'],
+  slime: ['pyromancer', 'earthshaper', 'brawler', 'ashwalker'],
+  goblin: ['warbreaker', 'berserker', 'lancer', 'reaver'],
+  orc: ['warbreaker', 'berserker', 'dragoon', 'ironwall'],
+  sea: ['tidecaller', 'seawitch', 'tidewarden', 'stormcaller'],
+  insect: ['pyromancer', 'grenadier', 'ashwalker', 'sunbreaker'],
+  construct: ['ironshaper', 'earthshaper', 'runeknight', 'brawler'],
+  clear: ['warbreaker', 'berserker', 'grenadier', 'stormcaller', 'battlemage'],
+  explore: ['ranger', 'stormdancer', 'dragoon', 'windcaller', 'arcanearcher'],
+  survey: ['ranger', 'windcaller', 'stormdancer', 'arcanearcher'],
+  deliver: ['lancer', 'windcaller', 'monk', 'rogue'],
+};
+function suits(key: string, r: () => number) {
+  const list = SUITS[key];
+  if (!list) return undefined;
+  const start = Math.floor(r() * list.length);
+  return [0, 1, 2].map((i) => list[(start + i) % list.length]);
 }
 
 /** A small seeded random (so a hall's board for a given day is the same on reload). */
@@ -123,12 +148,12 @@ export function makeContract(h: HallDef, rank: number, day: number, r: () => num
     case 'hunt': {
       const [fam, label] = pick(r, h.hunts);
       const n = 3 + stars * 2;
-      return { ...base, kind, targetFamily: fam, targetCount: n, title: `Cull: ${label[0].toUpperCase() + label.slice(1)}`, description: `${client} wants ${n} of ${label} put down near ${h.id === 'glen' ? 'the Glen' : h.id === 'port' ? 'the port roads' : 'the capital'}. They have been getting bolder.${by}` };
+      return { ...base, suits: suits(fam, r), kind, targetFamily: fam, targetCount: n, title: `Cull: ${label[0].toUpperCase() + label.slice(1)}`, description: `${client} wants ${n} of ${label} put down near ${h.id === 'glen' ? 'the Glen' : h.id === 'port' ? 'the port roads' : 'the capital'}. They have been getting bolder.${by}` };
     }
     case 'clear': {
       const p = pick(r, places(h));
       const n = 3 + stars * 2;
-      return { ...base, kind, targetCount: n, target: [p.x, p.z], radius: 60, targetName: p.name, title: `Clear Out: ${p.name}`, description: `Something has made ${p.name} its own. ${client} will pay to have it cleared: kill ${n} of whatever lives there.${by}` };
+      return { ...base, suits: suits('clear', r), kind, targetCount: n, target: [p.x, p.z], radius: 60, targetName: p.name, title: `Clear Out: ${p.name}`, description: `Something has made ${p.name} its own. ${client} will pay to have it cleared: kill ${n} of whatever lives there.${by}` };
     }
     case 'gather': {
       const items = h.gathers.filter((id) => ITEMS[id]);
@@ -139,15 +164,15 @@ export function makeContract(h: HallDef, rank: number, day: number, r: () => num
     }
     case 'explore': {
       const p = pick(r, places(h));
-      return { ...base, kind, target: [p.x, p.z], radius: 28, targetName: p.name, title: `Scout: ${p.name}`, description: `${client} wants fresh word of ${p.name}. Go there, look around, and come back alive.${by}` };
+      return { ...base, suits: suits('explore', r), kind, target: [p.x, p.z], radius: 28, targetName: p.name, title: `Scout: ${p.name}`, description: `${client} wants fresh word of ${p.name}. Go there, look around, and come back alive.${by}` };
     }
     case 'deliver': {
       const [to, dx, dz, who] = pick(r, h.deliveries);
-      return { ...base, kind, target: [dx, dz], radius: 16, targetName: `${who} at ${to}`, title: `Delivery to ${to}`, description: `${client} has a sealed parcel for ${who} at ${to}. Carry it there; the guild seal means nobody opens it.${by}` };
+      return { ...base, suits: suits('deliver', r), kind, target: [dx, dz], radius: 16, targetName: `${who} at ${to}`, title: `Delivery to ${to}`, description: `${client} has a sealed parcel for ${who} at ${to}. Carry it there; the guild seal means nobody opens it.${by}` };
     }
     case 'survey': {
       const n = 6 + stars * 4;
-      return { ...base, kind, targetCount: n, title: 'Cartographer\'s Commission', description: `The guild\'s map is out of date. Explore ${n} parts of the land you haven\'t seen.${by}` };
+      return { ...base, suits: suits('survey', r), kind, targetCount: n, title: 'Cartographer\'s Commission', description: `The guild\'s map is out of date. Explore ${n} parts of the land you haven\'t seen.${by}` };
     }
     default:
       return makeContract(h, rank, day, r);

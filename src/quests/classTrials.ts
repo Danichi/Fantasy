@@ -1,6 +1,7 @@
 import type { QuestDef, QuestLog } from './questLog';
 import type { Paths } from '../paths/paths';
-import { DISC } from '../paths/data';
+import { DISC, DISCIPLINES } from '../paths/data';
+import { events } from '../core/events';
 import { lessonHook } from '../paths/mentors';
 import { CRYPT } from '../world/terrainHeight';
 import { CHAPEL } from '../world/kingsRoad';
@@ -108,8 +109,48 @@ const TEACHES: Record<string, string> = {
   ...Object.fromEntries(ROSTER_TRIALS.map((q) => [q.id, q.id.slice('trial-'.length)])),
 };
 
+/** The level a class's mastery quest opens at. */
+export const MASTERY_LEVEL = 20;
+const COMBAT_KILLS = 30, MAGIC_CASTS = 40;
+
+/**
+ * Mastery quests: at level 20 a class's mentor sets one last task, and gives
+ * you a keepsake of theirs when it's done (items/catalog/classKeepsakes.ts).
+ * Combat classes count kills while they are your fighting class; magic
+ * classes count their techniques used.
+ */
+export function masteryQuests(paths: Paths): QuestDef[] {
+  return DISCIPLINES.filter((d) => (d.fam === 'combat' || d.fam === 'magic') && d.mentorNpc).map((d) => {
+    const who = d.mentor.split(',')[0];
+    const combat = d.fam === 'combat';
+    const task = combat ? `Defeat ${COMBAT_KILLS} enemies with ${d.name} as your fighting class` : `Use ${d.name} techniques ${MAGIC_CASTS} times in battle`;
+    return {
+      id: `mastery-${d.id}`, title: `Mastery of the ${d.name}`, giver: d.mentorNpc!, region: 'cresha',
+      summary: `${who} has one last task for you before calling you a master of ${d.name}.`,
+      offer: `You have come a long way with ${d.name}. Before I call you a master there is one more thing: ${task.charAt(0).toLowerCase()}${task.slice(1)}. Not to prove it to me. To prove it to yourself.`,
+      acceptLabel: 'I\'ll do it.',
+      offerIf: () => paths.level(d.id) >= MASTERY_LEVEL,
+      stages: [
+        { note: `${task}.`, objectives: [{ type: 'signal', id: `mastery-${d.id}`, count: combat ? COMBAT_KILLS : MAGIC_CASTS, text: task }] },
+        { note: `Return to ${who}.`, objectives: [{ type: 'talk', npc: d.mentorNpc!, text: `Return to ${who}`, reply: 'It is done.', say: `Then you are a master of ${d.name}, and nobody can take that from you. Here. This was mine. It should be yours now.` }] },
+      ],
+      done: `You have mastered ${d.name}. Your mentor's keepsake is in your bag.`,
+      rewards: { gold: 0, xp: 600 },
+    } as QuestDef;
+  });
+}
+
 export function setupClassTrials(o: { quests: QuestLog; paths: Paths; toast: (m: string) => void }) {
-  o.quests.add(...CLASS_TRIALS, ...ROSTER_TRIALS);
+  o.quests.add(...CLASS_TRIALS, ...ROSTER_TRIALS, ...masteryQuests(o.paths));
+  // Mastery counts: kills with your fighting class, techniques of a magic class.
+  events.on('enemyDied', () => {
+    const a = o.paths.active;
+    if (DISC[a]?.fam === 'combat') o.quests.signal(`mastery-${a}`);
+  });
+  events.on('spellCast', ({ spell }) => {
+    const head = spell.split(':')[0];
+    if (DISC[head]?.fam === 'magic') o.quests.signal(`mastery-${head}`);
+  });
   for (const [quest, disc] of Object.entries(TEACHES)) {
     o.quests.hooks.set(quest + ':done', () => {
       if (o.paths.learned(disc)) return; // already taught (or re-run on load)

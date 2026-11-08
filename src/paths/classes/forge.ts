@@ -7,6 +7,7 @@ import type { Target } from '../../combat/targets';
 import type { NumMod } from '../effects';
 import { physics } from '../../physics/physics';
 import { ROSTER_SPECS } from '../roster';
+import { forgedEmblems } from '../../ui/art/emblems';
 
 // The skill forge: one place that builds a working, flashy skill from a short
 // spec, so every tree (the later classes, the hidden ones, Oathbreaker's) gets
@@ -832,3 +833,5 @@ const SPECS: Record<string, Record<string, S>> = {
 };
 
 export const FORGED_SKILLS: Record<string, SkillDef> = Object.assign({}, ...Object.entries({ ...SPECS, ...ROSTER_SPECS }).map(([d, s]) => forge(d, s)));
+// Every forged technique gets its own painted emblem (ui/art/emblems.ts).
+for (const [d, s] of Object.entries(SPECS)) forgedEmblems(d, DISC[d]?.color, DISC[d]?.fam, s);

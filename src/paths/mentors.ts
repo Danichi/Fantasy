@@ -2,6 +2,10 @@ import type { DialogueOption } from '../ui/dialogue';
 import type { NpcSpec } from '../npc/npc';
 import { DISC, DISCIPLINES, type DisciplineDef } from './data';
 import type { Paths } from './paths';
+import { ASCENSIONS, ASC_LEVEL, type AscensionDef } from './ascensions';
+
+/** The Ascension ceremony's show (set by main): a card, light, a sound. */
+export const ascendHook: { ceremony?: (d: DisciplineDef, a: AscensionDef) => void } = {};
 
 /**
  * Lessons (story/lessons.ts): set by main. Being taught plays the mentor's
@@ -70,6 +74,27 @@ export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: 
       continue;
     }
     if (lessonHook.has?.(d.id)) out.push({ label: `Go over the first lesson of ${d.name} again.`, run: () => void lessonHook.start?.(d) });
+    // The Ascension: at level 30 the mentor sets the two paths before you, and you choose.
+    if (paths.canAscend(d.id)) {
+      const [a0, a1] = ASCENSIONS[d.id];
+      out.push({
+        label: `I am ready to ascend in ${d.name}.`,
+        run: () => say(`Then listen, because you only choose once. The first path is ${a0.name}: ${a0.flavour.replace(/\.$/, '')}. The second is ${a1.name}: ${a1.flavour.replace(/\.$/, '')}. Take your time. When you know, tell me.`),
+      });
+      for (const a of [a0, a1]) {
+        out.push({
+          label: `Ascend: ${a.name}.`,
+          run: () => {
+            if (!paths.ascend(d.id, ASCENSIONS[d.id].indexOf(a))) return;
+            ascendHook.ceremony?.(d, a);
+            notify(`${d.name} ascends: ${a.name} · open Skills (K) for its nodes`);
+            say(`Kneel. ... Rise, ${a.name}. The path is yours now, and the next steps open at levels 35, 40 and 45.`);
+          },
+        });
+      }
+    } else if (ASCENSIONS[d.id] && paths.ascension(d.id) < 0 && paths.level(d.id) >= ASC_LEVEL[0] - 5) {
+      out.push({ label: `What happens at level ${ASC_LEVEL[0]}?`, run: () => say(`At level ${ASC_LEVEL[0]} you ascend: one of two paths, ${ASCENSIONS[d.id][0].name} or ${ASCENSIONS[d.id][1].name}, and it changes the class for good. Come to me when you are there.`) });
+    }
     if (d.fam === 'combat' && paths.active !== d.id) {
       out.push({
         label: `Make ${d.name} my fighting class.`,
