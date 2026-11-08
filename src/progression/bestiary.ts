@@ -1,5 +1,7 @@
 import { events } from '../core/events';
 import { familyOf } from '../items/catalog/gearFx';
+import { strikeHooks } from '../combat/core';
+import { setBlessing } from './blessings';
 
 // The Wardens' Bestiary: every kind of foe you have killed, how many times,
 // and what the Glen Wardens' hunters have written about it. Kills are counted
@@ -164,6 +166,55 @@ export function luckFor(kills: number, boss: boolean): number {
   return Math.min(0.4, kills * 0.02) + (kills >= REVEAL.common[3] ? 0.1 : 0);
 }
 
+// ---- Hunt marks, family pages and the Warden's Rank (docs/design/bestiary.md) ----
+// Past the pages, every kind of foe has five hunt marks. Each mark makes you hit
+// that kind 2% harder. Bring every creature of a family to a mark and the whole
+// family counts as known (3% harder against all of it, and a Wardens' charm);
+// bring them all to the third and you are its bane (5% more). Every mark is a
+// point toward the Warden's Rank, and each rank is a little more health and
+// stamina; three of them bring a gift from Rook.
+
+export const MARKS = { common: [10, 50, 150, 400, 1000], boss: [2, 5, 10, 20, 40] } as const;
+export const MARK_NAMES = ['None', 'Tracker', 'Hunter', 'Slayer', 'Bane', 'Hunted Out'];
+/** damage against the kind for each mark */
+export const MARK_DMG = 0.02;
+/** damage against a family once every creature of it reaches a mark */
+export const FAMILY_TIERS = [
+  { mark: 1, dmg: 0.03, name: 'Known' },
+  { mark: 3, dmg: 0.05, name: 'Bane' },
+] as const;
+
+export function markOf(kills: number, boss: boolean) {
+  const r = boss ? MARKS.boss : MARKS.common;
+  let m = 0;
+  for (const n of r) if (kills >= n) m++;
+  return m;
+}
+/** Kills still needed for the next mark (null at the last). */
+export function nextMark(kills: number, boss: boolean): number | null {
+  const r = boss ? MARKS.boss : MARKS.common;
+  for (const n of r) if (kills < n) return n;
+  return null;
+}
+
+/** The Warden's Rank: [points needed, name]. Each rank past the first: +5 health, +3 stamina. */
+export const WARDEN_RANKS: [number, string][] = [
+  [0, 'Greenhand'], [3, 'Woodwise'], [8, 'Trail-Reader'], [15, 'Stalker'], [25, 'Huntsman'],
+  [40, 'Sworn Hunter'], [60, 'Bane-Taker'], [85, 'Old Hand'], [115, 'Master of the Hunt'], [150, 'Warden of the Wild'],
+];
+export const RANK_HP = 5, RANK_STAMINA = 3;
+/** Rook's gifts at these ranks (item ids, catalog/wardens.ts). */
+export const RANK_GIFTS: Record<number, string> = { 3: 'rooksWhistle', 6: 'wardensTorc', 9: 'greenmantleRing' };
+/** The charm Rook sends when a family is known (item id). */
+export const familyCharm = (fam: string) => `wardenCharm_${fam}`;
+
+/** Every family with creatures (not bosses) in the book, and those creatures. */
+export function familyMembers(): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const id of Object.keys(COMMON)) (out[entry(id).family] ??= []).push(id);
+  return out;
+}
+
 /** What CatalogSources needs from the book (set once the bestiary exists). */
 export const bestiaryHook: { luck?: (kind: string) => number; isBoss?: (kind: string) => boolean; name?: (kind: string) => string } = {};
 
@@ -171,9 +222,14 @@ export class Bestiary {
   /** a new entry, or a page that turned (the UI redraws, the HUD says so) */
   onChange?: () => void;
   onNews?: (msg: string) => void;
+  /** hand the player an item (Rook's gifts and charms) */
+  give?: (id: string) => void;
+  private famCache: Record<string, number> | null = null;
 
   constructor(private flags: Record<string, boolean | number | string>) {
     events.on('enemyDied', ({ kind }) => this.record(kind));
+    strikeHooks.mult = (t) => 1 + this.dmgBonus(t.kind);
+    this.reload();
     bestiaryHook.luck = (kind) => this.luck(kind);
     bestiaryHook.isBoss = (kind) => {
       const id = entryId(kind);
@@ -191,8 +247,19 @@ export class Bestiary {
   unlock() {
     if (this.unlocked) return false;
     this.flags.bestiary = 1;
+    // Kills from before the book count from the day it is given.
+    this.famCache = null;
+    this.refreshRank();
+    this.checkFamilies();
     this.onChange?.();
     return true;
+  }
+
+  /** After a load: the rank's health and stamina, from the saved kills. */
+  reload() {
+    this.famCache = null;
+    setBlessing('wardenRank', { hp: (this.unlocked ? this.rank() : 0) * RANK_HP, stamina: (this.unlocked ? this.rank() : 0) * RANK_STAMINA });
+    this.onChange?.();
   }
 
   kills(id: string) {
@@ -210,7 +277,91 @@ export class Bestiary {
     if (this.unlocked && s1 > s0) {
       this.onNews?.(s1 === 1 ? `New bestiary entry: ${e.name}` : `Bestiary: ${e.name} is now ${STAGE_NAMES[s1]}${s1 >= 2 ? ', more of its drops revealed' : ''}`);
     }
+    const m0 = markOf(before, e.boss), m1 = markOf(n, e.boss);
+    if (m1 > m0) {
+      this.famCache = null;
+      if (this.unlocked) this.onNews?.(`Hunt mark: ${MARK_NAMES[m1]} of the ${e.name} (+${Math.round(m1 * MARK_DMG * 100)}% damage to it)`);
+      this.checkFamilies();
+      this.refreshRank(true);
+    }
     this.onChange?.();
+  }
+
+  /** The hunt mark you hold against an entry (0 to 5). */
+  mark(id: string) {
+    return markOf(this.kills(id), entry(id).boss);
+  }
+
+  /** How far a family has come: the lowest mark among its creatures (0 if any is missing). */
+  familyMark(fam: string) {
+    if (!this.famCache) {
+      const c: Record<string, number> = {};
+      for (const [f, ids] of Object.entries(familyMembers())) c[f] = Math.min(...ids.map((id) => this.mark(id)));
+      this.famCache = c;
+    }
+    return this.famCache[fam] ?? 0;
+  }
+
+  /** The family's own bonus (both tiers add). */
+  familyDmg(fam: string) {
+    const m = this.familyMark(fam);
+    return FAMILY_TIERS.reduce((n, t) => n + (m >= t.mark ? t.dmg : 0), 0);
+  }
+
+  /** How much harder you hit this kind of foe: its marks and its family's page. */
+  dmgBonus(kind: string) {
+    if (!this.unlocked) return 0;
+    const id = entryId(kind);
+    if (!id) return 0;
+    const e = entry(id);
+    return this.mark(id) * MARK_DMG + this.familyDmg(e.family);
+  }
+
+  /** Warden points: one for every mark held, across the whole book. */
+  points() {
+    let n = 0;
+    for (const [k, v] of Object.entries(this.flags)) if (k.startsWith('bk:')) n += markOf(Number(v), entry(k.slice(3)).boss);
+    return n;
+  }
+
+  /** The Warden's Rank (index into WARDEN_RANKS). */
+  rank() {
+    const p = this.points();
+    let r = 0;
+    WARDEN_RANKS.forEach(([need], i) => { if (p >= need) r = i; });
+    return r;
+  }
+
+  private refreshRank(news = false) {
+    const r = this.unlocked ? this.rank() : 0;
+    setBlessing('wardenRank', { hp: r * RANK_HP, stamina: r * RANK_STAMINA });
+    const had = Number(this.flags.bkRank ?? 0);
+    if (r <= had) return;
+    this.flags.bkRank = r;
+    if (news) this.onNews?.(`Warden's Rank: ${WARDEN_RANKS[r][1]} (+${RANK_HP} health, +${RANK_STAMINA} stamina)`);
+    for (let i = had + 1; i <= r; i++) {
+      const gift = RANK_GIFTS[i];
+      if (gift && !this.flags['bkGift:' + gift]) {
+        this.flags['bkGift:' + gift] = 1;
+        this.give?.(gift);
+        if (news) this.onNews?.(`A Warden runner brings a gift from Rook for your rank.`);
+      }
+    }
+  }
+
+  /** A family brought to a mark: Rook sends its charm (once), and the HUD says so. */
+  private checkFamilies() {
+    if (!this.unlocked) return;
+    for (const fam of Object.keys(familyMembers())) {
+      const m = this.familyMark(fam);
+      FAMILY_TIERS.forEach((t, i) => {
+        const key = `bkFam:${fam}:${i}`;
+        if (m < t.mark || this.flags[key]) return;
+        this.flags[key] = 1;
+        this.onNews?.(`Bestiary: every creature of its family is ${MARK_NAMES[t.mark]}. ${t.name}: +${Math.round(t.dmg * 100)}% damage to all of them.`);
+        if (i === 0) this.give?.(familyCharm(fam));
+      });
+    }
   }
 
   /** The drop-luck bonus a kill of this kind gets (only while you carry the book). */

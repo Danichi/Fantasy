@@ -227,6 +227,13 @@ import { withArms } from './items/armsShops';
 import { prepareHero } from './origins/hero';
 import { wireOrigins } from './origins/wiring';
 import { CharacterCreator } from './ui/creator';
+import { placeLanterns, LostLanterns, TELL_STEP, BLESS, type LanternSpot } from './world/lostLanterns';
+import { Festivals } from './world/festivals';
+import { Almanac } from './ui/almanac';
+import { mulberry32 } from './core/math';
+import { CATALOG_ITEMS, SOURCES as CATALOG_SOURCES } from './items/catalog';
+import { priceOf } from './items/catalog/sources';
+import { CHAPEL } from './world/kingsRoad';
 
 const STEP = 1 / 60;
 
@@ -335,6 +342,9 @@ async function boot() {
   mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
   // Sites (world/sites/): the points of interest across Cresha, placed clear of everything above.
+  let lanternSpots: LanternSpot[] = [];
+  let almanac: Almanac | null = null;
+  const fairAt = new THREE.Vector3();
   const sites = new Sites({
     scene: r.scene, fx, mats: world.mats, player,
     toast: (m) => hud.toast(m),
@@ -377,8 +387,26 @@ async function boot() {
     const avoid: [number, number, number][] = [...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.map((d) => [d.home.x, d.home.z, d.home.r + 30] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 12] as [number, number, number])];
     const ms = sites.place([...BATCH5, ...BATCH1, ...BATCH2, ...BATCH3, ...BATCH4], avoid.filter(([x, z]) => !DISCOVERY_BOSSES.some((d) => d.home.x === x && d.home.z === z)));
     console.info(`[sites] placed ${sites.sites.length} in ${ms.toFixed(0)} ms`);
+    // The Lost Lanterns (world/lostLanterns.ts): placed clear of the same things, and of the sites themselves.
+    const t0 = performance.now();
+    lanternSpots = placeLanterns({ avoid: [...avoid, ...sites.clearings], sites: sites.sites });
+    // The Harvest Fair's ground: the nearest open, level field at the Glen's edge.
+    {
+      const keep = [...avoid, ...sites.clearings, ...lanternSpots.map((l) => [l.x, l.z, 3] as [number, number, number])];
+      let best: [number, number] | null = null, bd = Infinity;
+      for (let r = 125; r < 320 && !best; r += 12) for (let k = 0; k < 36; k++) {
+        const a = (k / 36) * Math.PI * 2, x = Math.cos(a) * r, z = Math.sin(a) * r;
+        if (keep.some(([cx, cz, cr]) => (x - cx) ** 2 + (z - cz) ** 2 < (cr + 16) ** 2) || roadDist(x, z) < 14 || Math.abs(x - riverX(z)) < 24) continue;
+        const h0 = heightAt(x, z);
+        if ([0, 1, 2, 3, 4, 5].some((j) => Math.abs(heightAt(x + Math.cos(j) * 11, z + Math.sin(j) * 11) - h0) > 1.4)) continue;
+        const dd = Math.hypot(x, z - 120);
+        if (dd < bd) { bd = dd; best = [x, z]; }
+      }
+      fairAt.set(best?.[0] ?? 40, 0, best?.[1] ?? 160);
+    }
+    console.info(`[lanterns] placed ${lanternSpots.length} in ${(performance.now() - t0).toFixed(0)} ms`);
   }
-  stylizedNature.clearings = [...sites.clearings, [DROWNED_MERE.x, DROWNED_MERE.z, DROWNED_MERE.r + 14], [SINKHOLE.x, SINKHOLE.z, SINKHOLE.r + 8], ...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
+  stylizedNature.clearings = [...lanternSpots.map((l) => [l.x, l.z, l.style === 'tall' || l.style === 'nook' ? 3.2 : 2.2] as [number, number, number]), ...sites.clearings, [DROWNED_MERE.x, DROWNED_MERE.z, DROWNED_MERE.r + 14], [SINKHOLE.x, SINKHOLE.z, SINKHOLE.r + 8], ...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -953,11 +981,14 @@ async function boot() {
     const rec = npcs.find(who)?.rec;
     bout({ name: rec?.name ?? (who === 'hadrik' ? 'Ser Hadrik Vane' : 'Cadet Dorian Vale'), look: rec!.look, hp: who === 'hadrik' ? 260 : 220 }, () => quests.signal(who === 'hadrik' ? 'trial-won' : 'rival-won'));
   };
+  let duelLose: (() => void) | null = null;
   duel.onEnd = (won, reason) => {
     hud.toast(reason);
-    const f = duelWin;
+    const f = duelWin, l = duelLose;
     duelWin = null;
+    duelLose = null;
     if (won) f?.();
+    else l?.();
   };
   quests.add(...PORT_QUESTS);
   quests.add(...SEA_QUESTS);
@@ -1662,6 +1693,8 @@ async function boot() {
         { id: 'people', label: 'People', key: 'P', el: () => repPanel.el, isOpen: () => repPanel.open, open: () => repPanel.toggle(true), close: () => repPanel.toggle(false) },
         // The Wardens' Bestiary (progression/bestiary.ts): its sub-tab appears once Rook hands it over.
         { id: 'bestiary', label: 'Bestiary', key: 'L', el: () => bestiaryUI.el, isOpen: () => bestiaryUI.open, open: () => bestiaryUI.toggle(true), close: () => bestiaryUI.toggle(false), hidden: () => !bestiary.unlocked },
+        // The Almanac (ui/almanac.ts): the calendar and its festivals, and the Lost Lanterns.
+        { id: 'almanac', label: 'Almanac', el: () => almanac?.el ?? null, isOpen: () => !!almanac?.open, open: () => almanac?.toggle(true), close: () => almanac?.toggle(false) },
       ],
     },
     {
@@ -1994,6 +2027,49 @@ async function boot() {
   lessonHook.start = (d, wait) => (TEST_MODE ? false : lessons.request(d, wait));
   lessonHook.has = (id) => lessons.has(id);
   realm.overworldInteractables.push(...main.interactables);
+  // ---- The Lost Lanterns (world/lostLanterns.ts): relit across the world and the Dark; told of at the Temple ----
+  const lanternFestival = { on: () => false };
+  const lanterns = new LostLanterns({
+    scene: r.scene, fx, flags: worldFlags,
+    toast: (m) => hud.toast(m),
+    card: (t, sub) => hud.regionCard(t, sub, true),
+    inDark: () => realm.mode === 'overworld' && story.darkness > 0.5,
+    hasLight: () => player.paths.learned('lightbinder') || skillRt.roster.field('light') || player.equip.items.some((it) => it.def.id === 'lanternCharm' && !!player.equip.slotOf(it.uid)),
+    night: () => time.state.night,
+    festival: () => lanternFestival.on(),
+    save: () => save(),
+  }, lanternSpots);
+  realm.overworldInteractables.push(lanterns.interactable);
+  {
+    // A fully lit region: by night, its foes hit you more softly.
+    const recv = player.receiveAttack.bind(player);
+    player.receiveAttack = (att) => {
+      const w = realm.mode === 'overworld' ? lanterns.wardAt(player.pos.x, player.pos.z) : 0;
+      return recv(w ? { ...att, damage: att.damage * (1 - w) } : att);
+    };
+    const lanternTalk = (who: string) => (show: FolkShow, back: () => void) => {
+      const opts: { label: string; run: () => void }[] = [];
+      const untold = lanterns.untold;
+      if (untold > 0) opts.push({
+        label: `Tell of the lanterns you've relit (${untold}).`,
+        run: () => {
+          const r = lanterns.tell();
+          const b = r.blessed;
+          const gift = b ? ` The Dawn's blessing on you${b > 1 ? `, ${b} times over` : ''}: +${BLESS.hp * b} health, +${BLESS.mana * b} mana, +${BLESS.stamina * b} stamina.` : ` Bring word of ${TELL_STEP - (lanterns.told % TELL_STEP)} more and the Dawn will bless you for them.`;
+          show(`${who === 'aldous' ? '"' : '"Child of the Dawn. '}${r.told} more lanterns burning again. I can feel the difference in the dark, you know. Every one.${gift}${r.titleUp ? ` They will call you ${r.title} now.` : ''}"`, [{ label: 'Thank you.', run: back }]);
+        },
+      });
+      opts.push({
+        label: 'What are the Lost Lanterns?',
+        run: () => show(`"Before the Fall the keepers of the Dawn hung a lantern on every road and over every door. When the Dark came, they went out, and the wind and the years scattered them. They're still out there: by the roads, in the old ruins, up on the stone stacks, out on the islands. Some are in the Dark itself, if you can believe it. Relight them, and tell me when you do. Every ten, the Dawn gives something back. ${lanterns.litCount()} of ${lanterns.spots.length} burn again so far. Listen for them: an unlit lantern hums a little, like glass in the wind."`, [{ label: 'I\'ll look for them.', run: back }]),
+      });
+      return opts;
+    };
+    for (const id of ['aldous', 'priestess']) {
+      const prev = folkServices.get(id), mine = lanternTalk(id);
+      folkServices.set(id, (show, back) => [...(prev?.(show, back) ?? []), ...mine(show, back)]);
+    }
+  }
   questUI.storyRecap = () => story.state.recap();
   questUI.giverName = (id) => serviceNpc(id)?.spec.name ?? npcs.find(id)?.rec.name;
   repPanel.codex = () => story.state.codex();
@@ -2011,7 +2087,97 @@ async function boot() {
     hud.toast(where);
     save();
   });
-  worldMap.siteMarkers = () => [...baseSiteMarks(), ...story.wheel.markers(), ...teachers.markers()];
+  // ---- The calendar's festivals (world/calendar.ts, world/festivals.ts) ----
+  const portV = (x: number, z: number) => new THREE.Vector3(x, heightAt(x, z), z);
+  const festivals = new Festivals({
+    scene: r.scene, fx, player, flags: worldFlags,
+    day: () => time.day, hour: () => time.hour,
+    toast: (m) => hud.toast(m), card: (t, sub) => hud.regionCard(t, sub, true),
+    give: (id, n) => giveItem(id, n),
+    take: (id, n) => {
+      if (countItem(id) < n) return false;
+      takeItem(id, n);
+      return true;
+    },
+    count: (id) => countItem(id),
+    gold: (n) => player.prog.addGold(n),
+    spend: (g) => {
+      if (player.prog.gold < g) return false;
+      player.prog.addGold(-g);
+      return true;
+    },
+    xp: (n) => player.prog.addXp(n),
+    bless: (b) => { arms.runtime.buffs.set(b.id, { id: b.id, label: b.label, left: b.sec, m: b.m }); hud.toast(`${b.label} for ${Math.round(b.sec / 60)} min`); },
+    shop: (name, title, intro, stock) => town.showShop(name, title, intro, stock),
+    bout: (spec, ring, onWin, onLose) => {
+      if (player.mounted) horses.dismount();
+      duelWin = onWin;
+      duelLose = onLose;
+      duel.start({ ...spec, ring, radius: 9 });
+    },
+    marketStock: (seed) => {
+      const rnd = mulberry32(seed * 104729 + 17);
+      const lvl = player.paths.charLevel;
+      const pool = Object.values(CATALOG_ITEMS).filter((d) => (d.rarity === 'rare' || d.rarity === 'epic') && (d.lvl ?? 1) <= lvl + 10 && (CATALOG_SOURCES[d.id] ?? []).some((t) => /^(chest|drop):/.test(t)) && d.kind !== 'material');
+      const out: [string, number][] = [];
+      for (let i = 0; i < 6 && pool.length; i++) {
+        const d = pool.splice(Math.floor(rnd() * pool.length), 1)[0];
+        out.push([d.id, Math.round(priceOf(d) * 1.6)]);
+      }
+      return out;
+    },
+    lanternRumour: () => {
+      let best: LanternSpot | null = null, bd = Infinity;
+      for (const s of lanterns.spots) {
+        if (lanterns.isLit(s.id) || worldFlags['llHint:' + s.id]) continue;
+        const dd = Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
+        if (dd < bd) { bd = dd; best = s; }
+      }
+      return best ? { id: best.id, x: best.x, z: best.z, region: best.region } : null;
+    },
+    riverX: (z) => riverX(z),
+    save: () => save(),
+  }, {
+    harvestFair: fairAt.clone().setY(heightAt(fairAt.x, fairAt.z)),
+    lanterns: portV(riverX(40) - 8, 40),
+    blackMarket: portV(PORT_SPOTS.thievesDoor.x - 2.5, PORT_SPOTS.thievesDoor.z - 3),
+    harbourWeek: portV(PORT_SPOTS.fishMarket.x - 6, PORT_SPOTS.fishMarket.z - 5),
+    tourney: portV(CAPITAL_SPOTS.lists.x + 12, CAPITAL_SPOTS.lists.z),
+    dawnVigil: portV(CHAPEL.x + 2.5, CHAPEL.z - 12),
+    lists: listsAt.clone(),
+  });
+  for (const s of festivals.settlements) npcs.addSettlement(s);
+  for (const rec of festivals.records) npcs.add(rec);
+  {
+    const prevAbsent = npcs.absent;
+    npcs.absent = (id) => festivals.absent(id) ?? prevAbsent?.(id) ?? false;
+    for (const [id, svc] of festivals.services) {
+      const prev = folkServices.get(id);
+      folkServices.set(id, (show, back) => [...(prev?.(show, back) ?? []), ...svc(show, back)]);
+    }
+    const prevCatch = fishing.onCatch;
+    fishing.onCatch = (c) => {
+      prevCatch?.(c);
+      festivals.onCatch(c);
+    };
+    lanternFestival.on = () => festivals.isOn('lanterns');
+  }
+  // Lost Lanterns a fence sold you word of: marked on the map until lit.
+  // ...and every one you've relit, as a small warm mark.
+  const lanternHints = () => lanterns.spots.filter((s) => (worldFlags['llHint:' + s.id] && !lanterns.isLit(s.id)) || (lanterns.isLit(s.id) && !s.dark)).map((s) => lanterns.isLit(s.id)
+    ? { x: s.x, z: s.z, kind: 'siteDone' as const, glyph: '✧', color: '#ffc860', label: 'A relit lantern' }
+    : { x: s.x, z: s.z, kind: 'site' as const, glyph: '✦', color: s.dark ? '#b08aff' : '#ffc860', label: `A Lost Lantern (rumoured)${s.dark ? ' - in the Dark' : ''}` });
+  worldMap.siteMarkers = () => [...baseSiteMarks(), ...story.wheel.markers(), ...teachers.markers(), ...festivals.markers(), ...lanternHints()];
+  almanac = new Almanac({
+    day: () => time.day, hour: () => time.hour, moon: () => time.moonName,
+    upcoming: () => festivals.upcoming(6),
+    lanterns,
+  });
+  almanac.onToggle = (open) => {
+    input.uiMode = open || inv.open || mapUI.open || dialogue.open;
+    if (open) input.exitLock();
+    else if (!inv.open && !mapUI.open && !dialogue.open && !questUI.open) input.requestLock();
+  };
 
   // ---- the item catalog (items/catalog): gear effects, set bonuses, one-use items, and where it all comes from ----
   const hereRegion = () => (realm.mode === 'dungeon' ? 'cresha' : realm.interior ? regionAt(realm.interior.door.pos.x, realm.interior.door.pos.z) : regionAt(player.pos.x, player.pos.z));
@@ -2074,6 +2240,7 @@ async function boot() {
   // ---- The Wardens' Bestiary: kills by kind, revealed drops, and the hunter's edge on them ----
   const bestiary = new Bestiary(worldFlags);
   bestiary.onNews = (m) => hud.toast(m);
+  bestiary.give = (id) => giveItem(id, 1);
   const bestiaryUI = new BestiaryUI(bestiary, { has: (id) => !!worldFlags['cat:' + id] || player.equip.items.some((it) => it.def.id === id) });
   bestiaryUI.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open || dialogue.open;
@@ -2499,6 +2666,8 @@ async function boot() {
       main.step(STEP);
       // (Indoors the overworld is hidden anyway: leave it be until you're back out.)
       if (realm.mode === 'overworld' && !realm.interior) darkRealm.update(STEP, story.darkness, player);
+      lanterns.update(STEP, player.pos, player.center, realm.mode === 'overworld' && !realm.interior && !player.dead);
+      festivals.update(STEP);
       crownRoad.update(STEP, player, time.state.night);
       roadLife.step(STEP, player);
       duel.update(STEP);
@@ -2807,6 +2976,9 @@ async function boot() {
       trouble.reset();
       requests.reset();
       for (const k of Object.keys(worldFlags)) delete worldFlags[k];
+      bestiary.reload();
+      lanterns.reset();
+      festivals.reset();
       realm.progress = structuredClone(fresh.dungeon);
       realm.mineProgress = { gateOpen: false, guardianDead: false };
       realm.maps = {};
@@ -2834,6 +3006,7 @@ async function boot() {
       arms, // Arms and Crafting (feat/arms)
       yard, combatDebug, // combat rework: the drill yard and the F9 overlay
       bestiary, bestiaryUI, reagentDrops, // the Wardens' Bestiary; kill loot on the ground
+      lanterns, festivals, almanac, folkServices, // the Lost Lanterns; the calendar's festivals; the Almanac; townsfolk's services
       ghLife, outcast, ghSide, scrapTowns,
       wilds, roadLife, herbalism, riches, gwKey, sanctum, lessons,
       origins, creator, // ---- Origins (feat/origins) ----

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { blessing } from '../progression/blessings';
 import { HERO } from '../npc/cast';
 import type { Look } from '../npc/charBuilder';
 import RAPIER from '@dimforge/rapier3d-compat';
@@ -192,13 +193,13 @@ export class Player {
   /** combat modifiers from skill passives and buffs, rewritten every step by the skill runtime */
   mods: CombatMods = baseMods();
   get maxHp() {
-    return Math.round((120 + this.paths.bonusHp + this.mods.hp + (this.equip?.bonus('maxHp') ?? 0)) * Math.max(0.2, this.mods.hpMult));
+    return Math.round((120 + this.paths.bonusHp + blessing('hp') + this.mods.hp + (this.equip?.bonus('maxHp') ?? 0)) * Math.max(0.2, this.mods.hpMult));
   }
   get maxStamina() {
-    return Math.round(100 + this.paths.bonusStamina + this.mods.stamina + (this.equip?.bonus('maxStamina') ?? 0));
+    return Math.round(100 + this.paths.bonusStamina + blessing('stamina') + this.mods.stamina + (this.equip?.bonus('maxStamina') ?? 0));
   }
   get maxMana() {
-    return Math.round(80 + this.paths.bonusMana + this.mods.mana + (this.equip?.bonus('maxMana') ?? 0));
+    return Math.round(80 + this.paths.bonusMana + blessing('mana') + this.mods.mana + (this.equip?.bonus('maxMana') ?? 0));
   }
   private staminaDelay = 0;
   private hot = { rate: 0, left: 0 };

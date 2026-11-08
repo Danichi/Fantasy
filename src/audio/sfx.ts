@@ -52,6 +52,46 @@ function env(g: GainNode, t0: number, peak: number, attack: number, hold: number
 export const sfx = {
   enabled: true,
 
+  /** A Lost Lantern near: a faint glass chime, three soft bells. */
+  chime(volume = 0.12) {
+    if (!this.enabled) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.02;
+    [1568, 2093, 2637].forEach((f, i) => {
+      const o = c.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f * (1 + (Math.random() - 0.5) * 0.004);
+      const g = c.createGain();
+      env(g, t + i * 0.16, volume * (1 - i * 0.2), 0.008, 0.02, 1.6);
+      o.connect(g).connect(out);
+      o.start(t + i * 0.16);
+      o.stop(t + i * 0.16 + 1.8);
+    });
+  },
+  /** A lantern relit: a warm rising arpeggio over a soft hum. */
+  kindle(volume = 0.2) {
+    if (!this.enabled) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.02;
+    [523, 659, 784, 1047, 1319].forEach((f, i) => {
+      const o = c.createOscillator();
+      o.type = i % 2 ? 'triangle' : 'sine';
+      o.frequency.value = f;
+      const g = c.createGain();
+      env(g, t + i * 0.09, volume * 0.8, 0.01, 0.15, 1.4);
+      o.connect(g).connect(out);
+      o.start(t + i * 0.09);
+      o.stop(t + i * 0.09 + 1.7);
+    });
+    const hum = c.createOscillator();
+    hum.type = 'sine';
+    hum.frequency.value = 196;
+    const hg = c.createGain();
+    env(hg, t, volume * 0.5, 0.3, 0.6, 1.2);
+    hum.connect(hg).connect(out);
+    hum.start(t);
+    hum.stop(t + 2.2);
+  },
   /** A huge bellow: detuned growling saws through a sweeping throat, over a sub. */
   roar(volume = 1) {
     if (!this.enabled) return;
