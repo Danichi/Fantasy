@@ -6,6 +6,7 @@ import { REGIONS } from './regionDefinitions';
 import { ROAD_SPECS } from './roadData';
 import { roadLength, pointAlong } from './roadNetwork';
 import { mulberry32 } from '../core/math';
+import { worldUV } from './buildings';
 import { physics } from '../physics/physics';
 import { setBlessing } from '../progression/blessings';
 import { sfx } from '../audio/sfx';
@@ -194,6 +195,8 @@ export interface LanternDeps {
   /** the Night of Lanterns: every unlit lantern glimmers from far off */
   festival(): boolean;
   save(): void;
+  /** the world's stone, timber and bark (painted textures) */
+  mats?: { stone: THREE.Material; timber: THREE.Material; bark: THREE.Material };
 }
 
 interface Built {
@@ -240,7 +243,12 @@ export class LostLanterns {
     glassDark: new THREE.MeshStandardMaterial({ color: 0xc8a8ff, emissive: 0x9a6aff, emissiveIntensity: 1.5, roughness: 0.3, transparent: true, opacity: 0.85 }),
     flame: new THREE.MeshBasicMaterial({ color: 0xfff0b0 }),
     flameDark: new THREE.MeshBasicMaterial({ color: 0xeedcff }),
+    ivy: new THREE.MeshStandardMaterial({ color: 0x3a5a2a, roughness: 1 }),
   };
+  private stone: THREE.Material;
+  private darkStone: THREE.Material;
+  private timber: THREE.Material;
+  private bark: THREE.Material;
   private geo = {
     bar: new THREE.BoxGeometry(0.025, 0.3, 0.025),
     cap: new THREE.ConeGeometry(0.17, 0.13, 6),
@@ -255,6 +263,13 @@ export class LostLanterns {
 
   constructor(private d: LanternDeps, spots: LanternSpot[]) {
     this.spots = spots;
+    this.stone = d.mats?.stone ?? this.mats.stone;
+    this.timber = d.mats?.timber ?? this.mats.wood;
+    this.bark = d.mats?.bark ?? this.mats.deadWood;
+    // The Dark's stone: the same stone, burnt nearly black.
+    const ds = this.stone.clone() as THREE.MeshStandardMaterial;
+    if (ds.color) ds.color.multiplyScalar(0.35).lerp(new THREE.Color(0x2a2236), 0.3);
+    this.darkStone = ds;
     for (const s of spots) {
       this.byId.set(s.id, s);
       const k = this.cell(s.x, s.z);
@@ -452,73 +467,101 @@ export class LostLanterns {
     const group = new THREE.Group();
     group.position.set(s.x, y, s.z);
     group.rotation.y = s.yaw;
-    const m = this.mats, stone = s.dark ? m.darkStone : m.stone, rnd = mulberry32(Math.abs(Math.round(s.x * 7 + s.z * 13)) + 1);
+    const m = this.mats, stone = s.dark ? this.darkStone : this.stone, rnd = mulberry32(Math.abs(Math.round(s.x * 7 + s.z * 13)) + 1);
     const colliders: RAPIER.Collider[] = [];
     const lit = this.isLit(s.id);
     const L = this.lantern(lit, s.dark);
     const top = this.topOf(s);
-    const addBox = (w: number, h: number, dd: number, x: number, yy: number, z: number, mat: THREE.Material, solid = true, ry = 0) => {
-      const b = new THREE.Mesh(this.geo.box, mat);
-      b.scale.set(w, h, dd);
+    /** A textured block (its own geometry, world-scaled UVs); solid ones get a collider. */
+    const block = (w: number, h: number, dd: number, x: number, yy: number, z: number, mat: THREE.Material, solid = true, ry = 0, tilt = 0) => {
+      const b = new THREE.Mesh(worldUV(new THREE.BoxGeometry(w, h, dd), 1.6), mat);
       b.position.set(x, yy, z);
-      b.rotation.y = ry;
+      b.rotation.set(tilt, ry, tilt * 0.6);
       b.castShadow = b.receiveShadow = true;
       group.add(b);
-      if (solid) {
-        const wp = new THREE.Vector3(x, yy, z).applyEuler(group.rotation).add(group.position);
-        colliders.push(physics.addBox(wp, new THREE.Vector3(w / 2, h / 2, dd / 2), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, s.yaw + ry, 0))));
-      }
+      if (solid) collide(w, h, dd, x, yy, z, ry);
       return b;
+    };
+    /** An invisible collider (the rough rock shapes stand on these). */
+    const collide = (w: number, h: number, dd: number, x: number, yy: number, z: number, ry = 0) => {
+      const wp = new THREE.Vector3(x, yy, z).applyEuler(group.rotation).add(group.position);
+      colliders.push(physics.addBox(wp, new THREE.Vector3(w / 2, h / 2, dd / 2), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, s.yaw + ry, 0))));
+    };
+    const rock = (r: number, x: number, yy: number, z: number, sy = 1) => {
+      const k = new THREE.Mesh(this.geo.rock, stone);
+      k.position.set(x, yy, z);
+      k.scale.set(r * 2, r * 2 * sy, r * 2 * (0.85 + rnd() * 0.3));
+      k.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3);
+      k.castShadow = k.receiveShadow = true;
+      group.add(k);
+      return k;
     };
     switch (s.style) {
       case 'post': {
-        const post = new THREE.Mesh(this.geo.post, m.wood);
-        post.scale.set(1, 1.7, 1);
-        post.position.set(0, 0.8, 0);
-        post.rotation.z = 0.08;
-        group.add(post);
-        addBox(0.06, 0.06, 0.55, 0, 1.62, 0.22, m.wood, false);
+        const post = block(0.16, 1.7, 0.16, 0, 0.8, 0, this.timber, false, 0, 0.05);
+        post.rotation.z = 0.06;
+        block(0.08, 0.08, 0.6, 0, 1.62, 0.22, this.timber, false);
+        block(0.04, 0.3, 0.04, 0.0, 1.45, 0.08, this.timber, false, 0, 0.7);
         L.g.position.set(0, top, 0.42);
         break;
       }
       case 'hang': {
         // A dead stump with one crooked arm; the lantern hangs from it on a chain.
-        const trunk = new THREE.Mesh(this.geo.post, m.deadWood);
-        trunk.scale.set(2.4, 2.6, 2.4);
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 2.6, 7), this.bark);
         trunk.position.y = 1.2;
+        trunk.rotation.z = 0.05;
+        trunk.castShadow = true;
         group.add(trunk);
-        const arm = addBox(0.1, 0.1, 1.1, 0, 2.35, 0.45, m.deadWood, false);
-        arm.rotation.x = -0.25;
-        addBox(0.015, 0.3, 0.015, 0, 2.15, 0.8, m.iron, false);
+        collide(0.4, 2.6, 0.4, 0, 1.2, 0);
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 1.1, 6), this.bark);
+        arm.position.set(0, 2.35, 0.42);
+        arm.rotation.x = Math.PI / 2 - 0.3;
+        group.add(arm);
+        block(0.015, 0.3, 0.015, 0, 2.15, 0.8, m.iron, false);
         L.g.position.set(0, top, 0.8);
         break;
       }
       case 'cairn': {
-        // A stack of stones with the lantern on top, and a step stone to climb it.
-        addBox(1.3, s.h * 0.5, 1.2, 0, s.h * 0.25, 0, stone, true, rnd() * 0.4);
-        addBox(1.0, s.h * 0.5, 0.9, 0.05, s.h * 0.75, -0.04, stone, true, rnd() * 0.6);
-        addBox(0.9, 0.55, 0.9, 1.25, 0.27, 0.2, stone, true, rnd());
+        // A stack of rough stones with the lantern on top, and a step stone to climb it.
+        collide(1.2, s.h * 0.5, 1.1, 0, s.h * 0.25, 0);
+        collide(0.95, s.h * 0.5, 0.85, 0, s.h * 0.75, 0);
+        collide(0.85, 0.55, 0.85, 1.2, 0.27, 0.2);
+        rock(0.7, 0, s.h * 0.22, 0, 0.55);
+        rock(0.55, 0.05, s.h * 0.6, -0.03, 0.6);
+        rock(0.42, -0.02, s.h * 0.88, 0.02, 0.45);
+        rock(0.5, 1.2, 0.22, 0.2, 0.6);
+        rock(0.22, -0.6, 0.08, 0.5);
         L.g.position.set(0, top, 0);
         break;
       }
       case 'tall': {
-        // A standing pillar too tall to climb by hand: an air jump, a glide from higher ground, a grappling hook.
-        addBox(1.5, s.h, 1.4, 0, s.h / 2, 0, stone, true, 0);
-        addBox(1.8, 0.25, 1.7, 0, s.h + 0.02, 0, stone, false, 0.3);
-        for (let i = 0; i < 4; i++) {
-          const r = new THREE.Mesh(this.geo.rock, stone);
-          const a = rnd() * Math.PI * 2;
-          r.position.set(Math.cos(a) * 1.4, 0.15, Math.sin(a) * 1.4);
-          r.scale.setScalar(0.4 + rnd() * 0.5);
-          group.add(r);
+        // A weathered standing stone, too tall to climb by hand: an air jump, a glide from higher ground, a grappling hook.
+        collide(1.4, s.h, 1.3, 0, s.h / 2, 0);
+        let yy = 0;
+        const parts = 3;
+        for (let i = 0; i < parts; i++) {
+          const ph = s.h / parts, w = 1.5 - i * 0.12;
+          block(w, ph + 0.05, w * 0.92, (rnd() - 0.5) * 0.06, yy + ph / 2, (rnd() - 0.5) * 0.06, stone, false, (rnd() - 0.5) * 0.25);
+          yy += ph;
         }
-        L.g.position.set(0, top + 0.1, 0);
+        block(1.5, 0.22, 1.4, 0, s.h + 0.08, 0, stone, false, 0.35);
+        for (let i = 0; i < 5; i++) {
+          const a = rnd() * Math.PI * 2;
+          rock(0.18 + rnd() * 0.25, Math.cos(a) * (1.2 + rnd() * 0.6), 0.1, Math.sin(a) * (1.2 + rnd() * 0.6), 0.6);
+        }
+        // A rope of ivy up one side, and a few carved rings: something old, and meant to be found.
+        block(0.06, s.h * 0.8, 0.06, 0.68, s.h * 0.4, 0.3, m.ivy, false);
+        for (let i = 1; i < parts; i++) block(1.52 - i * 0.12, 0.06, 1.42 - i * 0.12, 0, (s.h / parts) * i, 0, m.brass, false);
+        L.g.position.set(0, top + 0.12, 0);
         break;
       }
       case 'nook': {
-        // A broken stretch of old wall; the lantern sits in its corner.
-        addBox(2.4, 1.4 + rnd() * 0.6, 0.45, 0, 0.75, -0.6, stone, true, 0);
-        addBox(0.45, 1.0, 1.6, -1.0, 0.5, 0.1, stone, true, 0);
+        // A broken stretch of old wall, ragged along the top; the lantern sits in its corner.
+        const hs = [1.6 + rnd() * 0.5, 1.2 + rnd() * 0.4, 0.7 + rnd() * 0.3];
+        hs.forEach((h, i) => block(0.85, h, 0.45, -0.85 + i * 0.85, h / 2, -0.6, stone, true, (rnd() - 0.5) * 0.06));
+        block(0.45, 1.1, 1.6, -1.05, 0.55, 0.1, stone, true);
+        block(0.7, 0.4, 0.45, 1.1, 0.2, 0.3, stone, false, 0.6, 0.15);
+        rock(0.2, 0.6, 0.08, 0.6);
         L.g.position.set(-0.45, top, -0.15);
         break;
       }
@@ -526,10 +569,8 @@ export class LostLanterns {
         // Half sunk in the earth, on its side, glinting.
         L.g.rotation.z = 1.1;
         L.g.position.set(0, top, 0);
-        const r = new THREE.Mesh(this.geo.rock, stone);
-        r.position.set(0.5, 0.05, 0.2);
-        r.scale.setScalar(0.5);
-        group.add(r);
+        rock(0.28, 0.5, 0.05, 0.2, 0.6);
+        rock(0.16, -0.35, 0.03, -0.2, 0.6);
         break;
       }
     }
@@ -547,6 +588,8 @@ export class LostLanterns {
     const b = this.built.get(id);
     if (!b) return;
     this.d.scene.remove(b.group);
+    const shared = new Set<THREE.BufferGeometry>(Object.values(this.geo));
+    b.group.traverse((o) => { if (o instanceof THREE.Mesh && !shared.has(o.geometry)) o.geometry.dispose(); });
     for (const c of b.colliders) physics.removeStatic(c);
     this.built.delete(id);
     if (this.nearest === b) this.nearest = null;

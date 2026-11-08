@@ -2038,6 +2038,7 @@ async function boot() {
     night: () => time.state.night,
     festival: () => lanternFestival.on(),
     save: () => save(),
+    mats: { stone: world.mats.stone, timber: world.mats.timber, bark: world.mats.bark },
   }, lanternSpots);
   realm.overworldInteractables.push(lanterns.interactable);
   {
