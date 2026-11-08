@@ -123,7 +123,14 @@ test('the calendar: seasons, festivals on their days, the Harvest Fair\'s shows,
     for (let i = 0; i < 6; i++) F.update(1);
     const risen = F.vigil?.mobs.length ?? 0;
     const up = F.upcoming(6).map((u: any) => u.f.id);
-    return { dates, fairOn, hostHere, hostGone, produce, tokens, tok0, weigh, medal, marketOn, rumour, hinted, vigilOn, risen, up };
+    // The Almanac stays out of sight until opened, then shows the calendar and the lanterns.
+    const hiddenAtFirst = getComputedStyle(g.almanac.el).display === 'none';
+    g.almanac.openTab('calendar');
+    const cal = g.almanac.el.textContent;
+    g.almanac.openTab('lanterns');
+    const lan = g.almanac.el.textContent;
+    g.almanac.toggle(false);
+    return { hiddenAtFirst, cal: /Frost 4, year 1/.test(cal) && /The Harvest Fair/.test(cal), lan: /Lanternbearer|LANTERNBEARER/i.test(lan) && /The Dark/.test(lan), dates, fairOn, hostHere, hostGone, produce, tokens, tok0, weigh, medal, marketOn, rumour, hinted, vigilOn, risen, up };
   });
   expect(res.dates).toEqual(['Thaw 1, year 1', 'Harvest 6, year 1', 'Thaw 1, year 2', 'Frost']);
   expect(res.fairOn).toBe(true);
@@ -139,5 +146,8 @@ test('the calendar: seasons, festivals on their days, the Harvest Fair\'s shows,
   expect(res.vigilOn).toBe(true);
   expect(res.risen).toBeGreaterThan(0);
   expect(res.up.length).toBeGreaterThan(3);
+  expect(res.hiddenAtFirst).toBe(true);
+  expect(res.cal).toBe(true);
+  expect(res.lan).toBe(true);
   expect(errors).toEqual([]);
 });

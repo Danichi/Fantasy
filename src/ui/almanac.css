@@ -1,5 +1,6 @@
 /* The Almanac (almanac.ts): the calendar and the Lost Lanterns, in the journal's frame. */
-#ui .journal.almanac { width: min(980px, calc(100vw - 32px)); height: min(680px, calc(100vh - 48px)); display: flex; flex-direction: column; }
+#ui .journal.almanac { width: min(980px, calc(100vw - 32px)); height: min(680px, calc(100vh - 48px)); flex-direction: column; }
+#ui .journal.almanac:not(.hidden) { display: flex; }
 #ui .journal.almanac header { display: flex; align-items: center; }
 #ui .journal.almanac header > span { flex: 1; }
 #ui .journal.almanac .al-tabs { padding: 10px 26px 0; display: flex; gap: 8px; }
