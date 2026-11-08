@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { heightAt } from './terrainHeight';
+import { heightAt, RIVER_LEVEL } from './terrainHeight';
 import { FESTIVALS, FESTIVAL, sittingDay, upcoming, dateText, type FestivalDef, type FestivalId } from './calendar';
 import { mulberry32 } from '../core/math';
 import { newTargetId, targets, type HitInfo, type Target } from '../combat/targets';
@@ -343,7 +343,10 @@ export class Festivals {
   /** A lantern on the river (or one rising into the sky). */
   private launch(yours: boolean, at: THREE.Vector3, sky: boolean) {
     const m = new THREE.Mesh(this.floatGeo, sky ? this.skyMat : this.floatMat);
-    if (yours) m.scale.setScalar(1.5);
+    if (yours) {
+      m.scale.setScalar(1.5);
+      at = new THREE.Vector3(this.d.riverX(at.z) + 1.5, RIVER_LEVEL + 0.12, at.z);
+    }
     m.position.copy(at);
     this.d.scene.add(m);
     this.floats.push({ m, x: at.x, z: at.z, y: at.y, v: sky ? 0.9 + Math.random() * 0.6 : 0.6 + Math.random() * 0.4, sky });
@@ -729,11 +732,16 @@ export class Festivals {
     const home = this.at.lanterns, p = this.d.player.pos;
     const near = Math.hypot(home.x - p.x, home.z - p.z) < 400;
     if (on && near) {
+      // The first time you come: the river is already full of them.
+      if (!this.floats.length) for (let k = 0; k < 70; k++) {
+        const z = home.z - 160 + k * 8 + Math.random() * 6, x = this.d.riverX(z) + (Math.random() - 0.5) * 6;
+        this.launch(false, new THREE.Vector3(x, RIVER_LEVEL + 0.12, z), false);
+      }
       this.floatT -= dt;
       if (this.floatT <= 0) {
         this.floatT = 1.6;
         const z = home.z - 160 + Math.random() * 40, x = this.d.riverX(z) + (Math.random() - 0.5) * 6;
-        this.launch(false, new THREE.Vector3(x, heightAt(x, z) - 0.2, z), false);
+        this.launch(false, new THREE.Vector3(x, RIVER_LEVEL + 0.12, z), false);
         if (Math.random() < 0.6) {
           const a = Math.random() * Math.PI * 2, r = 30 + Math.random() * 120;
           const sx = Math.cos(a) * r, sz = Math.sin(a) * r;
@@ -748,7 +756,6 @@ export class Festivals {
       } else {
         f.z += f.v * dt;
         f.x = this.d.riverX(f.z) + (f.x - this.d.riverX(f.z - f.v * dt));
-        f.y = Math.max(f.y, heightAt(f.x, f.z) - 0.25);
       }
       f.m.position.set(f.x, f.y + (f.sky ? 0 : Math.sin(f.z) * 0.03), f.z);
     }
