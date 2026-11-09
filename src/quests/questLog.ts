@@ -201,7 +201,8 @@ export class QuestLog {
   }
 
   status(id: string): 'active' | 'done' | 'available' | 'locked' {
-    return this.state[id]?.status ?? (this.canOffer(this.defs.get(id)!) ? 'available' : 'locked');
+    const def = this.defs.get(id);
+    return this.state[id]?.status ?? (def && this.canOffer(def) ? 'available' : 'locked');
   }
 
   isActive(id: string, stage?: number) {
