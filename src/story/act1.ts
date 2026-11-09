@@ -9,6 +9,7 @@ import { CAST as LOOKS } from '../npc/cast';
 import { BRANNOC_LOOK } from '../raid/watchman';
 import { events } from '../core/events';
 import type { Story } from './story';
+import type { Undead } from '../enemies/undead';
 import { CHAMPIONS } from './champions';
 import type { SceneApi } from './scene';
 import type { RaidPrep } from '../raid/raids';
@@ -464,6 +465,8 @@ export function setupAct1(c: ActCtx) {
       if (node.id !== 'gravewood') return null;
       // Back out of the Dark, when you've seen enough of it.
       if (story.darkness > 0.5 && F.mirrorFight === 2) return { label: '(Step back through the wheel, into the light.)', run: () => { story.h.dialogue.close(); mirrorBack(); } };
+      // Mid-fight: back out, and the shades go with you. The wheel lets you try again.
+      if (story.darkness > 0.5 && F.mirrorFight === 1) return { label: '(Step back through the wheel. You can come again.)', run: () => { story.h.dialogue.close(); mirrorAbandon(); } };
       if (!quests.wants('mirror-walked')) return null;
       return { label: '(Step through the wheel, into the Dark.)', run: () => { story.h.dialogue.close(); mirrorWalk(); } };
     });
@@ -477,15 +480,38 @@ export function setupAct1(c: ActCtx) {
     });
     const go = () => {
       if (busy()) return void story.whenFree(go);
-      story.shades(6, player.pos, 8);
+      mirrorShades = story.shades(6, player.pos, 8).map((u) => ({ u, t: 0, born: 0 }));
       F.mirrorFight = 1;
     };
     go();
   };
-  const mirrorStep = () => {
+  /** this session's shades in the Dark, with how long each has been out of your reach */
+  let mirrorShades: { u: Undead; t: number; born: number }[] = [];
+  const mirrorAbandon = () => {
+    for (const m of mirrorShades) if (m.u.alive) m.u.sink();
+    mirrorShades = [];
+    F.mirrorFight = 0;
+    mirrorBack();
+  };
+  const mirrorStep = (dt: number) => {
+    // A fight from an earlier session (its shades weren't saved): the walk can be made again.
+    if (F.mirrorFight === 1 && !mirrorShades.length) F.mirrorFight = 0;
+    // A shade that can't get to you, and you can't get to (wedged in the ruins, never rose,
+    // fell through the ground), sinks back into the Dark rather than holding the fight open.
+    if (F.mirrorFight === 1) {
+      for (const m of mirrorShades) {
+        if (!m.u.alive) continue;
+        m.born += dt;
+        const d = Math.hypot(m.u.position.x - player.pos.x, m.u.position.z - player.pos.z);
+        const below = heightAt(m.u.position.x, m.u.position.z) - m.u.position.y > 1.5;
+        m.t = d < 4 ? 0 : m.t + dt;
+        if (d > 40 || below || m.t > 25 || (!m.u.lockable && m.born > 20)) m.u.sink();
+      }
+    }
     // Carried off by a wheel while still in the Dark: you come out of it.
     if (F.mirrorFight === 2 && story.darkness > 0.5 && !busy() && Math.hypot(player.pos.x - GRAVEWOOD.x, player.pos.z - GRAVEWOOD.y) > 300) story.darkTo(0);
-    if (F.mirrorFight !== 1 || story.aliveFoes) return;
+    if (F.mirrorFight !== 1 || mirrorShades.some((m) => m.u.alive)) return;
+    mirrorShades = [];
     F.mirrorFight = 2;
     void story.play('mirror-out', async (s) => {
       s.bars(true);
@@ -655,7 +681,7 @@ export function setupAct1(c: ActCtx) {
       fallStep();
       wardensStep();
       malricStep();
-      mirrorStep();
+      mirrorStep(dt);
       wardStep();
       bellsStep(dt);
       // The lesson at the crypt door: stop before it kills you.
