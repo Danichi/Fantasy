@@ -105,3 +105,23 @@ Every blow the player lands goes through `strike(target, spec)`:
 - **Tests:** `tests/combat.spec.ts` (rules, the defence ladder, strings, the
   brain, the drill yard, and a balance check of every family against every
   armour).
+
+## Tuning (fix round 2)
+
+- **Stamina matters.**
+  - A roll costs 32 stamina (was 18) and a backstep 22 (was 12).
+  - You can't roll on an empty bar: a roll needs at least 70% of its cost.
+  - Regeneration is 34 a second (was 46), 12 while blocking (was 16), and waits 0.9 s after a roll.
+- **Food heals slowly.**
+  - Apples, pears, carrots, berries and dates heal 4-5 health over 6 seconds; honeycomb heals 8.
+  - Eating more while it's working doesn't stack, it only restarts the timer.
+  - Draughts still heal in about a second.
+- **Maces.**
+  - A mace no longer breaks a common foe's guard in one blow:
+
+    | | Damage | Poise |
+    |---|---|---|
+    | Light combo | 1.1 / 1.15 / 1.45 | 28 / 30 / 46 |
+    | Heavy | 2.4 | 85 |
+
+  - The third light strike is now a ground shock: a 2.6 m sweep with a dust ring and a little camera shake.

@@ -138,11 +138,11 @@ const food = (id: string, name: string, desc: string, stats: ItemDef['stats']): 
 
 export const HERB_ITEMS: Record<string, ItemDef> = {
   redcap: mat('redcap', 'Redcap Mushroom', 'A white-spotted red cap from shady woods. Alchemists want it; eating it raw is a mistake.'),
-  brambleBerries: food('brambleBerries', 'Bramble Berries', 'Dark, sweet berries from hedgerow brambles. Restores a little health.', { heal: 10 }),
+  brambleBerries: food('brambleBerries', 'Bramble Berries', 'Dark, sweet berries from hedgerow brambles. Restores a little health, slowly.', { heal: 4 }),
   silverthistle: mat('silverthistle', 'Silverthistle', 'A thistle with metallic, silvery heads. Used in tonics that toughen the skin.', 'fine'),
   duskbloom: mat('duskbloom', 'Duskbloom', 'A violet flower that opens only after sunset and glows faintly. Prized by mages.', 'rare'),
   riverReed: mat('riverReed', 'River Reed', 'Tough reed stalks from the riverbanks. Weavers and fletchers use them.'),
-  honeycomb: food('honeycomb', 'Wild Honeycomb', 'Dripping comb from a hollow tree. Restores health and stamina.', { heal: 20, restoreStamina: 20 }),
+  honeycomb: food('honeycomb', 'Wild Honeycomb', 'Dripping comb from a hollow tree. Restores some health and stamina.', { heal: 8, restoreStamina: 12 }),
   wildGarlic: mat('wildGarlic', 'Wild Garlic', 'Broad leaves and white star flowers, pungent in the best way. A cook\'s favourite.'),
   emberroot: mat('emberroot', 'Emberroot', 'A warm orange root from sunny hillsides. Faintly hot to the touch; used in fire tonics.', 'fine'),
 };

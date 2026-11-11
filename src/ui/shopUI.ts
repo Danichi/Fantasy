@@ -82,7 +82,12 @@ export class ShopUI {
     events.on('equipmentChanged', () => this.refresh());
   }
 
+  /** Off every purchase (the guild badge: guild/ranks.ts), set by main. */
+  discount: () => number = () => 0;
+
   show(opts: ShopOpts) {
+    const k = 1 - this.discount();
+    if (k < 1) opts = { ...opts, stock: opts.stock.map(([id, p]) => [id, Math.max(1, Math.round(p * k))] as [string, number]) };
     this.opts = opts;
     this.tab = 'buy';
     this.note = '';

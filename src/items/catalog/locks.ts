@@ -80,7 +80,10 @@ export class Locks {
     return { master: n('masterLockpicks'), plain: n('lockpicks') };
   }
   /** Can a heavy weapon in hand force it? */
+  /** a class that breaks locks without a heavy weapon (Brawler, Earthshaper): set by main */
+  forceAny?: () => boolean;
   canForce() {
+    if (this.forceAny?.()) return true;
     const d = this.player.equip.mainWeapon?.def;
     return !!d && (d.hands === 2 || d.kind === 'greatsword' || d.kind === 'mace' || d.kind === 'axe');
   }

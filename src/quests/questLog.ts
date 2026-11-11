@@ -95,6 +95,8 @@ export interface QuestDef {
   offerHours?: [number, number];
   /** main story quests sort first */
   main?: boolean;
+  /** only offered while this holds (a class's level, say) */
+  offerIf?: () => boolean;
   /** an Adventurer's Guild contract mirrored from the board (the guild owns its progress and pay) */
   contract?: boolean;
 }
@@ -199,7 +201,8 @@ export class QuestLog {
   }
 
   status(id: string): 'active' | 'done' | 'available' | 'locked' {
-    return this.state[id]?.status ?? (this.canOffer(this.defs.get(id)!) ? 'available' : 'locked');
+    const def = this.defs.get(id);
+    return this.state[id]?.status ?? (def && this.canOffer(def) ? 'available' : 'locked');
   }
 
   isActive(id: string, stage?: number) {
@@ -215,6 +218,7 @@ export class QuestLog {
     if (this.state[q.id]) return false;
     if (q.requires?.some((r) => !this.isDone(r))) return false;
     if (q.offerHours && !inHours(this.ctx.hour(), q.offerHours[0], q.offerHours[1])) return false;
+    if (q.offerIf && !q.offerIf()) return false;
     return true;
   }
 
@@ -405,11 +409,17 @@ export class QuestLog {
    * quest that's ready, and who will put it to you. (Shown in the tracker and
    * on the map, so the story always has somewhere to point you.)
    */
-  leads(): { quest: QuestDef; npc: string; name: string }[] {
-    if (this.active().some((q) => q.main)) return [];
+  leads(): { quest: QuestDef; npc: string; name: string; away: string | null }[] {
+    // Every chapter of the story that someone is ready to put to you, whether or
+    // not another chapter is under way, and at any hour (the journal says when
+    // they're about). These are main quests in the log, not footnotes.
     return [...this.defs.values()]
-      .filter((q) => q.main && !!q.offer && this.canOffer(q) && !this.offerHidden?.(q.giver, q))
-      .map((q) => ({ quest: q, npc: q.giver, name: this.ctx.npcName?.(q.giver) ?? q.giver }));
+      .filter((q) => q.main && !!q.offer && !this.state[q.id] && !q.requires?.some((r) => !this.isDone(r)) && !this.offerHidden?.(q.giver, q))
+      .map((q) => {
+        const a = this.ctx.npcAway?.(q.giver);
+        const hrs = q.offerHours && !inHours(this.ctx.hour(), q.offerHours[0], q.offerHours[1]) ? `they're about from ${q.offerHours[0]}:00` : null;
+        return { quest: q, npc: q.giver, name: this.ctx.npcName?.(q.giver) ?? q.giver, away: a ? awayNote(a, true) : hrs };
+      });
   }
 
   /**
@@ -621,6 +631,15 @@ export class QuestLog {
     this.ctx.toast(`Quest complete: ${q.title}  (+${gold}g, +${r.xp} xp)${extra}`);
     this.onDone?.(q);
     if (this.tracked === q.id) this.tracked = this.active()[0]?.id ?? null;
+    // The story hands on: the next chapter is a main quest in the log from now,
+    // with who to see, even when that's someone else entirely.
+    if (q.main) {
+      for (const l of this.leads()) {
+        if (!(l.quest.requires ?? []).includes(q.id)) continue;
+        this.ctx.toast(`New main quest: ${l.quest.title}. Speak with ${l.name}.`);
+        if (!this.tracked || !this.defs.get(this.tracked)?.main) this.tracked = 'lead:' + l.quest.id;
+      }
+    }
     this.hooks.get(q.id + ':done')?.(q);
   }
 

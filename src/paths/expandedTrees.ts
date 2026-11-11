@@ -18,8 +18,8 @@ export const EXPANDED_TREES: Record<string, BranchDef[]> = {
     ['Pilgrim', 'Light on the move', [['Road Prayer', 'Light Feet'], ['*Sunstep', 'Pilgrim Pace', 'Glint'], ['*Judgment Leap', '?Comet|Lantern', 'Sure Stride'], ['*Radiant Charge', '!Sun Runner', 'Flare'], ['Zenith', 'Long Road']], 'Hour of the Sun'],
   ]),
   warbreaker: br([
-    ['Ruin', 'Huge blows', [['Heavy Hands', 'Thick Arms'], ['*Skullsplitter', 'Overhead', 'Brute'], ['*Earthbreaker', '?Fault Line|Rubble', 'Iron Back'], ['*Ruinous Blow', '!Reckless', 'Hammerfall'], ['Mountain Breaker', 'Bone Crusher']], 'The Last Swing'],
-    ['Fury', 'Rage and speed', [['Hot Blood', 'Grit'], ['*Blood Howl', 'Fury Well', 'Snarl'], ['*Frenzy', '?Berserk|Cold Rage', 'Bloodlust'], ['*Rampage', '!Red Mist', 'Pain Eater'], ['Unstoppable', 'Warpath']], 'Avatar of War'],
+    ['Ruin', 'Huge blows with both weapons', [['Heavy Hands', 'Iron Grip'], ['*Skullsplitter', 'Bone Breaker', 'Brute'], ['*Earthbreaker', '?Fault Line|Aftershock', 'Iron Back'], ['*Ruinous Blow', '!Reckless', 'Hammerfall'], ['Mountain Breaker', 'Bone Crusher']], 'The Last Swing'],
+    ['Fury', 'Rage and the beat', [['Hot Blood', 'War Drum'], ['*Blood Howl', 'Fury Well', 'Snarl'], ['*Frenzy', '?Berserk|Cold Rage', 'Bloodlust'], ['*Rampage', '!Red Mist', 'Pain Eater'], ['Unstoppable', 'Warpath']], 'Avatar of War'],
     ['Ironhide', 'Take it and keep coming', [['Scarred', 'Thick Skin'], ['*Shrug Off', 'Hard to Kill', 'Stubborn'], ['*Iron Roar', '?Defiant|Taunting', 'Bulwark Body'], ['*Last Stand', '!Unbreakable', 'Oxhide'], ['Old Wounds', 'Orc Blood']], 'Mountain That Walks'],
   ]),
 
@@ -117,7 +117,7 @@ export const EXPANDED_TREES: Record<string, BranchDef[]> = {
 
   // ---- hidden classes: Pyromancer gateways ------------------------------------------------
   sunbreaker: br([
-    ['Corona', 'Break the sun', [['Solar Wind', 'Flare'], ['*Solar Flare', 'Corona', 'Prominence'], ['*Sunspot', '?Dark Spot|Bright Spot', 'Photon'], ['*Supernova', '!Dying Star', 'Solar Mass'], ['Red Giant Heart', 'White Dwarf']], 'Sunbreak'],
+    ['Corona', 'Break the sun', [['Sunwind', 'Flare'], ['*Solar Flare', 'Corona', 'Prominence'], ['*Sunspot', '?Dark Spot|Bright Spot', 'Photon'], ['*Supernova', '!Dying Star', 'Solar Mass'], ['Red Giant Heart', 'White Dwarf']], 'Sunbreak'],
     ['Plasma', 'Fire past fire', [['Ionised', 'Charged'], ['*Plasma Lance', 'Arc Fire', 'Superheat'], ['*Plasma Chain', '?Arcing|Fusing', 'Hot Core'], ['*Fusion', '!Critical Mass', 'Reactor'], ['Star Core', 'Starforge']], 'Birth of a Star'],
     ['Eclipse', 'The sun swallowed', [['Shade of the Sun', 'Black Fire'], ['*Black Sun', 'Umbral Flame', 'Cold Fire'], ['*Solar Wind', '?Gale|Breeze', 'Drift'], ['*Corona Shield', '!Eclipsed', 'Halo of Fire'], ['Night Sun', 'Two Suns']], 'Sun Swallower'],
   ]),

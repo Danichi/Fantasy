@@ -52,7 +52,7 @@ An item's `fx` lists what it does while worn. A buff's keys can name the same ef
 Every item carries source tags in `SOURCES`:
 
 - **Shops:** each shop kind (smith, tailor, alchemist, inn, arcane, jeweller, bowyer, temple, trader) is guessed from the keeper's name and title. It sells its region's tier, rotating daily. Faction quartermasters and home-region shops sell faction gear.
-- **Foe drops:** foes drop their family's parts and sometimes gear, draughts or trophies. Luck raises the gear chances.
+- **Foe drops:** foes drop their family's parts and sometimes draughts or trophies. Gear is rare: about one ordinary kill in sixty (none before level 3), mostly plain pieces (weights 10 : 3 : 0.8 : 0.25 : 0.05 from common to legendary), never above your level's cap (fine until 8, rare until 20, epic until 32) and never more than one tier above your own. Named foes still drop from their own pools. Luck raises the chance.
 - **One-time rewards:** these are given once each (saved in world flags as `cat:<id>`):
   - bosses (`bossSlain`), lairs and sea beasts (`deed`);
   - quests (`questChanged`), faction quests and deeds;

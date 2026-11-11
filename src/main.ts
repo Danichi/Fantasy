@@ -5,7 +5,9 @@ import { combatFeedback } from './combat/feedback';
 import { TrainingYard } from './combat/trainingYard';
 import { EAST_GATE } from './world/desert/ghagrabbaPlaces';
 import { Lessons } from './story/lessons';
-import { lessonHook } from './paths/mentors';
+import { lessonHook, mentorMemory } from './paths/mentors';
+import { NAMED_KINDS, RANKS, rankIndex } from './guild/ranks';
+import type { HallId } from './guild/contracts';
 import type { StationKind } from './crafting/recipes';
 import { Mastery, wireMastery } from './paths/mastery';
 import { CombatDebug } from './combat/debugOverlay';
@@ -63,7 +65,8 @@ import { Fishing, type FishingSpot } from './world/fishing';
 import { Duel } from './combat/duel';
 import { buildCharacter, type Look } from './npc/charBuilder';
 import { DOORS, type Door, type InteriorKind } from './world/doors';
-import type { Interior } from './world/interior';
+import { guildHook, type Interior } from './world/interior';
+import type { DialogueOption } from './ui/dialogue';
 import type { Interactable } from './dungeon/instance';
 import { setupAcademy } from './quests/academy';
 import { setupLowerCity, SALLOW_LOOK, NIX_LOOK } from './quests/lowerCity';
@@ -108,6 +111,7 @@ import { setupHerbalismQuests } from './quests/herbalismQuests';
 import type { NpcSpec } from './npc/npc';
 import { ReagentDrops } from './world/herbs/reagentDrops';
 import { buildHerbFolk } from './world/herbs/herbFolk';
+import { buildHiddenTeachers } from './world/hiddenTeachers';
 import { RoadToRiches, MEADOW_CLEARING } from './world/roadToRiches';
 import { GravewoodKey } from './world/gravewoodKey';
 import { CorruptedBrother } from './enemies/corruptedBrother';
@@ -128,7 +132,7 @@ import { Bestiary } from './progression/bestiary';
 import { BestiaryUI } from './ui/bestiaryUI';
 import { glenNamedFolk } from './npc/glenNamed';
 import { ITEMS } from './items/itemDefs';
-import { buildGlenDressing, MARKET_SPOTS, NOTICEBOARD, WELL } from './world/glenDressing';
+import { buildGlenDressing, MARKET_SPOTS, WELL } from './world/glenDressing';
 import { Weather } from './world/weather';
 import { Precipitation } from './world/precipitation';
 import { Ambience } from './audio/ambience';
@@ -148,8 +152,11 @@ import { SeamanshipPanel } from './ui/seamanshipPanel';
 import { buildIslandPorts } from './world/sea/islandPorts';
 import { GroundWindow } from './world/groundWindow';
 import { SkillsUI } from './ui/skills';
-import { DISC } from './paths/data';
-import { mentorOptions } from './paths/mentors';
+import { DISC, DISCIPLINES } from './paths/data';
+import { ROSTER_HOOKS } from './paths/roster/engine';
+import { mentorOptions, ascendHook } from './paths/mentors';
+import { classRemark } from './npc/classRemarks';
+import { styleOfColor } from './paths/roster/engine';
 import { SkillRuntime } from './paths/skills';
 import { skillIcon } from './ui/skillTree';
 import { CharPreview } from './ui/charPreview';
@@ -160,6 +167,7 @@ import { Grass } from './world/grass';
 import { River } from './world/water';
 import { Foliage } from './world/foliage';
 import { StylizedNature } from './world/stylizedNature';
+import { DarkRealm } from './world/darkRealm';
 import { Flowers } from './world/flowers';
 import { Rewards, XP_FOR_KIND } from './progression/progression';
 import { levelScale } from './creatures/creature';
@@ -207,7 +215,8 @@ import { Town, NPCS } from './npc/town';
 import { DialogueUI } from './ui/dialogue';
 import { loadArmourKit } from './enemies/armourKit';
 import { MINE_CLEARING } from './world/mineEntrance';
-import { loadSave, writeSave, buildSave, applySave, clearSave } from './save';
+import { loadSave, writeSave, buildSave, applySave } from './save';
+import { buildSavePicker } from './ui/savePicker';
 import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 import { afflictions } from './combat/afflictions';
@@ -218,6 +227,13 @@ import { withArms } from './items/armsShops';
 import { prepareHero } from './origins/hero';
 import { wireOrigins } from './origins/wiring';
 import { CharacterCreator } from './ui/creator';
+import { placeLanterns, LostLanterns, TELL_STEP, BLESS, type LanternSpot } from './world/lostLanterns';
+import { Festivals } from './world/festivals';
+import { Almanac } from './ui/almanac';
+import { mulberry32 } from './core/math';
+import { CATALOG_ITEMS, SOURCES as CATALOG_SOURCES } from './items/catalog';
+import { priceOf } from './items/catalog/sources';
+import { CHAPEL } from './world/kingsRoad';
 
 const STEP = 1 / 60;
 
@@ -326,6 +342,9 @@ async function boot() {
   mark('capital');
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
   // Sites (world/sites/): the points of interest across Cresha, placed clear of everything above.
+  let lanternSpots: LanternSpot[] = [];
+  let almanac: Almanac | null = null;
+  const fairAt = new THREE.Vector3();
   const sites = new Sites({
     scene: r.scene, fx, mats: world.mats, player,
     toast: (m) => hud.toast(m),
@@ -368,8 +387,26 @@ async function boot() {
     const avoid: [number, number, number][] = [...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.map((d) => [d.home.x, d.home.z, d.home.r + 30] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 12] as [number, number, number])];
     const ms = sites.place([...BATCH5, ...BATCH1, ...BATCH2, ...BATCH3, ...BATCH4], avoid.filter(([x, z]) => !DISCOVERY_BOSSES.some((d) => d.home.x === x && d.home.z === z)));
     console.info(`[sites] placed ${sites.sites.length} in ${ms.toFixed(0)} ms`);
+    // The Lost Lanterns (world/lostLanterns.ts): placed clear of the same things, and of the sites themselves.
+    const t0 = performance.now();
+    lanternSpots = placeLanterns({ avoid: [...avoid, ...sites.clearings], sites: sites.sites });
+    // The Harvest Fair's ground: the nearest open, level field at the Glen's edge.
+    {
+      const keep = [...avoid, ...sites.clearings, ...lanternSpots.map((l) => [l.x, l.z, 3] as [number, number, number])];
+      let best: [number, number] | null = null, bd = Infinity;
+      for (let r = 125; r < 320 && !best; r += 12) for (let k = 0; k < 36; k++) {
+        const a = (k / 36) * Math.PI * 2, x = Math.cos(a) * r, z = Math.sin(a) * r;
+        if (keep.some(([cx, cz, cr]) => (x - cx) ** 2 + (z - cz) ** 2 < (cr + 16) ** 2) || roadDist(x, z) < 14 || Math.abs(x - riverX(z)) < 24) continue;
+        const h0 = heightAt(x, z);
+        if ([0, 1, 2, 3, 4, 5].some((j) => Math.abs(heightAt(x + Math.cos(j) * 11, z + Math.sin(j) * 11) - h0) > 1.4)) continue;
+        const dd = Math.hypot(x, z - 120);
+        if (dd < bd) { bd = dd; best = [x, z]; }
+      }
+      fairAt.set(best?.[0] ?? 40, 0, best?.[1] ?? 160);
+    }
+    console.info(`[lanterns] placed ${lanternSpots.length} in ${(performance.now() - t0).toFixed(0)} ms`);
   }
-  stylizedNature.clearings = [...sites.clearings, [DROWNED_MERE.x, DROWNED_MERE.z, DROWNED_MERE.r + 14], [SINKHOLE.x, SINKHOLE.z, SINKHOLE.r + 8], ...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
+  stylizedNature.clearings = [...lanternSpots.map((l) => [l.x, l.z, l.style === 'tall' || l.style === 'nook' ? 3.2 : 2.2] as [number, number, number]), ...sites.clearings, [DROWNED_MERE.x, DROWNED_MERE.z, DROWNED_MERE.r + 14], [SINKHOLE.x, SINKHOLE.z, SINKHOLE.r + 8], ...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -594,7 +631,6 @@ async function boot() {
   );
   realm.overworldInteractables.push(...town.interactables(), ...frontier.interactables);
   realm.overworldInteractables.push(
-    { pos: NOTICEBOARD, radius: 2.2, label: () => 'Read the noticeboard', enabled: () => true, action: () => town.guild.open('board') },
     {
       pos: WELL, radius: 2.2, label: () => 'Drink from the well', enabled: () => true,
       action: () => {
@@ -738,7 +774,8 @@ async function boot() {
         id: n.rec.id, name: n.rec.name, title,
         // Their own words the first time you meet; a story beat after that, if they have one.
         intro: greetingFor(n.rec.id, npcs.lineFor(n), { ...ctx, met: false }, 0),
-        story: storyGreeting(n.rec.id, ctx),
+        // (or, now and then, a word about how you fight: npc/classRemarks.ts)
+        story: storyGreeting(n.rec.id, ctx) ?? classRemark(n.rec.id, player.paths.active, time.day) ?? undefined,
         services: [
           ...(requests.prepare(n.rec.id), quests.options(n.rec.id, show, back)),
           ...story.optionsFor(n.rec.id),
@@ -944,11 +981,14 @@ async function boot() {
     const rec = npcs.find(who)?.rec;
     bout({ name: rec?.name ?? (who === 'hadrik' ? 'Ser Hadrik Vane' : 'Cadet Dorian Vale'), look: rec!.look, hp: who === 'hadrik' ? 260 : 220 }, () => quests.signal(who === 'hadrik' ? 'trial-won' : 'rival-won'));
   };
+  let duelLose: (() => void) | null = null;
   duel.onEnd = (won, reason) => {
     hud.toast(reason);
-    const f = duelWin;
+    const f = duelWin, l = duelLose;
     duelWin = null;
+    duelLose = null;
     if (won) f?.();
+    else l?.();
   };
   quests.add(...PORT_QUESTS);
   quests.add(...SEA_QUESTS);
@@ -1021,7 +1061,7 @@ async function boot() {
       dialogue.show('Old Nell Crabbe', 'Fish Market', g ? `Lovely fat fish. ${g} gold, and not a copper less.` : 'You\'ve nothing I can sell, dearie. Catch something first!', [{ label: 'Farewell.', run: () => dialogue.close() }]);
     },
   }]);
-  folkServices.set('guildmaster', () => [{ label: 'See the guild board', run: () => { dialogue.close(); town.guild.open('board'); } }]);
+  folkServices.set('guildmaster', (show, back) => guildDesk('port', show, back));
   const riverLife = new RiverLife(r.scene, fx);
   const boats = new Boats(r.scene, player);
   // Ships: owned, hired and crewed; the helm, the deck, pirates and serpents.
@@ -1106,12 +1146,16 @@ async function boot() {
     },
   }]);
   // ---- The Royal Capital's services ----------------------------------------------------
-  folkServices.set('grandmaster', () => [{ label: 'See the guild board', run: () => { dialogue.close(); town.guild.open('board'); } }]);
+  folkServices.set('grandmaster', (show, back) => guildDesk('capital', show, back));
   folkServices.set('armourer', () => [{ label: 'Browse royal armour', run: () => shop('armourer', 'Fitted by appointment. Today is your appointment.', [['ironHelm', 70], ['pauldrons', 85], ['breastplate', 170], ['gauntlets', 60], ['greaves', 95], ['sabatons', 60], ['kiteShield', 95], ['towerShield', 150]]) }]);
   folkServices.set('bladesmith', () => [{ label: 'Browse capital blades', run: () => shop('bladesmith', 'Every edge here was folded under the royal charter.', withArms('bladesmith', [['knightSword', 115], ['bastardSword', 150], ['claymore', 280], ['estoc', 260], ['frostbite', 340], ['emberbrand', 340]])) }]);
   folkServices.set('capAlchemist', () => [{ label: 'Browse court draughts', run: () => shop('capAlchemist', 'Brewed to the Collegium\u2019s own recipes.', withArms('capAlchemist', [['healthPotion', 16], ['manaPotion', 20], ['greaterHealthPotion', 50], ['greaterManaPotion', 55]])) }]);
   folkServices.set('capJeweller', () => [{ label: 'Browse court jewellery', run: () => shop('capJeweller', 'Garnets, gold, and a little protective enchantment.', [['garnetAmulet', 260], ['ringVigor', 220], ['ringSage', 200], ['warriorBelt', 180]]) }]);
-  folkServices.set('archmage', () => [{ label: 'Study at the Collegium (spell tomes)', run: () => shop('archmage', 'The first grammar of magic: fire, and its opposite.', withArms('archmage', [['fireball', 140], ['healingLight', 155], ['manaPotion', 22], ['greaterManaPotion', 60]])) }]);
+  folkServices.set('archmage', (show, back) => [
+    { label: 'Study at the Collegium (spell tomes)', run: () => shop('archmage', 'The first grammar of magic: fire, and its opposite.', withArms('archmage', [['fireball', 140], ['healingLight', 155], ['manaPotion', 22], ['greaterManaPotion', 60]])) },
+    // The Archmage teaches wind (and frost after it).
+    ...mentorOptions(player.paths, { id: 'archmage' }, (t) => show(t, [{ label: 'Go on.', run: back }]), (m) => hud.toast(m), trials),
+  ]);
   folkServices.set('cartographer', (show) => [{
     label: 'Buy a map of the Crown lands \u2014 40g',
     run: () => {
@@ -1432,7 +1476,6 @@ async function boot() {
       const st = npcs.find(keeper);
       if (st) folkInside(st, spot, it, extras, spot.seated ? 'sit' : 'idle'); // (the King sits his throne)
     }
-    if (it.kind === 'guild') extras.push({ pos: it.at(0, -it.D / 2 + 0.8), radius: 2, label: () => 'Read the quest board', enabled: () => true, action: () => town.guild.open('board') });
     // Taverns and the guild have company: residents who live nearby.
     if (it.kind === 'undercity') fillUndercity(it, extras);
     // The Palace of the Sun: the royal family and their court, each in their chamber.
@@ -1530,8 +1573,83 @@ async function boot() {
   });
   bosses.fromJSON(saveData?.world?.bosses);
   if (TEST_MODE) bosses.enabled = false;
+  // ---- Field abilities (paths/fieldAbilities.ts): Wind Step, Glide, Lantern Soul ----
+  // (and the roster's classes: paths/roster, `field` in each class)
+  player.fieldAirJumps = () => (player.paths.learned('gale') || skillRt.roster.field('airJump') ? 1 : 0);
+  player.fieldGlide = () => player.paths.learned('windcaller') || skillRt.roster.field('glide');
+  player.fieldSwim = () => (skillRt.roster.field('swim') ? 1.6 : 1);
+  // A Brawler fights bare-handed, and a fist grows heavier with the class.
+  player.canFightUnarmed = () => skillRt.roster.weight('brawler') > 0 || quests.status('trial-brawler') === 'active';
+  player.fistDamage = () => (player.paths.learned('brawler') ? 14 + player.paths.level('brawler') * 0.6 : 10);
+  player.onAirJump = () => fx.add.spawn({ pos: player.pos.clone().setY(player.pos.y + 0.2), spread: 0.6, count: 14, life: [0.2, 0.45], size: [0.16, 0.02], color: 0xe8fffb, color2: 0x6fd6c6, drag: 3 });
+  const lantern = { light: null as THREE.PointLight | null };
+  const lanternSoul = () => {
+    const dark = realm.mode === 'dungeon' || story.darkness > 0.5 || (realm.mode === 'overworld' && time.state.night > 0.55);
+    const want = (player.paths.learned('lightbinder') || skillRt.roster.field('light')) && dark && !player.dead;
+    if (want && !lantern.light) lantern.light = spells.borrowLight(lantern);
+    if (!want && lantern.light) (spells.returnLight(lantern.light), (lantern.light = null));
+    if (lantern.light) {
+      lantern.light.position.set(player.pos.x, player.pos.y + 2.4, player.pos.z);
+      lantern.light.color.set(0xfff0c0);
+      lantern.light.intensity = 3.2;
+      lantern.light.distance = 14;
+      lantern.light.decay = 1.4;
+    }
+  };
   town.guild.bounties = () => bosses.bounties();
   town.guild.onBounty = (id) => bosses.hear(id);
+  // ---- The Adventurer's Guild: halls, the Hunt Map, the trophy rack, the Quartermaster ----
+  for (const d of BOSS_DEFS) NAMED_KINDS.add(d.kind);
+  town.guild.day = () => time.day;
+  town.guild.toast = (m) => hud.toast(m);
+  // Jobs that suit a class pay a quarter more when it's how you fight (your fighting class, or a magic class you know).
+  town.guild.classFits = (ids) => {
+    const a = player.paths.active;
+    if (ids.includes(a)) return DISC[a].name;
+    const m = ids.find((id) => DISC[id]?.fam === 'magic' && player.paths.learned(id));
+    return m ? DISC[m].name : null;
+  };
+  town.guild.huntMarks = () => bosses.markers();
+  town.guild.onTrophies = (ids) => world.guildHall.setTrophies(ids);
+  world.guildHall.setTrophies(town.guild.trophyIds);
+  shopUI.discount = () => town.guild.discount;
+  hud.guildRank = town.guild.guildRank;
+  town.guild.onPromote = (rank) => {
+    hud.guildRank = rank;
+    hud.regionCard(`${rank}-RANK`, 'The Adventurer\'s Guild', true);
+    hud.toast(`Promoted to ${rank}-rank! ${RANKS[rankIndex(rank)].perks.join(' · ')}`);
+    if (!TEST_MODE) dialogue.show('The Registrar', 'Adventurer\'s Guild', `By the charter of the Crown, you are ${rank}-rank. Here: the badge. The whole hall saw it, and the whole valley will hear. ${RANKS[rankIndex(rank)].perks.join('. ')}.`, [{ label: 'Thank you.', run: () => dialogue.close() }]);
+  };
+  guildHook.wall = (hall) => town.guild.open('board', hall as HallId);
+  guildHook.map = (hall) => town.guild.open('map', hall as HallId);
+  guildHook.ladder = (hall) => town.guild.open('roster', hall as HallId);
+  guildHook.board = (hall) => town.guild.wallLook(hall as HallId);
+  guildHook.quartermaster = () => quartermaster();
+  const quartermaster = () => {
+    const G = town.guild;
+    const opts = G.quartermasterStock().map((x) => {
+      const locked = rankIndex(x.rank) > rankIndex(G.guildRank);
+      return {
+        label: `${ITEMS[x.id].name} · ${x.marks} Marks${locked ? ` (${x.rank}-rank)` : ''}`,
+        run: () => {
+          if (locked) return void hud.toast(`The Quartermaster only sells that to ${x.rank}-rank and above.`);
+          if (!G.spendMarks(x.marks)) return void hud.toast('Not enough Guild Marks.');
+          giveItem(x.id, 1);
+          hud.toast(`Bought ${ITEMS[x.id].name} for ${x.marks} Marks`);
+          quartermaster();
+        },
+      };
+    });
+    dialogue.show('The Quartermaster', `Guild stores · you hold ${G.marks} Marks`, 'Marks only, no coin. You earn them on the Wall; you spend them here.', [...opts, { label: 'That\'s all.', run: () => dialogue.close() }]);
+  };
+  /** A Registrar's or guildmaster's desk: the hall's wall, the trophies and exams, what your rank gives. */
+  const guildDesk = (hall: HallId, show: (text: string, opts: DialogueOption[]) => void, back: () => void): DialogueOption[] => [
+    ...town.guild.registrarOptions((t) => show(t, [{ label: 'Go on.', run: back }])),
+    { label: 'Show me the Quest Wall.', run: () => { dialogue.close(); town.guild.open('board', hall); } },
+    // Any guild hall's Registrar keeps your papers: change your fighting classes here.
+    ...(DISCIPLINES.some((d) => d.fam === 'combat' && player.paths.learned(d.id)) ? [{ label: 'Change my fighting classes.', run: () => { dialogue.close(); skills.showLoadout(); } }] : []),
+  ];
+  folkServices.set('registrar', (show, back) => guildDesk('glen', show, back));
   let shutters = 1;
   if (TEST_MODE) raids.auto = false;
   // The Seamanship calling (N): the sea's skill tree.
@@ -1542,7 +1660,7 @@ async function boot() {
     else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
   };
   // The book: every menu in one window, four tabs with sub-tabs (ui/menuBook.ts).
-  const skillsSub = (id: 'disc' | 'attr' | 'mast', label: string, key?: string) => ({
+  const skillsSub = (id: 'disc' | 'attr' | 'mast' | 'atlas' | 'load', label: string, key?: string) => ({
     id: 'skills-' + id, label, key, el: () => skills.el,
     isOpen: () => skills.open && skills.tabId === id,
     open: () => { skills.setTab(id); skills.toggle(true); },
@@ -1562,6 +1680,8 @@ async function boot() {
         skillsSub('disc', 'Disciplines', 'K'),
         skillsSub('attr', 'Attributes'),
         skillsSub('mast', 'Mastery'),
+        skillsSub('load', 'Loadout'),
+        skillsSub('atlas', 'Class Atlas'),
         { id: 'herbal', label: 'Herbal', key: 'O', el: () => herbalism.ui.el, isOpen: () => herbalism.isOpen, open: () => herbalism.openCodex(), close: () => herbalism.ui.close() },
         { id: 'seamanship', label: 'Seamanship', key: 'N', el: () => seaPanel.el, isOpen: () => seaPanel.open, open: () => seaPanel.toggle(true), close: () => seaPanel.toggle(false) },
       ],
@@ -1573,6 +1693,8 @@ async function boot() {
         { id: 'people', label: 'People', key: 'P', el: () => repPanel.el, isOpen: () => repPanel.open, open: () => repPanel.toggle(true), close: () => repPanel.toggle(false) },
         // The Wardens' Bestiary (progression/bestiary.ts): its sub-tab appears once Rook hands it over.
         { id: 'bestiary', label: 'Bestiary', key: 'L', el: () => bestiaryUI.el, isOpen: () => bestiaryUI.open, open: () => bestiaryUI.toggle(true), close: () => bestiaryUI.toggle(false), hidden: () => !bestiary.unlocked },
+        // The Almanac (ui/almanac.ts): the calendar and its festivals, and the Lost Lanterns.
+        { id: 'almanac', label: 'Almanac', el: () => almanac?.el ?? null, isOpen: () => !!almanac?.open, open: () => almanac?.toggle(true), close: () => almanac?.toggle(false) },
       ],
     },
     {
@@ -1667,6 +1789,7 @@ async function boot() {
     return quests.markers().filter((m) => m.quest === tracked).map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label, tracked: true }));
   };
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
+  mentorMemory.flags = worldFlags; // which mentors you've asked about their other classes
   // Kaela Voss's drill yard (combat rework): a drill for each part of the fighting.
   const kaelaSpec = NPCS.find((n) => n.id === 'kaela');
   const yard = new TrainingYard(r.scene, encounters.bolts, player, new THREE.Vector3(kaelaSpec?.pos[0] ?? -13.5, 0, kaelaSpec?.pos[1] ?? 0.5), worldFlags, (m) => hud.toast(m), (n) => player.prog.addXp(n));
@@ -1810,6 +1933,15 @@ async function boot() {
     const prev = folkServices.get(id);
     folkServices.set(id, (show, back) => [...(prev?.(show, back) ?? []), ...herbalism.serviceOptions(id, show, back)]);
   }
+  // Every other mentor out in the world teaches their classes too (the roster's mentors among them).
+  {
+    const already = new Set(['bruni', 'archmage', 'aldous', 'ilse', 'wenna']);
+    const ids = new Set(DISCIPLINES.filter((d) => d.mentorNpc && !already.has(d.mentorNpc)).map((d) => d.mentorNpc!));
+    for (const id of ids) {
+      const prev = folkServices.get(id);
+      folkServices.set(id, (show, back) => [...(prev?.(show, back) ?? []), ...mentorOptions(player.paths, { id }, (t) => show(t, [{ label: 'Go on.', run: back }]), (m) => hud.toast(m), trials)]);
+    }
+  }
   // ---- The main story: the Fifth Summon (src/story) ----
   const main = setupMainStory({
     scene: r.scene, camera: r.camera, cam, input, dialogue, player, fx, bolts: encounters.bolts, quests, flags: worldFlags,
@@ -1838,6 +1970,28 @@ async function boot() {
     saved: saveData?.world?.story,
   });
   const story = main.story;
+  // ---- The Dark beyond the Gravewood's wheel: the same land, rotted; no people, no village ----
+  const darkRealm = new DarkRealm({
+    scene: r.scene, fx,
+    treesNear: (x, z, rr) => stylizedNature.treesNear(x, z, rr),
+    say: (line) => hud.toast(line),
+    hide: (h) => {
+      npcs.setVisible(!h);
+      fauna.setVisible(!h);
+      horses?.setVisible(!h);
+      roadLife.setVisible(!h);
+      caravans?.setVisible(!h);
+      encounters?.setVisible(!h);
+      riverLife?.setVisible(!h);
+      foraging?.setVisible(!h);
+      arms.gathering.setVisible(!h);
+      herbFolk.setVisible(!h);
+      flowers.mesh.visible = !h;
+      foliage?.setVisible(!h);
+      stylizedNature.setVisible(!h && stylizedNature.loaded);
+      town.setVisible(!h);
+    },
+  });
   // ---- Lessons: a mentor teaching you plays a scene and walks you through it step by step ----
   const lessons = new Lessons({
     player, dialogue, flags: worldFlags,
@@ -1873,12 +2027,158 @@ async function boot() {
   lessonHook.start = (d, wait) => (TEST_MODE ? false : lessons.request(d, wait));
   lessonHook.has = (id) => lessons.has(id);
   realm.overworldInteractables.push(...main.interactables);
+  // ---- The Lost Lanterns (world/lostLanterns.ts): relit across the world and the Dark; told of at the Temple ----
+  const lanternFestival = { on: () => false };
+  const lanterns = new LostLanterns({
+    scene: r.scene, fx, flags: worldFlags,
+    toast: (m) => hud.toast(m),
+    card: (t, sub) => hud.regionCard(t, sub, true),
+    inDark: () => realm.mode === 'overworld' && story.darkness > 0.5,
+    hasLight: () => player.paths.learned('lightbinder') || skillRt.roster.field('light') || player.equip.items.some((it) => it.def.id === 'lanternCharm' && !!player.equip.slotOf(it.uid)),
+    night: () => time.state.night,
+    festival: () => lanternFestival.on(),
+    save: () => save(),
+    mats: { stone: world.mats.stone, timber: world.mats.timber, bark: world.mats.bark },
+  }, lanternSpots);
+  realm.overworldInteractables.push(lanterns.interactable);
+  {
+    // A fully lit region: by night, its foes hit you more softly.
+    const recv = player.receiveAttack.bind(player);
+    player.receiveAttack = (att) => {
+      const w = realm.mode === 'overworld' ? lanterns.wardAt(player.pos.x, player.pos.z) : 0;
+      return recv(w ? { ...att, damage: att.damage * (1 - w) } : att);
+    };
+    const lanternTalk = (who: string) => (show: FolkShow, back: () => void) => {
+      const opts: { label: string; run: () => void }[] = [];
+      const untold = lanterns.untold;
+      if (untold > 0) opts.push({
+        label: `Tell of the lanterns you've relit (${untold}).`,
+        run: () => {
+          const r = lanterns.tell();
+          const b = r.blessed;
+          const gift = b ? ` The Dawn's blessing on you${b > 1 ? `, ${b} times over` : ''}: +${BLESS.hp * b} health, +${BLESS.mana * b} mana, +${BLESS.stamina * b} stamina.` : ` Bring word of ${TELL_STEP - (lanterns.told % TELL_STEP)} more and the Dawn will bless you for them.`;
+          show(`${who === 'aldous' ? '"' : '"Child of the Dawn. '}${r.told} more lanterns burning again. I can feel the difference in the dark, you know. Every one.${gift}${r.titleUp ? ` They will call you ${r.title} now.` : ''}"`, [{ label: 'Thank you.', run: back }]);
+        },
+      });
+      opts.push({
+        label: 'What are the Lost Lanterns?',
+        run: () => show(`"Before the Fall the keepers of the Dawn hung a lantern on every road and over every door. When the Dark came, they went out, and the wind and the years scattered them. They're still out there: by the roads, in the old ruins, up on the stone stacks, out on the islands. Some are in the Dark itself, if you can believe it. Relight them, and tell me when you do. Every ten, the Dawn gives something back. ${lanterns.litCount()} of ${lanterns.spots.length} burn again so far. Listen for them: an unlit lantern hums a little, like glass in the wind."`, [{ label: 'I\'ll look for them.', run: back }]),
+      });
+      return opts;
+    };
+    for (const id of ['aldous', 'priestess']) {
+      const prev = folkServices.get(id), mine = lanternTalk(id);
+      folkServices.set(id, (show, back) => [...(prev?.(show, back) ?? []), ...mine(show, back)]);
+    }
+  }
   questUI.storyRecap = () => story.state.recap();
   questUI.giverName = (id) => serviceNpc(id)?.spec.name ?? npcs.find(id)?.rec.name;
   repPanel.codex = () => story.state.codex();
   repPanel.onName = (id, power) => story.state.nameAs(id, power as never);
   const baseSiteMarks = worldMap.siteMarkers;
-  worldMap.siteMarkers = () => [...baseSiteMarks(), ...story.wheel.markers()];
+  // The hidden teachers (paths/roster): one for each hidden class; a gateway shows you where.
+  const teachers = buildHiddenTeachers(r.scene, worldFlags);
+  for (const s of teachers.settlements) npcs.addSettlement(s);
+  for (const rec of teachers.records) npcs.add(rec);
+  hideHooks.push((h) => teachers.setVisible(!h));
+  events.on('gatewayOpened', ({ id }) => {
+    const where = teachers.reveal(id);
+    if (!where) return;
+    hud.regionCard('A Gateway Opens', where, true);
+    hud.toast(where);
+    save();
+  });
+  // ---- The calendar's festivals (world/calendar.ts, world/festivals.ts) ----
+  const portV = (x: number, z: number) => new THREE.Vector3(x, heightAt(x, z), z);
+  const festivals = new Festivals({
+    scene: r.scene, fx, player, flags: worldFlags,
+    day: () => time.day, hour: () => time.hour,
+    toast: (m) => hud.toast(m), card: (t, sub) => hud.regionCard(t, sub, true),
+    give: (id, n) => giveItem(id, n),
+    take: (id, n) => {
+      if (countItem(id) < n) return false;
+      takeItem(id, n);
+      return true;
+    },
+    count: (id) => countItem(id),
+    gold: (n) => player.prog.addGold(n),
+    spend: (g) => {
+      if (player.prog.gold < g) return false;
+      player.prog.addGold(-g);
+      return true;
+    },
+    xp: (n) => player.prog.addXp(n),
+    bless: (b) => { arms.runtime.buffs.set(b.id, { id: b.id, label: b.label, left: b.sec, m: b.m }); hud.toast(`${b.label} for ${Math.round(b.sec / 60)} min`); },
+    shop: (name, title, intro, stock) => town.showShop(name, title, intro, stock),
+    bout: (spec, ring, onWin, onLose) => {
+      if (player.mounted) horses.dismount();
+      duelWin = onWin;
+      duelLose = onLose;
+      duel.start({ ...spec, ring, radius: 9 });
+    },
+    marketStock: (seed) => {
+      const rnd = mulberry32(seed * 104729 + 17);
+      const lvl = player.paths.charLevel;
+      const pool = Object.values(CATALOG_ITEMS).filter((d) => (d.rarity === 'rare' || d.rarity === 'epic') && (d.lvl ?? 1) <= lvl + 10 && (CATALOG_SOURCES[d.id] ?? []).some((t) => /^(chest|drop):/.test(t)) && d.kind !== 'material');
+      const out: [string, number][] = [];
+      for (let i = 0; i < 6 && pool.length; i++) {
+        const d = pool.splice(Math.floor(rnd() * pool.length), 1)[0];
+        out.push([d.id, Math.round(priceOf(d) * 1.6)]);
+      }
+      return out;
+    },
+    lanternRumour: () => {
+      let best: LanternSpot | null = null, bd = Infinity;
+      for (const s of lanterns.spots) {
+        if (lanterns.isLit(s.id) || worldFlags['llHint:' + s.id]) continue;
+        const dd = Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
+        if (dd < bd) { bd = dd; best = s; }
+      }
+      return best ? { id: best.id, x: best.x, z: best.z, region: best.region } : null;
+    },
+    riverX: (z) => riverX(z),
+    save: () => save(),
+  }, {
+    harvestFair: fairAt.clone().setY(heightAt(fairAt.x, fairAt.z)),
+    lanterns: portV(riverX(40) - 8, 40),
+    blackMarket: portV(PORT_SPOTS.thievesDoor.x - 2.5, PORT_SPOTS.thievesDoor.z - 3),
+    harbourWeek: portV(PORT_SPOTS.fishMarket.x - 6, PORT_SPOTS.fishMarket.z - 5),
+    tourney: portV(CAPITAL_SPOTS.lists.x + 12, CAPITAL_SPOTS.lists.z),
+    dawnVigil: portV(CHAPEL.x + 2.5, CHAPEL.z - 12),
+    lists: listsAt.clone(),
+  });
+  for (const s of festivals.settlements) npcs.addSettlement(s);
+  for (const rec of festivals.records) npcs.add(rec);
+  {
+    const prevAbsent = npcs.absent;
+    npcs.absent = (id) => festivals.absent(id) ?? prevAbsent?.(id) ?? false;
+    for (const [id, svc] of festivals.services) {
+      const prev = folkServices.get(id);
+      folkServices.set(id, (show, back) => [...(prev?.(show, back) ?? []), ...svc(show, back)]);
+    }
+    const prevCatch = fishing.onCatch;
+    fishing.onCatch = (c) => {
+      prevCatch?.(c);
+      festivals.onCatch(c);
+    };
+    lanternFestival.on = () => festivals.isOn('lanterns');
+  }
+  // Lost Lanterns a fence sold you word of: marked on the map until lit.
+  // ...and every one you've relit, as a small warm mark.
+  const lanternHints = () => lanterns.spots.filter((s) => (worldFlags['llHint:' + s.id] && !lanterns.isLit(s.id)) || (lanterns.isLit(s.id) && !s.dark)).map((s) => lanterns.isLit(s.id)
+    ? { x: s.x, z: s.z, kind: 'siteDone' as const, glyph: '✧', color: '#ffc860', label: 'A relit lantern' }
+    : { x: s.x, z: s.z, kind: 'site' as const, glyph: '✦', color: s.dark ? '#b08aff' : '#ffc860', label: `A Lost Lantern (rumoured)${s.dark ? ' - in the Dark' : ''}` });
+  worldMap.siteMarkers = () => [...baseSiteMarks(), ...story.wheel.markers(), ...teachers.markers(), ...festivals.markers(), ...lanternHints()];
+  almanac = new Almanac({
+    day: () => time.day, hour: () => time.hour, moon: () => time.moonName,
+    upcoming: () => festivals.upcoming(6),
+    lanterns,
+  });
+  almanac.onToggle = (open) => {
+    input.uiMode = open || inv.open || mapUI.open || dialogue.open;
+    if (open) input.exitLock();
+    else if (!inv.open && !mapUI.open && !dialogue.open && !questUI.open) input.requestLock();
+  };
 
   // ---- the item catalog (items/catalog): gear effects, set bonuses, one-use items, and where it all comes from ----
   const hereRegion = () => (realm.mode === 'dungeon' ? 'cresha' : realm.interior ? regionAt(realm.interior.door.pos.x, realm.interior.door.pos.z) : regionAt(player.pos.x, player.pos.z));
@@ -1941,6 +2241,7 @@ async function boot() {
   // ---- The Wardens' Bestiary: kills by kind, revealed drops, and the hunter's edge on them ----
   const bestiary = new Bestiary(worldFlags);
   bestiary.onNews = (m) => hud.toast(m);
+  bestiary.give = (id) => giveItem(id, 1);
   const bestiaryUI = new BestiaryUI(bestiary, { has: (id) => !!worldFlags['cat:' + id] || player.equip.items.some((it) => it.def.id === id) });
   bestiaryUI.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open || dialogue.open;
@@ -1961,7 +2262,9 @@ async function boot() {
     }
   };
   // Locks on chests, caches and hatches: picked with lockpicks, or forced with something heavy.
-  const locks = new Locks(player, worldFlags, (m) => hud.toast(m), () => player.paths.level('dungeoneering'));
+  // (a Rogue's light fingers count as fifteen levels of Dungeoneering at the lock)
+  const locks = new Locks(player, worldFlags, (m) => hud.toast(m), () => player.paths.level('dungeoneering') + (skillRt.roster.field('locks') ? 15 : 0));
+  locks.forceAny = () => skillRt.roster.field('force');
   GEAR.locks = locks;
   locks.onToggle = (open) => {
     input.uiMode = open || inv.open || skills.open || mapUI.open || dialogue.open || shopUI.open;
@@ -1981,6 +2284,20 @@ async function boot() {
     },
   });
   gearRt.specials = specials;
+  // The roster's classes (paths/roster/engine.ts): summoned allies, trial counts, the blood of your people.
+  ROSTER_HOOKS.summon = (kind, n, sec, dmg) => void specials.allies.summon(kind, n, sec, Math.round(dmg));
+  ROSTER_HOOKS.signal = (id) => quests.signal(id);
+  ROSTER_HOOKS.toast = (m) => hud.toast(m);
+  ROSTER_HOOKS.origin = () => player.prog.origin;
+  // The Ascension ceremony: light rises around you, and the new path is named.
+  ascendHook.ceremony = (d, a) => {
+    const st = styleOfColor(d.color);
+    hud.regionCard(`${d.name}: ${a.name}`, a.flavour, true);
+    skillRt.vfx.pillar(player.pos.clone(), st, 1.4, 12);
+    skillRt.vfx.nova(player.pos.clone(), st, 6);
+    skillRt.vfx.spiral(player.pos.clone(), st, 3.2, 1.2, 40);
+    save();
+  };
   // The Golden Expanse wears you down: heat, thirst, the sandstorm.
   gearRt.exposure = new Exposure({
     player, arms: arms.runtime, toast: (m) => hud.toast(m), region: hereRegion, hour: () => time.hour,
@@ -2042,13 +2359,18 @@ async function boot() {
     if (open) input.exitLock();
     else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
   };
+  // A new save isn't written until its hero is made, so leaving the title for
+  // another slot doesn't leave this one holding a hero nobody created.
+  let heroMade = !!saveData || TEST_MODE;
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
+    if (!heroMade) return;
     const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
     writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, story: story.save(), social: social.save(), requests: requests.save(), pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), sites: sites.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
   };
   if (saveData) town.guild.fromJSON(saveData.guild);
+  hud.guildRank = town.guild.guildRank;
   // Guild contracts show in the quest log (tracker, journal, map, waypoint).
   const guildContracts = linkGuildContracts(town.guild, quests);
   guildContracts.restore();
@@ -2092,6 +2414,7 @@ async function boot() {
   const overlays = buildOverlays((origin) => {
     if (origin) player.prog.origin = origin;
     started = true;
+    heroMade = true;
     // (A new game always begins in the wheat: the story starts there.)
     if (!arrived && saveData && !TEST_MODE && loadInto() === 'ghagrabba' && realm.mode === 'overworld' && !realm.interior) {
       const [gx, gz] = EAST_GATE;
@@ -2198,17 +2521,11 @@ async function boot() {
     overlays.lockOrigin();
     const cta = overlays.start.querySelector('.cta')!;
     cta.textContent = 'CLICK TO CONTINUE';
-    const nw = document.createElement('button');
-    nw.className = 'newgame';
-    nw.textContent = 'Start a new game';
-    nw.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!confirm('Start over? Your progress and drawn maps will be erased.')) return;
-      window.removeEventListener('beforeunload', save);
-      clearSave();
-      location.reload();
-    });
-    cta.after(nw);
+  }
+  // Save slots: pick whose game this is, name a save, or start a new one.
+  if (!TEST_MODE) {
+    const picker = buildSavePicker(overlays.start.querySelector('.title-card')!);
+    overlays.start.querySelector('.cta')!.after(picker.el);
   }
   document.addEventListener('pointerlockchange', () => {
     if (input.locked) hadLock = true;
@@ -2336,6 +2653,7 @@ async function boot() {
     // B on land: brew from the Herbalist's Satchel (B is the spyglass only when aboard).
     if (input.pressedKey('KeyB') && !sailing.aboard && herbalism.count('herbalistSatchel') > 0) herbalism.openField();
     origins.update(STEP); // ---- Origins (feat/origins) ----
+    lanternSoul(); // (Lightbinder's field ability: in the dark, above and below ground)
     if (realm.mode === 'overworld') {
       slimes.update(STEP, player);
       population.update(STEP, player, time.hour, time.day);
@@ -2347,6 +2665,10 @@ async function boot() {
       frontier.update(STEP);
       encounters.update(STEP, time.hour, weather.p.rain);
       main.step(STEP);
+      // (Indoors the overworld is hidden anyway: leave it be until you're back out.)
+      if (realm.mode === 'overworld' && !realm.interior) darkRealm.update(STEP, story.darkness, player);
+      lanterns.update(STEP, player.pos, player.center, realm.mode === 'overworld' && !realm.interior && !player.dead);
+      festivals.update(STEP);
       crownRoad.update(STEP, player, time.state.night);
       roadLife.step(STEP, player);
       duel.update(STEP);
@@ -2369,7 +2691,9 @@ async function boot() {
       const px = player.pos.x, pz = player.pos.z;
       for (const it of realm.interactables) {
         const d = Math.hypot(it.pos.x - px, it.pos.z - pz);
-        if (d >= it.radius || d >= bestD || !it.enabled()) continue;
+        if (d >= it.radius || d >= bestD) continue;
+        if ((it as { level?: number }).level !== undefined && Math.abs(player.pos.y - (it.pos.y - 0.4)) > (it as { level?: number }).level!) continue;
+        if (!it.enabled()) continue;
         {
           bestD = d;
           best = it;
@@ -2381,6 +2705,7 @@ async function boot() {
     else if (best && input.wasPressed('interact')) best.action();
     spells.update(STEP);
     world.update(STEP);
+    world.guildHall.update(STEP, time.state.night);
     river.update(STEP);
     fx.update(STEP, r.renderer.domElement.height, r.camera.fov);
     physics.step(STEP);
@@ -2490,6 +2815,7 @@ async function boot() {
       caravans.update(dt, player.pos);
       if (worldRunning) roadLife.update(dt, player, ts.night);
       herbFolk.update(player.pos);
+      teachers.update(player.pos);
       riches.update(dt);
       if (worldRunning) {
         ghLife.update(dt);
@@ -2652,6 +2978,9 @@ async function boot() {
       trouble.reset();
       requests.reset();
       for (const k of Object.keys(worldFlags)) delete worldFlags[k];
+      bestiary.reload();
+      lanterns.reset();
+      festivals.reset();
       realm.progress = structuredClone(fresh.dungeon);
       realm.mineProgress = { gateOpen: false, guardianDead: false };
       realm.maps = {};
@@ -2679,6 +3008,7 @@ async function boot() {
       arms, // Arms and Crafting (feat/arms)
       yard, combatDebug, // combat rework: the drill yard and the F9 overlay
       bestiary, bestiaryUI, reagentDrops, // the Wardens' Bestiary; kill loot on the ground
+      lanterns, festivals, almanac, folkServices, // the Lost Lanterns; the calendar's festivals; the Almanac; townsfolk's services
       ghLife, outcast, ghSide, scrapTowns,
       wilds, roadLife, herbalism, riches, gwKey, sanctum, lessons,
       origins, creator, // ---- Origins (feat/origins) ----

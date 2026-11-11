@@ -13,6 +13,10 @@ export interface GameEvents {
   enemyHit: { at: Vector3; amount: number; crit: boolean; enemyId: number };
   /** the player's blade connected (after enemyHit) */
   meleeHit: { target: import('../combat/targets').Target; amount: number; crit: boolean; action: string };
+  /** an arrow or bolt the player loosed landed */
+  /** a gateway capstone opened: its hidden teacher can now be found */
+  gatewayOpened: { id: string };
+  shotHit: { target: import('../combat/targets').Target; amount: number };
   enemyDied: { at: Vector3; enemyId: number; kind: string; level?: number };
   /** a night raid: the horn sounded / it was beaten back or ran its course */
   raidStarted: { kind: string; front: string };

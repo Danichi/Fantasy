@@ -139,7 +139,7 @@ test('Guild bounty on Old Greyjaw: posted on the board, marks him on the map, pa
     const hit = eval(KILL);
     const news0 = B.rumours();
     const marks0 = B.markers().length;
-    G.addRep(200); // rank C: bounties at rank C and below are open
+    G.addRep(200); G.promote('C'); // rank C (by exam now): bounties at rank C and below are open
     G.open('board');
     const posted = !!document.querySelector('[data-bounty="bounty:greyjaw"]');
     const took = G.acceptBounty('bounty:greyjaw');
@@ -151,17 +151,20 @@ test('Guild bounty on Old Greyjaw: posted on the board, marks him on the map, pa
     hit(body, 1);
     for (let i = 0; i < 20; i++) g.stepSim(1);
     G.update(0.016, g.player.pos); // the guild settles contracts once a frame
+    const trophy = G.activeContracts.some((q: any) => q.templateId === 'bounty:greyjaw' && q.trophy);
+    G.turnIn(); // the trophy goes to the Registrar for the purse
     const paid = g.player.prog.gold - gold0;
     const still = G.activeContracts.some((q: any) => q.templateId === 'bounty:greyjaw');
     const news1 = B.rumours();
     const save = JSON.parse(JSON.stringify(B.toJSON()));
-    return { news0, marks0, posted, took, marks1, paid, still, news1, save };
+    return { news0, marks0, posted, took, marks1, trophy, paid, still, news1, save };
   }, KILL);
   expect(res.news0[0]).toMatch(/Old Greyjaw is hunting the north woods/);
   expect(res.marks0).toBe(0);
   expect(res.posted).toBe(true);
   expect(res.took).toBe(true);
   expect(res.marks1).toEqual([expect.objectContaining({ kind: 'bossRumour' })]);
+  expect(res.trophy).toBe(true);
   expect(res.paid).toBeGreaterThan(200);
   expect(res.still).toBe(false);
   expect(res.news1[0]).toMatch(/you killed Old Greyjaw/);

@@ -99,7 +99,8 @@ test('sources: shops stock their tier, bosses and quests give their uniques, the
     const g = (window as any).__game, S = g.catalogSources, p = g.player;
     const has = (id: string) => p.equip.items.some((i: any) => i.def.id === id);
     const smith = S.stockFor('Master Fröst', 'Smith & Merchant', 'Reliable gear', []).map(([id]: [string]) => id);
-    g.events.emit('bossSlain', { id: 'ratQueen', first: true });
+    // (A boss gives one piece of its hoard a kill now: kill her until the dagger comes.)
+    for (let i = 0; i < 20 && !has('plaguetoothDagger'); i++) S.poolDrop('ratQueen');
     g.events.emit('questChanged', { id: 'wren', status: 'done' });
     g.events.emit('siteDone', { id: 'x', kind: 'stone' });
     const before = S.stats.drops;

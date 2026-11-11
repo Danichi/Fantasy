@@ -44,8 +44,46 @@ Visual mockups: https://claude.ai/artifact/2e8Focia4DPWqk66fh9zj6
 
 ### Draft 3 decisions (locked in)
 - **Skills screen:** the Discipline Atlas lists disciplines by family. Clicking one opens its tree.
-- **Tree look per family:** Combat Styles use the Sigil Wheel, Magic Schools use a
-  Constellation, Callings use a Living Tree.
+- **Tree look per discipline:** each tree is laid out in the shape of its own emblem
+  (`ui/treeShapes.ts`): Cross Style's two crossed blades, Warbreaker's war hammer,
+  Gale's swirling gusts, Boundary's shield, Dawnblade's sword and sunrise,
+  Pyromancer's flame, Windcaller's spiral, Lightbinder's sun, Cryomancer's
+  snowflake, Shadowcaller's crescent moon, Voidwalker's rings, Smithing's anvil,
+  Cooking's steaming pot, Tailoring's needle and thread, Runecraft's rune,
+  Jewelcrafting's cut gem, Prospecting's pickaxe, Dungeoneering's archway and
+  Beastbinding's paw. Each branch runs along one path of the emblem, tier by tier
+  out from the core. Disciplines without a shape keep their family's look
+  (Sigil Wheel, Constellation, Living Tree).
+- **Mentors offer one class at a time.** A mentor who teaches more than one
+  class offers the first; you hear about the rest by asking "Is there anything
+  else you could teach me?" (`paths/mentors.ts`, remembered per mentor).
+  Magus Orren teaches fire only (and Shadowcaller after it); Archmage Isolde
+  Venn at the Collegium in the Capital teaches Windcaller and Cryomancer.
+
+### Warbreaker (Cross Style's heavy road)
+
+Taught by Ilse Vantara once your Cross Style is level 5 (it used to follow Gale,
+whose dodge-first fighting has nothing in common with it). A weapon in each
+hand, and the same left-right beat as Cross Style, but the beat builds **Rage**
+(0-100) instead of Tempo:
+
+| | Rage |
+|---|---|
+| A strike in rhythm | +7 (2 out of rhythm) |
+| A blow you take | +5 |
+| Each point | +0.3% damage (30% at full) |
+| Out of combat | drains after 4 s |
+
+| Branch | Techniques |
+|---|---|
+| Ruin | Skullsplitter (leaping double overhead, spends up to 30 Rage), Earthbreaker (a 9 m fissure that throws foes down), Ruinous Blow (spends all Rage, at least 40), capstone The Last Swing (a 6 m crater, double at full Rage) |
+| Fury | Blood Howl (+30 Rage, +25% damage), Frenzy (+30% attack speed), Rampage (a charge through the crowd), capstone Avatar of War (15 s of full Rage and shockwaves) |
+| Ironhide | Shrug Off (spend 30 Rage to heal 20%), Iron Roar (stuns all within 6 m, Rage per foe), Last Stand (half damage, double Rage from blows), capstone Mountain That Walks (half damage, every blow taken answers with a shockwave) |
+
+The core technique is War Cleave. Every passive does something named
+(`paths/classes/warbreaker.passives.ts`): War Drum's shockwave every fourth
+beat, Red Mist at 90 Rage, Bloodlust on kills, Old Wounds scaling with missing
+health, and so on. No generic "class damage" nodes.
 - **Tree points:** each discipline level gives 1 tree point (+1 bonus every 5 levels), spent
   in that discipline's tree only. Points buy new nodes **or rank up owned skills** (I to V,
   1 point per rank; rank III unlocks a Form).

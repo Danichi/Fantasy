@@ -67,13 +67,13 @@ const VOICES: Record<string, Voice> = {
     greet: [
       { when: (c) => c.activeClass === 'gale' && grukkDead(c), text: 'There\'s my student. The whole yard heard about Grukk. Don\'t let it go to your feet: they still have to move.' },
       { when: (c) => c.active('trial-gale'), text: 'Three fights. Not three slimes you poked from a distance. Go on, the yard will still be here.' },
-      { when: (c) => c.activeClass === 'gale', text: 'Back for more? Good. Flow fades when you stand still, and so do students.' },
+      { when: (c) => c.activeClass === 'gale', text: 'Back for more? Good. Keep moving: your Flow fades when you stand still.' },
       { when: (c) => c.activeClass === 'boundary', text: 'Corvin\'s shield-bearer. Hm. You still need to learn to get out of the way of things.' },
       { when: wet, text: 'Rain\'s the best teacher there is. Mud punishes heavy feet.' },
       { when: dawn, text: 'Early. I like that. The yard\'s quiet before the watch changes.' },
       { when: night, text: 'It\'s late to be swinging steel. Unless something out there is swinging first?' },
-      { text: 'Feet apart. Shoulders loose. You hold that blade like it owes you money.' },
-      { text: 'Watch my hips, not my hands. Hands lie.' },
+      { text: 'Feet apart. Shoulders loose. You\'re gripping that sword far too tightly.' },
+      { text: 'Watch an enemy\'s hips, not their hands. The hips show you where the swing is really going.' },
     ],
     topics: [
       { q: 'How do I get better at fighting?', a: 'Lock on (middle mouse or Q) and the world gets smaller. Dodge through a blow rather than away from it. Parry (F) when you see the swing start, not when it lands. And never fight on an empty stamina bar.' },
@@ -99,29 +99,29 @@ const VOICES: Record<string, Voice> = {
   },
   magus: {
     greet: [
-      { when: woodQuiet, text: 'The wheel turns again, and I can sleep. You have my thanks, and the Order\'s, wherever it is now.' },
+      { when: woodQuiet, text: 'The Gravewood is quiet, and I can finally sleep. Thank you. The old Order would have thanked you too, if any of them were still alive.' },
       { when: (c) => c.active('trial-pyro'), text: 'The crypt mouth, after dark. Sit with the flame and don\'t run. That is the whole of the trial, and nobody finds it easy.' },
-      { when: (c) => c.learned('pyromancer'), text: 'How is the Heat treating you? Not too well, I hope. The ones it treats well grow careless.' },
-      { when: night, text: 'The stars are loud tonight. You hear them too, I think, though you don\'t know it yet.' },
-      { when: wet, text: 'Rain on the ley lines. They hum like a struck wire. Stand closer, you can almost feel it.' },
-      { text: 'The ley lines are restless tonight. This town was built where three old roads of magic meet.' },
-      { text: 'Fire is a guest. Feed it, and it stays. Forget it, and it eats the house.' },
+      { when: (c) => c.learned('pyromancer'), text: 'How are you finding the Heat? Be careful with it. Fire mages who get comfortable get burned.' },
+      { when: night, text: 'Clear skies tonight. Good for reading the stars, if you\'re into that sort of thing. I am.' },
+      { when: wet, text: 'Rain makes the magic in the ground hum. Stand still and you can almost feel it in your teeth.' },
+      { text: 'This town sits where three old lines of magic cross. That\'s why I live here, and why strange things keep happening.' },
+      { text: 'Fire is easy to start and hard to control. If you want to learn it, I can teach you.' },
     ],
     topics: [
       { q: 'What is Heat?', a: 'Every flame you call leaves some of itself in you. The hotter you run, the harder your fire bites. Past four fifths of what you can hold, it starts to burn you. At the top, you go off like a lamp dropped in oil. Spend it before it spends you.' },
-      { q: 'Who else teaches magic?', a: 'Brother Aldous at the Chapel of the Dawn, out on the King\'s Road east of here, binds light. He will want you to keep the dawn vigil first. Wind I can start you on myself, once you\'re ready for it.' },
+      { q: 'Who else teaches magic?', a: 'Brother Aldous at the Chapel of the Dawn, out on the King\'s Road east of here, binds light. He will want you to keep the dawn vigil first. Wind and frost are taught at the Arcane Collegium in the Capital, by Archmage Venn. I only teach fire.' },
       { q: 'What are the Sunwheel stones?', a: (c) => (woodQuiet(c) ? 'A ward older than the kingdom, mended now. The stones touch one another across the land. Touch a waystone and you may find you can step from one to the next.' : 'Old stones with an old mark: a wheel with eight spokes. Somebody raised them long before Cresha had a king. I am still learning what they were for.') },
     ],
   },
   veyr: {
     greet: [
-      { when: (c) => c.level >= 6, text: 'You stand differently now. Weight lower. Somebody has been teaching you, or something has.' },
+      { when: (c) => c.level >= 6, text: 'You stand differently now, lower and steadier. Somebody has been teaching you.' },
       { when: wet, text: 'My knees know it\'s raining before the sky does.' },
-      { text: 'A fighter who only knows how to attack is predictable. I was not. Once.' },
+      { text: 'If all you do is attack, people learn to see it coming. I used to be hard to read. Not any more.' },
       { text: 'Sit, if you like. The bench has heard more war stories than any tavern.' },
     ],
     topics: [
-      { q: 'What makes a good duelist?', a: 'Patience. Most fights are lost by the one who swings first and second and third. Let them show you their rhythm, then break it.' },
+      { q: 'What makes a good duelist?', a: 'Patience. Most fights are lost by whoever swings wildly first. Watch how they fight, wait for the gap, then hit it.' },
       { q: 'Tell me a story.', a: 'Thirty years ago a man challenged me on the Kingsbridge with a sword twice the length of mine. I let him swing until his arms shook, then I tapped his knuckles and walked home. He bought me supper for a year after. Reach is nothing without breath.' },
     ],
   },
@@ -129,7 +129,7 @@ const VOICES: Record<string, Voice> = {
     greet: [
       { when: grukkDead, text: 'Grukk fell, and the Road to Riches is a little safer. That\'s a debt I couldn\'t pay myself. Thank you.' },
       { when: (c) => c.activeClass === 'boundary', text: 'Shield up, oath kept. Good. Tell me what hit you hardest out there.' },
-      { when: night, text: 'I keep this gate at night. Old habit. Old promise.' },
+      { when: night, text: 'I watch this gate at night. I promised someone I would, a long time ago.' },
       { when: wet, text: 'Rain off the hills. The road turns to soup north of here. Watch your footing in a fight.' },
       { text: 'You have the look of someone headed north. This town is the last safe roof before the hills.' },
       { text: 'Stand still a moment. You\'re carrying that shield like a tray.' },
@@ -173,7 +173,7 @@ const VOICES: Record<string, Voice> = {
     topics: [{ q: 'How is the harvest?', a: 'Good, if we get it in before the rain. Old Wren Barley\'s been asking for spare hands in the south fields.' }],
   },
   tailor: {
-    greet: [{ text: 'A cloak tells people where you have been. Mine are made for getting back alive.' }],
+    greet: [{ text: 'My cloaks are made to keep you warm and dry on the road. Have a look.' }],
     topics: [{ q: 'What should I wear?', a: 'Whatever you can still run in. Heavy plate stops a blow, but it won\'t help you if you can\'t get out of the way of the next one.' }],
   },
   carpenter: {
@@ -184,11 +184,11 @@ const VOICES: Record<string, Voice> = {
     topics: [{ q: 'Are your shields any good?', a: 'Linden and an iron rim. Light, quick, and they\'ll take a sword or ten. Ask Fröst for a heater if you mean to stand in front of orcs all day.' }],
   },
   arcanist: {
-    greet: [{ text: 'Magic is expensive because mistakes are expensive.' }],
-    topics: [{ q: 'Is magic dangerous?', a: 'Fire burns the caster too, if they\'re greedy. Light is kinder, but slower to anger. Wind will drop you on your back if you lean on it.' }],
+    greet: [{ text: 'Spell tomes aren\'t cheap. A badly written spell can take your hand off, so I only sell good ones.' }],
+    topics: [{ q: 'Is magic dangerous?', a: 'Yes. Fire can burn the person casting it. Light magic is safer but slower. Wind is tricky: get it wrong and it knocks you over.' }],
   },
   stablemaster: {
-    greet: [{ text: 'The frontier starts at the gate. A good mount makes the frontier smaller.' }],
+    greet: [{ text: 'It\'s a long way to anywhere from here. A horse makes it a lot shorter.' }],
     topics: [{ q: 'Where does the road go?', a: 'East along the King\'s Road: the Wayfarer\'s Rest, Millbrook, the Chapel of the Dawn and finally Port Aurelle on the sea. A long walk. A short ride.' }],
   },
 };

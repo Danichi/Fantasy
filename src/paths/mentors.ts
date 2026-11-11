@@ -2,6 +2,10 @@ import type { DialogueOption } from '../ui/dialogue';
 import type { NpcSpec } from '../npc/npc';
 import { DISC, DISCIPLINES, type DisciplineDef } from './data';
 import type { Paths } from './paths';
+import { ASCENSIONS, ASC_LEVEL, type AscensionDef } from './ascensions';
+
+/** The Ascension ceremony's show (set by main): a card, light, a sound. */
+export const ascendHook: { ceremony?: (d: DisciplineDef, a: AscensionDef) => void } = {};
 
 /**
  * Lessons (story/lessons.ts): set by main. Being taught plays the mentor's
@@ -9,6 +13,13 @@ import type { Paths } from './paths';
  * that led to it has closed (a trial's turn-in). False: no lesson ran.
  */
 export const lessonHook: { start?: (d: DisciplineDef, wait?: boolean) => boolean; has?: (id: string) => boolean } = {};
+
+/**
+ * What mentors have told you (saved world flags, set by main). A mentor who
+ * teaches more than one class offers only the first; the others come up when
+ * you ask whether there is anything else (`mentorAsked:<npc>`).
+ */
+export const mentorMemory: { flags: Record<string, unknown> } = { flags: {} };
 
 // What a mentor can do for you, as extra dialogue replies: teach their
 // disciplines, make one of their combat classes your active one, or undo
@@ -25,8 +36,16 @@ export interface Trials {
 
 export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: string) => void, notify: (msg: string) => void, trials?: Trials): DialogueOption[] {
   const out: DialogueOption[] = [];
-  for (const d of DISCIPLINES) {
-    if (d.mentorNpc !== s.id || d.secret) continue;
+  // Hidden classes only come up once their way is open (a gateway, your people's blood).
+  const mine = DISCIPLINES.filter((d) => d.mentorNpc === s.id && (!d.secret || paths.learned(d.id) || paths.canTeach(d.id)));
+  // The one they offer up front: the first you haven't learned that needs nothing
+  // else first (or whose groundwork you have). The rest wait until you ask.
+  const unlearned = mine.filter((d) => !paths.learned(d.id));
+  const first = unlearned.find((d) => !d.requires) ?? unlearned.find((d) => paths.canTeach(d.id));
+  const asked = !!mentorMemory.flags['mentorAsked:' + s.id];
+  const held = unlearned.filter((d) => d !== first && !asked);
+  for (const d of mine) {
+    if (!paths.learned(d.id) && held.includes(d)) continue;
     if (!paths.learned(d.id)) {
       out.push({
         label: `Teach me ${d.name}.`,
@@ -42,8 +61,7 @@ export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: 
             return;
           }
           if (!paths.canTeach(d.id)) {
-            const [req, lv] = d.requires!;
-            say(`Not yet. Come back when your ${DISC[req].name} has reached level ${lv}.`);
+            say(`Not yet. ${paths.teachWhyNot(d.id) ?? 'You are not ready.'}. Come back when you are.`);
             return;
           }
           // The lesson teaches it, one step at a time (the tree opens at the end).
@@ -56,6 +74,27 @@ export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: 
       continue;
     }
     if (lessonHook.has?.(d.id)) out.push({ label: `Go over the first lesson of ${d.name} again.`, run: () => void lessonHook.start?.(d) });
+    // The Ascension: at level 30 the mentor sets the two paths before you, and you choose.
+    if (paths.canAscend(d.id)) {
+      const [a0, a1] = ASCENSIONS[d.id];
+      out.push({
+        label: `I am ready to ascend in ${d.name}.`,
+        run: () => say(`Then listen, because you only choose once. The first path is ${a0.name}: ${a0.flavour.replace(/\.$/, '')}. The second is ${a1.name}: ${a1.flavour.replace(/\.$/, '')}. Take your time. When you know, tell me.`),
+      });
+      for (const a of [a0, a1]) {
+        out.push({
+          label: `Ascend: ${a.name}.`,
+          run: () => {
+            if (!paths.ascend(d.id, ASCENSIONS[d.id].indexOf(a))) return;
+            ascendHook.ceremony?.(d, a);
+            notify(`${d.name} ascends: ${a.name} · open Skills (K) for its nodes`);
+            say(`Kneel. ... Rise, ${a.name}. The path is yours now, and the next steps open at levels 35, 40 and 45.`);
+          },
+        });
+      }
+    } else if (ASCENSIONS[d.id] && paths.ascension(d.id) < 0 && paths.level(d.id) >= ASC_LEVEL[0] - 5) {
+      out.push({ label: `What happens at level ${ASC_LEVEL[0]}?`, run: () => say(`At level ${ASC_LEVEL[0]} you ascend: one of two paths, ${ASCENSIONS[d.id][0].name} or ${ASCENSIONS[d.id][1].name}, and it changes the class for good. Come to me when you are there.`) });
+    }
     if (d.fam === 'combat' && paths.active !== d.id) {
       out.push({
         label: `Make ${d.name} my fighting class.`,
@@ -84,5 +123,27 @@ export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: 
       });
     }
   }
+  if (held.length) {
+    out.push({
+      label: 'Is there anything else you could teach me?',
+      run: () => {
+        mentorMemory.flags['mentorAsked:' + s.id] = 1;
+        say(askReply(paths, held, !!first && !paths.learned(first.id)));
+      },
+    });
+  }
   return out;
+}
+
+/** A mentor owning up to the other classes they teach, in plain words. */
+function askReply(paths: Paths, held: DisciplineDef[], firstPending: boolean) {
+  const names = held.map((d) => d.name);
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+  const notYet = held.filter((d) => !paths.canTeach(d.id) && (d.requires || d.also));
+  const lead = firstPending ? 'I do. But one thing at a time.' : 'I do, as it happens.';
+  let text = `${lead} I also teach ${list}. ${held.map((d) => `${d.name}: ${d.how.charAt(0).toLowerCase()}${d.how.slice(1)}`).join(' ')}`;
+  if (notYet.length) {
+    text += ' ' + notYet.map((d) => `For ${d.name}: ${(paths.teachWhyNot(d.id) ?? '').replace(/^Needs /, 'you need ')} first.`).join(' ');
+  }
+  return text;
 }

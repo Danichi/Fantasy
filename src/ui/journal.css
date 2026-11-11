@@ -52,6 +52,7 @@
 #ui .journal .jq-card.done .jq-mid b { text-decoration: line-through rgba(46, 33, 18, .35); }
 #ui .journal .jq-mid small { font: italic 400 13px/1.15 var(--fell); color: var(--ink-mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #ui .journal .jq-prog { display: block; height: 5px; margin-top: 2px; border-radius: 3px; background: rgba(122, 90, 46, .2); overflow: hidden; }
+#ui .journal .jq-new { display: inline-block; margin-top: 3px; padding: 0 6px; border-radius: 8px; font-style: normal; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #fff4d8; background: #b0782a; width: fit-content; }
 #ui .journal .jq-prog i { display: block; height: 100%; background: var(--c); border-radius: 3px; }
 #ui .journal .jq-pin { color: var(--c); font-size: 15px; filter: drop-shadow(0 0 3px rgba(255, 210, 110, .9)); }
 #ui .journal .jq-empty { margin: 18px 6px; color: var(--ink-mid); font: italic 400 15px/1.5 var(--fell); }

@@ -440,7 +440,8 @@ export class StylizedNature {
     const prevTarget = r.getRenderTarget();
     const prevClear = r.getClearColor(new THREE.Color());
     const prevAlpha = r.getClearAlpha();
-    r.setRenderTarget(this.atlas);
+    const rt = this.atlas;
+    r.setRenderTarget(rt);
     r.setClearColor(0x000000, 0);
     r.clear();
     for (const proto of this.prototypes) {
@@ -463,17 +464,23 @@ export class StylizedNature {
       bakeScene.add(group);
       const col = proto.atlas % this.atlasCols, row = Math.floor(proto.atlas / this.atlasCols);
       const vx = col * CW, vy = (this.atlasRows - 1 - row) * CH;
-      r.setViewport(vx, vy, CW, CH);
-      r.setScissor(vx, vy, CW, CH);
-      r.setScissorTest(true);
+      // The target's own viewport and scissor, in its pixels. (The renderer's
+      // setViewport is scaled by the screen's pixel ratio: on a high-DPI screen
+      // every cell was drawn twice the size and in the wrong place, so far trees
+      // showed a blown-up piece of another tree, a trunk floating over the canopy.)
+      rt.viewport.set(vx, vy, CW, CH);
+      rt.scissor.set(vx, vy, CW, CH);
+      rt.scissorTest = true;
+      r.setRenderTarget(rt);
       r.render(bakeScene, cam);
       bakeScene.remove(group);
       proto.span = (2 * halfH) / size.y;
       proto.aspect = aspect;
     }
-    r.setScissorTest(false);
+    rt.viewport.set(0, 0, rt.width, rt.height);
+    rt.scissor.set(0, 0, rt.width, rt.height);
+    rt.scissorTest = false;
     r.setRenderTarget(prevTarget);
-    r.setViewport(0, 0, r.domElement.width / r.getPixelRatio(), r.domElement.height / r.getPixelRatio());
     r.setClearColor(prevClear, prevAlpha);
     this.impostorUniforms.tAtlas.value = this.atlas.texture;
     this.impostorUniforms.uGrid.value.set(this.atlasCols, this.atlasRows);
@@ -829,6 +836,21 @@ export class StylizedNature {
       physics.removeStatic(c);
       this.colliders.delete(id);
     }
+  }
+
+  /** Trees (not bushes or rocks) standing within r of a point: [x, y, z, rot, height] (the Dark puts dead ones in their place). */
+  treesNear(x: number, z: number, r: number): [number, number, number, number, number][] {
+    const out: [number, number, number, number, number][] = [];
+    for (const t of this.tiles.values()) {
+      const a = t.trees;
+      for (let o = 0; o < a.length; o += 6) {
+        const proto = this.prototypes[a[o + 5]];
+        if (!proto || (proto.spec.kind !== 'tree' && proto.spec.kind !== 'pine')) continue;
+        if (Math.hypot(a[o] - x, a[o + 2] - z) > r) continue;
+        out.push([a[o], a[o + 1], a[o + 2], a[o + 3], proto.spec.targetHeight * a[o + 4]]);
+      }
+    }
+    return out;
   }
 
   setVisible(visible: boolean) {

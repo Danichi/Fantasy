@@ -89,9 +89,99 @@ export interface SaveData {
   legacy?: LegacySave;
 }
 
+// ---- Save slots: several heroes on one computer ----
+// Slot "1" keeps the original key, so a save from before slots is Save 1 as it
+// stands. Other slots live under `${KEY}:${id}`. The index names them and says
+// which one the next boot loads.
+
+const INDEX = 'fantasy-rpg-slots';
+export interface SlotInfo { id: string; name: string; created: number; updated?: number }
+interface SlotIndex { active: string; slots: SlotInfo[] }
+
+const keyOf = (id: string) => (id === '1' ? KEY : `${KEY}:${id}`);
+
+function readIndex(): SlotIndex {
+  try {
+    const d = JSON.parse(localStorage.getItem(INDEX) ?? 'null') as SlotIndex | null;
+    if (d && Array.isArray(d.slots) && d.slots.length) {
+      if (!d.slots.some((s) => s.id === d.active)) d.active = d.slots[0].id;
+      return d;
+    }
+  } catch {}
+  return { active: '1', slots: [{ id: '1', name: 'Save 1', created: Date.now() }] };
+}
+
+function writeIndex(ix: SlotIndex) {
+  try {
+    localStorage.setItem(INDEX, JSON.stringify(ix));
+  } catch {}
+}
+
+/** The slot this boot loaded. Saves always go here, even after another slot is picked for the next boot. */
+const CURRENT = readIndex().active;
+
+export function currentSlot() {
+  return CURRENT;
+}
+
+/** Every slot with a short summary of its hero (null for a slot with no game yet). */
+export function listSlots() {
+  return readIndex().slots.map((s) => {
+    let hero: { name: string; origin: string; level: number; day?: number } | null = null;
+    try {
+      const raw = localStorage.getItem(keyOf(s.id)) ?? (s.id === '1' ? LEGACY_KEYS.map((k) => localStorage.getItem(k)).find(Boolean) : null);
+      if (raw) {
+        const d = JSON.parse(raw);
+        hero = { name: d.look?.name ?? 'Hero', origin: d.prog?.origin ?? d.prog?.combat?.origin ?? 'human', level: d.prog?.level ?? 1, day: d.world?.time?.day };
+      }
+    } catch {}
+    return { ...s, hero, current: s.id === CURRENT };
+  });
+}
+
+/** Load this slot on the next boot. */
+export function setActiveSlot(id: string) {
+  const ix = readIndex();
+  if (!ix.slots.some((s) => s.id === id)) return;
+  ix.active = id;
+  writeIndex(ix);
+}
+
+/** A new, empty slot, loaded on the next boot. Returns its id. */
+export function createSlot(name: string) {
+  const ix = readIndex();
+  const id = String(Math.max(0, ...ix.slots.map((s) => +s.id || 0)) + 1);
+  ix.slots.push({ id, name: name.trim().slice(0, 32) || `Save ${id}`, created: Date.now() });
+  ix.active = id;
+  writeIndex(ix);
+  return id;
+}
+
+export function renameSlot(id: string, name: string) {
+  const ix = readIndex();
+  const s = ix.slots.find((x) => x.id === id);
+  if (!s || !name.trim()) return;
+  s.name = name.trim().slice(0, 32);
+  writeIndex(ix);
+}
+
+/** Erase a slot and its game. The slot in play can't be deleted (it would save itself back). */
+export function deleteSlot(id: string) {
+  if (id === CURRENT) return;
+  const ix = readIndex();
+  ix.slots = ix.slots.filter((s) => s.id !== id);
+  if (!ix.slots.length) return;
+  if (ix.active === id) ix.active = CURRENT;
+  writeIndex(ix);
+  try {
+    localStorage.removeItem(keyOf(id));
+    if (id === '1') for (const k of LEGACY_KEYS) localStorage.removeItem(k);
+  } catch {}
+}
+
 export function hasSave() {
   try {
-    return !!(localStorage.getItem(KEY) || LEGACY_KEYS.some((k) => localStorage.getItem(k)));
+    return !!(localStorage.getItem(keyOf(CURRENT)) || (CURRENT === '1' && LEGACY_KEYS.some((k) => localStorage.getItem(k))));
   } catch {
     return false;
   }
@@ -99,14 +189,14 @@ export function hasSave() {
 
 export function clearSave() {
   try {
-    localStorage.removeItem(KEY);
-    for (const k of LEGACY_KEYS) localStorage.removeItem(k);
+    localStorage.removeItem(keyOf(CURRENT));
+    if (CURRENT === '1') for (const k of LEGACY_KEYS) localStorage.removeItem(k);
   } catch {}
 }
 
 export function loadSave(): SaveData | null {
   try {
-    const raw = localStorage.getItem(KEY) ?? LEGACY_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
+    const raw = localStorage.getItem(keyOf(CURRENT)) ?? (CURRENT === '1' ? LEGACY_KEYS.map((k) => localStorage.getItem(k)).find(Boolean) : null);
     if (!raw) return null;
     const d = JSON.parse(raw) as any;
     if (d.v === 6) return d as SaveData;
@@ -175,8 +265,15 @@ export function buildSave(player: Player, seed: number, maps: Record<string, Map
 export function writeSave(player: Player, seed: number, maps: Record<string, MapData>, dungeon: DungeonProgress, guild: GuildSaveData, world: WorldSave = { flags: {} }, mine?: MineProgress) {
   const data = buildSave(player, seed, maps, dungeon, guild, world, mine);
   try {
-    localStorage.setItem(KEY, JSON.stringify(data));
+    localStorage.setItem(keyOf(CURRENT), JSON.stringify(data));
   } catch {}
+  // The slot list shows when each hero was last played (a minute is close enough).
+  const ix = readIndex();
+  const s = ix.slots.find((x) => x.id === CURRENT);
+  if (s && (!s.updated || Date.now() - s.updated > 60_000)) {
+    s.updated = Date.now();
+    writeIndex(ix);
+  }
 }
 
 /** Rebuild the player's progression and inventory from a save. */

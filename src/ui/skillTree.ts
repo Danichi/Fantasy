@@ -1,5 +1,7 @@
 import type { DisciplineDef } from '../paths/data';
 import { NODE_COST, TIER_GATE, treeOf, type Paths, type Tree, type TreeNode } from '../paths/paths';
+import { TREE_SHAPES, along, smooth } from './treeShapes';
+import { ROSTER } from '../paths/roster';
 import { emblemIcon } from './icons';
 import { EMBLEMS } from './art/emblems';
 
@@ -47,10 +49,14 @@ export const ICONS: Record<string, string> = {
   legendaryHero: 'M3 18h18M4 18l-1-10 5 4 4-8 4 8 5-4-1 10M12 13v2',
 };
 
+// The roster's classes carry their own emblems.
+for (const s of ROSTER) if (s.icon) ICONS[s.id] = s.icon;
+
 /** Hex values of the discipline colour tokens (the canvas and HUD can't read CSS variables). */
 export const HEX: Record<string, string> = {
   '--c-gale': '#6fd6c6', '--c-fire': '#ff8246', '--c-frost': '#9cc8ff', '--c-wind': '#b7e38a', '--c-herb': '#8fcf6a',
   '--c-steel': '#aeb8cc', '--c-ward': '#5fa8ff', '--c-light': '#ffe08a', '--c-shadow': '#b48cff', '--c-blood': '#d8574a', '--c-gold': '#d9b15a',
+  '--c-earth': '#d09a5a', '--c-tide': '#4fc3e0', '--c-storm': '#b0a4ff',
 };
 
 /** Hotbar icon for a skill: its painted emblem (ui/art/emblems.ts) with the rank as pips. */
@@ -97,7 +103,24 @@ const bounds = new Map<string, BB>();
 function layout(d: DisciplineDef, t: Tree) {
   if (bounds.has(d.id)) return bounds.get(d.id)!;
   let bb: BB;
-  if (d.fam === 'combat') {
+  const shape = TREE_SHAPES[d.id];
+  if (shape) {
+    // A themed shape (ui/treeShapes.ts): each branch along its own path of the emblem.
+    bb = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    for (const n of t.nodes) {
+      if (n.type === 'center') [n.x, n.y] = shape.c;
+      else {
+        const u = n.type === 'cap' ? 1 : 0.17 + (n.tier - 1) * 0.165;
+        const { p, t: tg } = along(shape.p[n.branch], u);
+        const off = n.type === 'cap' || n.len === 1 ? 0 : (n.k - (n.len - 1) / 2) * (n.len === 2 ? 50 : 44);
+        n.x = p[0] - tg[1] * off;
+        n.y = p[1] + tg[0] * off;
+      }
+      bb.x0 = Math.min(bb.x0, n.x!); bb.y0 = Math.min(bb.y0, n.y!); bb.x1 = Math.max(bb.x1, n.x!); bb.y1 = Math.max(bb.y1, n.y!);
+    }
+    for (const sl of shape.sil) for (const [x, y] of sl) { bb.x0 = Math.min(bb.x0, x); bb.y0 = Math.min(bb.y0, y); bb.x1 = Math.max(bb.x1, x); bb.y1 = Math.max(bb.y1, y); }
+    bb = { x0: bb.x0 - 70, y0: bb.y0 - 80, x1: bb.x1 + 70, y1: bb.y1 + 85 };
+  } else if (d.fam === 'combat') {
     for (const n of t.nodes) {
       if (n.type === 'center') { n.x = 0; n.y = 0; continue; }
       const R = n.type === 'cap' ? 82 + 5 * 60 + 8 : 82 + (n.tier - 1) * 60;
@@ -241,11 +264,14 @@ export class TreeView {
     const c = this.ctx, col = this.col, gold = this.gold;
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, w, h);
+    const shape = TREE_SHAPES[d.id];
     if (d.fam === 'combat') this.bgWheel(w, h);
     else if (d.fam === 'magic') this.bgStars(w, h, ts);
+    else if (shape) this.bgWheel(w, h);
     else this.bgTree(w, h, ts);
     c.setTransform(s, 0, 0, s, this.cam.ox, this.cam.oy);
-    if (d.fam === 'combat') this.wheelOverlay(ts);
+    if (shape) this.shapeOverlay(ts);
+    else if (d.fam === 'combat') this.wheelOverlay(ts);
     for (const n of t.nodes) {
       if (!n.parent) continue;
       const p = t.map[n.parent];
@@ -291,6 +317,48 @@ export class TreeView {
     g.addColorStop(0.6, 'rgba(10,12,18,0)');
     c.fillStyle = g;
     c.fillRect(0, 0, w, h);
+  }
+
+  /** A themed tree's emblem: its silhouette, the branch paths as faint ribbons, and their names. */
+  private shapeOverlay(ts: number) {
+    const c = this.ctx, col = this.col, gold = this.gold, shape = TREE_SHAPES[this.d.id];
+    const line = (ps: [number, number][]) => {
+      c.beginPath();
+      c.moveTo(ps[0][0], ps[0][1]);
+      for (let i = 1; i < ps.length; i++) c.lineTo(ps[i][0], ps[i][1]);
+    };
+    c.lineJoin = c.lineCap = 'round';
+    for (const sl of shape.sil) {
+      const closed = sl.length > 2 && sl[0][0] === sl[sl.length - 1][0] && sl[0][1] === sl[sl.length - 1][1];
+      line(sl);
+      if (closed) {
+        c.fillStyle = hexA(col, 0.05);
+        c.fill();
+      }
+      c.strokeStyle = hexA(gold, 0.22 + (reduce ? 0 : 0.05 * Math.sin(ts * 0.0012)));
+      c.lineWidth = 3;
+      c.stroke();
+    }
+    shape.p.forEach((pth, bi) => {
+      line(smooth(pth));
+      c.strokeStyle = hexA(col, 0.1);
+      c.lineWidth = 30;
+      c.stroke();
+      c.strokeStyle = hexA(col, 0.22);
+      c.lineWidth = 2;
+      c.stroke();
+      if (this.d.fam === 'magic') return; // (the starfield writes the names)
+      const cap = this.tree.map[`${bi}-cap`];
+      // (past the end of the branch, the way it points; above it when it runs sideways)
+      const tg = along(pth, 1).t;
+      const side = Math.abs(tg[1]) < 0.5;
+      const at = shape.label?.[bi] ?? (side ? [cap.x!, cap.y! - 40] : [cap.x! + tg[0] * 50, cap.y! + tg[1] * 50 + (tg[1] > 0 ? 14 : 0)]);
+      c.fillStyle = 'rgba(236,229,211,0.7)';
+      c.font = '16px Cinzel, serif';
+      c.textAlign = 'center';
+      c.fillText(this.d.branches![bi].name.toUpperCase(), at[0], at[1]);
+    });
+    c.lineCap = 'butt';
   }
 
   private wheelOverlay(ts: number) {

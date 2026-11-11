@@ -2,7 +2,7 @@ import './bestiary.css';
 import { ITEMS } from '../items/itemDefs';
 import { iconFor } from './icons';
 import { dropTable } from '../items/catalog/sources';
-import { Bestiary, ALL_ENTRIES, entry, stageOf, luckFor, REVEAL, STAGE_NAMES, type BeastEntry } from '../progression/bestiary';
+import { Bestiary, ALL_ENTRIES, entry, stageOf, luckFor, REVEAL, STAGE_NAMES, MARKS, MARK_NAMES, MARK_DMG, markOf, nextMark, FAMILY_TIERS, WARDEN_RANKS, RANK_HP, RANK_STAMINA, RANK_GIFTS, familyCharm, type BeastEntry } from '../progression/bestiary';
 
 // The Wardens' Bestiary page (L): a card for every foe you've killed (and a
 // "?" card for the ones the Wardens know of that you haven't), and a page per
@@ -126,8 +126,9 @@ export class BestiaryUI {
       const s = stageOf(x.kills, x.e.boss);
       if (!x.kills) return `<button class="bx-card unknown" disabled title="Not yet recorded">${sigil(x.e.family, 'dim')}<b>? ? ?</b><small>Unrecorded</small></button>`;
       const pips = [1, 2, 3, 4].map((i) => `<i class="${s >= i ? 'on' : ''}"></i>`).join('');
+      const m = markOf(x.kills, x.e.boss);
       return `<button class="bx-card fam-${x.e.family} ${s >= 4 ? 'mastered' : ''} ${this.selected === x.e.id ? 'sel' : ''}" data-entry="${x.e.id}">
-        ${sigil(x.e.family)}<b>${esc(x.e.name)}</b><small>${x.kills} slain</small><span class="bx-pips">${pips}</span></button>`;
+        ${sigil(x.e.family)}<b>${esc(x.e.name)}</b><small>${x.kills} slain</small><span class="bx-pips">${pips}</span>${m ? `<span class="bx-mark m${m}" title="${MARK_NAMES[m]}">${'★'.repeat(m)}</span>` : ''}</button>`;
     };
     let nav = '';
     if (this.tab === 'bosses') nav = `<div class="bx-grid">${pool.sort((a, b) => Number(!a.kills) - Number(!b.kills) || a.e.tier - b.e.tier).map(card).join('')}</div>`;
@@ -136,16 +137,23 @@ export class BestiaryUI {
         const group = pool.filter((x) => x.e.family === fam).sort((a, b) => Number(!a.kills) - Number(!b.kills) || a.e.tier - b.e.tier);
         if (!group.length) continue;
         const got = group.filter((x) => x.kills).length;
-        nav += `<div class="bx-fam"><span>${FAMILY_LABEL[fam] ?? fam}</span><em>${got}/${group.length}</em></div><div class="bx-grid">${group.map(card).join('')}</div>`;
+        const fm = this.book.familyMark(fam), fd = this.book.familyDmg(fam);
+        const famTip = FAMILY_TIERS.map((t) => `${t.name}: every one at ${MARK_NAMES[t.mark]} (+${Math.round(t.dmg * 100)}%)`).join(' · ');
+        nav += `<div class="bx-fam"><span>${FAMILY_LABEL[fam] ?? fam}</span><em class="bx-fam-mark ${fd ? 'on' : ''}" title="${esc(famTip)}">${fd ? `${fm >= FAMILY_TIERS[1].mark ? 'Bane' : 'Known'} +${Math.round(fd * 100)}%` : `page: every one to ${MARK_NAMES[1]}`}</em><em>${got}/${group.length}</em></div><div class="bx-grid">${group.map(card).join('')}</div>`;
       }
     }
     const sel = this.selected ? all.find((x) => x.e.id === this.selected) : null;
     const detail = sel ? this.page(sel.e, sel.kills) : `<div class="bx-empty">${sigil(this.tab === 'bosses' ? 'wyrm' : 'beast', 'big dim')}<p>${this.tab === 'bosses' ? 'No great foe has fallen to you yet. Their pages fill in when they do.' : 'Nothing recorded yet. Every kind of foe you kill gets a page.'}</p></div>`;
     const bossKills = bosses.filter((x) => x.kills).length;
-    this.el.innerHTML = `<header><span>BESTIARY</span><div class="bx-count"><b>${recorded}</b> of ${all.length} recorded · <b>${kills}</b> slain</div><button data-close>✕</button></header>
+    const rank = this.book.rank(), pts = this.book.points();
+    const nextR = WARDEN_RANKS[rank + 1];
+    const gift = Object.entries(RANK_GIFTS).find(([r]) => Number(r) > rank);
+    const rankTip = `Each rank: +${RANK_HP} health, +${RANK_STAMINA} stamina (now +${rank * RANK_HP} / +${rank * RANK_STAMINA}).${gift ? ` Rook sends a gift at ${WARDEN_RANKS[Number(gift[0])][1]}: ${ITEMS[gift[1]]?.name ?? ''}.` : ''}`;
+    this.el.innerHTML = `<header><span>BESTIARY</span><div class="bx-count"><b>${recorded}</b> of ${all.length} recorded · <b>${kills}</b> slain</div>
+      <div class="bx-rank" title="${esc(rankTip)}"><small>WARDEN'S RANK</small><b>${WARDEN_RANKS[rank][1]}</b><span>${pts} mark${pts === 1 ? '' : 's'}${nextR ? ` · ${nextR[0]} for ${nextR[1]}` : ' · the highest'}</span></div><button data-close>✕</button></header>
       <div class="bx-tabs"><button data-tab="creatures" class="${this.tab === 'creatures' ? 'on' : ''}">Creatures <em>${recorded - bossKills}/${creatures.length}</em></button><button data-tab="bosses" class="${this.tab === 'bosses' ? 'on' : ''}">Bosses <em>${bossKills}/${bosses.length}</em></button></div>
       <div class="bx-body"><nav>${nav}</nav><section>${detail}</section></div>
-      <footer><span>Kill more of a kind to reveal its drops and sharpen your luck against it.</span><span>L · close</span></footer>`;
+      <footer><span>Kill more of a kind to reveal its drops, sharpen your luck and earn hunt marks against it.</span><span>L · close</span></footer>`;
   }
 
   private chip(id: string, show: boolean, owned?: boolean) {
@@ -154,6 +162,20 @@ export class BestiaryUI {
     const icon = iconFor(id);
     if (!icon) this.missingIcons = true;
     return `<span class="bx-item r-${d.rarity} ${owned ? 'owned' : ''}" title="${esc(d.name)} · ${d.rarity}"><i class="bx-ic">${icon ? `<img src="${icon}" alt="">` : ''}</i><span>${esc(d.name)}</span>${owned ? '<b class="bx-tick">✔</b>' : ''}</span>`;
+  }
+
+  /** The hunt marks row: five stars, kills to the next, the damage they give. */
+  private marks(e: BeastEntry, kills: number) {
+    const r = e.boss ? MARKS.boss : MARKS.common;
+    const m = markOf(kills, e.boss), nx = nextMark(kills, e.boss);
+    const fam = e.boss ? '' : (() => {
+      const fd = this.book.familyDmg(e.family);
+      const charm = ITEMS[familyCharm(e.family)];
+      return fd ? ` · family +${Math.round(fd * 100)}%` : charm ? ` · bring every ${FAMILY_LABEL[e.family]?.toLowerCase() ?? e.family} to ${MARK_NAMES[1]} for ${esc(charm.name)}` : '';
+    })();
+    return `<div class="bx-marks"><div class="bx-marks-top"><small>HUNT MARKS</small><b>${MARK_NAMES[m]}</b><span>+${Math.round((m * MARK_DMG + (e.boss ? 0 : this.book.familyDmg(e.family))) * 100)}% damage to it${fam}</span></div>
+      <div class="bx-steps marks">${MARK_NAMES.slice(1).map((n, i) => `<span class="${m > i ? 'on' : ''}">${n}<em>${r[i]}</em></span>`).join('')}</div>
+      <div class="bx-marks-next">${nx ? `${nx - kills} more for ${MARK_NAMES[m + 1]} (+${Math.round(MARK_DMG * 100)}% damage, +1 Warden mark)` : 'Every mark taken. Nothing left of this kind can surprise you.'}</div></div>`;
   }
 
   private page(e: BeastEntry, kills: number) {
@@ -196,6 +218,7 @@ export class BestiaryUI {
           <div class="bx-steps">${STAGE_NAMES.slice(1).map((n, i) => `<span class="${s > i ? 'on' : ''}">${n}<em>${r[i]}</em></span>`).join('')}</div></div>
         <div class="bx-luck" title="Better odds on this foe's good drops"><small>HUNTER'S EDGE</small><b>+${Math.round(luck * 100)}%</b><span>drop luck · max +${Math.round(cap * 100)}%</span></div>
       </div>
+      ${this.marks(e, kills)}
       <p class="bx-lore">${esc(e.lore)}</p>
       ${e.boss ? uniqHtml : ''}
       ${section('Common drops', 2, cut([...t.parts, ...t.supplies], 10), 'Parts and supplies it often leaves behind.')}

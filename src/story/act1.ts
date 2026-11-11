@@ -9,6 +9,7 @@ import { CAST as LOOKS } from '../npc/cast';
 import { BRANNOC_LOOK } from '../raid/watchman';
 import { events } from '../core/events';
 import type { Story } from './story';
+import type { Undead } from '../enemies/undead';
 import { CHAMPIONS } from './champions';
 import type { SceneApi } from './scene';
 import type { RaidPrep } from '../raid/raids';
@@ -92,11 +93,11 @@ export const ACT1_QUESTS: QuestDef[] = [
         ['keep:remedies', 'Ilyra says the fever broke in two of the low houses, and she says it was your brewing that did it, not hers. She hates saying that. The Penney girl sat up and asked for bread this morning. There wasn\'t much, but she asked. Now: Magus Orren wants you. He hasn\'t slept in a week. His tower, by the forge.'],
         ['keep:meals', 'The Watch ate hot three nights running, and the Watch notices that sort of thing. Brannoc says his boys stayed awake on the wall for once. Fed men see further. Now: Magus Orren wants you. He\'s been reading about people like you, and he hasn\'t slept in a week. His tower, by the forge.'],
       ], say: 'A little. The granary\'s a little fuller and last night we only lost the dog, and Tom Hale says you\'re "all right, for a sky-person." From Tom that\'s a knighthood. It isn\'t enough. Nothing is enough, this year. But it\'s more than yesterday. Magus Orren wants you. He\'s been reading about people like you, and he hasn\'t slept in a week. His tower, by the forge.' }] },
-      { note: 'See Magus Orren.', objectives: [{ type: 'talk', npc: 'magus', text: 'See Magus Orren', reply: 'Maud sent me.', say: 'Give me your hand. ...Yes. Warm. Warmer than it should be. There is a waystone at the east gate, older than the road, with a wheel cut into it: the Sunwheel. Every one of them in Cresha is the same wheel, I think. Go and put your hand on it, and tell me what it says to you. I suspect it has been waiting for you.' }] },
+      { note: 'See Magus Orren.', objectives: [{ type: 'talk', npc: 'magus', text: 'See Magus Orren', reply: 'Maud sent me.', say: 'Give me your hand. ...Yes. Warm. Warmer than it should be. There is an old waystone at the east gate with a wheel carved into it. We call it a Sunwheel, and there are others like it all over Cresha. I think it has something to do with how you got here. Go and put your hand on it, then come back and tell me what happens.' }] },
       { note: 'Lay your hand on the waystone at the east gate.', hook: 'wheel:wake', objectives: [{ type: 'signal', id: 'wheel-woken', text: 'Touch the Sunwheel waystone at the east gate', at: [128, -10] }] },
-      { note: 'Go back to Magus Orren and tell him what the wheel said.', objectives: [{ type: 'talk', npc: 'magus', text: 'Tell Magus Orren what the wheel said', reply: 'The wheel spoke to me.', say: 'It spoke. Of course it spoke; I could see it on you from the door. Sit down before you fall down. ...It called you. Out of your own world, and four before you. Four. I have read every page in Cresha about the Sunwheel and not one of them says four. And six more on the same night, carried off by other hands. Gods. Whatever is playing this game, it is older than my books and it is not playing for us.' }] },
+      { note: 'Go back to Magus Orren and tell him what the wheel said.', objectives: [{ type: 'talk', npc: 'magus', text: 'Tell Magus Orren what the wheel said', reply: 'The wheel spoke to me.', say: 'It spoke to you. I could see it on your face from the door. Sit down before you fall down. ...So the voice is the Dawn, the old god of the Sunwheels. It brought you here from another world, and it brought four others before you, and six other champions came the same night for other masters. None of my books say any of this. Whatever this contest is, it is bigger than Elder Glen, and I don\'t think it is being played for our sake.' }] },
     ],
-    done: 'The wheel will carry you now, between any of its stones you have touched. Use it. And go and see Maud: the shepherds came down off the north hill this morning white as milk. There are lights in the old crypt again.',
+    done: 'From now on you can travel between any Sunwheel stones you have touched: walk up to one and use it. And go and see Maud. The shepherds came down off the north hill this morning scared out of their wits. There are lights in the old crypt again.',
     rewards: { gold: 60, xp: 120 },
   },
   {
@@ -121,7 +122,7 @@ export const ACT1_QUESTS: QuestDef[] = [
   {
     id: 'mq-gravewood', title: 'The Dead Wood', giver: 'magus', region: 'cresha', main: true, requires: ['mq-crypt'],
     summary: 'The dead walk in the Gravewood. Magus Orren believes it is a thin place, where the Dark presses against the world, and that through the Sunwheel you might see what is pushing.',
-    offer: 'The Dark. The other side of everything. The library in the Capital has one book about it, and I have read it until the spine broke; it knows less than it pretends to. The Gravewood is a thin place: the Dark leaning on the world. Go to the standing stones on the hill north-west of here, and do what you did at the waystone. Look through the wheel. Then go to the Gravewood and break whatever is leaning.',
+    offer: 'The Dark is a second world that lies underneath ours. Most of the time you can\'t see it or touch it. The library in the Capital has one book about it, and I have read it until the spine broke. In some places the Dark is pressing up close to our world, and the Gravewood is one of them: that\'s why the dead walk there. First, go to the standing stones on the hill north-west of here and touch the wheel, like you did at the waystone; it should let you see the Dark. Then go to the Gravewood and break whatever is pressing through.',
     acceptLabel: 'I\'ll look through the wheel.',
     stages: [
       { note: 'Look through the Sunwheel at the standing stones (north-west hills).', objectives: [{ type: 'signal', id: 'ring-rite', text: 'Do the rite at the standing stones: look through the wheel', at: [STANDING_STONES.x, STANDING_STONES.z] }] },
@@ -132,7 +133,7 @@ export const ACT1_QUESTS: QuestDef[] = [
         { type: 'deliver', npc: 'magus', item: 'silverOre', count: 2, optional: true, flag: 'ward:silver', bonus: { xp: 50 }, text: 'Bring Orren two silver ore to bless', say: 'Silver, from the deep seams. Hold still. ...There. It will not stop them. It will make them hesitate, and sometimes that is all a person needs.' },
       ] },
       { note: 'Step through the pedestal\'s wheel into the Dark.', hook: 'gravewood:mirror', objectives: [{ type: 'signal', id: 'mirror-walked', text: 'Do the rite at the Gravewood pedestal and step into the Dark', at: [GRAVEWOOD.x, GRAVEWOOD.y] }] },
-      { note: 'Tell Magus Orren what you saw.', objectives: [{ type: 'talk', npc: 'magus', text: 'Tell Magus Orren what you saw in the Dark', reply: 'I was in the Dark. Something there is dying.', say: 'Dying. My book says only that something old rules over there, and that nothing has ever seen it die. If it is dying... no. I don\'t know what that means, and I don\'t like that I don\'t. Whatever brought you here knows. Ask it, not me. And be careful what it asks of you in return.', sayIf: [
+      { note: 'Tell Magus Orren what you saw.', objectives: [{ type: 'talk', npc: 'magus', text: 'Tell Magus Orren what you saw in the Dark', reply: 'I was in the Dark. Something there is dying.', say: 'The king of the Dark, dying. My book says a king rules over there, and that he has ruled for longer than anyone remembers. If he is dying, someone will take his place, and I would bet that is what all these champions are for. The Dawn, the voice that brought you here, knows more than I do. Listen to it. But be careful what it asks of you in return.', sayIf: [
         ['ward:rune', 'Dying. And you walked in there with a ward cut in your own hand, and walked out. That rune will never be clean again, you know; keep it anyway. My book says something old rules over there, and that nothing has ever seen it die. If it is dying... I don\'t know what that means. Whatever brought you here knows. Ask it. And be careful what it asks in return.'],
         ['ward:silver', 'Dying. And the silver held, did it? Good. My book says only that something old rules over there, and nothing has ever seen it die. If it is dying... I don\'t know what that means. Whatever brought you here knows. Ask it, not me. And be careful what it asks of you in return.'],
       ] }] },
@@ -185,13 +186,15 @@ export const ACT1_QUESTS: QuestDef[] = [
 /** What the Dawn says to you in the dark, before you open your eyes (line, seconds). */
 const PROLOGUE: [string, number][] = [
   ['Listen.', 2.6],
-  ['Before the first morning there was only the Dark. Then there was me.', 4.6],
-  ['I have kept this world lit for longer than your kind has had a word for time. The night is long, and it is hungry, and I am so very tired.', 6.4],
-  ['Four times I have reached into the other places and pulled a soul across. I will not tell you yet what became of them.', 5.8],
-  ['You are the fifth.', 3.2],
-  ['You will wake with nothing. No name they know. No blade. No friend. Only a little of my light in you, and it is very small.', 6],
-  ['Things are already moving toward where you will fall. They can smell it on you.', 4.6],
-  ['Keep it lit.', 3.4],
+  ['I am the Dawn. I am the light that keeps this world safe from the Dark.', 4.6],
+  ['The Dark is a second world, lying just under this one. The Hollow King rules it, and he is dying.', 5.6],
+  ['When he dies, someone will take his throne. Seven powers want it, and I am one of them.', 5.2],
+  ['Every twenty years, each of us may bring one champion from another world to fight for it. Each of those summonings is called an age.', 6.4],
+  ['I have brought four champions before you. All four are dead.', 4.4],
+  ['You are my fifth. That is why they will call you the Fifth.', 4.4],
+  ['You will wake with nothing: no name, no sword, no friends. Only a little of my light.', 5.4],
+  ['Creatures of the Dark are already heading for where you will land. They can sense my light on you.', 5.2],
+  ['Stay alive.', 3],
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -225,9 +228,9 @@ export function setupAct1(c: ActCtx) {
       await s.cam(me.clone().add(new THREE.Vector3(0, 9, 3)), me, 0);
       await s.fade(0, 2.6);
       await s.say(null, 'Cold. Wet wheat against your face. You have nothing: no coat, no coin, no name anyone here would know.', 3.6);
-      await s.voice('Five.', 2.2);
+      await s.voice('Wake up, Fifth.', 2.2);
       await s.cam(me.clone().add(new THREE.Vector3(3, 2.2, 5)), me.clone().setY(me.y + 0.8), 3);
-      await s.voice('Get up. Quickly now. They felt you arrive.', 3.4);
+      await s.voice('Get up. Quickly. The Dark felt you arrive.', 3.4);
       // Something in the wheat under your hand: the only thing you'll own tonight.
       if (!player.equip.mainWeapon) {
         const blade = player.equip.add('rustedBlade');
@@ -256,7 +259,7 @@ export function setupAct1(c: ActCtx) {
       const [x, z] = String(F.fallRift ?? `${FALL_AT.x + 9},${FALL_AT.z - 6}`).split(',').map(Number);
       story.shades(3, ground(x, z), 3);
       F.fallWave = 1;
-      story.voice('Fight. You know how. Your hands remember even if you don\'t.');
+      story.voice('Fight. You know how. Your hands remember, even if you don\'t.');
     };
     go();
   };
@@ -291,7 +294,7 @@ export function setupAct1(c: ActCtx) {
       story.clearFight();
       if (!story.h.test) c.time.skipTo(8);
       story.h.teleport(ground(MAUD_AT.x, MAUD_AT.z).add(new THREE.Vector3(0, 0.6, 3)));
-      story.note(CH[0], 'You fell out of the night sky into the wheat south of Elder Glen. Things from the Dark were waiting. Kaela Voss and Captain Brannoc came over the wall and fought beside you. A voice in your head said one word: "Five."');
+      story.note(CH[0], 'You fell out of the night sky into the wheat south of Elder Glen. Things from the Dark were waiting. Kaela Voss and Captain Brannoc came over the wall and fought beside you. A voice in your head, the Dawn\'s, called you "Fifth".');
       await s.fade(0, 1.4);
     });
   });
@@ -315,11 +318,11 @@ export function setupAct1(c: ActCtx) {
       s.bars(true);
       await s.dark(0.1, 0.5);
       await s.say(null, 'The carving goes hot under your palm. Gold light runs out of the spokes and up your arm.', 3);
-      await s.voice('There you are.', 2.2);
-      await s.voice('I called you. Out of your own world, into this one, as I have called four before you.', 4.2);
-      await s.voice('Every wheel in this land is mine. Touch them, and they will carry you.', 3.6);
-      await s.voice('Six others fell out of the sky the same night as you. The other powers caught theirs and carried them home: to the Deep Mountains, to the Deep Continent, under the sea. They are being taught. I could only catch you in a wheat field.', 6);
-      await s.voice('You will not meet them for a while. When you do, they will be ready. Be readier. And the older ones are already out here, little Fifth. Be quick. Be quicker than the four.', 5);
+      await s.voice('There you are. It is me, the Dawn: the voice you heard when you fell.', 3.6);
+      await s.voice('I brought you here from your own world, the same way I brought my four champions before you.', 4.2);
+      await s.voice('These carved wheels, the Sunwheels, are mine. Touch one, and from then on it can carry you to any other wheel you have touched.', 4.8);
+      await s.voice('The other six powers each brought a champion across on the same night as you. They took theirs home to train them. I could only catch you in a wheat field.', 6);
+      await s.voice('You will not meet those six for a long while, and by then they will be well trained. Worse, champions from the earlier summonings are already out here, and they hunt mine. Get strong, and quickly.', 6);
       await s.dark(0, 0.8);
       await s.card('', 'The Sunwheel Wakes', 'Touch any wheel to travel to another you have touched, or to rest.', 3.6);
     });
@@ -399,10 +402,15 @@ export function setupAct1(c: ActCtx) {
     // A lesson, not a fight you can win: when it's gone far enough, he stops.
     const go = () => {
       if (busy()) return void story.whenFree(go);
-      const ch = story.champion('malric', at, { floor: 0.55, intro: false });
+      // He is far beyond you: twenty years of the Iron Below. Your blows barely
+      // mark him; he throws you about with gravity and iron, and when he has
+      // made his point he stops.
+      const ch = story.champion('malric', at, { scale: 2.5, floor: 0.3, intro: false });
+      ch.overwhelming();
       F.malricSpar = 1;
       story.lesson(true);
       ch.onFloor = () => endSpar(true);
+      ch.onShown = () => endSpar(ch.hp < ch.maxHp * 0.985);
     };
     go();
   };
@@ -414,9 +422,10 @@ export function setupAct1(c: ActCtx) {
     const m = story.champions.find((x) => x.def.id === 'malric');
     void story.play('malric-after', async (s) => {
       s.bars(true);
-      if (hurtHim) await s.say('Ser Malric Dane', 'Oh, now. That one I felt.');
-      else await s.say('Ser Malric Dane', 'Not yet. You\'re not worth breaking yet.');
-      await s.say('Ser Malric Dane', 'Get stronger, Fifth. It\'ll mean more when I do it.');
+      if (hurtHim) await s.say('Ser Malric Dane', 'You scratched me. Good. That\'s more than most manage.');
+      else await s.say('Ser Malric Dane', 'That\'s enough. You couldn\'t touch me if I stood still all day.');
+      await s.say('Ser Malric Dane', 'Twenty years I\'ve been in this world, Fifth. That\'s how far behind you are. Grukk was nothing.');
+      await s.say('Ser Malric Dane', 'Get stronger. It\'ll mean more when I break you.');
       await s.fade(1, 0.8);
       m?.dispose();
       story.champions = story.champions.filter((x) => x !== m);
@@ -444,16 +453,21 @@ export function setupAct1(c: ActCtx) {
       await s.cam(at.clone().add(new THREE.Vector3(0, 60, 40)), gw, 2.4);
       await s.cam(gw.clone().add(new THREE.Vector3(30, 26, -40)), gw, 2.6);
       await s.say(null, 'Far off, the Gravewood. In the Dark it is a hole, and something on the other side is pushing through it, the way a hand pushes through cloth.', 4);
-      await s.voice('He is dying. The king of this place. When he is gone, someone will sit in his chair.', 4);
-      await s.voice('Every power in your new world wants it. They sent champions. So did I.', 3.6);
+      await s.voice('This is the Dark. The Hollow King rules it, and he is dying.', 3.6);
+      await s.voice('Whoever takes his throne will rule the Dark, and through it, this world too. That is what the seven powers are fighting over. We call it the Game. You are my piece in it.', 6);
       await s.dark(0, 1.6);
     });
-    story.note(CH[3], 'At the standing stones you looked through the Sunwheel and saw the world as it is in the Dark: the same hills under a wounded sky. The Gravewood is a hole in it, and something is pushing through. The voice said the king of the Dark is dying, and every power in the world wants his chair.');
+    story.note(CH[3], 'At the standing stones you looked through the Sunwheel and saw the world as it is in the Dark: the same hills under a wounded sky. The Gravewood is a hole in it, and something is pushing through. The Dawn said the Hollow King, who rules the Dark, is dying, and that the seven powers are fighting over his throne: the Game.');
     quests.signal('ring-rite');
   };
   quests.hooks.set('gravewood:mirror', () => {
     story.rites.set('gravewood', (node) => {
-      if (node.id !== 'gravewood' || !quests.wants('mirror-walked')) return null;
+      if (node.id !== 'gravewood') return null;
+      // Back out of the Dark, when you've seen enough of it.
+      if (story.darkness > 0.5 && F.mirrorFight === 2) return { label: '(Step back through the wheel, into the light.)', run: () => { story.h.dialogue.close(); mirrorBack(); } };
+      // Mid-fight: back out, and the shades go with you. The wheel lets you try again.
+      if (story.darkness > 0.5 && F.mirrorFight === 1) return { label: '(Step back through the wheel. You can come again.)', run: () => { story.h.dialogue.close(); mirrorAbandon(); } };
+      if (!quests.wants('mirror-walked')) return null;
       return { label: '(Step through the wheel, into the Dark.)', run: () => { story.h.dialogue.close(); mirrorWalk(); } };
     });
   });
@@ -461,29 +475,62 @@ export function setupAct1(c: ActCtx) {
     void story.play('mirror', async (s) => {
       s.bars(true);
       await s.dark(1, 1.8);
-      await s.say(null, 'You step through. The graveyard is the same, and not. The graves are open. Nothing has ever been buried here; everything has only been waiting.', 4);
+      await s.say(null, 'You step through. The graveyard is the same, and not. The graves are open. Beyond the wall the wood is black and dead, and old ruins stand where there were none. No one lives here. Nothing has for a very long time.', 5);
       await s.voice('Do not stay long. The Dark remembers the shape of anyone who walks in it.', 3.4);
     });
     const go = () => {
       if (busy()) return void story.whenFree(go);
-      story.shades(6, player.pos, 8);
+      mirrorShades = story.shades(6, player.pos, 8).map((u) => ({ u, t: 0, born: 0 }));
       F.mirrorFight = 1;
     };
     go();
   };
-  const mirrorStep = () => {
-    if (F.mirrorFight !== 1 || story.aliveFoes) return;
+  /** this session's shades in the Dark, with how long each has been out of your reach */
+  let mirrorShades: { u: Undead; t: number; born: number }[] = [];
+  const mirrorAbandon = () => {
+    for (const m of mirrorShades) if (m.u.alive) m.u.sink();
+    mirrorShades = [];
+    F.mirrorFight = 0;
+    mirrorBack();
+  };
+  const mirrorStep = (dt: number) => {
+    // A fight from an earlier session (its shades weren't saved): the walk can be made again.
+    if (F.mirrorFight === 1 && !mirrorShades.length) F.mirrorFight = 0;
+    // A shade that can't get to you, and you can't get to (wedged in the ruins, never rose,
+    // fell through the ground), sinks back into the Dark rather than holding the fight open.
+    if (F.mirrorFight === 1) {
+      for (const m of mirrorShades) {
+        if (!m.u.alive) continue;
+        m.born += dt;
+        const d = Math.hypot(m.u.position.x - player.pos.x, m.u.position.z - player.pos.z);
+        const below = heightAt(m.u.position.x, m.u.position.z) - m.u.position.y > 1.5;
+        m.t = d < 4 ? 0 : m.t + dt;
+        if (d > 40 || below || m.t > 25 || (!m.u.lockable && m.born > 20)) m.u.sink();
+      }
+    }
+    // Carried off by a wheel while still in the Dark: you come out of it.
+    if (F.mirrorFight === 2 && story.darkness > 0.5 && !busy() && Math.hypot(player.pos.x - GRAVEWOOD.x, player.pos.z - GRAVEWOOD.y) > 300) story.darkTo(0);
+    if (F.mirrorFight !== 1 || mirrorShades.some((m) => m.u.alive)) return;
+    mirrorShades = [];
     F.mirrorFight = 2;
     void story.play('mirror-out', async (s) => {
       s.bars(true);
       await s.say(null, 'Under the last of them, a voice. Not the one in your head. Older. So tired it is barely a sound at all.', 3.6);
       await s.say('???', '...five...', 2.6);
       await s.say('???', '...they are all so hungry... so hungry for my chair...', 3.6);
-      await s.voice('That was him. The Hollow King. Come away now.', 2.8);
-      await s.dark(0, 1.6);
+      await s.voice('That was him: the Hollow King, the dying king of the Dark.', 3.4);
+      await s.voice('Look around if you must, but do not wander far, and do not stay long. Step back through the wheel when you are done.', 4.4);
     });
     story.note(CH[3], 'You broke the curse on the Gravewood, then stepped through the pedestal\'s wheel into the Dark itself and fought the shades waiting there. Under them, a voice so old and tired it was barely a sound: "they are all so hungry for my chair." The Hollow King.');
     quests.signal('mirror-walked');
+  };
+
+  const mirrorBack = () => {
+    void story.play('mirror-back', async (s) => {
+      s.bars(true);
+      await s.say(null, 'You step back through. Colour comes back into the world, and birdsong, and the smell of grass.', 3.4);
+      await s.dark(0, 1.6);
+    });
   };
 
   // ---- Going into the Gravewood warded (mq-gravewood's optional wards) -------------------------
@@ -595,9 +642,9 @@ export function setupAct1(c: ActCtx) {
         /* (it's day already) */
       } else if (!story.h.test) c.time.skipTo(6);
       await s.fade(0, 1.6);
-      await s.voice('You lived. Good. That is more than my fourth managed, his first year.', 3.6);
+      await s.voice('You lived. Good. My fourth champion didn\'t survive his first year.', 3.6);
       await s.voice('There is an Academy by the sea where they make knights. Go there. Grow teeth.', 3.4);
-      await s.voice('And find out who killed my four. I would very much like to know.', 3.4);
+      await s.voice('And find out who killed my four champions before you. I need to know.', 3.4);
       await s.card('End of Act I', 'The Fifth Summon', '', 3.6);
     });
     const prep = String(F.bellsPrep ?? '').split(',').filter(Boolean);
@@ -634,7 +681,7 @@ export function setupAct1(c: ActCtx) {
       fallStep();
       wardensStep();
       malricStep();
-      mirrorStep();
+      mirrorStep(dt);
       wardStep();
       bellsStep(dt);
       // The lesson at the crypt door: stop before it kills you.

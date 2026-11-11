@@ -107,10 +107,12 @@ export function setupRequests(social: Social, quests: QuestLog, day: () => numbe
   };
 
   // Remake the favours still in play before the journal loads.
-  for (const id of state.open) {
+  // (A favour that can't be remade, say its asker is gone, is dropped.)
+  state.open = state.open.filter((id) => {
     const d = build(id);
     if (d) quests.add(d);
-  }
+    return !!d || quests.defs.has(id);
+  });
 
   /** Before a conversation: someone who likes you may have a favour to ask. */
   const prepare = (who: string) => {
@@ -119,7 +121,7 @@ export function setupRequests(social: Social, quests: QuestLog, day: () => numbe
     const mood = rep.moodOf(who);
     if (MOODS.indexOf(mood) < MOODS.indexOf('neutral')) return;
     // One at a time each, a few at a time in all, and not every day.
-    state.open = state.open.filter((id) => quests.status(id) !== 'done' && (quests.status(id) === 'active' || quests.offers(id.split(':')[1]).some((q) => q.id === id)));
+    state.open = state.open.filter((id) => quests.defs.has(id) && quests.status(id) !== 'done' && (quests.status(id) === 'active' || quests.offers(id.split(':')[1]).some((q) => q.id === id)));
     if (state.open.some((id) => id.split(':')[1] === who)) return;
     if (state.open.filter((id) => quests.isActive(id)).length >= 4) return;
     const wait = mood === 'devoted' || mood === 'friend' ? 1 : mood === 'warm' ? 2 : 3;

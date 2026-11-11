@@ -160,12 +160,12 @@ const food = (id: string, name: string, desc: string, stats: ItemDef['stats'], b
 
 export const PRODUCE_ITEMS: Record<string, ItemDef> = {
   wheat: mat('wheat', 'Wheat Sheaf', 'Golden Elder Glen wheat. The millers and bakers always want more.', sheaf),
-  carrot: food('carrot', 'Carrot', 'Sweet and crunchy. Restores a little health.', { heal: 8 }, carrot),
+  carrot: food('carrot', 'Carrot', 'Sweet and crunchy. Restores a little health, slowly.', { heal: 4 }, carrot),
   cabbage: mat('cabbage', 'Cabbage', 'A dense green head. A cook can do a lot with it.', cabbage),
   pumpkin: mat('pumpkin', 'Pumpkin', 'A fat orange pumpkin. Festival pies need a lot of these.', pumpkin),
-  apple: food('apple', 'Apple', 'A crisp orchard apple. Restores health.', { heal: 12 }, () => apple()),
-  pear: food('pear', 'Pear', 'A ripe yellow pear. Restores health and stamina.', { heal: 12, restoreStamina: 12 }, () => apple(0xd8c64a, true)),
-  milk: food('milk', 'Fresh Milk', 'Still warm from the pasture. Restores stamina and a little health.', { restoreStamina: 40, heal: 8 }, milk),
+  apple: food('apple', 'Apple', 'A crisp orchard apple. Restores a little health, slowly.', { heal: 5 }, () => apple()),
+  pear: food('pear', 'Pear', 'A ripe yellow pear. Restores a little health, slowly, and some stamina.', { heal: 5, restoreStamina: 8 }, () => apple(0xd8c64a, true)),
+  milk: food('milk', 'Fresh Milk', 'Still warm from the pasture. Restores stamina and a little health.', { restoreStamina: 30, heal: 3 }, milk),
   egg: mat('egg', 'Egg', 'A brown hen\'s egg, collected from the coop.', egg),
   wool: mat('wool', 'Raw Wool', 'Shorn from Elder Glen sheep. Tailors spin it into cloth.', wool),
   ironOre: mat('ironOre', 'Iron Ore', 'Rust-streaked rock from the old quarry. A smith can smelt it.', ore),

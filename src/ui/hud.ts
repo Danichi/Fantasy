@@ -72,6 +72,8 @@ export class HUD {
   sideQuestHtml = '';
   private questHtmlShown: string | null = null;
   private xpShown = '';
+  /** the Adventurer's Guild rank, shown as a badge by your level (set by main) */
+  guildRank = '';
   onSlotDrop?: (mode: 'items' | 'moves', slot: number, ref: number | string) => void;
   /** class skills on the moves bar: how to draw one, and its live cooldown (0..1) */
   skillSlot?: (ref: string) => { svg: string; name: string; cost: string; cd: number; ready: boolean } | null;
@@ -429,13 +431,13 @@ export class HUD {
     const xpFor = p.paths.active || DISCIPLINES.find((d) => p.paths.learned(d.id))?.id;
     const need = xpFor ? p.paths.nextCost(xpFor) : 150;
     const ready = pr.xp >= need;
-    const xpKey = `${pr.xp}|${need}|${pr.level}|${pr.gold}`;
+    const xpKey = `${pr.xp}|${need}|${pr.level}|${pr.gold}|${this.guildRank}`;
     if (xpKey !== this.xpShown) {
       this.xpShown = xpKey;
       this.xpFill.style.transform = `scaleX(${Math.min(1, pr.xp / need)})`;
       this.xpBar.classList.toggle('ready', ready);
       this.xpVal.textContent = `${pr.xp.toLocaleString()} XP`;
-      this.lvEl.textContent = `LV ${pr.level}`;
+      this.lvEl.innerHTML = `LV ${pr.level}${this.guildRank ? ` <b class="hud-rank" title="Adventurer's Guild rank">${this.guildRank}</b>` : ''}`;
       this.goldEl.textContent = `${pr.gold}`;
     }
     if (this.boss) {

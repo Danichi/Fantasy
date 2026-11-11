@@ -96,8 +96,8 @@ Attuned wheels show on the world map.
 **Act I, The Fifth Summon (Elder Glen)**
 1. *The Fall* (`mq-fall`): a new game opens at night in the wheat: the card, the voice ("Five."), a rift, shades; Kaela and Brannoc come over the wall as allies; morning, Maud.
 2. *A Stranger in Elder Glen*: help any two of the Glen's troubles (its side quests count), Maud, Orren, then the waystone at the east gate: the voice speaks, and the wheel wakes.
-3. *Lights on the Hill*: the Glen Wardens climb with you and hold the crypt door; Grukk; coming up, **Malric** waits. A choice (defy / ask about the fourth / yield), then a lesson you can't win.
-4. *The Dead Wood*: a rite at the standing stones shows you the Dark; break the curse; step through the pedestal into the Dark mirror and hear the Hollow King.
+3. *Lights on the Hill*: the Glen Wardens climb with you and hold the crypt door; Grukk; coming up, **Malric** waits. A choice (defy / ask about the fourth / yield), then a fight you can't come close to winning. He takes almost nothing from your blows (6%, no flinching) and throws the Iron Below's magic at you (`story/malricMagic.ts`): gravity lifts you 5 m into the air and slams you down, black iron vines burst from the ground and hold you while he closes in, a well of weight drags you to his feet, and a line of iron spikes runs out of the ground at you. After six spells, or when you're nearly beaten, he stops: twenty years ahead of you, and he wants you to know it.
+4. *The Dead Wood*: a rite at the standing stones shows you the Dark; break the curse; step through the pedestal into the Dark mirror and hear the Hollow King. The Dark around the Gravewood (`world/darkRealm.ts`, 230 m) is the same land rotted: dead black trees where the living ones stand, old ruins (a broken keep, a colonnade, a great arch, a fallen giant), a few burned-out shacks, leaning graves, ash falling, and no village, people or animals. You can explore it once the shades fall; its edge turns you back, and the pedestal's wheel takes you home.
 5. *The Night of Bells*: a scripted gloam siege; who fights beside you depends on your reputation; Malric comes and you drive him off.
 
 **Act II, The Academy and the Crown**
@@ -141,3 +141,17 @@ you: they end in their scenes. (`Story.playerFell`, `Story.lesson`.)
 `migrateMainQuest` (story/wiring.ts): old chapters in progress map to the
 nearest new stage; chapters an old story has passed count as done; the wheel
 is awake for anyone past A Stranger in Elder Glen.
+
+## Plain words
+
+The Dawn's voice explains the setup in the prologue in plain terms: it is the
+Dawn, the light that keeps the world safe from the Dark; the Dark is a second
+world under this one, ruled by the dying Hollow King; seven powers want his
+throne, and every twenty years each brings one champion from another world (an
+"age"); the Dawn's four champions so far are dead, and you are its fifth (the
+"Fifth"). The wheel, the ring rite and the Academy archive repeat it as the
+story goes on, each time in ordinary sentences.
+
+Between chapters the next chapter is a main quest in the journal ("New", with
+who to speak to and when they're about), on the tracker and on the compass,
+even when it's someone other than the person who ended the last chapter.

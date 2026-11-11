@@ -215,4 +215,6 @@ export interface Interactable {
   label: () => string;
   enabled: () => boolean;
   action: () => void;
+  /** only within this height of pos.y; unset: any height */
+  level?: number;
 }

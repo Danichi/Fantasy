@@ -54,7 +54,7 @@ export const isRole = (name: string, title?: string) => name === title || ROLE.t
 
 /** Settlements' names as people say them. */
 const TOWN_NAMES: Record<string, string> = {
-  elderGlen: 'Elder Glen', portAurelle: 'Port Aurelle', royalCapital: 'the Capital', wayfarersRest: 'the Wayfarer’s Rest', lanternCamp: 'the Lantern Camp',
+  elderGlen: 'Elder Glen', portAurelle: 'Port Aurelle', royalCapital: 'the Capital', wayfarersRest: 'the Wayfarer’s Rest', lanternCamp: 'the Lantern Camp', millbrookFold: 'Millbrook', chapelOfDawn: 'the Chapel of the Dawn',
   crownOutpost: 'the Crown Outpost', gateMarket: 'the Gate Market', wreckersRest: 'Wrecker’s Rest', herbCamp: 'the herb camp', kingsmile: 'the Kingsmile',
   sunspire: 'Sunspire', 'rl-wayfork': 'the Wayfork', 'rl-toll': 'Halfpenny Bridge', 'rl-hedge': 'Ser Tobin’s camp', 'rl-pilgrims': 'the Pilgrims’ Rest',
   'rl-hermit': 'the South Wood', 'rl-drovers': 'the Drover’s Well', 'rl-refugee': 'the Ashby camp', waystation: 'the Wayfarer’s Rest',

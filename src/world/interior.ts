@@ -143,6 +143,25 @@ export interface Seat {
  */
 export const stationHook: { use?: (kind: string, where: string, bonus: number) => void; label?: (kind: string) => string } = {};
 
+/**
+ * The guild halls' fittings (guild/adventurerGuild.ts, set by main): the Quest
+ * Wall, the Hunt Map table and the Rank Ladder upstairs, the Quartermaster,
+ * and the trophies hung in the hall. `hall` is which chapter's hall it is.
+ */
+export const guildHook: {
+  wall?: (hall: string) => void;
+  map?: (hall: string) => void;
+  ladder?: (hall: string) => void;
+  quartermaster?: (hall: string) => void;
+  /** the wall's look: notices per rank column and bounty posters */
+  board?: (hall: string) => { columns: number[]; bounties: number };
+} = {};
+
+/** Which guild chapter a hall belongs to, from its door. */
+export function hallOf(door: Door) {
+  return /Grand Hall/.test(door.name ?? '') ? 'capital' : door.keeper === 'guildmaster' ? 'port' : 'glen';
+}
+
 export class Interior {
   readonly group = new THREE.Group();
   readonly interactables: Interactable[] = [];
@@ -193,6 +212,9 @@ export class Interior {
       this.grandShell();
       this.spawn = this.at(0, this.D / 2 - 1.6);
       this.furnish();
+    } else if (kind === 'guild') {
+      this.guildHall();
+      this.spawn = this.at(0, this.D / 2 - 1.4);
     } else {
       this.shell();
       this.spawn = this.at(0, this.D / 2 - 1.1);
@@ -1053,6 +1075,147 @@ export class Interior {
   }
 
   // ---- layouts --------------------------------------------------------------------
+  // ---- the guild hall --------------------------------------------------------------
+  /**
+   * Two storeys under one roof. Ground floor: the Quest Wall across the back
+   * (under the gallery), the Registrar's counter on the right, the common room's
+   * long tables and the hearth, the trophy wall. A stair up the left wall to the
+   * gallery: the Hunt Map table, the Rank Ladder, the Quartermaster.
+   */
+  private guildHall() {
+    const { W, D, m } = this;
+    const hall = hallOf(this.door);
+    const GH = 8.2, UP = 3.8, GD = 5.6; // ceiling, gallery floor height, gallery depth
+    const back = -D / 2, front = D / 2, left = -W / 2, right = W / 2;
+    const wallT = 0.4;
+    const stone = m.bridgeStone ?? m.stone;
+    // Floor, stone walls to the gallery, plaster above, a beamed ceiling.
+    this.box(m.planks, W, 0.2, D, 0, -0.1, 0, 0, true);
+    this.box(stone, W + wallT * 2, GH, wallT, 0, GH / 2, back - wallT / 2, 0, true);
+    for (const sx of [-1, 1]) this.box(stone, wallT, GH, D, sx * (W / 2 + wallT / 2), GH / 2, 0, 0, true);
+    const side = (W - 2.6) / 2;
+    for (const sx of [-1, 1]) this.box(stone, side + wallT, GH, wallT, sx * (W / 2 - side / 2 + wallT / 2), GH / 2, front + wallT / 2, 0, true);
+    this.box(stone, 2.6, GH - 3.4, wallT, 0, 3.4 + (GH - 3.4) / 2, front + wallT / 2);
+    for (const sx of [-1, 1]) this.box(m.planks, 1.25, 3.3, 0.1, sx * 0.64, 1.65, front + 0.25, 0, true);
+    this.box(m.planks, W + 1, 0.2, D + 1, 0, GH + 0.1, 0);
+    for (let i = 0; i < 5; i++) this.box(m.timber, W, 0.32, 0.36, 0, GH - 0.25, back + ((i + 0.5) * D) / 5);
+    // Plaster bands above the stone, timber posts in the side walls.
+    for (const sx of [-1, 1]) for (let i = 0; i <= 4; i++) this.box(m.timber, 0.24, GH, 0.3, sx * (W / 2 - 0.05), GH / 2, back + (i * D) / 4);
+    // Tall windows in the side walls.
+    for (const sx of [-1, 1]) for (const f of [-0.15, 0.3]) {
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 2.0), this.windowMat);
+      win.position.set(sx * (W / 2 - 0.02), 2.0, D * f);
+      win.rotation.y = -sx * Math.PI / 2;
+      this.group.add(win);
+      this.box(m.timber, 0.14, 2.2, 1.3, sx * (W / 2 - 0.04), 2.0, D * f);
+      const up = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.4), this.windowMat);
+      up.position.set(sx * (W / 2 - 0.02), UP + 1.9, back + GD / 2);
+      up.rotation.y = -sx * Math.PI / 2;
+      this.group.add(up);
+    }
+
+    // ---- the gallery: a floor over the back, posts, a railing, the stair -------------------
+    const GZ = back + GD; // the gallery's front edge
+    this.box(m.planks, W, 0.3, GD, 0, UP - 0.15, back + GD / 2, 0, true);
+    this.box(m.timber, W, 0.36, 0.3, 0, UP - 0.3, GZ);
+    for (const px of [-W / 2 + 4.2, -2.2, 2.2, W / 2 - 1.2]) this.cyl(m.timber, 0.18, UP, px, UP / 2, GZ - 0.1, true, 8);
+    // The railing (collides, except where the stair arrives on the left).
+    const SX = left + 1.0, SW = 1.6; // stair centre x and width
+    const railFrom = SX + SW / 2 + 0.2;
+    this.box(m.timber, right - railFrom, 0.1, 0.1, (right + railFrom) / 2, UP + 1.0, GZ, 0, true);
+    for (let x = railFrom; x <= right; x += 0.9) this.box(m.timber, 0.07, 1.0, 0.07, x, UP + 0.5, GZ);
+    this.colliders.push(physics.addBox(this.at((right + railFrom) / 2, GZ, UP + 0.55), new THREE.Vector3((right - railFrom) / 2, 0.55, 0.06)));
+    // The stair up the left wall, from the front of the room back to the gallery.
+    const steps = 15, rise = UP / steps, run = 0.42;
+    const z0 = GZ + steps * run; // the bottom step
+    for (let i = 0; i < steps; i++) {
+      const top = (i + 1) * rise;
+      this.box(m.planks, SW, top, run + 0.02, SX, top / 2, z0 - i * run - run / 2, 0, true);
+    }
+    this.box(m.timber, 0.1, 1.0, steps * run, SX + SW / 2 + 0.05, UP / 2 + 0.5, (z0 + GZ) / 2);
+    // (A landing at the top so the stair meets the gallery floor cleanly.)
+    this.box(m.planks, SW, 0.3, 0.8, SX, UP - 0.15, GZ + 0.2, 0, true);
+
+    // ---- ground floor -----------------------------------------------------------------------
+    // The Quest Wall: the back wall under the gallery, notices by rank and the bounty posters.
+    const wallW = W - 5, wallH = 2.9;
+    const look = guildHook.board?.(hall) ?? { columns: [4, 3, 2, 1, 0], bounties: 2 };
+    const tex = questWallTexture(look.columns, look.bounties);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(wallW, wallH), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }));
+    face.position.set(0.9, 0.5 + wallH / 2, back + 0.12);
+    this.group.add(face);
+    this.box(m.timber, wallW + 0.3, 0.2, 0.2, 0.9, 0.5 + wallH + 0.1, back + 0.12);
+    this.box(m.timber, wallW + 0.3, 0.2, 0.2, 0.9, 0.4, back + 0.12);
+    this.interactables.push({ pos: this.at(0.9, back + 1.4, 0.4), radius: 3.2, level: 1.6, label: () => 'Read the Quest Wall', enabled: () => !!guildHook.wall, action: () => guildHook.wall?.(hall) });
+    // Candles along the wall.
+    for (const x of [-wallW / 2 + 1.5, 0.9, wallW / 2 + 0.3]) this.wants.push({ pos: this.at(x, back + 1.2, 2.6), color: 0xffd8a0, intensity: 3, distance: 7, decay: 1.6, fire: false });
+    // The Registrar's counter, on the right, facing the room.
+    this.counter(right - 2.2, back + GD + 2.2, 4.2, Math.PI / 2);
+    this.keeperSpot = { pos: this.at(right - 1.1, back + GD + 2.2), yaw: -Math.PI / 2, seated: false };
+    this.shelf(right - 0.3, back + GD + 0.6, -Math.PI / 2, 1.6, 'books');
+    // The hearth on the right wall towards the front, the trophy wall above it.
+    this.hearth(right - 0.45, front - 3.4, -Math.PI / 2);
+    // The common room: two long tables and their benches.
+    for (const z of [front - 5.2, front - 2.6]) {
+      this.table(-0.6, z, Math.min(W - 7, 5.5), 1.0);
+      this.bench(-0.6, z + 0.8, Math.min(W - 7, 5.2), Math.PI);
+      this.bench(-0.6, z - 0.8, Math.min(W - 7, 5.2), 0);
+      this.seat(-1.6, z + 0.8, Math.PI);
+      this.seat(0.6, z - 0.8, 0);
+      this.seat(-2.4, z - 0.8, 0);
+    }
+    this.barrel(right - 0.7, front - 1.2);
+    this.barrel(right - 1.5, front - 0.9);
+    this.rug(-0.6, front - 3.9, Math.min(W - 6, 7), 4.4);
+    // Guild banners down the side walls.
+    for (const sx of [-1, 1]) for (const f of [-0.02]) {
+      const banner = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2.6), this.cloth[1]);
+      banner.position.set(sx * (W / 2 - 0.12), UP + 2.2, D * f + 1.5);
+      banner.rotation.y = -sx * Math.PI / 2;
+      this.group.add(banner);
+    }
+    // ---- the gallery ------------------------------------------------------------------------
+    const GY = UP;
+    // The Hunt Map: a big table with the painted map of the land on it.
+    const mapTop = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 2.2), new THREE.MeshStandardMaterial({ map: huntMapTexture(), roughness: 0.85 }));
+    mapTop.rotation.x = -Math.PI / 2;
+    mapTop.position.set(0.6, GY + 0.86, back + GD / 2 + 0.2);
+    this.group.add(mapTop);
+    this.box(m.timber, 3.6, 0.1, 2.4, 0.6, GY + 0.8, back + GD / 2 + 0.2);
+    for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) this.box(m.timber, 0.12, 0.78, 0.12, 0.6 + lx * 1.6, GY + 0.39, back + GD / 2 + 0.2 + lz * 1.0);
+    this.colliders.push(physics.addBox(this.at(0.6, back + GD / 2 + 0.2, GY + 0.45), new THREE.Vector3(1.8, 0.45, 1.2)));
+    // Pins on the map: red for what's being hunted.
+    for (let i = 0; i < 7; i++) this.cyl(sharedMats().redHand, 0.04, 0.12, 0.6 + (this.rnd() - 0.5) * 3, GY + 0.92, back + GD / 2 + 0.2 + (this.rnd() - 0.5) * 1.8, false, 6);
+    this.interactables.push({ pos: this.at(0.6, back + GD / 2 + 1.6, GY + 0.4), radius: 2.6, level: 1.6, label: () => 'Study the Hunt Map', enabled: () => !!guildHook.map, action: () => guildHook.map?.(hall) });
+    this.wants.push({ pos: this.at(0.6, back + GD / 2, GY + 2.6), color: 0xffe2b8, intensity: 4, distance: 9, decay: 1.5, fire: false });
+    // The Rank Ladder: a carved board on the back wall above the Quest Wall.
+    const ladder = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 3.2), new THREE.MeshStandardMaterial({ map: rankLadderTexture(), roughness: 0.8 }));
+    ladder.position.set(-3.6, GY + 2.3, back + 0.1);
+    this.group.add(ladder);
+    this.box(m.timber, 4.5, 0.2, 0.18, -3.6, GY + 3.95, back + 0.1);
+    this.interactables.push({ pos: this.at(-3.6, back + 1.3, GY + 0.4), radius: 1.8, level: 1.6, label: () => 'Read the Rank Ladder', enabled: () => !!guildHook.ladder, action: () => guildHook.ladder?.(hall) });
+    // The Quartermaster's counter at the gallery's right end, with racks of guild kit.
+    this.counter(right - 2.0, back + 2.6, 2.6, Math.PI / 2);
+    this.shelf(right - 0.3, back + 1.2, -Math.PI / 2, 1.6, 'weapons');
+    this.interactables.push({ pos: this.at(right - 2.9, back + 2.6, GY + 0.4), radius: 1.8, level: 1.6, label: () => 'Trade Guild Marks with the Quartermaster', enabled: () => !!guildHook.quartermaster, action: () => guildHook.quartermaster?.(hall) });
+    // (Shift what the counters and shelves built at floor level up onto the gallery.)
+    this.raiseOntoGallery(GY, back, back + GD - 0.4, right - 3.6);
+    this.wants.push({ pos: this.at(0, 0, 3.0), color: 0xffe2b8, intensity: 3, distance: Math.max(W, D) * 1.4, decay: 1.6, fire: false });
+  }
+
+  /** The gallery's counter and shelf were built at floor height: lift those meshes (and colliders) onto the gallery. */
+  private raiseOntoGallery(y: number, z0: number, z1: number, x0: number) {
+    for (const o of this.group.children) {
+      const p = o.position;
+      if (p.y < y - 0.5 && p.x > x0 && p.z > z0 && p.z < z1) p.y += y;
+    }
+    for (const c of this.colliders) {
+      const t = c.translation();
+      const lx = t.x - INTERIOR_ORIGIN.x, lz = t.z - INTERIOR_ORIGIN.z, ly = t.y - INTERIOR_ORIGIN.y;
+      if (ly < y - 0.5 && lx > x0 && lz > z0 && lz < z1) c.setTranslation({ x: t.x, y: t.y + y, z: t.z });
+    }
+  }
+
   private furnish() {
     const { W, D, kind } = this;
     const back = -D / 2, left = -W / 2, right = W / 2;
@@ -1125,33 +1288,6 @@ export class Interior {
       this.station('runestone', right - 1.5, back + 3.3, 'the runestone');
       this.inspectProp(left + 1.0, 0.3, 'Inspect the forge', 'An anvil, quench barrel and unfinished blades make it clear this forge is a workplace, not a showroom.');
       this.keeperSpot = { pos: this.at(0.9, back + 2.6), yaw: -Math.PI / 2, seated: false };
-    } else if (kind === 'guild') {
-      this.hearth(left + 0.45, back + D * 0.4, Math.PI / 2);
-      // The quest board on the back wall.
-      this.box(this.m.planks, 2.6, 1.6, 0.1, 0, 1.8, back + 0.08);
-      const paper = new THREE.MeshStandardMaterial({ color: 0xefe4c4, roughness: 1 });
-      for (let i = 0; i < 9; i++) {
-        const p = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.44), paper);
-        p.position.set(-1.0 + (i % 3) * 1.0 + (this.rnd() - 0.5) * 0.2, 1.4 + Math.floor(i / 3) * 0.45, back + 0.14);
-        p.rotation.z = (this.rnd() - 0.5) * 0.15;
-        this.group.add(p);
-      }
-      this.counter(right - 2.2, back + 1.6, 2.6, 0);
-      this.keeperSpot = { pos: this.at(right - 2.2, back + 1.0), yaw: 0, seated: false };
-      for (const z of [back + D * 0.55, back + D * 0.78]) {
-        this.table(-0.4, z, Math.min(W - 4, 4.5), 1.0);
-        this.bench(-0.4, z + 0.8, Math.min(W - 4, 4.2), Math.PI);
-        this.bench(-0.4, z - 0.8, Math.min(W - 4, 4.2), 0);
-        this.seat(-1.2, z + 0.8, Math.PI);
-        this.seat(0.6, z - 0.8, 0);
-      }
-      for (const sx of [-1, 1]) {
-        const banner = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 2.2), this.cloth[0]);
-        banner.position.set(sx * 2.4, 2.0, back + 0.1);
-        this.group.add(banner);
-      }
-      this.table(0, back + D * 0.34, 3.2, 0.9);
-      this.inspectProp(0, back + D * 0.34, 'Inspect the guild map table', 'Pins mark roads, ruins and old contracts across the Glen. Someone has circled the northern hills in fresh charcoal.');
     } else if (kind === 'throne') {
       const g = grandMats(this.m);
       // The long carpet from the door to the dais, and two rows of columns.
@@ -1290,4 +1426,128 @@ export class Interior {
       if (mesh.isMesh) mesh.geometry.dispose();
     });
   }
+}
+
+// ---- the guild hall's painted boards ---------------------------------------------------
+/** The Quest Wall: notices pinned in rank columns (D to S), and wax-sealed bounty posters. */
+function questWallTexture(columns: number[], bounties: number) {
+  const c = document.createElement('canvas');
+  c.width = 1024;
+  c.height = 256;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#4a3220';
+  g.fillRect(0, 0, c.width, c.height);
+  for (let i = 0; i < 14; i++) {
+    g.fillStyle = i % 2 ? 'rgba(0,0,0,.07)' : 'rgba(255,255,255,.03)';
+    g.fillRect(0, i * 19, c.width, 19);
+  }
+  let r = 7;
+  const rnd = () => ((r = (r * 9301 + 49297) % 233280) / 233280);
+  const ranks = ['D', 'C', 'B', 'A', 'S'];
+  const colW = 140;
+  g.textAlign = 'center';
+  ranks.forEach((rk, i) => {
+    const x0 = 20 + i * colW;
+    g.fillStyle = '#d9b15a';
+    g.font = '700 22px Cinzel, serif';
+    g.fillText(rk, x0 + colW / 2 - 10, 26);
+    for (let k = 0; k < Math.min(4, columns[i] ?? 0); k++) {
+      const x = x0 + 12 + rnd() * 20, y = 38 + k * 52 + rnd() * 6, w = 82 + rnd() * 14, h = 46;
+      g.save();
+      g.translate(x + w / 2, y + h / 2);
+      g.rotate((rnd() - 0.5) * 0.12);
+      g.fillStyle = ['#efe3c2', '#f4ead0', '#e8d9b0'][k % 3];
+      g.fillRect(-w / 2, -h / 2, w, h);
+      g.fillStyle = '#5a4a3a';
+      for (let l = 0; l < 4; l++) g.fillRect(-w / 2 + 6, -h / 2 + 8 + l * 9, w - 12 - (l % 2) * 18, 2);
+      g.fillStyle = '#b8402e';
+      g.beginPath(); g.arc(0, -h / 2 + 3, 3.5, 0, 7); g.fill();
+      g.restore();
+    }
+  });
+  // The bounty panel: posters with a face and a red wax seal.
+  const bx = 20 + 5 * colW + 16;
+  g.fillStyle = '#2e1e12';
+  g.fillRect(bx - 8, 8, c.width - bx - 4, c.height - 16);
+  g.fillStyle = '#e8c766';
+  g.font = '700 20px Cinzel, serif';
+  g.fillText('WANTED', bx + (c.width - bx) / 2 - 6, 30);
+  for (let k = 0; k < Math.min(3, bounties); k++) {
+    const x = bx + 10 + k * 88, y = 44, w = 78, h = 112 + (k % 2) * 30;
+    g.fillStyle = '#e6d3a4';
+    g.fillRect(x, y, w, h);
+    g.fillStyle = '#3a2a1a';
+    g.beginPath(); g.ellipse(x + w / 2, y + 42, 18, 22, 0, 0, 7); g.fill();
+    g.fillRect(x + w / 2 - 22, y + 62, 44, 18);
+    for (let l = 0; l < 3; l++) g.fillRect(x + 8, y + 90 + l * 8, w - 16, 2);
+    g.fillStyle = '#9a1a14';
+    g.beginPath(); g.arc(x + w - 14, y + h - 14, 9, 0, 7); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/** The Rank Ladder: carved rungs, a name or two burnt into each. */
+function rankLadderTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 400;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#3a2614';
+  g.fillRect(0, 0, c.width, c.height);
+  g.strokeStyle = '#d9b15a';
+  g.lineWidth = 6;
+  g.strokeRect(6, 6, c.width - 12, c.height - 12);
+  g.fillStyle = '#e8c766';
+  g.font = '700 26px Cinzel, serif';
+  g.textAlign = 'center';
+  g.fillText('THE RANK LADDER', c.width / 2, 40);
+  const ranks = ['SSS', 'SS', 'S', 'A', 'B', 'C', 'D'];
+  ranks.forEach((rk, i) => {
+    const y = 72 + i * 46;
+    g.fillStyle = 'rgba(217,177,90,.25)';
+    g.fillRect(24, y, c.width - 48, 36);
+    g.fillStyle = '#e8c766';
+    g.font = '700 20px Cinzel, serif';
+    g.textAlign = 'left';
+    g.fillText(rk, 36, y + 25);
+    g.fillStyle = 'rgba(240,226,190,.7)';
+    for (let k = 0; k < Math.max(1, i); k++) g.fillRect(110 + k * 70, y + 16, 54, 3);
+  });
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/** The Hunt Map's table top: the land in sepia, hatched mountains and a compass rose. */
+function huntMapTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 332;
+  const g = c.getContext('2d')!;
+  const bg = g.createLinearGradient(0, 0, 0, c.height);
+  bg.addColorStop(0, '#efdcae'); bg.addColorStop(1, '#d6bd87');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, c.width, c.height);
+  let r = 11;
+  const rnd = () => ((r = (r * 9301 + 49297) % 233280) / 233280);
+  g.strokeStyle = 'rgba(90,60,30,.55)';
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(20, 200);
+  for (let i = 0; i < 30; i++) g.lineTo(20 + i * 16, 200 + Math.sin(i * 0.7) * 40 + (rnd() - 0.5) * 20);
+  g.stroke();
+  for (let i = 0; i < 26; i++) {
+    const x = rnd() * c.width, y = rnd() * c.height * 0.6;
+    g.beginPath(); g.moveTo(x - 10, y + 8); g.lineTo(x, y - 8); g.lineTo(x + 10, y + 8); g.stroke();
+  }
+  g.fillStyle = 'rgba(70,104,128,.5)';
+  g.beginPath(); g.ellipse(400, 260, 90, 50, 0.3, 0, 7); g.fill();
+  g.strokeStyle = '#5a4326';
+  g.lineWidth = 6;
+  g.strokeRect(4, 4, c.width - 8, c.height - 8);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }

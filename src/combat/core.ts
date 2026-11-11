@@ -290,6 +290,9 @@ export function behind(t: Target, from: THREE.Vector3) {
   return to.normalize().dot(f) < -0.64;
 }
 
+/** Outside bonuses to every blow, shot and spell (the bestiary's hunting lore). */
+export const strikeHooks: { mult?: (t: Target) => number } = {};
+
 /** Land a blow on a target: crits, damage type, posture, reaction, then the target's own takeHit. */
 export function strike(t: Target, s: StrikeSpec): StrikeResult {
   const st = combatOf(t);
@@ -318,7 +321,7 @@ export function strike(t: Target, s: StrikeSpec): StrikeResult {
   let typeMult = RESIST[armour][s.type] ?? 1;
   if (typeMult < 1 && s.pierce) typeMult += (1 - typeMult) * Math.min(1, s.pierce);
   const roll = s.steady ? 1 : 0.94 + Math.random() * 0.12;
-  const damage = Math.max(1, Math.round(s.base * typeMult * critMult * roll));
+  const damage = Math.max(1, Math.round(s.base * typeMult * critMult * roll * (strikeHooks.mult?.(t) ?? 1)));
 
   // Posture: blunt and counter-hits pile it on.
   let posture = s.posture ?? s.poise * 0.7 + s.base * 0.18;

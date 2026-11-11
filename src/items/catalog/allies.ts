@@ -9,11 +9,15 @@ import type { Player } from '../../player/player';
 // follow you when nothing is near, and fade when their time is up. Foes can't
 // harm them.
 
-export type AllyKind = 'wolf' | 'watchman';
+export type AllyKind = 'wolf' | 'watchman' | 'skeleton' | 'beast' | 'drowned';
 
 const LOOK: Record<AllyKind, { color: number; speed: number; reach: number; cd: number; label: string }> = {
   wolf: { color: 0x9fd0ff, speed: 7.5, reach: 1.7, cd: 0.9, label: 'Spectral Wolf' },
   watchman: { color: 0xffe0a0, speed: 4.6, reach: 2.4, cd: 1.25, label: 'Glen Watchman' },
+  // The classes' summons (paths/roster): the Necromancer's risen dead, the Druid's and Beastmaster's beasts, the Seawitch's drowned.
+  skeleton: { color: 0xc8f0b0, speed: 4.2, reach: 2.0, cd: 1.1, label: 'Risen Dead' },
+  beast: { color: 0x9fe07a, speed: 7, reach: 1.8, cd: 0.95, label: 'Spirit Beast' },
+  drowned: { color: 0x5ad0d8, speed: 4, reach: 2.2, cd: 1.2, label: 'Drowned Sailor' },
 };
 
 function ghost(color: number) {
@@ -94,7 +98,8 @@ export class Ally {
 
   constructor(private scene: THREE.Scene, readonly kind: AllyKind, at: THREE.Vector3, sec: number, readonly dmg: number, private slot: number) {
     this.mat = ghost(LOOK[kind].color);
-    const built = kind === 'wolf' ? wolfModel(this.mat) : watchmanModel(this.mat);
+    const built = kind === 'wolf' || kind === 'beast' ? wolfModel(this.mat) : watchmanModel(this.mat);
+    if (kind === 'beast') built.g.scale.setScalar(1.25);
     this.group = built.g;
     this.legs = built.legs;
     if ('spear' in built) this.arm = [(built as ReturnType<typeof watchmanModel>).spear, (built as ReturnType<typeof watchmanModel>).tip];
@@ -150,7 +155,7 @@ export class Ally {
       this.cd = L.cd;
       this.lunge = 1;
       rt.hit(t, this.dmg, { poise: this.kind === 'wolf' ? 25 : 45, source: 'spell', noVerdict: true, dir: to.lengthSq() > 0 ? to.clone().normalize() : undefined });
-      rt.vfx.burst(t.center.clone(), this.kind === 'wolf' ? 'frost' : 'light', 0.7, 2);
+      rt.vfx.burst(t.center.clone(), ({ wolf: 'frost', watchman: 'light', skeleton: 'shadow', beast: 'nature', drowned: 'frost' } as const)[this.kind], 0.7, 2);
       this.hits++;
     }
     // Animate: legs swing while moving, a lunge on the blow, fade at the end.

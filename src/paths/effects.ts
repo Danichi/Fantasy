@@ -4,6 +4,9 @@ import { DUNGEONEERING_PASSIVES } from '../dungeon/kit/delving';
 import { FIRE_PASSIVES } from './classes/fire.passives';
 import { GALE_PASSIVES, BOUNDARY_PASSIVES, CROSS_PASSIVES } from './classes/sword.passives';
 import { LIGHT_PASSIVES } from './classes/light.passives';
+import { WAR_PASSIVES } from './classes/warbreaker.passives';
+import { KIT_PASSIVES } from './classes/kits.passives';
+import { ROSTER_PASSIVES } from './roster';
 import { CALLING_PASSIVES } from '../crafting/callingPassives';
 
 // What every passive node does. `m` adds to the player's combat modifiers
@@ -106,6 +109,9 @@ export const PASSIVES: Record<string, NodeEffect> = {
   ...GALE_PASSIVES,
   ...BOUNDARY_PASSIVES,
   ...CROSS_PASSIVES,
+  ...WAR_PASSIVES,
+  ...KIT_PASSIVES,
+  ...ROSTER_PASSIVES,
   ...FIRE_PASSIVES,
   // Smithing, Cooking, Tailoring, Runecraft: written in crafting/callingPassives.ts
   ...CALLING_PASSIVES,

@@ -96,6 +96,9 @@ export function fitsTrade(kind: string, d: ItemDef): boolean {
   return true;
 }
 
+/** An item's tier (its own, or from its level). */
+const tierOfItem = (id: string) => { const d = ITEMS[id]; return d.tier ?? (d.lvl ? tierOfLevel(d.lvl) : 1); };
+
 const RAR_PRICE: Record<string, number> = { common: 10, fine: 32, rare: 85, epic: 220, legendary: 600 };
 
 /** What a catalog item costs to buy. */
@@ -299,6 +302,15 @@ export class CatalogSources {
     const luck = 1 + (this.d.gear.fx.luck ?? 0) + lore;
     const roll = (p: number) => Math.random() < p;
     const one = (pool: string[]) => (pool.length ? pool[Math.floor(Math.random() * pool.length)] : null);
+    // Plain pieces far more often than fine ones, rare ones seldom.
+    const GEAR_W = [10, 3, 0.8, 0.25, 0.05];
+    const weighted = (pool: string[]) => {
+      if (!pool.length) return null;
+      const w = pool.map((id) => GEAR_W[RAR_RANK[ITEMS[id].rarity] ?? 0] ?? 0.05);
+      let x = Math.random() * w.reduce((a, b) => a + b, 0);
+      for (let i = 0; i < pool.length; i++) if ((x -= w[i]) <= 0) return pool[i];
+      return pool[pool.length - 1];
+    };
     const drops: string[] = [];
     // Parts of the creature: most kills.
     const parts = withTier(`drop:${fam}`, tier).filter((id) => ITEMS[id].kind === 'material');
@@ -309,7 +321,15 @@ export class CatalogSources {
       ...(ARMED.has(fam) ? withTier('drop:armed', tier, Math.max(1, tier - 1)) : []),
       ...(CASTER.has(fam) ? withTier('drop:caster', tier, Math.max(1, tier - 1)) : []),
     ];
-    if (roll(0.05 * luck)) { const id = one(gearPool); if (id) drops.push(id); }
+    // Rare, and never better than you are ready for: an ordinary foe drops gear
+    // about one kill in sixty, mostly plain pieces, and the rarity is capped by
+    // your level (fine until 8, rare until 20, epic from 32). Named foes have
+    // their own pools above; this is only what a common foe happened to carry.
+    const lvl = this.d.playerLevel();
+    const cap = lvl < 8 ? 1 : lvl < 20 ? 2 : lvl < 32 ? 3 : 4;
+    const myTier = tierOfLevel(Math.max(1, lvl));
+    const fit = gearPool.filter((id) => (RAR_RANK[ITEMS[id].rarity] ?? 0) <= cap && tierOfItem(id) <= myTier + 1);
+    if (lvl >= 3 && roll(0.016 * luck)) { const id = weighted(fit); if (id) drops.push(id); }
     // Draughts and the like.
     if (roll(0.06 * luck)) { const id = one(withTier('drop:any', tier, 1)); if (id) drops.push(id); }
     // A trophy of the hunt (Prospecting's finds help).
