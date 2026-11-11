@@ -1,6 +1,7 @@
 import './creator.css';
 import * as THREE from 'three';
 import { buildCharacter, type Hair } from '../npc/charBuilder';
+import { dressHero } from '../player/heroBody';
 import { addOriginParts, fitHeight, shapeBones, type PartsHandle } from '../npc/charParts';
 import { kitLook } from '../origins/hero';
 import { ORIGINS, ORIGIN_IDS, cleanLook, defaultLook, randomName, type OriginLook } from '../origins/data';
@@ -202,6 +203,7 @@ export class CharacterCreator {
       if (token !== this.token) return;
       const built = await buildCharacter(kitLook(look), ['idle'], { merge: false });
       if (token !== this.token || !this.open) return;
+      dressHero(built.model, kitLook(look));
       const bone = (n: string) => built.bones.get(n);
       shapeBones(bone, look);
       fitHeight(built.model, look.height);

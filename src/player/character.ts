@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { RIG_PROFILES, detectRigFamily, type RigFamily, type RigProfile } from './rigProfile';
 import { buildCharacter, type Look } from '../npc/charBuilder';
+import { dressHero } from './heroBody';
 import { captureRest, retargetClip, MIXAMO_TO_UE } from '../anim/retarget';
 
 // ---------------------------------------------------------------------------
@@ -100,6 +101,8 @@ export class Character {
       // The manifest model is still read for its Mixamo rest pose (the clips' source rig).
       mixamoRest = captureRest(gltf.scene, shortBoneName);
       const hero = await buildCharacter(look, [], { merge: false });
+      // The hero's own body (player/heroBody.ts) on the kit's skeleton.
+      dressHero(hero.model, look);
       this.model = hero.model;
       this.built = true;
     } else {
