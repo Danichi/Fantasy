@@ -61,7 +61,7 @@ function buildMats() {
   const wall = pbr(L, 'castle_brick_07', { color: 0xb5c0bd }, 4, 0.72);
   const floor = pbr(L, 'cobblestone_floor_08', { color: 0xa0aaa7 }, 4, 0.32);
   const ceil = pbr(L, 'rock_face_03', { color: 0x687b82 }, 4, 0.72);
-  const pillar = pbr(L, 'rock_face_03', { color: 0xbac6c2 }, 4, 0.72);
+  const pillar = pbr(L, 'rock_face_03', { color: 0xbac6c2 }, 4, 0.72, 'dungeon_wall');
   for (const m of [wall, pillar]) for (const t of [m.map, m.normalMap, m.roughnessMap]) t?.repeat.set(1.6, 1.6);
   for (const t of [floor.map, floor.normalMap, floor.roughnessMap]) t?.repeat.set(1.5, 1.5);
   const flame = new THREE.SpriteMaterial({ map: glowTex(), color: new THREE.Color(3.5, 1.9, 0.7), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });

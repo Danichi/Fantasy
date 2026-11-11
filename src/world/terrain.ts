@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { MEADOW_FIELD_GLSL } from '../render/palette';
 import { worldNoise } from '../render/noise';
-import { paintedTexture } from '../render/painted';
+import { paintedGround } from '../render/painted';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { fbm } from '../core/math';
 import { physics } from '../physics/physics';
@@ -66,13 +66,27 @@ function terrainMaterial(renderer: THREE.WebGLRenderer, splat: THREE.DataTexture
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
   mat.userData.styleSoftness = 0;
+  // The painted ground kit: cobbles and packed dirt for streets and roads, turf
+  // under the meadows and a rock face for cliffs.
+  const cobble = paintedGround('cobbles', 2.4, aniso), dirt = paintedGround('dirt', 3.2, aniso);
+  const turf = paintedGround('grass', 2.6, aniso), cliff = paintedGround('rock', 5, aniso), litter = paintedGround('forest_floor', 3.4, aniso);
   const uniforms = {
     tSplat: { value: splat },
     uSize: { value: WORLD_SIZE },
     tNoise: { value: worldNoise() },
-    tCobble: { value: paintedTexture('cobbles', aniso, 7) },
-    tDirt: { value: paintedTexture('dirt', aniso, 8) },
-    tCliff: { value: rockDetail(aniso) },
+    tCobble: { value: cobble.map },
+    tDirt: { value: dirt.map },
+    tTurf: { value: turf.map },
+    tCliff: { value: cliff.map },
+    tLitter: { value: litter.map },
+    uLitterS: { value: litter.scale },
+    uLitterMean: { value: litter.mean },
+    uCobbleS: { value: cobble.scale },
+    uDirtS: { value: dirt.scale },
+    uTurfS: { value: turf.scale },
+    uCliffS: { value: cliff.scale },
+    uTurfMean: { value: turf.mean },
+    uCliffMean: { value: cliff.mean },
     tMacro: { value: macroTexture() },
     tMap: { value: paintedMapTexture() },
     uWorld: { value: new THREE.Vector4(WORLD_X0, WORLD_Z0, WORLD_W, WORLD_H) },
@@ -101,7 +115,11 @@ vWN = normal;`);
         `#include <common>
         varying vec3 vWPos;
         varying vec3 vWN;
-        uniform sampler2D tSplat, tNoise, tCobble, tDirt, tMacro, tMap, tRoads, tRoadsW, tCliff;
+        uniform sampler2D tSplat, tNoise, tCobble, tDirt, tMacro, tMap, tRoads, tRoadsW, tCliff, tTurf, tLitter;
+        uniform vec2 uCobbleS, uDirtS, uTurfS, uCliffS, uLitterS;
+        uniform float uTurfMean, uCliffMean, uLitterMean;
+        // Painted leaf litter for the forest floor (1 = none), set before the biomes are coloured.
+        vec3 forestLitter = vec3(1.0);
         uniform vec4 uRoadRect, uRoadRectW, uCityRect, uCap;
         uniform float uSize;
         uniform vec4 uWorld;
@@ -129,7 +147,7 @@ vWN = normal;`);
           if (id == 3 || id == 12) return mix(gNear, gFar, smoothstep(10.0, 70.0, dist)) * mix(0.92, 1.06, fN.b); // meadow, lake shore
           if (id == 4) {                                                                           // forest floor
             vec3 f = mix(vec3(0.07, 0.13, 0.05), vec3(0.12, 0.17, 0.06), pN.r);
-            return mix(f, vec3(0.2, 0.16, 0.09), smoothstep(0.6, 0.8, fN.g) * 0.5);
+            return mix(f, vec3(0.2, 0.16, 0.09), smoothstep(0.6, 0.8, fN.g) * 0.5) * forestLitter;
           }
           if (id == 5) return strata(vec3(0.3, 0.29, 0.28), vec3(0.46, 0.44, 0.41), vWPos.y, fN, pN, dist);
           if (id == 6) return mix(vec3(0.8, 0.85, 0.93), vec3(0.93, 0.95, 0.99), fN.r);             // snow
@@ -157,6 +175,17 @@ vWN = normal;`);
         vec3 gFar = mix(vec3(0.22, 0.4, 0.1), vec3(0.36, 0.43, 0.13), smoothstep(0.55, 0.85, patchN.g));
         vec3 field = meadowTint(vWPos.xz, tNoise);
         gNear *= field; gFar *= field;
+        // Painted turf under the blades: tufts and clover in the ground itself,
+        // so thin or trodden grass still reads as a meadow, not a flat colour.
+        // (Its light and shade, and a little of its hue; the palette stays the field's.)
+        if (dist < 70.0) {
+          float nearK = 1.0 - smoothstep(26.0, 70.0, dist);
+          vec3 turf = texture2D(tTurf, vWPos.xz * uTurfS).rgb / uTurfMean;
+          gNear *= mix(vec3(1.0), mix(vec3(dot(turf, vec3(0.3, 0.55, 0.15))), turf, 0.45), 0.72 * nearK);
+          // Fallen leaves, twigs and moss under the trees (lifted: the forest floor colour is already dark).
+          vec3 lit = texture2D(tLitter, vWPos.xz * uLitterS).rgb / uLitterMean;
+          forestLitter = mix(vec3(1.0), lit * 1.25, 0.85 * nearK);
+        }
 
         // Macro relief: blend the four surrounding 60 m cells, with a noisy
         // offset so the borders wander like painted brush edges.
@@ -213,8 +242,8 @@ vWN = normal;`);
         vec3 col = biome;
         if (localW > 0.001) {
           vec4 sp = texture2D(tSplat, luv);
-          vec3 cD = texture2D(tDirt, vWPos.xz / 3.2).rgb;
-          vec3 cS = texture2D(tCobble, vWPos.xz / 2.4).rgb;
+          vec3 cD = texture2D(tDirt, vWPos.xz * uDirtS).rgb;
+          vec3 cS = texture2D(tCobble, vWPos.xz * uCobbleS).rgb;
           vec3 w = sp.rgb + (fineN.r - 0.5) * 0.35 * vec3(1.0, 1.0, 0.0);
           w = max(w, 0.0);
           w = pow(w, vec3(1.6));
@@ -235,11 +264,11 @@ vWN = normal;`);
           float edge = (fineN.r - 0.5) * 0.45 + (patchN.g - 0.5) * 0.2;
           float wD = smoothstep(0.2, 0.62, rd.r + edge) * outside;
           float wC = smoothstep(0.25, 0.6, rd.g + edge) * outside;
-          vec3 dirtC = texture2D(tDirt, vWPos.xz / 3.2).rgb;
+          vec3 dirtC = texture2D(tDirt, vWPos.xz * uDirtS).rgb;
           // Two wheel ruts along the middle of the dirt.
           dirtC *= mix(1.0, 0.86, smoothstep(0.8, 0.95, rd.r) * (0.5 + 0.5 * sin(fineN.b * 6.0)));
           col = mix(col, dirtC, wD);
-          col = mix(col, texture2D(tCobble, vWPos.xz / 2.4).rgb, wC);
+          col = mix(col, texture2D(tCobble, vWPos.xz * uCobbleS).rgb, wC);
         }
 
         // Wildflowers on meadows: dots in the middle distance, a wash far away.
@@ -261,13 +290,13 @@ vWN = normal;`);
         float tRock = smoothstep(0.3, 0.46, 1.0 - wn.y);
         if (tRock > 0.01) {
           vec3 cR = strata(vec3(0.34, 0.32, 0.3), vec3(0.5, 0.47, 0.42), vWPos.y, fineN, patchN, dist);
-          // Detailed rock up close (the wild look): a real rock face projected on
-          // the cliff from both sides, carried as light and shade on the strata.
+          // Detailed rock up close (the wild look): the painted rock face projected
+          // on the cliff from both sides, carried as light and shade on the strata.
           if (dist < 160.0) {
             vec3 ax = abs(wn);
-            vec3 rx = texture2D(tCliff, vWPos.zy / 5.0).rgb, rz = texture2D(tCliff, vWPos.xy / 5.0).rgb;
+            vec3 rx = texture2D(tCliff, vWPos.zy * uCliffS).rgb, rz = texture2D(tCliff, vWPos.xy * uCliffS).rgb;
             vec3 rt = (rx * ax.x + rz * ax.z) / max(ax.x + ax.z, 1e-3);
-            float detail = clamp(dot(rt, vec3(0.3, 0.55, 0.15)) / 0.42, 0.45, 1.6);
+            float detail = clamp(dot(rt, vec3(0.3, 0.55, 0.15)) / uCliffMean, 0.45, 1.6);
             cR *= mix(1.0, detail, 0.9 * (1.0 - smoothstep(90.0, 160.0, dist)));
           }
           float moss = smoothstep(0.62, 0.75, wn.y + (fineN.r - 0.5) * 0.3) * (1.0 - snowW);
@@ -291,15 +320,6 @@ vWN = normal;`);
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += terrainGlow;');
   };
   return { mat, uniforms };
-}
-
-/** The rock face terrain cliffs carry up close (its light and shade, not its colour). */
-function rockDetail(aniso: number) {
-  const t = new THREE.TextureLoader().load('/assets/textures/rock_face_03_diff_1k.jpg');
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.anisotropy = aniso;
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
 }
 
 // ---- streamed tiles ------------------------------------------------------------

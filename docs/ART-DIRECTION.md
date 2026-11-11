@@ -105,3 +105,13 @@ node tools/views/grid.mjs <name> # 2x2 contact sheet in screenshots/
 ```
 
 Compare against the previous sheet. Judge by eye, not by metrics.
+
+## 11. The painted texture kit
+
+Every wall, roof, beam, street, path, cliff and dungeon surface is hand-painted: no photographs anywhere. The kit lives in `public/assets/textures/painted/` (an albedo and a normal map per surface) and is listed in `src/render/paintedSets.json`. The reference sheets, the rules for adding to it and the roadmap are in `docs/art-bible/README.md`.
+
+- **One look:** soft painterly brushwork, clean readable shapes, flat even light painted in (no cast shadows, no highlights: the game's lighting does that).
+- **Palette first:** a new painting is prompted with the hex colours from §3 and pulled to them with `--tint` if it drifts.
+- **Calm at a distance:** broad stains and blotches are taken out of the tile (`--calm`), because the same stain every two metres reads as wallpaper. Walls get their drift, rain streaks and moss in the shader, in world space.
+- **Direction matters:** wood grain runs along the beam (`beam()` in `src/world/buildings.ts`), and tiles, slates and thatch hang toward the eave.
+- **Adding or changing one:** put the source painting in `assets-src/higgsfield/<name>.png`, add a line to `tools/build-textures.sh`, run it, and look at the 2 × 2 sheet it writes to `docs/art-bible/materials/` before looking in the game.

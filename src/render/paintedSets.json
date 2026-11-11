@@ -1,0 +1,125 @@
+{
+  "bark": {
+    "normal": true,
+    "aspect": 1.2678,
+    "repeat": 1,
+    "color": "#503c2a",
+    "source": "bark.png"
+  },
+  "cobbles": {
+    "normal": true,
+    "aspect": 1.138,
+    "repeat": 1.25,
+    "color": "#878175",
+    "source": "cobbles.png"
+  },
+  "dirt": {
+    "normal": true,
+    "aspect": 0.8716,
+    "repeat": 1,
+    "color": "#b5926b",
+    "source": "dirt.png"
+  },
+  "door": {
+    "decal": true,
+    "normal": true,
+    "glow": false,
+    "aspect": 0.559,
+    "repeat": 1,
+    "color": "#808080",
+    "source": "door.png"
+  },
+  "dungeon_wall": {
+    "normal": true,
+    "aspect": 1.2415,
+    "repeat": 1,
+    "color": "#727077",
+    "source": "dungeon_wall.png"
+  },
+  "flagstones": {
+    "normal": true,
+    "aspect": 1.1748,
+    "repeat": 1,
+    "color": "#726e69",
+    "source": "flagstones.png"
+  },
+  "forest_floor": {
+    "normal": true,
+    "aspect": 1.0437,
+    "repeat": 1,
+    "color": "#443120",
+    "source": "forest_floor.png"
+  },
+  "grass": {
+    "normal": true,
+    "aspect": 0.9814,
+    "repeat": 1,
+    "color": "#5b8f3f",
+    "source": "grass.png"
+  },
+  "planks": {
+    "normal": true,
+    "aspect": 1.0143,
+    "repeat": 1.3,
+    "color": "#94633b",
+    "source": "planks.png"
+  },
+  "plaster": {
+    "normal": true,
+    "aspect": 0.9953,
+    "repeat": 1,
+    "color": "#eddcbf",
+    "source": "plaster.png"
+  },
+  "rock": {
+    "normal": true,
+    "aspect": 1.076,
+    "repeat": 1,
+    "color": "#837b73",
+    "source": "rock.png"
+  },
+  "roof_slate": {
+    "normal": true,
+    "aspect": 1,
+    "repeat": 1,
+    "color": "#5f6b7d",
+    "source": "roof_slate.png"
+  },
+  "roof_tile": {
+    "normal": true,
+    "aspect": 1.0043,
+    "repeat": 1,
+    "color": "#b65b40",
+    "source": "roof_tile.png"
+  },
+  "stone": {
+    "normal": true,
+    "aspect": 1.0137,
+    "repeat": 1,
+    "color": "#a7967d",
+    "source": "stone.png"
+  },
+  "thatch": {
+    "normal": true,
+    "aspect": 0.9818,
+    "repeat": 1,
+    "color": "#a37e47",
+    "source": "thatch.png"
+  },
+  "timber": {
+    "normal": true,
+    "aspect": 0.9405,
+    "repeat": 1,
+    "color": "#65442f",
+    "source": "timber.png"
+  },
+  "window": {
+    "decal": true,
+    "normal": true,
+    "glow": true,
+    "aspect": 1,
+    "repeat": 1,
+    "color": "#808080",
+    "source": "window.png"
+  }
+}

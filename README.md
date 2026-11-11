@@ -112,6 +112,7 @@ npm test             # Playwright; starts Vite if it isn't running
 
 ## Assets and licences
 
-- Textures, HDRI and props come from Poly Haven (CC0).
+- Surface textures are the hand-painted kit in `public/assets/textures/painted/` (generated with Higgsfield, made seamless by `tools/make-texture.mjs`; see `docs/art-bible/README.md`).
+- HDRI and props come from Poly Haven (CC0).
 - Characters: Quaternius character kits (CC0); animations from Mixamo.
 - Swords, shields, armour, slimes, houses and trees are generated in code.

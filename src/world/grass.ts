@@ -61,8 +61,11 @@ function bladeGeometry(rows = [0, 0.3, 0.6, 0.85], blades = 1, spread = 0, seed 
   g.setAttribute('aT', new THREE.Float32BufferAttribute(t, 1));
   // where each blade stands in its tuft (x, z metres) and how it is turned
   g.setAttribute('aTuft', new THREE.Float32BufferAttribute(tuft, 3));
-  // Normals lean up so a field lights evenly, like one soft surface.
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(pos.length / 3).fill([0, 0.9, 0.44]).flat(), 3));
+  // Normals point almost straight up, like the ground the blades stand on: a
+  // field lights as one soft surface. (Leaning them further put every blade
+  // that faced away from a low sun on the shade side of the cel ramp, and a
+  // morning meadow turned into dark triangles scattered on bright ground.)
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(pos.length / 3).fill([0, 0.992, 0.125]).flat(), 3));
   g.setIndex(idx);
   return g;
 }

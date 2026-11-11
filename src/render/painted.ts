@@ -1,11 +1,14 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/math';
+import SETS from './paintedSets.json';
 
-// Painted surface kit (docs/ART-DIRECTION.md §1, §3): soft palette textures
-// drawn in code, replacing the photographic Poly Haven materials. Each one is
-// broad colour variation plus a readable pattern (stone courses, roof rows,
-// planks), no normal maps, so everything shades like a painted surface under
-// the shared stylised lighting.
+// Painted surface kit (docs/ART-DIRECTION.md §1, §3): the hand-painted
+// textures every wall, roof, beam, path and cliff in the world is made of.
+//
+// The paintings live in public/assets/textures/painted (an albedo and a normal
+// map each, made seamless by tools/make-texture.mjs, which also records them
+// in paintedSets.json). A surface without a painting falls back to the simple
+// pattern drawn in code below (PAINT), so a missing file never leaves a hole.
 
 type Ctx = CanvasRenderingContext2D;
 const SIZE = 512;
@@ -209,6 +212,98 @@ export const PAINT = {
   },
 };
 
+/** A painted set as tools/make-texture.mjs recorded it. */
+interface PaintedSet {
+  normal: boolean;
+  /** width / height of what the tile shows, so features keep their shape */
+  aspect: number;
+  /** tiles per material tile (the scale of its features) */
+  repeat: number;
+  /** its average colour */
+  color: string;
+  /** one whole object (a window, a door), not a tiling surface */
+  decal?: boolean;
+  /** it has a mask of its glass (lit windows) */
+  glow?: boolean;
+}
+const KIT = SETS as Record<string, PaintedSet | undefined>;
+const loader = new THREE.TextureLoader();
+const kitCache = new Map<string, THREE.Texture>();
+const kitLoaded = new Map<string, Promise<void>>();
+
+/** One map of a painted set, shared by everything that uses it. */
+function kitTexture(name: string, map: 'albedo' | 'normal' | 'glow', aniso: number) {
+  const key = `${name}_${map}`;
+  let t = kitCache.get(key);
+  if (!t) {
+    const set = KIT[name]!;
+    let done!: () => void;
+    kitLoaded.set(key, new Promise<void>((r) => (done = r)));
+    t = loader.load(`/assets/textures/painted/${key}.webp`, () => done());
+    t.wrapS = t.wrapT = set.decal ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+    if (map === 'albedo') t.colorSpace = THREE.SRGBColorSpace;
+    if (!set.decal) t.repeat.set(set.repeat, set.repeat * set.aspect);
+    kitCache.set(key, t);
+  }
+  t.anisotropy = Math.max(t.anisotropy, aniso);
+  return t;
+}
+
+/**
+ * The same picture as its own texture object (one upload: they share the
+ * image), for a material whose scale the caller sets itself.
+ */
+function kitInstance(name: string, map: 'albedo' | 'normal', aniso: number) {
+  const base = kitTexture(name, map, aniso);
+  const t = new THREE.Texture();
+  t.source = base.source;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = base.colorSpace;
+  t.anisotropy = aniso;
+  t.repeat.copy(base.repeat);
+  void kitLoaded.get(`${name}_${map}`)!.then(() => (t.needsUpdate = true));
+  return t;
+}
+
+/**
+ * A material of its own from the painted kit (dungeon walls, cave rock: one
+ * per use, so its scale and tint are its own). `average` is the colour the
+ * surface should come out on the whole (linear): the painting is tinted to
+ * it and keeps its drawing. Returns null when the kit has no such painting.
+ */
+export function paintedMaterial(name: string, opts: THREE.MeshStandardMaterialParameters = {}, aniso = 4, average?: THREE.Color) {
+  const set = KIT[name];
+  if (!set) return null;
+  const { color, ...rest } = opts;
+  const m = new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0, ...rest, map: kitInstance(name, 'albedo', aniso) });
+  if (set.normal) m.normalMap = kitInstance(name, 'normal', aniso);
+  if (average) {
+    const mean = new THREE.Color(set.color);
+    m.color.setRGB(Math.min(3, average.r / Math.max(mean.r, 0.02)), Math.min(3, average.g / Math.max(mean.g, 0.02)), Math.min(3, average.b / Math.max(mean.b, 0.02)));
+  } else if (color !== undefined) m.color.set(color as THREE.ColorRepresentation);
+  m.userData.styleSoftness = 0;
+  return m;
+}
+
+/**
+ * A whole painted object on a box or a card (a window, a door): the picture
+ * fills each face. `glow` lights its glass from inside (emissive, masked to
+ * the panes); the caller turns emissiveIntensity up at night.
+ */
+export function paintedDecal(name: string, aniso: number, glow?: THREE.ColorRepresentation) {
+  const set = KIT[name];
+  if (!set) return null;
+  const m = new THREE.MeshStandardMaterial({ map: kitTexture(name, 'albedo', aniso), roughness: 0.8, metalness: 0 });
+  if (set.normal) m.normalMap = kitTexture(name, 'normal', aniso);
+  if (glow !== undefined && set.glow) {
+    m.emissive.set(glow);
+    m.emissiveMap = kitTexture(name, 'glow', aniso);
+    m.emissiveIntensity = 0.28;
+  }
+  m.userData.styleSoftness = 0;
+  return m;
+}
+
 export interface PaintedMats {
   stone: THREE.MeshStandardMaterial;
   bridgeStone: THREE.MeshStandardMaterial;
@@ -221,15 +316,46 @@ export interface PaintedMats {
   bark: THREE.MeshStandardMaterial;
 }
 
-/** A painted texture on its own (terrain layers sample these directly). */
-export function paintedTexture(kind: 'cobbles' | 'dirt', aniso: number, seed = 99) {
-  return toTexture(PAINT[kind](mulberry32(seed)), aniso);
+/** A ground surface the terrain samples itself: its picture and how often it repeats per metre. */
+export interface PaintedGround {
+  map: THREE.Texture;
+  /** multiply world metres by this for UVs (x, z) */
+  scale: THREE.Vector2;
+  /** average linear brightness of the picture (to use it as light and shade only) */
+  mean: number;
+}
+
+const FALLBACK_SEED: Record<string, number> = { cobbles: 7, dirt: 8, grass: 9, rock: 10, forest_floor: 11 };
+
+/**
+ * A painted ground texture for the terrain shader. `metres` is how much ground
+ * one tile covers.
+ */
+export function paintedGround(kind: 'cobbles' | 'dirt' | 'grass' | 'rock' | 'forest_floor', metres: number, aniso: number): PaintedGround {
+  const set = KIT[kind];
+  if (set) {
+    const c = new THREE.Color(set.color);
+    return {
+      map: kitTexture(kind, 'albedo', aniso),
+      scale: new THREE.Vector2(set.repeat / metres, (set.repeat * set.aspect) / metres),
+      mean: c.r * 0.3 + c.g * 0.55 + c.b * 0.15,
+    };
+  }
+  const rnd = mulberry32(FALLBACK_SEED[kind]);
+  const canvas = kind === 'cobbles' ? PAINT.cobbles(rnd) : kind === 'rock' ? PAINT.stone(rnd) : PAINT.dirt(rnd);
+  return { map: toTexture(canvas, aniso), scale: new THREE.Vector2(1 / metres, 1 / metres), mean: 0.3 };
 }
 
 export function paintedMaterials(aniso: number): PaintedMats {
   const rnd = mulberry32(4242);
-  const mat = (c: HTMLCanvasElement, roughness = 0.92) => {
-    const m = new THREE.MeshStandardMaterial({ map: toTexture(c, aniso), roughness, metalness: 0 });
+  /** `relief` scales the normal map: how deep the joints and grain read. */
+  const mat = (name: string, fallback: () => HTMLCanvasElement, roughness = 0.92, relief = 1) => {
+    const set = KIT[name];
+    const m = new THREE.MeshStandardMaterial({ map: set ? kitTexture(name, 'albedo', aniso) : toTexture(fallback(), aniso), roughness, metalness: 0 });
+    if (set?.normal) {
+      m.normalMap = kitTexture(name, 'normal', aniso);
+      m.normalScale.setScalar(relief);
+    }
     m.userData.styleSoftness = 0; // already painted
     return m;
   };
@@ -239,15 +365,19 @@ export function paintedMaterials(aniso: number): PaintedMats {
     m.defines = { ...m.defines, STYLE_WEATHER: '', ...(roof ? { STYLE_ROOF: '' } : {}) };
     return m;
   };
+  const stone = weather(mat('stone', () => PAINT.stone(rnd)));
+  // Bridges and quays: the same masonry, a shade paler and cooler.
+  const bridgeStone = weather(mat('stone', () => PAINT.stone(rnd, '#b3ada1')));
+  if (KIT.stone) bridgeStone.color.setRGB(1.06, 1.07, 1.1);
   return {
-    stone: weather(mat(PAINT.stone(rnd))),
-    bridgeStone: weather(mat(PAINT.stone(rnd, '#b3ada1'))),
-    plaster: weather(mat(PAINT.plaster(rnd), 0.96)),
-    timber: weather(mat(PAINT.timber(rnd))),
-    slate: weather(mat(PAINT.roofTiles(rnd, '#566479', '#465266', '#687690'), 0.8), true),
-    tile: weather(mat(PAINT.roofTiles(rnd, '#a4553c', '#874632', '#b86a4d'), 0.85), true),
-    thatch: weather(mat(PAINT.thatch(rnd), 1), true),
-    planks: weather(mat(PAINT.planks(rnd))),
-    bark: mat(PAINT.bark(rnd)),
+    stone,
+    bridgeStone,
+    plaster: weather(mat('plaster', () => PAINT.plaster(rnd), 0.96, 0.6)),
+    timber: weather(mat('timber', () => PAINT.timber(rnd))),
+    slate: weather(mat('roof_slate', () => PAINT.roofTiles(rnd, '#566479', '#465266', '#687690'), 0.8, 1.2), true),
+    tile: weather(mat('roof_tile', () => PAINT.roofTiles(rnd, '#a4553c', '#874632', '#b86a4d'), 0.85, 1.2), true),
+    thatch: weather(mat('thatch', () => PAINT.thatch(rnd), 1, 1.2), true),
+    planks: weather(mat('planks', () => PAINT.planks(rnd))),
+    bark: mat('bark', () => PAINT.bark(rnd), 0.95, 1.2),
   };
 }

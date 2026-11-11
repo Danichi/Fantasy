@@ -2473,6 +2473,7 @@ async function boot() {
       // Shutters barred during a raid: the windows go dark.
       shutters += ((raids.villageIndoors ? 0.1 : 1) - shutters) * Math.min(1, dt * 1.5);
       world.mats.glass instanceof THREE.MeshStandardMaterial && (world.mats.glass.emissiveIntensity = 0.28 + ts.night * 2.4 * shutters);
+      world.mats.windowLit instanceof THREE.MeshStandardMaterial && (world.mats.windowLit.emissiveIntensity = 0.28 + ts.night * 2.4 * shutters);
       world.village.lanternMat.emissiveIntensity = 0.6 + ts.night * 2.6;
       npcs.raining = wp.rain > 0.45;
       if (worldRunning) npcs.update(dt, player.pos, r.camera.position, ts.night);

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { registerDoor, type Door } from './doors';
 import { StaticBatch } from './cityKit';
-import { paintedMaterials } from '../render/painted';
+import { paintedMaterials, paintedMaterial, paintedDecal } from '../render/painted';
 import { buildVillage, type PlacedHouse, type Village } from './village';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -19,7 +19,34 @@ import type { FX } from '../fx/particles';
 
 const TEX = '/assets/textures/';
 
-export function pbr(loader: THREE.TextureLoader, id: string, opts: THREE.MeshStandardMaterialParameters = {}, aniso = 4, desaturate = 0) {
+/**
+ * The photographic sets these surfaces used to be made of, each with the
+ * painting that replaces it and the photo's average colour (linear). Dungeon
+ * and landmark tints were tuned against the photos, so a painting is tinted
+ * to come out the same colour on the whole: the mood stays, the surface is
+ * now hand-painted like the rest of the world (docs/ART-DIRECTION.md §1).
+ */
+const PAINTED: Record<string, [string, number, number, number]> = {
+  castle_brick_07: ['dungeon_wall', 0.188, 0.085, 0.042],
+  cobblestone_floor_08: ['flagstones', 0.298, 0.271, 0.228],
+  rock_face_03: ['rock', 0.23, 0.144, 0.082],
+  weathered_peeling_timber: ['timber', 0.171, 0.148, 0.118],
+  wood_planks_grey: ['planks', 0.062, 0.059, 0.052],
+  white_plaster_rough_01: ['plaster', 0.204, 0.167, 0.097],
+};
+
+/** `painting` picks another painting than the photo's usual stand-in (dressed blocks for a pillar, not a rock face). */
+export function pbr(loader: THREE.TextureLoader, id: string, opts: THREE.MeshStandardMaterialParameters = {}, aniso = 4, desaturate = 0, painting?: string) {
+  const swap = PAINTED[id];
+  if (swap) {
+    // What the photo came out as: its average, greyed as asked, times the tint.
+    const avg = new THREE.Color(swap[1], swap[2], swap[3]);
+    const grey = avg.r * 0.3 + avg.g * 0.55 + avg.b * 0.15;
+    avg.lerp(new THREE.Color(grey, grey, grey), desaturate);
+    if (opts.color !== undefined) avg.multiply(new THREE.Color(opts.color as THREE.ColorRepresentation));
+    const painted = paintedMaterial(painting ?? swap[0], opts, aniso, avg);
+    if (painted) return painted;
+  }
   const load = (m: string, srgb: boolean) => {
     const t = loader.load(`${TEX}${id}_${m}_1k.jpg`);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -194,6 +221,10 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     ...paintedMaterials(aniso),
     // Windows read dark by day with only a faint warm glow.
     glass: new THREE.MeshStandardMaterial({ color: 0x2c3440, emissive: 0xffa040, emissiveIntensity: 0.28, roughness: 0.25, metalness: 0.2 }),
+    // Painted leaded windows (dark, and lit from inside) and plank doors for houses.
+    window: paintedDecal('window', aniso) ?? undefined,
+    windowLit: paintedDecal('window', aniso, 0xffb055) ?? undefined,
+    door: paintedDecal('door', aniso) ?? undefined,
   };
 
   // ---- houses along the northern street -----------------------------------
