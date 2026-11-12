@@ -7,9 +7,11 @@ export type Action =
   | 'sprint' | 'walk' | 'dodge' | 'jump'
   | 'attack' | 'offhand' | 'parry' | 'lockOn' | 'cast' | 'kick'
   | 'inventory' | 'skills' | 'help' | 'toggleBar' | 'interact' | 'map' | 'originAbility'
+  | 'swimUp' | 'swimDown' | 'seaOrders' | 'seaAnchor' | 'seaReef' | 'seaLash' | 'seaMode' | 'seaTrimIn' | 'seaTrimOut' | 'seaCut' | 'seaSpyglass' | 'seaShot' | 'seaRow'
   | 'slot1' | 'slot2' | 'slot3' | 'slot4' | 'slot5' | 'slot6' | 'slot7' | 'slot8';
 
 export const DEFAULT_BINDINGS: Record<Action, string[]> = {
+  swimUp: ['Space'], swimDown: ['KeyC'], seaOrders: ['KeyP'], seaAnchor: ['KeyF'], seaReef: ['KeyR'], seaLash: ['KeyL'], seaMode: ['KeyG'], seaTrimIn: ['KeyZ'], seaTrimOut: ['KeyX'], seaCut: ['KeyO'], seaSpyglass: ['KeyB'], seaShot: ['KeyT'], seaRow: ['KeyC'],
   forward: ['KeyW', 'ArrowUp'],
   back: ['KeyS', 'ArrowDown'],
   left: ['KeyA', 'ArrowLeft'],

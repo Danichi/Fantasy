@@ -1,3 +1,6 @@
+import { segmentBox } from './collision';
+import { rowboat } from '../boats';
+import { seaRandom, seaRuntime } from './runtime';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { physics, groups, G_STATIC } from '../../physics/physics';
@@ -98,6 +101,7 @@ export class Ship {
   readonly group = new THREE.Group();
   private sails: THREE.Object3D[] = [];
   private cannons: THREE.Object3D[] = [];
+  private oars: THREE.Object3D[] = [];
   private model: THREE.Object3D;
   name: string;
   owner: 'player' | 'rental' | 'pirate' | 'npc' = 'player';
@@ -166,6 +170,7 @@ export class Ship {
   private tmpE = new THREE.Euler(0, 0, 0, 'YXZ');
   private lightningT = 8;
   private broachT = 0;
+  stormExposure = 0;
 
   constructor(private scene: THREE.Scene, readonly hull: HullId, public fit: Fit, opts: { name: string; hullColor?: number; trim?: number; sail?: number; flag?: number } = { name: 'Boat' }) {
     this.def = HULLS[hull];
@@ -174,13 +179,15 @@ export class Ship {
     this.sections = [this.stats.hull, this.stats.hull, this.stats.hull];
     this.sailHp = this.stats.sails;
     if (this.def.model === 'skiff') {
-      const s = buildSkiff(opts.hullColor ?? 0x9a6a3e);
+      const s = this.hull === 'rowboat' ? { ...rowboat(), sails: [] } : buildSkiff(opts.hullColor ?? 0x9a6a3e);
       this.model = s.group;
       this.sails = s.sails;
+      this.oars='oars' in s ? s.oars as THREE.Object3D[] : [];
     } else {
       const s = buildShip(this.def.model, opts.hullColor ?? 0x5a3a24, opts.trim ?? 0xc9a25a, { rigged: true, sail: opts.sail, flag: opts.flag });
       this.model = s.group;
       this.sails = s.sails;
+      this.oars='oars' in s ? s.oars as THREE.Object3D[] : [];
     }
     this.group.add(this.model);
     this.buildCannons();
@@ -197,13 +204,15 @@ export class Ship {
     this.group.remove(this.model);
     this.model.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); });
     if (this.def.model === 'skiff') {
-      const s = buildSkiff(hullColor);
+      const s = this.hull === 'rowboat' ? { ...rowboat(), sails: [] } : buildSkiff(hullColor);
       this.model = s.group;
       this.sails = s.sails;
+      this.oars='oars' in s ? s.oars as THREE.Object3D[] : [];
     } else {
       const s = buildShip(this.def.model, hullColor, trim, { rigged: true, sail, flag });
       this.model = s.group;
       this.sails = s.sails;
+      this.oars='oars' in s ? s.oars as THREE.Object3D[] : [];
     }
     this.group.add(this.model);
     this.cannons = [];
@@ -264,6 +273,9 @@ export class Ship {
   sectionOf(local: THREE.Vector3) {
     return local.z > this.length * 0.17 ? 0 : local.z < -this.length * 0.17 ? 2 : 1;
   }
+  sweptHit(a:THREE.Vector3,b:THREE.Vector3,pad=.15) {
+    return segmentBox(this.toLocal(a),this.toLocal(b),new THREE.Vector3(-this.beam*.5-pad,-this.def.draft-1-pad,-this.length*.5-pad),new THREE.Vector3(this.beam*.5+pad,this.def.deckY+2.5+pad,this.length*.5+pad));
+  }
   /** Is a world point inside the hull (cannonballs, rams, bites)? */
   contains(world: THREE.Vector3, pad = 0) {
     const l = this.toLocal(world);
@@ -314,17 +326,23 @@ export class Ship {
     let targetSpeed = this.stats.speed * polar(offWind, irons) * pk.sailDrive * (pressing ? 1.2 : 1) * this.trim * this.sailSet * reef * sailHealth * (0.6 + 0.4 * hands) * windFactor * (1 - this.water * 0.55);
     // Oars for the small boats (and getting out of irons).
     if (ctl.row && (this.hull === 'skiff' || this.hull === 'sloop')) targetSpeed = Math.max(targetSpeed, (this.hull === 'skiff' ? 2.2 : 1.4) * ctl.row);
+    if (this.hull === 'rowboat') targetSpeed = ctl.sail * this.stats.speed;
+    if (opts.assisted && offWind < irons && this.sailSet > 0.05 && (this.hull === 'skiff' || this.hull === 'sloop')) targetSpeed = Math.max(targetSpeed, 1.25 * this.sailSet);
     if (this.anchored || this.capsized) targetSpeed = 0;
 
+    // A storm builds over several seconds, matching its visual approach.
+    const incomingStorm=Math.max(SEA.storm,cellStormAt(this.pos.x,this.pos.z));
+    this.stormExposure += (incomingStorm-this.stormExposure)*Math.min(1,dt*.15);
+    const localStorm=this.stormExposure;
     // ---- the sea under the hull ----
     const pts = [[0, L * 0.42], [0, -L * 0.42], [B * 0.45, 0], [-B * 0.45, 0]].map(([lx, lz]) => {
       const x = this.pos.x + right.x * -lx + heading.x * lz;
       const z = this.pos.z + right.y * -lx + heading.y * lz;
-      const s = waveAt(x, z);
+      const s = waveAt(x, z, SEA.t, SEA.amp, localStorm);
       return { y: s.y, dx: s.dx, dz: s.dz };
     });
     const [bow, stern, port, star] = pts;
-    const localStorm = Math.max(SEA.storm, cellStormAt(this.pos.x, this.pos.z));
+
     const H = waveHeight(SEA.amp, localStorm);
     const sea = this.stats.seaworthy * (1 + opts.skill * 0.35);
     // How far beyond the hull's comfort the sea is (0 = fine, 1 = twice what it can take).
@@ -368,7 +386,7 @@ export class Ship {
         const crash = w.speed > 7.5 && !this.reefed && this.sailSet > 0.6 && Math.abs(this.yawRate) > 0.12;
         if (crash) {
           this.sailHp = Math.max(0, this.sailHp - this.stats.sails * 0.07);
-          if (this.def.capsize) this.knock += (Math.random() < 0.5 ? -1 : 1) * 0.45;
+          if (this.def.capsize) this.knock += (seaRandom() < 0.5 ? -1 : 1) * 0.45;
         }
         this.onEvent?.('jibe', crash ? 1 : 0);
       }
@@ -383,12 +401,12 @@ export class Ship {
 
     // ---- steering ----
     const steer = Math.max(0.2, Math.min(1.1, 0.25 + Math.abs(this.speed) / this.stats.speed));
-    const wantYawRate = -ctl.rudder * this.stats.turn * steer * pk.turn;
-    this.yawRate += (wantYawRate - this.yawRate) * Math.min(1, dt * 2.5);
+    const wantYawRate = -ctl.rudder * this.stats.turn * steer * pk.turn * (opts.assisted ? 1.18 : 1);
+    this.yawRate += (wantYawRate - this.yawRate) * Math.min(1, dt * 4);
     this.yaw += (this.yawRate + this.kick) * dt;
 
     // ---- speed, leeway, storm drift ----
-    const accel = this.def.accel * (targetSpeed > this.speed ? 1 : 1.6);
+    const accel = this.def.accel * (targetSpeed > this.speed ? 1.45 : 2.8);
     this.speed += (targetSpeed - this.speed) * Math.min(1, accel * dt * 0.5);
     const leeway = (offWind < 70 ? 0.12 : 0.05) * this.stats.leeway * this.sailSet;
     const sideTarget = this.speed * leeway * -windSide;
@@ -400,8 +418,8 @@ export class Ship {
     const cur = currentAt(this.pos.x, this.pos.z);
     this.currentSpeed = Math.hypot(cur.x, cur.z) * pk.current;
     this.currentId = cur.id;
-    const vx = heading.x * this.speed + right.x * this.side + SEA.windDir.x * drift + cur.x * pk.current;
-    const vz = heading.y * this.speed + right.y * this.side + SEA.windDir.y * drift + cur.z * pk.current;
+    const vx = this.anchored ? (localStorm>.7?SEA.windDir.x*drift*.08:0) : heading.x * this.speed + right.x * this.side + SEA.windDir.x * drift + cur.x * pk.current;
+    const vz = this.anchored ? (localStorm>.7?SEA.windDir.y*drift*.08:0) : heading.y * this.speed + right.y * this.side + SEA.windDir.y * drift + cur.z * pk.current;
 
     // ---- shallows and shore ----
     const nx = this.pos.x + vx * dt, nz = this.pos.z + vz * dt;
@@ -409,7 +427,8 @@ export class Ship {
     const depthBow = SEA_LEVEL - heightAt(bowX, bowZ);
     const depthMid = SEA_LEVEL - heightAt(nx, nz);
     this.grounded = false;
-    if (depthBow < 0.3 || depthMid < this.def.draft * 0.6) {
+    const keelDepth=Math.min(depthBow,depthMid,...[[-B*.4,L*.32],[B*.4,L*.32],[-B*.4,-L*.4],[B*.4,-L*.4]].map(([x,z])=>SEA_LEVEL-heightAt(nx+Math.cos(this.yaw)*x+heading.x*z,nz-Math.sin(this.yaw)*x+heading.y*z)));
+    if (keelDepth < this.def.draft * .7) {
       // Run aground: stop, a shudder, and damage by how fast you hit.
       if (Math.abs(this.speed) > 1.2) {
         this.damage(0, Math.abs(this.speed) * this.stats.hull * 0.035 * pk.groundDmg);
@@ -447,9 +466,9 @@ export class Ship {
       const big = (localStorm > 0.3 ? STORM_WAVES[0] : BASE_WAVES[0]);
       const wd = new THREE.Vector2(big[0], big[1]).normalize();
       const beamOn = 1 - Math.abs(heading.dot(wd));
-      if (beamOn > 0.7 && Math.random() < dt * this.thrown * 0.6 * (1 - opts.skill * 0.5)) {
+      if (beamOn > 0.7 && seaRandom() < dt * this.thrown * 0.6 * (1 - opts.skill * 0.5)) {
         this.broachT = 6;
-        this.knock = (Math.random() < 0.5 ? -1 : 1) * Math.min(1.2, 0.5 + this.thrown * 0.5);
+        this.knock = (seaRandom() < 0.5 ? -1 : 1) * Math.min(1.2, 0.5 + this.thrown * 0.5);
         this.water = Math.min(1, this.water + 0.08 + this.thrown * 0.06);
         this.damage(1, this.stats.hull * 0.06);
         this.onEvent?.('broach', this.thrown);
@@ -457,7 +476,7 @@ export class Ship {
     }
     // Pitchpoling: running too fast down a steep sea buries the bow: small boats somersault,
     // big ones bury their bow and ship it green. (Reef, or slow down, when you're surfing.)
-    if (this.thrown > 0.4 && offWind > 140 && this.pitch < -0.3 && this.speed > this.stats.speed * 0.75 && Math.random() < dt * 0.5) {
+    if (this.thrown > 0.4 && offWind > 140 && this.pitch < -0.3 && this.speed > this.stats.speed * 0.75 && seaRandom() < dt * 0.5) {
       if (this.def.capsize) {
         this.capsized = true;
         this.sailSet = 0;
@@ -478,7 +497,7 @@ export class Ship {
     // ---- water in the hold ----
     const leaks = this.sections.reduce((a, h) => a + (1 - h / this.stats.hull), 0) * 0.018;
     const seas = this.thrown * 0.022 + (this.pitch < -0.22 && this.speed > 3 ? 0.03 : 0); // green water over the bow
-    if (this.pitch < -0.28 && this.speed > 4 && Math.random() < dt * 0.3) this.onEvent?.('greenWater');
+    if (this.pitch < -0.28 && this.speed > 4 && seaRandom() < dt * 0.3) this.onEvent?.('greenWater');
     // past the point of no return the pumps can't keep up: she's awash
     const pumps = this.water >= 0.97 ? 0 : 0.012 * this.stats.pump * (1 + this.pumping * 0.8 + Math.min(this.crew, 3) * 0.25);
     this.water = Math.max(0, Math.min(1, this.water + (leaks + seas - pumps) * dt));
@@ -501,8 +520,8 @@ export class Ship {
     if (localStorm > 0.5) {
       this.lightningT -= dt;
       if (this.lightningT <= 0) {
-        this.lightningT = 25 + Math.random() * 50;
-        if (Math.random() < localStorm * 0.45) {
+        this.lightningT = 25 + seaRandom() * 50;
+        if (seaRandom() < localStorm * 0.45) {
           this.sailHp = Math.max(0, this.sailHp - this.stats.sails * 0.3);
           this.damage(1, this.stats.hull * 0.05);
           this.onEvent?.('lightning');
@@ -523,7 +542,7 @@ export class Ship {
     const meet = -heading.dot(from); // 1 = meeting it bow-on
     const beam = 1 - Math.abs(meet);
     if (beam > 0.55) {
-      this.knock = (Math.random() < 0.5 ? -1 : 1) * Math.min(1.4, 0.6 + size * 0.15);
+      this.knock = (seaRandom() < 0.5 ? -1 : 1) * Math.min(1.4, 0.6 + size * 0.15);
       this.water = Math.min(1, this.water + 0.1 + size * 0.025);
       this.damage(1, this.stats.hull * 0.08 * size * 0.3);
       if (this.def.capsize) { this.capsized = true; this.sailSet = 0; }
@@ -539,6 +558,7 @@ export class Ship {
 
   /** Put the model and the deck where the ship is. */
   place() {
+    for(const [i,o]of this.oars.entries()){const stroke=seaRuntime.time*(2.2+Math.abs(this.speed)*.4);o.rotation.y=Math.sin(stroke)*.5*(i?-1:1)*Math.min(1,Math.abs(this.speed));o.rotation.z=(Math.cos(stroke)*.25-.15)*(i?-1:1);}
     const capsizeRoll = this.capsized ? 1.9 : 0;
     this.prevFrame.copy(this.frame);
     this.tmpE.set(-this.pitch * 0.85, this.yaw, this.roll * 0.8 + this.heel + this.knock + capsizeRoll, 'YXZ');
@@ -611,7 +631,7 @@ export class Ship {
   /** Is a world point standing on this deck (feet within the rails, near deck height)? */
   onDeck(world: THREE.Vector3) {
     const l = this.toLocal(world);
-    return Math.abs(l.x) < this.beam * 0.46 && Math.abs(l.z) < this.length * 0.42 && l.y > this.def.deckY - 1.2 && l.y < this.def.deckY + 2.2;
+    return Math.abs(l.x) < this.beam * 0.5 + 0.2 && Math.abs(l.z) < this.length * 0.45 + 0.3 && l.y > this.def.deckY - 1.2 && l.y < this.def.deckY + 2.2;
   }
 
   /** How the deck moved since the last frame: apply to whatever stands on it. */

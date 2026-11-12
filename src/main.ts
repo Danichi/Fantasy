@@ -1100,6 +1100,11 @@ async function boot() {
     openMap: () => book.show('map'),
     wants: (id) => quests.wants(id),
     dismount: () => { if (player.mounted) horses.dismount(); },
+    fish: spot => fishing.start(spot),
+    enterCabin: ship => {
+      const door:Door={pos:ship.pos.clone(),yaw:ship.yaw,kind:'cabin',name:`Cabin of the ${ship.name}`,spec:{w:10,d:12,floors:1,roof:'tile',seed:4152},returnTo:()=>{sailing.leaveCabin();return{pos:player.pos.clone(),yaw:ship.yaw};}};
+      void realm.enterInterior(door,'cabin',world.mats,spells);
+    },
   });
   sailing.fromJSON(saveData?.world?.sailing);
   realm.overworldInteractables.push(...sailing.interactables);
@@ -1114,22 +1119,14 @@ async function boot() {
   // Sea quests put ships and monsters on the water while their stage is current.
   for (const [hook, tag] of [['sea:serpentHunt', 'serpentHunt'], ['sea:btScout', 'btScout'], ['sea:btFlag', 'btFlag']] as const) quests.hooks.set(hook, () => sailing.story.add(tag));
   for (const c of HARBOUR_SAILORS) folkServices.set(c.id, (show, back) => sailing.sailorOptions(c.id, show, back));
+  boats.onLaunch = (at,yaw)=>sailing.launchRowboat(at,yaw);
   boats.onFish = (spot) => fishing.start(spot);
   realm.overworldInteractables.push(...boats.interactables);
   folkServices.set('mira', (show, back) => [
     ...sailing.miraOptions(show, back),
     { label: 'Buy a fishing rod — 20g', run: () => { if (player.prog.gold >= 20) { player.prog.addGold(-20); giveItem('fishingRod', 1); } dialogue.close(); } },
-    {
-      label: 'Hire a rowing boat — 5g',
-      run: () => {
-        if (player.prog.gold < 5) return dialogue.close();
-        player.prog.addGold(-5);
-        dialogue.close();
-        if (player.mounted) horses.dismount();
-        boats.launch(new THREE.Vector3(2998, 0, 292), Math.PI / 2);
-        hud.toast('WASD to row, Shift to pull hard. E near land to step ashore; E in deep water to fish.');
-      },
-    },
+    {label:'Hire a rowing boat — 5g',run:()=>sailing.hireRowboat()},
+    {label:'Sailing guide, training and coastal work',run:()=>sailing.openOrders()},
   ]);
   folkServices.set('ragna', () => [{ label: 'Browse Port steel', run: () => shop('ragna', 'Aurelle-folded steel. Heavier purse, lighter grave.', withArms('ragna', [['knightSword', 110], ['kiteShield', 90], ['armingSword', 55], ['roundShield', 50]])) }]);
   folkServices.set('quill', () => [{ label: 'Browse fine draughts', run: () => shop('quill', 'Twice the strength of a village draught. Half the taste.', withArms('quill', [['healthPotion', 18], ['manaPotion', 22], ['greaterHealthPotion', 55], ['greaterManaPotion', 60]])) }]);
@@ -1470,6 +1467,11 @@ async function boot() {
   realm.onInterior = (it) => {
     const extras: Interactable[] = [];
     portLife.interior(it,extras);
+    if(it.kind==='cabin') {
+      if(it.spots.cabinChart)extras.push({pos:it.spots.cabinChart.pos,radius:1.8,label:()=> 'Read the ship’s charts and voyage log',enabled:()=>true,action:()=>sailing.openOrders()});
+      if(it.spots.cabinChest)extras.push({pos:it.spots.cabinChest.pos,radius:1.8,label:()=> 'Open the cargo and crew ledger',enabled:()=>true,action:()=>sailing.openCabin()});
+      if(it.spots.cabinBunk)extras.push({pos:it.spots.cabinBunk.pos,radius:1.8,label:()=> 'Rest in the captain’s bunk',enabled:()=>true,action:()=>sailing.restInCabin()});
+    }
     it.setDaylight(1 - time.state.night);
     const keeper = it.door.keeper==='aurelle-factor'&&quests.isDone('aurelle-false-lights')?(quests.flag('aurelle-false-lights','warehouse')==='families'?'aurelle-cook':'mira'):it.door.keeper;
     const spot = it.keeperSpot;
@@ -2356,6 +2358,7 @@ async function boot() {
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
   migrateMainQuest(saveData?.world?.quests, !!saveData?.world?.story);
   quests.fromJSON(saveData?.world?.quests);
+  sailing.restoreVoyage();
   // ---- Origins (feat/origins): passives, Renown, legendary abilities, flight, NPC reactions ----
   const origins = wireOrigins({ player, skillRt, fx, scene: r.scene, input, cam, hud, dialogue, shopUI, quests, realm, time, weather, gravewood, foraging });
   events.on('mapRevealed', () => worldMap.markFogDirty());
@@ -2661,14 +2664,14 @@ async function boot() {
       else book.show('bestiary');
     }
     if (input.wasPressed('help')) overlays.toggleHelp();
-    if (input.wasPressed('toggleBar')) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
+    if (input.wasPressed('toggleBar') && !sailing.atHelm) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
     if (input.wasPressed('map')) {
       if (realm.mode === 'dungeon') mapUI.toggle();
       else if (realm.mode === 'interior') hud.toast('Step outside to read the map.');
       else worldMap.toggle();
     }
-    slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
-    if (realm.mode === 'overworld') sailing.preStep(STEP);
+    if(!sailing.atHelm && !player.swimming) slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
+    if (realm.mode === 'overworld') { updateSea(STEP,player.pos,weather.p); sailing.preStep(STEP); }
     player.update(STEP, input, cam);
     combat.tick(STEP); // posture, poise and wind-ups of everything that fights (combat/core.ts)
     director.tick(STEP, player); // attack turns (combat/ai.ts)
@@ -2676,9 +2679,9 @@ async function boot() {
     gearRt.update(STEP); // the item catalog's gear effects (items/catalog)
     arms.update(STEP, input); // Arms and Crafting (feat/arms)
     herbalism.update(STEP);
-    if (input.pressedKey('KeyO')) (herbalism.isOpen ? herbalism.ui.close() : herbalism.openCodex());
+    if (input.pressedKey('KeyO') && !sailing.aboard && !player.swimming) (herbalism.isOpen ? herbalism.ui.close() : herbalism.openCodex());
     // B on land: brew from the Herbalist's Satchel (B is the spyglass only when aboard).
-    if (input.pressedKey('KeyB') && !sailing.aboard && herbalism.count('herbalistSatchel') > 0) herbalism.openField();
+    if (input.pressedKey('KeyB') && !sailing.aboard && !player.swimming && herbalism.count('herbalistSatchel') > 0) herbalism.openField();
     origins.update(STEP); // ---- Origins (feat/origins) ----
     lanternSoul(); // (Lightbinder's field ability: in the dark, above and below ground)
     if (realm.mode === 'overworld') {
@@ -2805,7 +2808,7 @@ async function boot() {
     ground.update(r.camera.position);
     grass.update(dt, r.camera.position, renderPos);
     ambient.update(dt, r.camera.position, now / 1000);
-    updateSea(dt, r.camera.position, weather.p);
+    // Sea simulation advances on the fixed step; rendering reads the same clock.
     ocean.update(dt, r.camera.position);
     // Time of day and weather drive the sky, light, water, grass and sound.
     const worldRunning = !(paused || overlayUp || mapUI.open || worldMap.open || questUI.open);
@@ -2882,7 +2885,7 @@ async function boot() {
       }
       questUI.update(player.pos);
       bestiaryTick(dt);
-      sailing.frame(dt);
+      // Sailing HUD is updated below for swimming indoors as well.
       folkTalk.npc = npcs.nearest(player.pos);
       if (folkTalk.npc) folkTalk.pos.copy(folkTalk.npc.pos);
       else folkTalk.pos.set(0, -999, 0);
@@ -2904,6 +2907,7 @@ async function boot() {
     if (realm.mode === 'overworld') stylizedNature.update(dt, r.camera.position, player.pos);
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
+    sailing.frame(dt);
     herbalism.frame(dt);
     book.update();
     mapUI.update();

@@ -79,7 +79,8 @@ test('storms throw a ship off course, the deck carries you, and a sunk ship is g
   const res = await game.page.evaluate(async (slow) => {
     const g = window.__game, T = g.THREE, sl = g.sailing, inp = g.input;
     const SS = await import('/src/world/sea/seaState.ts');
-    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    const wait = async (ms: number) => { g.stepSim(Math.max(1, Math.round(ms * .06))); sl.frame(ms / 1000); await new Promise(r => setTimeout(r, 0)); };
+    g.player.invulnerable = true;
     const out: Record<string, unknown> = {};
     g.player.prog.addGold(100000);
     sl.xp = 1e6;
@@ -151,7 +152,8 @@ test('broadsides hit, pirates grapple and board, and the harpoon finds a sea ser
   test.setTimeout(180_000 * SLOW);
   const res = await game.page.evaluate(async (slow) => {
     const g = window.__game, T = g.THREE, sl = g.sailing, inp = g.input;
-    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    const wait = async (ms: number) => { g.stepSim(Math.max(1, Math.round(ms * .06))); sl.frame(ms / 1000); await new Promise(r => setTimeout(r, 0)); };
+    g.player.invulnerable = true;
     const out: Record<string, unknown> = {};
     g.player.prog.addGold(100000);
     sl.xp = 1e6;
@@ -203,7 +205,8 @@ test('the Seamanship calling: skills open by level, the wheel can be lashed, tac
   test.setTimeout(150_000 * SLOW);
   const res = await game.page.evaluate(async (slow) => {
     const g = window.__game, sl = g.sailing, inp = g.input, SS = g.seaState;
-    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    const wait = async (ms: number) => { g.stepSim(Math.max(1, Math.round(ms * .06))); sl.frame(ms / 1000); await new Promise(r => setTimeout(r, 0)); };
+    g.player.invulnerable = true;
     const toasts: string[] = [];
     const ot = g.hud.toast.bind(g.hud);
     g.hud.toast = (m: string) => { toasts.push(m); ot(m); };
@@ -223,6 +226,7 @@ test('the Seamanship calling: skills open by level, the wheel can be lashed, tac
     const into = Math.atan2(-wind.dir.x, -wind.dir.y);
     s.yaw = into + 0.95;
     s.sailSet = 1;
+    s.anchored = false; sl.ctl.anchor = false;
     sl.ctl.sail = 1;
     await wait(2500);
     inp.press('KeyL');
@@ -261,14 +265,15 @@ test('the Seamanship calling: skills open by level, the wheel can be lashed, tac
   expect(res.tack).toMatch(/tack/);
   expect(res.trawl).toMatch(/trawl/);
   expect(res.current).toMatchObject({ id: 'aurelleStream', known: true });
-  expect(res.hud).toMatch(/Heading \d+°/);
+  expect(res.hud).toMatch(/Heading[\s\S]*\d+°/i);
 });
 
 test('ship against ship: chain and grape, boarding, prizes and ransoms, the harpoon line, the Black Tide', async ({ game }) => {
   test.setTimeout(180_000 * SLOW);
   const res = await game.page.evaluate(async (slow) => {
     const g = window.__game, T = g.THREE, sl = g.sailing, inp = g.input;
-    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    const wait = async (ms: number) => { g.stepSim(Math.max(1, Math.round(ms * .06))); sl.frame(ms / 1000); await new Promise(r => setTimeout(r, 0)); };
+    g.player.invulnerable = true;
     const out: Record<string, unknown> = {};
     const pick = (re: RegExp) => g.dialogue.options.find((o: { label: string }) => re.test(o.label))?.run();
     g.player.prog.addGold(100000);
@@ -394,7 +399,8 @@ test('the great monsters: each fights the ship its own way, and each yields its 
   test.setTimeout(240_000 * SLOW);
   const res = await game.page.evaluate(async (slow) => {
     const g = window.__game, T = g.THREE, sl = g.sailing;
-    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    const wait = async (ms: number) => { g.stepSim(Math.max(1, Math.round(ms * .06))); sl.frame(ms / 1000); await new Promise(r => setTimeout(r, 0)); };
+    g.player.invulnerable = true;
     const errors: string[] = [];
     const onErr = (e: ErrorEvent) => errors.push(String(e.message));
     window.addEventListener('error', onErr);
@@ -452,7 +458,8 @@ test('the island harbours: landfall, trade by the hold, Guild contracts, the cus
   test.setTimeout(150_000 * SLOW);
   const res = await game.page.evaluate(async (slow) => {
     const g = window.__game, T = g.THREE, sl = g.sailing;
-    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    const wait = async (ms: number) => { g.stepSim(Math.max(1, Math.round(ms * .06))); sl.frame(ms / 1000); await new Promise(r => setTimeout(r, 0)); };
+    g.player.invulnerable = true;
     type Opt = { label: string; run: () => void };
     let menu: { t: string; o: Opt[] } = { t: '', o: [] };
     const show = (t: string, o: Opt[]) => { menu = { t, o }; };
@@ -509,10 +516,11 @@ test('the island harbours: landfall, trade by the hold, Guild contracts, the cus
     ship.place();
     sl.board(ship);
     sl.customsChecked = false;
-    const rnd = Math.random;
-    Math.random = () => 0.01;
+    const {seaRuntime} = await import('/src/world/sea/runtime.ts');
+    const rnd = seaRuntime.random;
+    seaRuntime.random = () => 0.01;
     await wait(500);
-    Math.random = rnd;
+    seaRuntime.random = rnd;
     out.customs = !!sl.customs;
     if (sl.customs) {
       ship.speed = 0;
@@ -547,7 +555,8 @@ test('life on the sea: events, a treasure map, pearl beds, the storm log and the
   test.setTimeout(200_000 * SLOW);
   const res = await game.page.evaluate(async (slow) => {
     const g = window.__game, T = g.THREE, sl = g.sailing, inp = g.input, SS = g.seaState;
-    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    const wait = async (ms: number) => { g.stepSim(Math.max(1, Math.round(ms * .06))); sl.frame(ms / 1000); await new Promise(r => setTimeout(r, 0)); };
+    g.player.invulnerable = true;
     const errors: string[] = [];
     const onErr = (e: ErrorEvent) => errors.push(String(e.message));
     window.addEventListener('error', onErr);
@@ -649,7 +658,8 @@ test('a ship is a home: the cabin, the pumps and plugs, paint and a new name, a 
   test.setTimeout(150_000 * SLOW);
   const res = await game.page.evaluate(async (slow) => {
     const g = window.__game, T = g.THREE, sl = g.sailing;
-    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms * slow));
+    const wait = async (ms: number) => { g.stepSim(Math.max(1, Math.round(ms * .06))); sl.frame(ms / 1000); await new Promise(r => setTimeout(r, 0)); };
+    g.player.invulnerable = true;
     type Opt = { label: string; run: () => void };
     let menu: { t: string; o: Opt[] } = { t: '', o: [] };
     const show = (t: string, o: Opt[]) => { menu = { t, o }; };

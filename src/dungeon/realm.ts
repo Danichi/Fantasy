@@ -459,10 +459,11 @@ export class Realm {
     this.overworld.enemiesEnabled(true);
     this.atmosphere(false);
     const d = it.door;
-    const p = d.pos.clone().add(new THREE.Vector3(Math.sin(d.yaw), 0, Math.cos(d.yaw)).multiplyScalar(0.6));
-    this.player.teleport(p.setY(heightAt(p.x, p.z) + 0.3));
-    this.player.yaw = d.yaw;
-    this.cam.yaw = d.yaw;
+    const returned = d.returnTo?.();
+    const p = returned?.pos ?? d.pos.clone().add(new THREE.Vector3(Math.sin(d.yaw), 0, Math.cos(d.yaw)).multiplyScalar(0.6));
+    this.player.teleport(returned ? p : p.setY(heightAt(p.x, p.z) + 0.3));
+    this.player.yaw = returned?.yaw ?? d.yaw;
+    this.cam.yaw = returned?.yaw ?? d.yaw;
     this.cam.distance = 3.9;
     this.cam.snapTo(this.player.pos);
     await new Promise((r) => setTimeout(r, 100));

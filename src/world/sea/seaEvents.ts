@@ -1,3 +1,4 @@
+import { seaRandom } from './runtime';
 import * as THREE from 'three';
 import { SEA_LEVEL } from '../worldMap';
 import { heightAt } from '../terrainHeight';
@@ -121,7 +122,7 @@ class Dolphins extends SeaEvent {
       d.m.position.copy(p);
       d.m.rotation.set(-Math.cos(this.t * 2.2 + d.ph) * 0.6, ship.yaw, 0);
       d.part.center.copy(p);
-      if (leap > 0.9 && Math.random() < dt * 4) this.fx.alpha.spawn({ pos: p.clone().setY(SEA_LEVEL + 0.2), vel: new THREE.Vector3(0, 2, 0), spread: 0.6, count: 4, life: [0.4, 0.8], size: [0.3, 0.1], color: 0xeaf6fa, alpha: 0.7, gravity: 8 });
+      if (leap > 0.9 && seaRandom() < dt * 4) this.fx.alpha.spawn({ pos: p.clone().setY(SEA_LEVEL + 0.2), vel: new THREE.Vector3(0, 2, 0), spread: 0.6, count: 4, life: [0.4, 0.8], size: [0.3, 0.1], color: 0xeaf6fa, alpha: 0.7, gravity: 8 });
     }
     this.pos.copy(ship.pos);
   }
@@ -133,7 +134,7 @@ class Whale extends SeaEvent {
   readonly id = 'whale' as const;
   private body = new THREE.Group();
   private tail: THREE.Mesh;
-  yaw = Math.random() * 6;
+  yaw = seaRandom() * 6;
   private part: Part;
   constructor(scene: THREE.Scene, fx: FX, at: THREE.Vector3) {
     super(scene, fx, at);
@@ -165,7 +166,7 @@ class Whale extends SeaEvent {
     this.body.position.copy(this.pos).setY(surface(this.pos.x, this.pos.z) + y);
     this.body.rotation.set(cycle > 9 && cycle < 12 ? 0.35 : 0, this.yaw, 0);
     this.tail.rotation.x = cycle > 9 && cycle < 12 ? -0.8 : Math.sin(this.t) * 0.1;
-    if (cycle > 2 && cycle < 3.2 && Math.random() < dt * 30) this.fx.alpha.spawn({ pos: this.pos.clone().setY(SEA_LEVEL + 1.5), vel: new THREE.Vector3(0, 12, 0), spread: 1.2, count: 6, life: [0.8, 1.5], size: [0.8, 0.3], color: 0xf4fafc, alpha: 0.75, gravity: 6 });
+    if (cycle > 2 && cycle < 3.2 && seaRandom() < dt * 30) this.fx.alpha.spawn({ pos: this.pos.clone().setY(SEA_LEVEL + 1.5), vel: new THREE.Vector3(0, 12, 0), spread: 1.2, count: 6, life: [0.8, 1.5], size: [0.8, 0.3], color: 0xf4fafc, alpha: 0.75, gravity: 6 });
     this.part.center.copy(this.body.position);
   }
 }
@@ -206,9 +207,9 @@ class Flotsam extends SeaEvent {
         ctx.xp(20);
       } else {
         const goods = ['rum', 'cloth', 'spices', 'sugar', 'timber', 'saltFish'];
-        const good = goods[Math.floor(Math.random() * goods.length)];
-        const n = ctx.stow(good, 3 + Math.floor(Math.random() * 6));
-        const g = 20 + Math.floor(Math.random() * 60);
+        const good = goods[Math.floor(seaRandom() * goods.length)];
+        const n = ctx.stow(good, 3 + Math.floor(seaRandom() * 6));
+        const g = 20 + Math.floor(seaRandom() * 60);
         ctx.gold(g);
         ctx.toast(`You haul the floating cargo aboard: ${g} gold in a strongbox${n ? ` and ${n} crates of ${good === 'saltFish' ? 'salt fish' : good}` : ''}.`);
         ctx.xp(10);
@@ -237,7 +238,7 @@ class Waterspout extends SeaEvent {
     g.computeVertexNormals();
     this.col = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xc8d8e0, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
     this.group.add(this.col);
-    this.dir = new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize();
+    this.dir = new THREE.Vector3(seaRandom() - 0.5, 0, seaRandom() - 0.5).normalize();
   }
   update(dt: number, ship: Ship | null, ctx: EventCtx) {
     this.t += dt;
@@ -246,10 +247,10 @@ class Waterspout extends SeaEvent {
     this.pos.addScaledVector(this.dir, 4 * dt);
     this.col.position.copy(this.pos).setY(SEA_LEVEL + 30);
     this.col.rotation.y = this.t * 2;
-    if (Math.random() < dt * 20) this.fx.alpha.spawn({ pos: this.pos.clone().setY(SEA_LEVEL + 0.5), vel: new THREE.Vector3(0, 6, 0), spread: 4, count: 3, life: [0.6, 1.2], size: [0.8, 0.3], color: 0xeef6fa, alpha: 0.7, gravity: 3 });
+    if (seaRandom() < dt * 20) this.fx.alpha.spawn({ pos: this.pos.clone().setY(SEA_LEVEL + 0.5), vel: new THREE.Vector3(0, 6, 0), spread: 4, count: 3, life: [0.6, 1.2], size: [0.8, 0.3], color: 0xeef6fa, alpha: 0.7, gravity: 3 });
     if (ship && !this.hit && Math.hypot(ship.pos.x - this.pos.x, ship.pos.z - this.pos.z) < ship.length * 0.4 + 6) {
       this.hit = true;
-      ship.yaw += (Math.random() < 0.5 ? -1 : 1) * 1.2;
+      ship.yaw += (seaRandom() < 0.5 ? -1 : 1) * 1.2;
       ship.sailHp = Math.max(0, ship.sailHp - ship.stats.sails * 0.25);
       ship.water = Math.min(1, ship.water + 0.12);
       ship.damage(1, ship.stats.hull * 0.08);
@@ -266,10 +267,10 @@ class Bloom extends SeaEvent {
   update(dt: number, ship: Ship | null, ctx: EventCtx) {
     this.t += dt;
     if (!ship || this.t > 45) { this.done = true; return; }
-    if (this.once(ctx, 'The sea around you begins to glow blue: every wave and wake lit from within. The sailors fall silent.', 15) && Math.random() < 0.3) ctx.give('pearl', 1);
+    if (this.once(ctx, 'The sea around you begins to glow blue: every wave and wake lit from within. The sailors fall silent.', 15) && seaRandom() < 0.3) ctx.give('pearl', 1);
     this.pos.copy(ship.pos);
     for (let k = 0; k < 3; k++) {
-      const a = Math.random() * Math.PI * 2, r = 4 + Math.random() * 40;
+      const a = seaRandom() * Math.PI * 2, r = 4 + seaRandom() * 40;
       this.fx.add.spawn({ pos: new THREE.Vector3(ship.pos.x + Math.cos(a) * r, SEA_LEVEL + 0.1, ship.pos.z + Math.sin(a) * r), spread: 1.5, count: 2, life: [1, 2], size: [0.25, 0.05], color: 0x6af0ff, color2: 0x2a6aff });
     }
   }
@@ -316,11 +317,11 @@ export class Shoal extends SeaEvent {
   fish: Part | null = null;
   fishKind = 'bluefin';
   private fishMesh: THREE.Group | null = null;
-  yaw = Math.random() * 6;
+  yaw = seaRandom() * 6;
   constructor(scene: THREE.Scene, fx: FX, at: THREE.Vector3, bigGame: boolean) {
     super(scene, fx, at);
     if (bigGame) {
-      this.fishKind = Math.random() < 0.5 ? 'bluefin' : 'marlin';
+      this.fishKind = seaRandom() < 0.5 ? 'bluefin' : 'marlin';
       const g = new THREE.Group();
       const b = new THREE.Mesh(new THREE.SphereGeometry(0.6, 12, 8), mat(this.fishKind === 'marlin' ? 0x3a6aaa : 0x2a4a8a, { metalness: 0.4, roughness: 0.3 }));
       b.scale.set(0.8, 0.9, 3);
@@ -350,8 +351,8 @@ export class Shoal extends SeaEvent {
     if (this.t > 120 || (ship && ship.pos.distanceTo(this.pos) > 700)) { this.done = true; return; }
     this.once(ctx, this.fish ? `A shoal boils on the surface, and something big is feeding in it: a ${this.fishKind === 'marlin' ? 'sailfin marlin' : 'bluefin tuna'}! Harpoon it!` : 'A shoal boils the water ahead: trawl through it!');
     // Boiling water (brighter with Shoal Sight).
-    if (Math.random() < dt * (ctx.shoalSight ? 30 : 14)) {
-      const a = Math.random() * Math.PI * 2, r = Math.random() * 22;
+    if (seaRandom() < dt * (ctx.shoalSight ? 30 : 14)) {
+      const a = seaRandom() * Math.PI * 2, r = seaRandom() * 22;
       this.fx.alpha.spawn({ pos: new THREE.Vector3(this.pos.x + Math.cos(a) * r, SEA_LEVEL + 0.15, this.pos.z + Math.sin(a) * r), vel: new THREE.Vector3(0, 1.5, 0), spread: 0.5, count: 2, life: [0.4, 0.8], size: [0.3, 0.1], color: 0xf4fafc, alpha: 0.7, gravity: 6 });
     }
     if (this.fish && this.fishMesh) {
@@ -417,15 +418,15 @@ export function makeSeaEvent(id: SeaEventId, scene: THREE.Scene, fx: FX, ship: S
   const ahead = (d: number, side = 0) => ship.pos.clone().add(new THREE.Vector3(Math.sin(ship.yaw) * d + Math.cos(ship.yaw) * side, 0, Math.cos(ship.yaw) * d - Math.sin(ship.yaw) * side));
   switch (id) {
     case 'dolphins': return new Dolphins(scene, fx, ship.pos.clone());
-    case 'whale': return new Whale(scene, fx, ahead(60, (Math.random() < 0.5 ? -1 : 1) * 70));
-    case 'flotsam': return new Flotsam(scene, fx, ahead(110, (Math.random() - 0.5) * 60), false);
-    case 'bottle': return new Flotsam(scene, fx, ahead(90, (Math.random() - 0.5) * 40), true);
-    case 'waterspout': return new Waterspout(scene, fx, ahead(220, (Math.random() - 0.5) * 120));
+    case 'whale': return new Whale(scene, fx, ahead(60, (seaRandom() < 0.5 ? -1 : 1) * 70));
+    case 'flotsam': return new Flotsam(scene, fx, ahead(110, (seaRandom() - 0.5) * 60), false);
+    case 'bottle': return new Flotsam(scene, fx, ahead(90, (seaRandom() - 0.5) * 40), true);
+    case 'waterspout': return new Waterspout(scene, fx, ahead(220, (seaRandom() - 0.5) * 120));
     case 'bloom': return new Bloom(scene, fx, ship.pos.clone());
-    case 'survivors': return new Survivors(scene, fx, ahead(140, (Math.random() - 0.5) * 80));
-    case 'shoal': return new Shoal(scene, fx, ahead(130, (Math.random() - 0.5) * 80), bigGame);
+    case 'survivors': return new Survivors(scene, fx, ahead(140, (seaRandom() - 0.5) * 80));
+    case 'shoal': return new Shoal(scene, fx, ahead(130, (seaRandom() - 0.5) * 80), bigGame);
     case 'merchant': {
-      const side = Math.random() < 0.5 ? -1 : 1;
+      const side = seaRandom() < 0.5 ? -1 : 1;
       const at = ahead(260, side * 200);
       return new Merchant(scene, fx, at, makeShip(), ship.yaw + side * 1.9);
     }
@@ -440,7 +441,7 @@ export function treasureSite(near: THREE.Vector3): { x: number; z: number; kind:
       const x = near.x + Math.cos(a) * r, z = near.z + Math.sin(a) * r;
       const h = heightAt(x, z);
       if (h > 0.2 && h < 4) return { x, z, kind: 'dig' };
-      if (h < -4 && h > -14 && Math.random() < 0.08) return { x, z, kind: 'dive' };
+      if (h < -4 && h > -14 && seaRandom() < 0.08) return { x, z, kind: 'dive' };
     }
   }
   return { x: near.x + 400, z: near.z, kind: 'dive' };

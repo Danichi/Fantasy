@@ -5,9 +5,10 @@ import type { HouseSpec } from './buildings';
 // house (buildHouse knows where its door is); the interior behind it is built
 // only when you step through (world/interior.ts).
 
-export type InteriorKind = 'home' | 'tavern' | 'shop' | 'smithy' | 'guild' | 'hall' | 'undercity' | 'throne' | 'temple' | 'library' | 'palace' | 'sanctum' | 'lighthouse';
+export type InteriorKind = 'home' | 'tavern' | 'shop' | 'smithy' | 'guild' | 'hall' | 'undercity' | 'throne' | 'temple' | 'library' | 'palace' | 'sanctum' | 'lighthouse' | 'cabin';
 
 export interface Door {
+  returnTo?: () => { pos:THREE.Vector3; yaw:number };
   /** the doorstep, just outside, on the ground */
   pos: THREE.Vector3;
   /** the direction the door faces (out of the building) */

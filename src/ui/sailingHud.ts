@@ -40,100 +40,44 @@ export interface HelmReadout {
   /** extra keys learned (Y windcaller, U full press, T shot) */
   extraKeys?: string;
   skiff?: boolean;
+  rowboat?:boolean; order?:number; advanced?:boolean; units?:'kmh'|'knots'; travelMode?:string; modeLabel?:string; destination?:string; warning?:string; target?:string; ammunition?:string; tether?:string; hints?:string;
 }
 
 const CSS = `
-.helm{position:fixed;right:18px;top:96px;width:270px;padding:12px 14px;background:linear-gradient(180deg,rgba(18,28,52,.88),rgba(12,20,40,.9));border:1px solid #c9a55a;border-radius:10px;color:#efe3c2;font:12px Inter,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.45);pointer-events:none;display:none;z-index:30}
-.helm h3{margin:0;font:700 15px Cinzel,serif;color:#f2d68a;letter-spacing:.04em}
-.helm .sub{color:#b9b3a0;font-size:11px;margin-bottom:6px}
-.helm .danger{float:right;font:600 10px Cinzel,serif;padding:2px 6px;border-radius:6px;border:1px solid}
-.helm .row{display:flex;justify-content:space-between;align-items:center;margin:3px 0}
-.helm .bar{height:6px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden;flex:1;margin-left:8px}
-.helm .bar i{display:block;height:100%;border-radius:3px}
-.helm .rose{position:relative;width:86px;height:86px;border-radius:50%;border:2px solid #c9a55a;margin:6px auto;background:radial-gradient(circle,rgba(40,60,100,.6),rgba(10,18,36,.9))}
-.helm .rose b{position:absolute;left:50%;top:50%;width:2px;height:36px;margin-left:-1px;transform-origin:50% 0}
-.helm .rose .n{position:absolute;left:50%;top:2px;transform:translateX(-50%);font:700 10px Cinzel,serif;color:#f2d68a}
-.helm .ship{position:absolute;left:50%;top:50%;width:10px;height:26px;margin:-13px 0 0 -5px;background:#efe3c2;clip-path:polygon(50% 0,100% 35%,85% 100%,15% 100%,0 35%)}
-.helm .keys{margin-top:6px;color:#9a947f;font-size:10px;line-height:1.45}
-.helm .warn{color:#ff8a6a;font-weight:600}
-.helm .note{color:#bfe3f2;font-size:11.5px}
-.breath{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);width:220px;height:8px;border:1px solid #c9a55a;border-radius:4px;background:rgba(10,20,40,.7);display:none;z-index:30}
-.breath i{display:block;height:100%;background:linear-gradient(90deg,#7ad8ff,#e8f8ff);border-radius:3px}
-.underwater{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(20,90,110,.25),rgba(4,30,46,.72));opacity:0;transition:opacity .4s;z-index:5}
+.sea-hud{position:fixed;left:50%;bottom:94px;transform:translateX(-50%);width:min(760px,calc(100vw - 32px));box-sizing:border-box;color:#f5ead4;background:linear-gradient(135deg,rgba(13,31,43,.96),rgba(11,20,33,.93));border:1px solid #a48d60;border-top:3px solid #d4b875;border-radius:10px;padding:12px 18px;font:13px Inter,sans-serif;z-index:42;pointer-events:none;box-shadow:0 6px 28px #0008}
+.sea-hud header{display:flex;align-items:center;justify-content:space-between;gap:12px}.sea-hud h3{font:600 17px Cinzel,serif;margin:0;color:#f7dfaa}.sea-hud .sea-mode{color:#a9c8cf;font-size:11px;text-transform:uppercase;letter-spacing:.12em}.sea-hud .sea-grid{display:flex;flex-wrap:wrap;gap:14px;margin:10px 0}.sea-hud .sea-stat{flex:1;min-width:75px}.sea-hud small{display:block;color:#b4c7ca;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}.sea-hud strong{font-size:16px;font-weight:600}.sea-hud .sea-track{height:5px;margin-top:5px;background:#ffffff18;border-radius:3px;overflow:hidden}.sea-hud .sea-track i{display:block;height:100%;background:#76c8ac}.sea-hud .sea-route{color:#e8d29d}.sea-hud .sea-message{color:#97c3d0;margin-top:7px}.sea-hud .warn{color:#ffb18c}.sea-hud footer{border-top:1px solid #ffffff20;margin-top:9px;padding-top:8px;color:#c4d3d4;font-size:11px;line-height:1.6}.sea-hud kbd{font:600 10px Inter,sans-serif;color:#fff1cc;padding:2px 4px;border:1px solid #9d8c66;border-radius:3px}.sea-hud details{margin-top:8px;color:#b4c7ca}.sea-hud .sea-extra{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;margin-top:8px}.sea-hud .sea-battery{position:fixed;left:50%;top:28%;transform:translateX(-50%);font-size:13px;color:#fff3d4;padding:5px 10px;background:#0c2030b8;border:1px solid #c9a55a;border-radius:4px}.sea-water{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at center,rgba(20,90,110,.1),rgba(4,30,46,.6));z-index:5}
+@media(max-width:800px){.sea-hud{bottom:82px;padding:10px 12px}.sea-hud strong{font-size:13px}.sea-hud .sea-grid{gap:8px}.sea-hud .sea-stat{min-width:60px}.sea-hud h3{font-size:14px}}
 `;
-
-const pct = (v: number) => `${Math.round(Math.max(0, Math.min(1, v)) * 100)}%`;
-const barColor = (v: number) => (v > 0.6 ? '#6ad08a' : v > 0.3 ? '#e8c060' : '#e86a4a');
-const DANGER_COLS = ['#7ad8a0', '#a8d870', '#e8d060', '#e8a040', '#e86a4a', '#c04ad0'];
-
+const esc = (s: string) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
+const pct=(n:number)=>`${Math.round(Math.max(0,Math.min(1,n))*100)}%`;
+const track=(n:number)=>`<div class="sea-track"><i style="width:${pct(n)};background:${n<.25?'#ef9b73':'#76c8ac'}"></i></div>`;
+const stat=(label:string,value:string,bar?:number)=>`<div class="sea-stat"><small>${label}</small><strong>${value}</strong>${bar===undefined?'':track(bar)}</div>`;
 export class SailingHud {
-  private el: HTMLDivElement;
-  private breathEl: HTMLDivElement;
+  readonly el: HTMLDivElement;
   private water: HTMLDivElement;
-  private t = 0;
-
-  constructor(root: HTMLElement = document.getElementById('ui') ?? document.body) {
-    if (!document.getElementById('helm-css')) {
-      const st = document.createElement('style');
-      st.id = 'helm-css';
-      st.textContent = CSS;
-      document.head.appendChild(st);
-    }
-    this.el = document.createElement('div');
-    this.el.className = 'helm';
-    this.breathEl = document.createElement('div');
-    this.breathEl.className = 'breath';
-    this.breathEl.innerHTML = '<i></i>';
-    this.water = document.createElement('div');
-    this.water.className = 'underwater';
-    root.append(this.el, this.breathEl);
-    document.body.appendChild(this.water);
+  private air=1;
+  private under=false;
+  private t=0;
+  constructor(root:HTMLElement=document.getElementById('ui')??document.body){
+    if(!document.getElementById('helm-css')){const st=document.createElement('style');st.id='helm-css';st.textContent=CSS;document.head.append(st);}
+    this.el=document.createElement('div');this.el.className='sea-hud helm';this.el.style.display='none';this.el.setAttribute('role','status');this.el.setAttribute('aria-label','Sailing and swimming');
+    this.water=document.createElement('div');this.water.className='sea-water';root.append(this.el);document.body.append(this.water);
   }
-
-  hide() {
-    this.el.style.display = 'none';
+  hide(){this.el.style.display='none';this.t=0;}
+  setBreath(breath:number,under:boolean){this.air=breath;this.under=under;this.water.style.opacity=under?'1':'0';}
+  swim(stamina:number,depth:number,fast:boolean,nearBoat:boolean,hints:string){
+    this.el.style.display='block';this.el.dataset.mode=this.under?'diving':'swimming';
+    this.el.innerHTML=`<header><h3>${this.under?'Below the surface':fast?'Swimming fast':'Swimming'}</h3><span class="sea-mode">${this.under?depth.toFixed(1)+' m deep':'Surface water'}</span></header><div class="sea-grid">${stat('Stamina',pct(stamina),stamina)}${stat('Breath',pct(this.air),this.air)}</div><div class="sea-message ${this.air<.3||stamina<.15?'warn':''}">${this.air<.3?'Air is running low — rise to the surface.':stamina<.15?'Rest at the surface or climb aboard.':nearBoat?'A boat is nearby. Swim to its side to climb aboard.':'Rest at the surface to recover. Look for a ladder or a shallow shore.'}</div><footer>${hints}</footer>`;
   }
-
-  /** Breath (0..1) while diving; the screen goes blue-green under the water. */
-  setBreath(breath: number, under: boolean) {
-    this.breathEl.style.display = under || breath < 0.999 ? 'block' : 'none';
-    (this.breathEl.firstChild as HTMLElement).style.width = pct(breath);
-    (this.breathEl.firstChild as HTMLElement).style.background = breath < 0.25 ? '#e86a4a' : '';
-    this.water.style.opacity = under ? '1' : '0';
-  }
-
-  update(dt: number, r: HelmReadout) {
-    this.el.style.display = 'block';
-    this.t -= dt;
-    if (this.t > 0) return;
-    this.t = 0.12;
-    const d = Math.min(5, Math.round(r.danger));
-    const over = r.waves > r.rated;
-    const sec = ['Bow', 'Mid', 'Stern'].map((n, i) => `<div class="row"><span>${n}</span><span class="bar"><i style="width:${pct(r.sections[i])};background:${barColor(r.sections[i])}"></i></span></div>`).join('');
-    const gun = (s: number, label: string) => (r.guns ? `<span>${label} ${s <= 0 ? '<b style="color:#6ad08a">READY</b>' : s.toFixed(1) + 's'}</span>` : '');
-    const deg = (a: number) => (a * 180) / Math.PI;
-    this.el.innerHTML = `
-      <span class="danger" style="color:${DANGER_COLS[d]};border-color:${DANGER_COLS[d]}">${r.dangerName}</span>
-      <h3>${r.name}</h3>
-      <div class="sub">${r.hull} · Seamanship ${r.level} <span class="bar" style="display:inline-block;width:60px;vertical-align:middle"><i style="width:${pct(r.xpFrac)};background:#c9a55a"></i></span></div>
-      <div class="rose">
-        <span class="n">N</span>
-        <div class="ship" style="transform:rotate(${(180 - deg(r.heading)).toFixed(0)}deg)"></div>
-        <b style="background:#7ad8ff;transform:rotate(${(180 - deg(r.heading) + deg(r.windRel) + 180).toFixed(0)}deg)"></b>
-      </div>
-      <div class="row"><span><b>${r.knots.toFixed(1)}</b> kn · ${r.point}</span><span>wind ${(r.windSpeed * 1.94).toFixed(0)} kn</span></div>
-      <div class="row"><span>Trim ${r.assisted ? '(auto)' : ''}</span><span class="bar"><i style="width:${pct(r.trim)};background:${barColor(r.trim)}"></i></span></div>
-      <div class="row"><span>Sail ${r.reefed ? '(reefed)' : ''}${r.anchored ? ' · at anchor' : ''}</span><span class="bar"><i style="width:${pct(r.sail)};background:#efe3c2"></i></span></div>
-      <div class="row"><span>Canvas</span><span class="bar"><i style="width:${pct(r.sails)};background:${barColor(r.sails)}"></i></span></div>
-      ${sec}
-      <div class="row"><span class="${r.water > 0.4 ? 'warn' : ''}">Water in the hold</span><span class="bar"><i style="width:${pct(r.water)};background:#4a9ae8"></i></span></div>
-      <div class="row"><span class="${over ? 'warn' : ''}">Waves ${r.waves.toFixed(1)} m / hull ${r.rated.toFixed(1)} m</span>${r.storm > 0.3 ? '<span class="warn">STORM</span>' : ''}</div>
-      ${Math.abs(r.courseError) > 0.08 ? `<div class="row warn"><span>Thrown off course ${r.courseError > 0 ? '◀' : '▶'} ${deg(Math.abs(r.courseError)).toFixed(0)}°/s</span></div>` : ''}
-      ${r.guns ? `<div class="row">${gun(r.reload[0], '◀ Port')}${gun(r.reload[1], 'Starboard ▶')}</div>` : ''}
-      ${(r.notes ?? []).map((n) => `<div class="row note"><span>${n}</span></div>`).join('')}
-      <div class="row"><span>Crew ${r.crew}${r.crewMin ? ' / ' + r.crewMin + ' needed' : ''}</span><span>Morale ${pct(r.morale)}</span></div>
-      <div class="keys">${r.atHelm
-        ? 'A/D helm · W/S sail · R reef · F anchor · C row · ' + (r.assisted ? 'G: full sailing' : 'Z/X trim · G: assisted') + (r.skiff ? ' · Shift lean out' : '') + (r.guns ? '<br>Left click: fire the broadside you face' : '') + (r.harpoon ? ' · Right click: harpoon' : '') + (r.extraKeys ? '<br>' + r.extraKeys : '') + '<br>E leave the helm' + (r.skiff ? '' : ' · L lash it') + ' · hold B spyglass'
-        : 'On deck · E at the wheel to take the helm'}</div>`;
+  update(dt:number,r:HelmReadout){
+    this.el.style.display='block';this.el.dataset.mode=r.travelMode??(r.atHelm?'helm':'deck');this.t-=dt;if(this.t>0)return;this.t=.1;
+    const speed=r.knots/1.94;
+    const heading=((180-r.heading*180/Math.PI)%360+360)%360;
+    const compass=['N','NE','E','SE','S','SW','W','NW'][Math.round(heading/45)%8];
+    const windFrom=((r.windRel*180/Math.PI+540)%360)-180;
+    const hull=r.sections.reduce((a,b)=>a+b,0)/3;
+    const sail=r.rowboat?(r.order??0)<.05?'Stopped':'Rowing':r.anchored?'Stopped · anchored':r.reefed?'Reefed':(r.order??r.sail)<.05?'Stopped':(r.order??r.sail)<.38?'Slow':(r.order??r.sail)<.8?'Half':'Full';
+    const wind=r.rowboat?'Oars':r.point==='In irons'?'Ahead — turn to catch it':Math.abs(windFrom)<45?'From behind':windFrom<0?'From the left':'From the right';
+    this.el.innerHTML=`<header><div><span class="sea-mode">${esc(r.modeLabel??(r.atHelm?'At the helm':'On deck'))} · ${r.assisted?'Assisted':'Advanced'}</span><h3>${esc(r.name)}</h3></div><span class="sea-mode">${esc(r.dangerName)}</span></header><div class="sea-grid">${stat('Speed',`${(r.units==='knots'?r.knots:speed*3.6).toFixed(1)} ${r.units==='knots'?'kn':'km/h'}`)}${stat('Heading',`${compass} · ${Math.round(heading)}°`)}${stat(r.rowboat?'Oars':'Sails',sail)}${stat('Hull',hull>.7?'Good':hull>.35?'Damaged':'Critical',hull)}${stat('Wind',`<span aria-hidden="true" style="display:inline-block;transform:rotate(${windFrom.toFixed(0)}deg)">↑</span> ${esc(wind)}`)}</div><div class="sea-route">${esc(r.destination??'P: choose a destination or a voyage')}</div>${r.warning?`<div class="sea-message warn">${esc(r.warning)}</div>`:''}${r.guns?`<div class="sea-extra"><span>◀ Left battery ${r.reload[0]<=0?'READY':Math.ceil(r.reload[0])+'s'}</span><span>Right battery ▶ ${r.reload[1]<=0?'READY':Math.ceil(r.reload[1])+'s'}</span><span>${esc(r.ammunition??'Round shot')} · ${esc(r.target??'Look along a side to aim')}</span></div>`:''}${r.tether?`<div class="sea-message">${esc(r.tether)}</div>`:''}${r.advanced?`<div class="sea-extra"><span>${esc(r.point)} · trim ${pct(r.trim)}</span><span>Wind ${(r.windSpeed*3.6).toFixed(0)} km/h · waves ${r.waves.toFixed(1)} m / rating ${r.rated.toFixed(1)} m</span><span>Flooding ${pct(r.water)} · crew ${r.crew}/${r.crewMin} · morale ${pct(r.morale)}</span><span>Bow ${pct(r.sections[0])} · middle ${pct(r.sections[1])} · stern ${pct(r.sections[2])}</span></div>`:''}<footer>${r.hints??'W/S speed · A/D steer · E leave helm · P ship & navigation'}</footer>`;
   }
 }

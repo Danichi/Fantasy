@@ -12,6 +12,8 @@ export class ThirdPersonCamera {
   distance = 4.8;
   /** extra arm length and height (at a ship's helm: see the whole ship) */
   extra = 0;
+  seafaring = false;
+  motion = 0.35;
   private armLen = 4.8;
   private shoulder = 0.48;
   private pivot = new THREE.Vector3();
@@ -58,7 +60,7 @@ export class ThirdPersonCamera {
     const target = new THREE.Vector3(focus.x, focus.y + 1.55 + this.extra * 0.22, focus.z);
     this.pivot.x = damp(this.pivot.x, target.x, 16, dt);
     this.pivot.z = damp(this.pivot.z, target.z, 16, dt);
-    this.pivot.y = damp(this.pivot.y, target.y, 9, dt);
+    this.pivot.y = damp(this.pivot.y, target.y, this.seafaring ? 3 + this.motion * 4 : 9, dt);
 
     if (this.lockTarget) {
       // Frame the target: yaw toward it, pitch so it sits a little below centre.
@@ -101,7 +103,7 @@ export class ThirdPersonCamera {
 
     // Trauma-based shake.
     this.trauma = Math.max(0, this.trauma - dt * 1.6);
-    const s = this.trauma * this.trauma;
+    const s = this.trauma * this.trauma * (this.seafaring ? this.motion : 1);
     if (s > 0) {
       const t = this.time * 28;
       pos.x += (valueNoise(t, 1.3) - 0.5) * 0.35 * s;

@@ -1,3 +1,5 @@
+import { phaseState, restorePhase, type PhaseState } from './snapshot';
+import { seaRandom } from './runtime';
 import * as THREE from 'three';
 import { SEA_LEVEL } from '../worldMap';
 import { heightAt } from '../terrainHeight';
@@ -105,6 +107,7 @@ export class Part implements Target, SeaTarget {
 }
 
 /** A monster encounter: parts to shoot at, a health pool for the boss bar, its own fight. */
+export interface BeastSave {id:BeastId;danger:number;pos:[number,number,number];phase:PhaseState;parts:{hp:number;alive:boolean}[];}
 export abstract class SeaBeast {
   abstract readonly id: BeastId;
   readonly group = new THREE.Group();
@@ -126,6 +129,8 @@ export abstract class SeaBeast {
     this.pos.copy(at);
     scene.add(this.group);
   }
+  snapshot():BeastSave {return {id:this.id,danger:this.danger,pos:this.pos.toArray() as [number,number,number],phase:phaseState(this),parts:this.parts_.map(p=>({hp:p.hp,alive:p.alive}))};}
+  restore(saved:BeastSave){this.pos.fromArray(saved.pos);restorePhase(this,saved.phase);saved.parts.forEach((v,i)=>{const p=this.parts_[i];if(!p)return;p.hp=Math.min(p.maxHp,v.hp);p.alive=v.alive;if(!v.alive)targets.delete(p);});}
   get name() {
     return BEAST_NAMES[this.id];
   }
@@ -156,7 +161,7 @@ export abstract class SeaBeast {
   /** Bubbles and dark water: a tell. */
   protected boil(at: THREE.Vector3, r: number, n = 3) {
     for (let k = 0; k < n; k++) {
-      const a = Math.random() * Math.PI * 2, d = Math.random() * r;
+      const a = seaRandom() * Math.PI * 2, d = seaRandom() * r;
       this.fx.alpha.spawn({ pos: new THREE.Vector3(at.x + Math.cos(a) * d, SEA_LEVEL + 0.2, at.z + Math.sin(a) * d), vel: new THREE.Vector3(0, 2, 0), spread: 0.6, count: 2, life: [0.6, 1.2], size: [0.4, 0.9], color: 0xeef8fa, alpha: 0.7, gravity: 2 });
     }
   }
@@ -274,7 +279,7 @@ export class Kraken extends SeaBeast {
     if (this.state === 'tentacles' && (this.cut >= Math.ceil(this.tentacles.length * 0.6) || this.st > 50)) {
       this.state = 'eye';
       this.st = 0;
-      const port = new THREE.Vector3(Math.cos(ship.yaw), 0, -Math.sin(ship.yaw)).multiplyScalar(Math.random() < 0.5 ? 1 : -1);
+      const port = new THREE.Vector3(Math.cos(ship.yaw), 0, -Math.sin(ship.yaw)).multiplyScalar(seaRandom() < 0.5 ? 1 : -1);
       this.pos.copy(ship.pos).addScaledVector(port, ship.beam / 2 + 14).setY(SEA_LEVEL - 1);
       this.head.visible = true;
       this.head.position.copy(this.pos);
@@ -322,11 +327,11 @@ export class Kraken extends SeaBeast {
         // Reared above the rail, swaying, the tip curled over the deck.
         const inward = over.clone().sub(base).setY(0).normalize();
         tip = base.clone().addScaledVector(inward, 3 + Math.sin(this.t * 1.1 + t.base.z) * 1.5).add(new THREE.Vector3(Math.sin(this.t * 1.4 + t.base.z) * 1.5, 10 + Math.sin(this.t + t.base.z) * 1.5, 0));
-        if (t.at > 2.5 + Math.random() * 3) {
-          const r = Math.random();
+        if (t.at > 2.5 + seaRandom() * 3) {
+          const r = seaRandom();
           t.act = r < 0.35 ? 'grab' : r < 0.7 ? 'sweep' : 'crush';
           t.at = 0;
-          t.mast = ship.length * (Math.random() < 0.5 ? -0.12 : 0.15);
+          t.mast = ship.length * (seaRandom() < 0.5 ? -0.12 : 0.15);
           t.section = ship.sectionOf(t.base);
         }
       } else if (t.act === 'grab') {
@@ -520,7 +525,7 @@ export class CrabColossus extends SeaBeast {
       if (this.st > (ctx.lore ? 7 : 4.5)) {
         this.state = 'grip';
         this.st = 0;
-        this.side = Math.random() < 0.5 ? 1 : -1;
+        this.side = seaRandom() < 0.5 ? 1 : -1;
         this.body.visible = true;
         this.makeClaw(ship, 0);
         this.makeClaw(ship, 1);
@@ -664,8 +669,8 @@ export class SirenChoir extends SeaBeast {
       s.part.center.copy(s.fig.position).setY(s.fig.position.y + 1.6);
     }
     // Fog drifts about the rocks.
-    if (Math.random() < dt * 8) {
-      const a = Math.random() * Math.PI * 2, r = 20 + Math.random() * 80;
+    if (seaRandom() < dt * 8) {
+      const a = seaRandom() * Math.PI * 2, r = 20 + seaRandom() * 80;
       this.fx.alpha.spawn({ pos: this.rocks.clone().add(new THREE.Vector3(Math.cos(a) * r, 2, Math.sin(a) * r)), spread: 6, count: 2, life: [3, 6], size: [6, 12], color: 0xdde6ea, alpha: 0.25, drag: 0.5 });
     }
     if (!ship || ship.sunk) return;
@@ -685,7 +690,7 @@ export class SirenChoir extends SeaBeast {
     // And the crew walk to the rail as if dreaming.
     this.charmT -= dt;
     if (this.charmT <= 0) {
-      this.charmT = 14 + Math.random() * 8;
+      this.charmT = 14 + seaRandom() * 8;
       const who = ctx.crewLost();
       if (who) ctx.toast(`${who} walks to the rail, smiling, and steps into the sea.`);
     }
@@ -693,7 +698,7 @@ export class SirenChoir extends SeaBeast {
     if (d < 16 + ship.length * 0.4 && Math.abs(ship.speed) > 0.5) {
       ship.damage(0, ship.stats.hull * 0.06 * dt * Math.abs(ship.speed));
       ship.speed *= Math.exp(-1.5 * dt);
-      if (Math.random() < dt) ctx.shake(0.5);
+      if (seaRandom() < dt) ctx.shake(0.5);
     }
   }
 }
@@ -803,7 +808,7 @@ export class StormWyrm extends SeaBeast {
     if (this.state === 'downed') {
       goal = this.pos.clone().setY(surface(this.pos.x, this.pos.z) - 0.3);
       speed = 6;
-      if (Math.random() < dt * 6) this.splash(this.pos, 0.7);
+      if (seaRandom() < dt * 6) this.splash(this.pos, 0.7);
       if (this.st > 12 || !this.body.held) {
         this.state = 'circle';
         this.st = 0;
@@ -812,8 +817,8 @@ export class StormWyrm extends SeaBeast {
       this.ang += dt * 0.45;
       const r = 55;
       goal = ship.pos.clone().add(new THREE.Vector3(Math.cos(this.ang) * r, 0, Math.sin(this.ang) * r)).setY(SEA_LEVEL + 24 + Math.sin(this.t * 0.7) * 4);
-      if (this.st > (ctx.lore ? 9 : 7) + Math.random() * 3) {
-        this.state = Math.random() < 0.55 ? 'dive' : 'breath';
+      if (this.st > (ctx.lore ? 9 : 7) + seaRandom() * 3) {
+        this.state = seaRandom() < 0.55 ? 'dive' : 'breath';
         this.st = 0;
         this.hitDeck = false;
         ctx.toast(this.state === 'dive' ? 'The Wyrm folds its wings and dives at the deck!' : 'Lightning crackles in the Wyrm\'s jaws!');
@@ -984,7 +989,7 @@ export class OldTeeth extends SeaBeast {
     } else if (this.state === 'circle' || this.state === 'run') {
       this.ang += dt * 0.35;
       goal = ship.pos.clone().add(new THREE.Vector3(Math.cos(this.ang) * 32, 0, Math.sin(this.ang) * 32)).setY(sea - 0.6);
-      if (this.st > (ctx.lore ? 11 : 9) + Math.random() * 5) {
+      if (this.st > (ctx.lore ? 11 : 9) + seaRandom() * 5) {
         this.state = 'ram';
         this.st = 0;
         this.rammed = false;
@@ -1000,7 +1005,7 @@ export class OldTeeth extends SeaBeast {
         ship.water = Math.min(1, ship.water + 0.04);
         ctx.shake(1);
         ctx.toast('Old Teeth slams the hull from below!');
-        if (Math.random() < 0.3) {
+        if (seaRandom() < 0.3) {
           const who = ctx.crewLost();
           if (who) ctx.toast(`Old Teeth snatches ${who} from the rail!`);
         }
@@ -1060,8 +1065,8 @@ export class Leviathan extends SeaBeast {
       this.body.add(m);
       // Crags and growths along the back: it looks like an island.
       for (let k = 0; k < 5; k++) {
-        const c = new THREE.Mesh(k % 2 ? new THREE.DodecahedronGeometry(1.4 + Math.random() * 1.2, 0) : new THREE.ConeGeometry(1.2 + Math.random(), 3 + Math.random() * 3, 5), k % 3 === 0 ? moss : pale);
-        c.position.set((Math.random() - 0.5) * r * 1.2, r * 0.5, 40 - i * 16 + (Math.random() - 0.5) * 12);
+        const c = new THREE.Mesh(k % 2 ? new THREE.DodecahedronGeometry(1.4 + seaRandom() * 1.2, 0) : new THREE.ConeGeometry(1.2 + seaRandom(), 3 + seaRandom() * 3, 5), k % 3 === 0 ? moss : pale);
+        c.position.set((seaRandom() - 0.5) * r * 1.2, r * 0.5, 40 - i * 16 + (seaRandom() - 0.5) * 12);
         this.body.add(c);
       }
     }
@@ -1133,7 +1138,7 @@ export class Leviathan extends SeaBeast {
       if (this.breachT <= 0) {
         this.state = 'breach';
         this.st = 0;
-        this.breachT = 16 + Math.random() * 8;
+        this.breachT = 16 + seaRandom() * 8;
       }
       if (this.state === 'breach') {
         y = SEA_LEVEL - 2.6 + Math.sin(Math.min(1, this.st / 3) * Math.PI) * 12;

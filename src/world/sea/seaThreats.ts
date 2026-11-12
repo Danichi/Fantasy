@@ -1,3 +1,6 @@
+import { phaseState, restorePhase, type PhaseState } from './snapshot';
+import { shipMotion, restoreMotion, type ShipMotion } from './shipState';
+import { seaRandom, seaRuntime } from './runtime';
 import * as THREE from 'three';
 import { SEA_LEVEL } from '../worldMap';
 import { waveAt, windAt } from './seaState';
@@ -40,6 +43,10 @@ export function pirateFit(danger: number): { hull: HullId; fit: Fit } {
 
 export interface PirateOpts { name?: string; captain?: string; hull?: HullId; fit?: Fit; bounty?: number; colours?: [number, number]; tag?: string }
 
+export interface PirateSave {
+  hull:HullId; fit:Fit; name:string; captain:string; tag:string; bounty:number; danger:number; pos:[number,number,number]; yaw:number; motion:ShipMotion; sections:number[]; sails:number; phase:PhaseState; reload:Record<number,number>;
+  boarders:{hp:number;local:[number,number,number]}[]; defenders:{hp:number;local:[number,number,number]}[];
+}
 export class PirateShip {
   readonly ship: Ship;
   state: 'hunt' | 'broadside' | 'board' | 'flee' | 'struck' | 'boarded' | 'taken' | 'sunk' = 'hunt';
@@ -64,11 +71,11 @@ export class PirateShip {
     const pf = pirateFit(danger);
     const hull = opts.hull ?? pf.hull, fit = opts.fit ?? pf.fit;
     const [hc, tc] = opts.colours ?? [0x1e1a1c, 0x8a1a1a];
-    this.ship = new Ship(scene, hull, fit, { name: opts.name ?? PIRATE_NAMES[Math.floor(Math.random() * PIRATE_NAMES.length)], hullColor: hc, trim: tc });
+    this.ship = new Ship(scene, hull, fit, { name: opts.name ?? PIRATE_NAMES[Math.floor(seaRandom() * PIRATE_NAMES.length)], hullColor: hc, trim: tc });
     this.ship.owner = 'pirate';
     this.ship.crew = this.ship.def.crewMax;
     this.ship.pos.copy(at);
-    this.ship.yaw = Math.random() * Math.PI * 2;
+    this.ship.yaw = seaRandom() * Math.PI * 2;
     this.ship.anchored = false;
     this.ship.sailSet = 1;
     this.crew = this.crewStart = Math.round(this.ship.def.crewMax * 2 + 4 + danger * 3);
@@ -98,15 +105,15 @@ export class PirateShip {
       s.update(dt, NO_CONTROL(), { skill: 0.3, assisted: true });
       return;
     }
-    if (this.state === 'boarded' || this.state === 'taken') {
-      // Lashed alongside the ship that boarded her: she goes where it goes.
-      if (prey) this.lashTo(prey, dt);
-      s.update(dt, { ...NO_CONTROL(), sail: 0 }, { skill: 0.3, assisted: true });
-      this.carryCrew(prey);
+    if (prey && (this.state === 'boarded' || this.state === 'taken' || this.grappled)) {
+      const previous=s.frame.clone();
+      s.update(dt,{...NO_CONTROL(),sail:0,anchor:true},{skill:.3,assisted:true});
+      this.lashTo(prey,dt);s.place();s.prevFrame.copy(previous);this.carryCrew(prey);
+      if(this.grappled && this.boarders.length && this.boarders.every(b=>!b.alive)){this.state='struck';this.grappled=false;}
       return;
     }
     // Beaten: strike the colours (most do; the proud and the desperate run).
-    if (this.state !== 'struck' && !this.grappled && this.beaten) this.state = this.tag || Math.random() < 0.25 ? 'flee' : 'struck';
+    if (this.state !== 'struck' && !this.grappled && this.beaten) this.state = this.tag || seaRandom() < 0.25 ? 'flee' : 'struck';
     if (this.state === 'flee' && this.beaten && this.crew < this.crewStart * 0.2) this.state = 'struck';
     if ((!prey || prey.sunk) && this.state !== 'struck') this.state = 'flee';
     let want = s.yaw;
@@ -133,9 +140,9 @@ export class PirateShip {
           const beamYaw = s.yaw - side * (Math.PI / 2);
           const off = Math.abs(wrap(bearing - beamYaw));
           if (this.reload[side] <= 0 && off < 0.5 && dist < 110) {
-            const shot: ShotKind = this.danger > 3.4 && Math.random() < 0.2 ? 'fire' : this.danger > 1.8 && prey.sailHp > prey.stats.sails * 0.5 && Math.random() < 0.3 ? 'chain' : 'ball';
+            const shot: ShotKind = this.danger > 3.4 && seaRandom() < 0.2 ? 'fire' : this.danger > 1.8 && prey.sailHp > prey.stats.sails * 0.5 && seaRandom() < 0.3 ? 'chain' : 'ball';
             gunnery.broadside(s, side, dist, prey.pos, undefined, { shot });
-            this.reload[side] = Gunnery.reload(s, 2) + Math.random() * 2;
+            this.reload[side] = Gunnery.reload(s, 2) + seaRandom() * 2;
           }
         }
       } else if (this.state === 'board') {
@@ -179,7 +186,7 @@ export class PirateShip {
 
   private lashTo(prey: Ship, dt: number) {
     const s = this.ship;
-    s.pos.lerp(this.besidePoint(prey), Math.min(1, dt * 1.5));
+    s.pos.copy(this.besidePoint(prey));
     s.yaw = prey.yaw;
     s.speed = prey.speed;
   }
@@ -202,7 +209,11 @@ export class PirateShip {
     const b = new Bandit(i % 3 === 2 ? 'crossbow' : 'sword', at, this.scene, this.bolts, undefined, PIRATE_LOOKS[i % PIRATE_LOOKS.length]);
     b.kind = 'pirate';
     b.name = captain ? this.captain : i % 3 === 2 ? 'Pirate Gunner' : 'Pirate Cutthroat';
-    if (captain) b.hp = b.maxHp = 220 + this.danger * 40 + (this.tag ? 160 : 0);
+    b.level = Math.round(10 + this.danger * 3 + (captain ? 3 : 0));
+    b.hp = b.maxHp = captain ? 1400 + this.danger * 300 + (this.tag ? 400 : 0) : 650 + this.danger * 220;
+    b.hitDamage = 32 + this.danger * 10 + (captain ? 12 : 0);
+    b.postureMax = captain ? 425 : 250; b.poiseMax = captain ? 105 : 80;
+    b.label = b.name; (b as import('../../combat/targets').Target).boss = false;
     b.alerted = true;
     return b;
   }
@@ -213,7 +224,7 @@ export class PirateShip {
     prey.enableDeck();
     const n = Math.max(2, Math.min(6, Math.round(this.crew / 4), 2 + Math.round(this.danger)));
     for (let i = 0; i < n; i++) {
-      const local = new THREE.Vector3((Math.random() - 0.5) * prey.beam * 0.5, prey.def.deckY + 0.4, -prey.length * 0.3 + (i / Math.max(1, n - 1)) * prey.length * 0.6);
+      const local = new THREE.Vector3((seaRandom() - 0.5) * prey.beam * 0.5, prey.def.deckY + 0.4, -prey.length * 0.3 + (i / Math.max(1, n - 1)) * prey.length * 0.6);
       this.boarders.push(this.pirate(i, prey.toWorld(local), i === 0));
     }
     this.fx.alpha.spawn({ pos: prey.pos.clone().setY(prey.pos.y + 3), spread: 3, count: 12, life: [0.6, 1.2], size: [0.4, 1.2], color: 0xd8d4cc, alpha: 0.5 });
@@ -224,7 +235,8 @@ export class PirateShip {
     const port = new THREE.Vector3(Math.cos(by.yaw), 0, -Math.sin(by.yaw));
     this.side = (this.ship.pos.clone().sub(by.pos).dot(port) > 0 ? 1 : -1) as -1 | 1;
     this.grappled = false;
-    this.ship.place();
+    this.ship.pos.copy(this.besidePoint(by));this.ship.yaw=by.yaw;
+    this.ship.place();this.ship.place();
     this.ship.enableDeck();
   }
 
@@ -241,7 +253,7 @@ export class PirateShip {
     const s = this.ship;
     const n = Math.max(1, Math.min(7, Math.round(this.crew / 3)));
     for (let i = 0; i < n; i++) {
-      const local = new THREE.Vector3((Math.random() - 0.5) * s.beam * 0.45, s.def.deckY + 0.4, -s.length * 0.3 + (i / Math.max(1, n - 1)) * s.length * 0.6);
+      const local = new THREE.Vector3((seaRandom() - 0.5) * s.beam * 0.45, s.def.deckY + 0.4, -s.length * 0.3 + (i / Math.max(1, n - 1)) * s.length * 0.6);
       this.defenders.push(this.pirate(i, s.toWorld(local), i === 0));
     }
   }
@@ -269,6 +281,15 @@ export class PirateShip {
     this.defenders.length = 0;
   }
 
+  snapshot(prey:Ship|null):PirateSave {
+    const fighter=(b:Bandit,deck:Ship)=>({hp:b.alive?b.hp:0,local:deck.toLocal(b.position).toArray() as [number,number,number]});
+    return {hull:this.ship.hull,fit:{...this.ship.fit},name:this.ship.name,captain:this.captain,tag:this.tag,bounty:this.bounty,danger:this.danger,pos:this.ship.pos.toArray() as [number,number,number],yaw:this.ship.yaw,motion:shipMotion(this.ship),sections:[...this.ship.sections],sails:this.ship.sailHp,phase:phaseState(this),reload:{...this.reload},boarders:this.boarders.map(b=>fighter(b,prey??this.ship)),defenders:this.defenders.map(b=>fighter(b,this.ship))};
+  }
+  restore(saved:PirateSave,prey:Ship|null) {
+    this.ship.pos.fromArray(saved.pos);this.ship.yaw=saved.yaw;this.ship.sections=[...saved.sections];this.ship.sailHp=saved.sails;restoreMotion(this.ship,saved.motion);restorePhase(this,saved.phase);this.reload={...saved.reload};
+    const restore=(list:{hp:number;local:[number,number,number]}[],deck:Ship,out:Bandit[])=>{if(list.length)deck.enableDeck();list.forEach((f,i)=>{const b=this.pirate(i,deck.toWorld(new THREE.Vector3(...f.local)),i===0);if(f.hp<=0)b.dispose();else b.hp=Math.min(b.maxHp,f.hp);out.push(b);});};
+    restore(saved.boarders,prey??this.ship,this.boarders);restore(saved.defenders,this.ship,this.defenders);
+  }
   dispose() {
     this.release();
     this.ship.dispose();
@@ -303,7 +324,7 @@ export class SeaSerpent implements Target, SeaTarget {
   private trail: THREE.Vector3[] = [];
   yaw = 0;
   private st = 0;
-  private circle = Math.random() * 6.28;
+  private circle = seaRandom() * 6.28;
   private bit = false;
   private deathT = 0;
   /** what it did (the owner turns these into damage, toasts and drops) */
@@ -392,7 +413,7 @@ export class SeaSerpent implements Target, SeaTarget {
 
   update(dt: number, ship: Ship | null, player: Player) {
     this.st += dt;
-    const t = performance.now() / 1000;
+    const t = (seaRuntime.time * 1000) / 1000;
     if (this.state === 'dying') {
       this.deathT += dt;
       this.pos.y -= dt * 1.2;
@@ -421,8 +442,8 @@ export class SeaSerpent implements Target, SeaTarget {
     if (this.state === 'stalk') {
       this.circle += dt * 0.32;
       goal = ship.pos.clone().add(new THREE.Vector3(Math.cos(this.circle) * 34, 0, Math.sin(this.circle) * 34));
-      if (this.st > 9 + Math.random() * 5) {
-        this.state = Math.random() < 0.55 ? 'dive' : 'rear';
+      if (this.st > 9 + seaRandom() * 5) {
+        this.state = seaRandom() < 0.55 ? 'dive' : 'rear';
         this.st = 0;
         this.bit = false;
       }
@@ -431,7 +452,7 @@ export class SeaSerpent implements Target, SeaTarget {
       goal = ship.pos.clone();
       y = sea - 4;
       speed = 11;
-      if (Math.random() < dt * 30) this.fx.alpha.spawn({ pos: this.pos.clone().setY(sea + 0.1), spread: 1.5, count: 2, life: [0.8, 1.4], size: [0.6, 1.4], color: 0xeef8fa, alpha: 0.6, upBias: 0.3 });
+      if (seaRandom() < dt * 30) this.fx.alpha.spawn({ pos: this.pos.clone().setY(sea + 0.1), spread: 1.5, count: 2, life: [0.8, 1.4], size: [0.6, 1.4], color: 0xeef8fa, alpha: 0.6, upBias: 0.3 });
       if (this.st > 2.2) { this.state = 'ram'; this.st = 0; }
     } else if (this.state === 'ram') {
       goal = ship.pos.clone();
@@ -493,6 +514,8 @@ export class SeaSerpent implements Target, SeaTarget {
     this.position.copy(this.pos).setY(this.pos.y - 1);
   }
 
+  snapshot(){return {danger:this.danger,pos:this.pos.toArray() as [number,number,number],vel:this.vel.toArray() as [number,number,number],phase:phaseState(this)};}
+  restore(saved:{pos:[number,number,number];vel:[number,number,number];phase:PhaseState}){this.pos.fromArray(saved.pos);this.center.copy(this.pos);this.position.copy(this.pos);this.vel.fromArray(saved.vel);restorePhase(this,saved.phase);this.held=false;}
   dispose() {
     targets.delete(this);
     this.scene.remove(this.group);
@@ -516,9 +539,9 @@ export class Shark implements Target, SeaTarget {
   position = new THREE.Vector3();
   pos = new THREE.Vector3();
   private group = new THREE.Group();
-  yaw = Math.random() * 6.28;
-  private circle = Math.random() * 6.28;
-  private biteT = 6 + Math.random() * 4; // they circle a while first: time to swim for it
+  yaw = seaRandom() * 6.28;
+  private circle = seaRandom() * 6.28;
+  private biteT = 6 + seaRandom() * 4; // they circle a while first: time to swim for it
   private lunge = 0;
   bored = 0;
 
@@ -571,7 +594,7 @@ export class Shark implements Target, SeaTarget {
     let speed = 4.5;
     if (inWater) {
       this.biteT -= dt;
-      if (this.biteT <= 0) { this.lunge = 1.6; this.biteT = 6 + Math.random() * 4; }
+      if (this.biteT <= 0) { this.lunge = 1.6; this.biteT = 6 + seaRandom() * 4; }
     } else this.bored += dt;
     if (this.lunge > 0) {
       this.lunge -= dt;
@@ -589,7 +612,7 @@ export class Shark implements Target, SeaTarget {
     this.vel.set(Math.sin(this.yaw) * speed, 0, Math.cos(this.yaw) * speed);
     this.pos.y = surface(this.pos.x, this.pos.z) - 0.55;
     this.group.position.copy(this.pos);
-    this.group.rotation.set(0, this.yaw, Math.sin(performance.now() / 300) * 0.08);
+    this.group.rotation.set(0, this.yaw, Math.sin((seaRuntime.time * 1000) / 300) * 0.08);
     this.center.copy(this.pos);
     this.position.copy(this.pos).setY(this.pos.y - 0.3);
   }

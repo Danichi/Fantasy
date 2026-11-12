@@ -1,3 +1,5 @@
+import { segmentSphere } from './collision';
+import { seaRandom } from './runtime';
 import * as THREE from 'three';
 import { SEA_LEVEL } from '../worldMap';
 import { waveAt } from './seaState';
@@ -55,6 +57,7 @@ interface Shot {
   dmg: number;
   kind: ShotKind;
   life: number;
+  delay?: number;
   line?: THREE.Line;
 }
 
@@ -127,9 +130,9 @@ export class Gunnery {
     const dmg = 24 * ship.stats.calibre * (opts.dmg ?? 1);
     for (let k = 0; k < n; k++) {
       const muzzle = ship.toWorld(ship.gunLocal(side, k).add(new THREE.Vector3(-side * 0.6, 0, 0)));
-      const spread = (Math.random() - 0.5) * spread0;
+      const spread = (seaRandom() - 0.5) * spread0;
       const dir = aim.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), spread);
-      const vel = dir.multiplyScalar(BALL_SPEED * Math.cos(elev)).setY(BALL_SPEED * Math.sin(elev) + (Math.random() - 0.5) * 1.5 * (opts.spread ?? 1));
+      const vel = dir.multiplyScalar(BALL_SPEED * Math.cos(elev)).setY(BALL_SPEED * Math.sin(elev) + (seaRandom() - 0.5) * 1.5 * (opts.spread ?? 1));
       vel.x += Math.sin(ship.yaw) * ship.speed;
       vel.z += Math.cos(ship.yaw) * ship.speed;
       this.spawn(ship, muzzle, vel, dmg, shot, k * 0.08);
@@ -185,7 +188,7 @@ export class Gunnery {
     const mesh = new THREE.Mesh(kind === 'harpoon' ? this.harpoonGeo : this.ballGeo, mat);
     mesh.position.copy(pos);
     this.scene.add(mesh);
-    const shot: Shot = { mesh, pos: pos.clone(), vel, from, dmg, kind, life: 4 + delay };
+    const shot: Shot = { mesh, pos: pos.clone(), vel, from, dmg, kind, life: 5, delay };
     if (kind === 'harpoon') {
       shot.line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([pos, pos]), new THREE.LineBasicMaterial({ color: 0x3a2a1a }));
       this.scene.add(shot.line);
@@ -200,12 +203,13 @@ export class Gunnery {
 
   update(dt: number, ships: Ship[], monsters: SeaTarget[], foes: DeckFoe[] = []) {
     for (const s of this.shots) {
+      if(s.delay && s.delay>0){s.delay-=dt;continue;}
       s.life -= dt;
       const prev = s.pos.clone();
       s.vel.y -= 9.8 * dt;
       s.pos.addScaledVector(s.vel, dt);
       s.mesh.position.copy(s.pos);
-      if (s.kind === 'fire' && Math.random() < 0.6) this.fx.add.spawn({ pos: s.pos, spread: 0.3, count: 1, life: [0.15, 0.3], size: [0.3, 0.05], color: 0xffb040, color2: 0xff3a10 });
+      if (s.kind === 'fire' && seaRandom() < 0.6) this.fx.add.spawn({ pos: s.pos, spread: 0.3, count: 1, life: [0.15, 0.3], size: [0.3, 0.05], color: 0xffb040, color2: 0xff3a10 });
       if (s.kind === 'harpoon') {
         s.mesh.lookAt(s.pos.clone().add(s.vel));
         (s.line!.geometry as THREE.BufferGeometry).setFromPoints([Gunnery.bow(s.from), s.pos]);
@@ -213,16 +217,17 @@ export class Gunnery {
       // People on a deck: grape and swivel shot cut them down.
       if (s.kind === 'grape' || s.kind === 'swivel') for (const f of foes) {
         if (!f.alive || s.life <= 0) continue;
-        if (f.center.distanceTo(s.pos) < 1.1 || f.center.distanceTo(prev.clone().lerp(s.pos, 0.5)) < 1.1) {
+        if (segmentSphere(prev,s.pos,f.center,1.1)!==null) {
           f.takeHit({ damage: s.kind === 'swivel' ? 45 : 30, poise: 30, dir: s.vel.clone().setY(0).normalize(), at: f.center.clone(), crit: false, source: 'melee' });
           if (s.kind === 'swivel') s.life = 0;
         }
       }
-      // Ships.
-      for (const ship of ships) {
-        if (ship === s.from || ship.sunk || s.life <= 0) continue;
-        if (!ship.contains(s.pos, 0.2) && !ship.contains(prev.clone().lerp(s.pos, 0.5), 0.2)) continue;
-        if (s.kind === 'harpoon') { s.life = 0; continue; }
+      // Sweep the entire travelled segment, resolving the nearest contact first.
+      const hit=this.trace(prev,s.pos,s.from,ships,monsters);
+      if(hit && s.life>0){
+        s.pos.copy(prev.clone().lerp(s.pos,hit.t));
+        if(hit.ship && s.kind==='harpoon')s.life=0;
+        else if(hit.ship){const ship=hit.ship;
         const local = ship.toLocal(s.pos);
         const high = local.y > ship.def.deckY + 1.8;
         // Raking: a shot travelling down her length, bow to stern, does half as much again.
@@ -237,7 +242,7 @@ export class Gunnery {
           ship.damage(sec, dmg * 0.25);
         } else if (s.kind === 'grape' || s.kind === 'swivel') {
           ship.damage(sec, dmg * 0.15);
-          this.onCrewHit?.(ship, s.kind === 'grape' ? 1 + Math.round(Math.random() * rake) : 1, s.from);
+          this.onCrewHit?.(ship, s.kind === 'grape' ? 1 + Math.round(seaRandom() * rake) : 1, s.from);
         } else if (s.kind === 'fire') {
           ship.damage(sec, dmg * 0.5);
           ship.fire = Math.min(1, ship.fire + 0.35);
@@ -248,11 +253,7 @@ export class Gunnery {
         this.fx.alpha.spawn({ pos: s.pos, spread: 2.5, count: 10, life: [0.5, 1.2], size: [0.15, 0.05], color: 0x6a4a2a, alpha: 0.9, gravity: 9 });
         this.onImpact?.(s.pos, s.from);
         s.life = 0;
-      }
-      // Monsters.
-      for (const m of monsters) {
-        if (!m.alive || s.life <= 0) continue;
-        if (m.hitTest ? m.hitTest(s.pos, 0.4) : m.pos.distanceTo(s.pos) < m.radius + 0.4) {
+        } else if(hit.monster){const m=hit.monster;
           const k = s.kind === 'harpoon' ? 1 : s.kind === 'grape' ? 0.5 : s.kind === 'chain' ? 0.9 : s.kind === 'swivel' ? 0.7 : 0.8;
           m.hitBy(s.dmg * k, s.from.pos, s.kind);
           this.fx.alpha.spawn({ pos: s.pos, spread: 3, count: 14, life: [0.4, 0.9], size: [0.18, 0.05], color: 0x5a1a14, alpha: 0.9, gravity: 6 });
@@ -275,6 +276,17 @@ export class Gunnery {
     this.updateTethers(dt);
   }
 
+  private trace(a:THREE.Vector3,b:THREE.Vector3,from:Ship,ships:Ship[],monsters:SeaTarget[]) {
+    let best:{t:number;ship?:Ship;monster?:SeaTarget}|null=null;
+    for(const ship of ships){if(ship===from||ship.sunk)continue;const t=ship.sweptHit(a,b,.2);if(t!==null&&(!best||t<best.t))best={t,ship};}
+    for(const monster of monsters){if(!monster.alive)continue;let t:number|null=null;
+      if(monster.hitTest){const n=Math.max(1,Math.ceil(a.distanceTo(b)/.35));for(let i=0;i<=n;i++){if(monster.hitTest(a.clone().lerp(b,i/n),.4)){t=i/n;break;}}}
+      else t=segmentSphere(a,b,monster.pos,monster.radius+.4);
+      if(t!==null&&(!best||t<best.t))best={t,monster};
+    }
+    return best;
+  }
+
   // ---- harpoon lines ------------------------------------------------------------------------
 
   private tether(ship: Ship, target: SeaTarget, heavy: boolean) {
@@ -285,6 +297,8 @@ export class Gunnery {
     target.held = true;
     this.onTether?.(t, 'hold');
   }
+
+  restoreLine(ship:Ship,target:SeaTarget,saved:{len:number;heavy:boolean;strain:number;tow:number}){this.tether(ship,target,saved.heavy);const t=this.tethers[this.tethers.length-1];Object.assign(t,saved);}
 
   /** Haul on the line: shorten it (the monster comes to you, or you to it). */
   reel(ship: Ship, dt: number) {

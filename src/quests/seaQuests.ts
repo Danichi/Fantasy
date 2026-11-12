@@ -14,10 +14,10 @@ export const SEA_QUESTS: QuestDef[] = [
   {
     id: 'sea-legs', title: 'Sea Legs', giver: 'mira', region: 'portAurelle',
     summary: 'Dockmaster Mira will make a sailor of you: take a boat out, tack her cleanly through the wind, and bring her home to a berth.',
-    offer: 'Want to learn the water properly? Hire one of my boats (or buy your own off Barrow). Take her out past the harbour mouth, put her about through the wind clean as a whistle, and bring her back to a berth without scratching my paint.',
+    offer: 'Want to learn the water properly? Hire one of my boats (or buy your own off Barrow). I will lend you a training skiff. W raises sail, S lowers it, and A/D steer. Follow the three gold course markers, then slow down and dock at Aurelle. Your sailing HUD will guide you. P opens the ship and navigation screen.',
     acceptLabel: 'Teach me the sea.',
     stages: [
-      { note: 'Sail out and make a clean tack: turn your bow through the wind quickly, without stalling.', objectives: [{ type: 'signal', id: 'sea-tack', text: 'Make a clean tack (turn through the wind, quickly)' }] },
+      { note: 'Ask Mira for the free training skiff, press W to raise sail, and steer through the three gold markers. P opens your ship guide.', objectives: [{ type: 'signal', id: 'sea-course', text: 'Sail through Mira’s three marked harbour buoys' }] },
       { note: 'Bring her back and dock at Port Aurelle (E when slow in the harbour).', objectives: [{ type: 'signal', id: 'sea-dock', text: 'Dock at a port' }] },
       { note: 'Tell Mira how it went.', objectives: [{ type: 'talk', npc: 'mira', text: 'Report to Dockmaster Mira', say: 'Not a scratch! You\'ve sea legs after all. Here: a sailor\'s first pay, and something to remember it by. Press N any time to see what the sea is teaching you.' }] },
     ],

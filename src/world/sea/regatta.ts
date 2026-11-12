@@ -1,3 +1,4 @@
+import { seaRandom } from './runtime';
 import { AURELLE, LIGHTHOUSE } from '../portCity';
 import * as THREE from 'three';
 import { events } from '../../core/events';
@@ -152,7 +153,7 @@ export class Regatta {
     const rel = Math.atan2(Math.sin(want - into), Math.cos(want - into));
     if (Math.abs(rel) < 0.85) {
       // Beat: hold a close-hauled tack, going about now and then.
-      if (Math.random() < dt / 25) r.rivalTack *= -1;
+      if (seaRandom() < dt / 25) r.rivalTack *= -1;
       want = into + r.rivalTack * 0.9;
     }
     const err = Math.atan2(Math.sin(want - rival.yaw), Math.cos(want - rival.yaw));
