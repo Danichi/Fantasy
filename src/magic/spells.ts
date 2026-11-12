@@ -10,6 +10,7 @@ import { Q } from '../core/settings';
 import type { Player } from '../player/player';
 import { ITEMS } from '../items/itemDefs';
 import { MagicCircles } from './circles';
+import { preloadVfx, Billboard, loopTex, burstTex, vfxMaterial, setFrame, setOpacity } from '../fx/vfxSprites';
 
 // Spell effects: Fireball projectiles, Healing Light aura, potion sparkles.
 // Dynamic lights come from a fixed pool created up front so adding a light
@@ -116,6 +117,7 @@ export class Spells {
   private time = 0;
   private circles: MagicCircles;
   private castSeen: object | null = null;
+  private booms: { b: Billboard; t: number }[] = [];
 
   /** Lend a pooled light to something else (building interiors). */
   borrowLight(owner: object) {
@@ -128,6 +130,7 @@ export class Spells {
 
   constructor(private scene: THREE.Scene, private fx: FX, private player: Player) {
     this.circles = new MagicCircles(scene);
+    preloadVfx();
     this.lights = new LightPool(scene, Math.max(1, Q.maxDynamicLights));
     this.fireMat = new THREE.ShaderMaterial({ vertexShader: FIRE_VERT, fragmentShader: FIRE_FRAG, uniforms: { uTime: { value: 0 } } });
     this.glowMat = new THREE.SpriteMaterial({ map: glowTexture(), color: 0xff7414, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
@@ -147,6 +150,15 @@ export class Spells {
     const glow = new THREE.Sprite(this.glowMat);
     glow.scale.setScalar(1.3);
     group.add(core, glow);
+    // Painted, looping roil of flame around the core (once the texture has loaded).
+    const roil = loopTex('fireball');
+    if (roil) {
+      const b = new Billboard(vfxMaterial({ map: roil, grid: 4, gain: 2.4, occlude: 0.5 }));
+      b.scale.setScalar(1.25);
+      b.name = 'roil';
+      group.add(b);
+      core.scale.setScalar(0.6);
+    }
     group.position.copy(from);
     this.scene.add(group);
     const light = this.lights.acquire(group);
@@ -183,6 +195,15 @@ export class Spells {
       events.emit('enemyHit', { at: t.center.clone(), amount: r.damage, crit: r.crit, enemyId: t.id });
     }
     const fx = this.fx;
+    // The painted explosion: a fireball that blooms and breaks into smoke.
+    const boom = burstTex('fire');
+    if (boom) {
+      const b = new Billboard(vfxMaterial({ map: boom, grid: 4, gain: 2.2, occlude: 0.6 }));
+      b.position.copy(at);
+      b.roll = Math.random() * Math.PI * 2;
+      this.scene.add(b);
+      this.booms.push({ b, t: 0 });
+    }
     // Hot core flash, then a wide fire burst.
     fx.add.spawn({ pos: at, spread: 1.5, count: 14, life: [0.12, 0.22], size: [1.6, 0.6], color: 0xfff6d8, color2: 0xffa040, jitter: 0.2 });
     fx.add.spawn({ pos: at, spread: 7, count: 110, life: [0.25, 0.75], size: [0.8, 0.08], color: 0xfff05a, color2: 0xff1e00, drag: 3, jitter: 0.4 });
@@ -288,6 +309,11 @@ export class Spells {
         continue;
       }
       fb.group.position.copy(to);
+      const roil = fb.group.getObjectByName('roil') as Billboard | undefined;
+      if (roil) {
+        setFrame(roil.material as THREE.Material, (this.time * 24 + fb.phase) % 16);
+        roil.roll += dt * 3;
+      }
       fb.group.children[0].rotation.x += dt * 5;
       fb.group.children[0].rotation.y += dt * 7;
       if (fb.light) fb.light.position.copy(to);
@@ -306,6 +332,16 @@ export class Spells {
       if (Math.random() < 0.5) this.fx.alpha.spawn({ pos: to, spread: 0.3, count: 1, life: [0.5, 0.9], size: [0.2, 0.5], color: 0x2d2622, alpha: 0.35, upBias: 1 });
     }
     this.balls = this.balls.filter((b) => b.life > -99);
+
+    for (const bm of this.booms) {
+      bm.t += dt;
+      const u = Math.min(1, bm.t / 0.85);
+      setFrame(bm.b.material as THREE.Material, Math.min(15, u * 16));
+      setOpacity(bm.b.material as THREE.Material, Math.min(1, (1 - u) * 4));
+      bm.b.scale.setScalar(4.6 * (0.9 + 0.2 * u));
+      if (u >= 1) this.scene.remove(bm.b);
+    }
+    this.booms = this.booms.filter((bm) => bm.t < 0.85);
 
     for (const f of this.flashes) {
       f.t += dt;
