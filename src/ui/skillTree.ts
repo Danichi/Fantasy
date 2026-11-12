@@ -5,6 +5,32 @@ import { ROSTER } from '../paths/roster';
 import { emblemIcon } from './icons';
 import { EMBLEMS } from './art/emblems';
 
+// Painted art for the tree screen (public/assets/ui/tree, generated with
+// Higgsfield): a backdrop per family and metal node frames that go from dark
+// iron (locked) to silver (can learn) to glowing gold (learned).
+const TREE_ART = '/assets/ui/tree/';
+const artImgs = new Map<string, HTMLImageElement>();
+function art(name: string): HTMLImageElement | null {
+  let img = artImgs.get(name);
+  if (!img) {
+    img = new Image();
+    img.src = TREE_ART + name + '.webp';
+    artImgs.set(name, img);
+  }
+  return img.complete && img.naturalWidth ? img : null;
+}
+/** Painted backdrop, scaled to cover the canvas. Returns false until it has loaded. */
+function drawBackdrop(c: CanvasRenderingContext2D, w: number, h: number, name: string, alpha = 1) {
+  const img = art(name);
+  if (!img) return false;
+  const s = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+  const iw = img.naturalWidth * s, ih = img.naturalHeight * s;
+  c.globalAlpha = alpha;
+  c.drawImage(img, (w - iw) / 2, (h - ih) / 2, iw, ih);
+  c.globalAlpha = 1;
+  return true;
+}
+
 const emblemImgs = new Map<string, HTMLImageElement>();
 /** The emblem as an image for the tree canvas (loads once, then draws every frame). */
 function emblemImg(key: string) {
@@ -312,6 +338,7 @@ export class TreeView {
 
   private bgWheel(w: number, h: number) {
     const c = this.ctx;
+    drawBackdrop(c, w, h, 'bg_combat', 0.95);
     const g = c.createRadialGradient(w / 2, h / 2, 10, w / 2, h / 2, Math.max(w, h) * 0.6);
     g.addColorStop(0, hexA(this.col, 0.14));
     g.addColorStop(0.6, 'rgba(10,12,18,0)');
@@ -438,7 +465,11 @@ export class TreeView {
     g.addColorStop(0.45, 'rgba(20,14,22,0.6)');
     g.addColorStop(1, '#07080c');
     c.fillStyle = g;
+    // Over the painted nebula the wash only tints it toward the school's colour.
+    const painted = drawBackdrop(c, w, h, 'bg_magic');
+    if (painted) c.globalAlpha = 0.45;
     c.fillRect(0, 0, w, h);
+    c.globalAlpha = 1;
     for (let i = 0; i < 5; i++) {
       const x = (0.2 + hash(d.id + i) * 0.6) * w, y = (0.2 + hash(i + d.id) * 0.5) * h, r = (0.18 + hash('n' + i) * 0.2) * w;
       const gg = c.createRadialGradient(x, y, 0, x, y, r);
@@ -472,7 +503,10 @@ export class TreeView {
     g.addColorStop(0.75, '#0d130e');
     g.addColorStop(1, '#0a0906');
     c.fillStyle = g;
+    const painted = drawBackdrop(c, w, h, 'bg_calling');
+    if (painted) c.globalAlpha = 0.35;
     c.fillRect(0, 0, w, h);
+    c.globalAlpha = 1;
     const glow = c.createRadialGradient(w / 2, h * 0.45, 10, w / 2, h * 0.45, w * 0.6);
     glow.addColorStop(0, hexA(col, 0.1));
     glow.addColorStop(1, 'rgba(0,0,0,0)');
@@ -591,6 +625,40 @@ export class TreeView {
       c.fill();
       c.shadowBlur = 0;
     }
+  }
+
+  /**
+   * The painted metal frame over a node (combat and magic trees; the calling
+   * trees keep their leaves and blossoms): iron while locked, silver once it
+   * can be learned, glowing gold when learned. Magic nodes also show their
+   * skill's emblem inside the frame.
+   */
+  private paintedFrame(n: TreeNode, on: boolean, av: boolean, gated: boolean) {
+    if (this.d.fam === 'calling' && n.type !== 'center') return;
+    const f = FRAME[n.type];
+    if (!f) return;
+    const [shape, size] = f;
+    const metal = on ? 'gold' : av ? 'silver' : 'iron';
+    const name = shape === 'capstone' || shape === 'choice' ? `frame_${shape}` : `frame_${metal}_${shape}`;
+    const img = art(name);
+    if (!img) return;
+    const c = this.ctx;
+    c.save();
+    c.shadowBlur = on ? 14 : 0;
+    c.shadowColor = this.gold;
+    if (this.d.fam === 'magic' && (n.type === 'active' || n.type === 'keystone')) {
+      const em = EMBLEMS[`${this.d.id}:${n.name}`] ? emblemImg(`${this.d.id}:${n.name}`) : null;
+      if (em?.complete && em.naturalWidth) {
+        c.save();
+        if (!on) c.filter = 'grayscale(0.85)';
+        c.drawImage(em, -size * 0.36, -size * 0.36, size * 0.72, size * 0.72);
+        c.restore();
+      }
+    }
+    // Capstones and choices are always gold art: dim them until they're earned.
+    if (!on && (shape === 'capstone' || shape === 'choice')) c.filter = gated ? 'grayscale(1) brightness(0.55)' : 'grayscale(0.6) brightness(0.8)';
+    c.drawImage(img, -size / 2, -size / 2, size, size);
+    c.restore();
   }
 
   private nodeShape(n: TreeNode, ts: number) {
@@ -771,6 +839,7 @@ export class TreeView {
       c.arc(0, 0, 26, 0, 7);
       c.stroke();
     }
+    this.paintedFrame(n, on, av, gated);
     c.restore();
     // Rank arcs around owned skills.
     const v = P.node(d.id, n.id);
@@ -800,6 +869,17 @@ export class TreeView {
     }
   }
 }
+
+/** Which painted frame and how big (world units) each node type gets. */
+const FRAME: Partial<Record<TreeNode['type'], [shape: string, size: number]>> = {
+  minor: ['stud', 22],
+  notable: ['diamond', 30],
+  active: ['ring', 46],
+  choice: ['choice', 34],
+  keystone: ['star', 50],
+  cap: ['capstone', 66],
+  center: ['capstone', 96],
+};
 
 /** Draw a sealed placeholder for disciplines whose tree isn't written yet. */
 export function drawSealed(cv: HTMLCanvasElement, learned: boolean) {
