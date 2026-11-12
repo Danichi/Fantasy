@@ -22,7 +22,7 @@ export const AURELLE = {
   berth: [2938, 150],
   stable: [2716, 164],
   thievesDoor: [2873.4, 300],
-  dormitory: [2790, 64.4],
+  dormitory: [2785.7, 96],
   saltyAnchor: [2784, 252],
   drownedLantern: [2880, 300],
   bell: [2904, 176],
@@ -59,6 +59,16 @@ export const PORT_BERTHS: [number, number, number][] = [
   [2962, 296, Math.PI / 2],
   [2972, 316, Math.PI / 2],
 ];
+/** Four working piers, then spaced offshore moorings for larger saved fleets. */
+export function portOwnedBerth(index: number): [number, number, number] {
+  if (index < PORT_BERTHS.length - 1) return PORT_BERTHS[index];
+  const extra = index - (PORT_BERTHS.length - 1);
+  return [
+    3035 + Math.floor(extra / 5) * 50,
+    70 + (extra % 5) * 50,
+    Math.PI / 2,
+  ];
+}
 export const PORT_LANDING: P2 = [2938, 196];
 export const PORT_DISTRICTS = [
   {

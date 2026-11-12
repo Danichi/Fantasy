@@ -5,7 +5,7 @@ import { heightAt } from '../terrainHeight';
 import { addDropGlow, bestRarity } from '../dropGlow';
 import { SEA_LEVEL } from '../worldMap';
 import { waterSurfaceAt } from '../waterLevel';
-import { QUAY_X, PORT_BERTHS, PORT_LANDING, AURELLE, quayAt } from '../portCity';
+import { QUAY_X, PORT_BERTHS, PORT_LANDING, AURELLE, quayAt, portOwnedBerth } from '../portCity';
 import { buildCharacter, type BuiltCharacter, type Look } from '../../npc/charBuilder';
 import { Ship, NO_CONTROL, POINT_NAMES, SECTION_NAMES, type ShipControls, type ShipPerks } from './ship';
 import { HULLS, HULL_ORDER, UPGRADES, SLOTS, STOCK_FIT, type HullId, type Fit } from './shipTypes';
@@ -427,6 +427,13 @@ export class Sailing {
   }
 
   private freeBerth(port: Port) {
+    if (port.id === 'portAurelle') {
+      // Keep Mira's hire berth free, and never stack a large fleet at the last pier.
+      for (let i = 0; ; i++) {
+        const b = portOwnedBerth(i);
+        if (![...this.ships.values()].some((s) => !s.sunk && Math.hypot(s.pos.x - b[0], s.pos.z - b[1]) < 18)) return b;
+      }
+    }
     for (const b of port.berths) {
       const taken = [...this.ships.values()].some((s) => !s.sunk && Math.hypot(s.pos.x - b[0], s.pos.z - b[1]) < 9);
       if (!taken) return b;

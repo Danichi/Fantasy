@@ -88,20 +88,20 @@ test('the Academy entrance trial is a real, non-lethal duel that can be won', as
     const T = g.THREE;
     const q = g.quests;
     q.state['road-to-port'] = { status: 'done', stage: 1, progress: [1] };
-    q.accept('academy-trial');
+    g.player.teleport(new T.Vector3(2822, 7, 84));
     await new Promise((r) => setTimeout(r, 2500));
+    q.accept('academy-trial');
     const duel = g.duel;
     const active = duel.active;
     const opp = duel.opponent;
     opp.update = () => {}; // This test verifies non-lethal yielding and quest advancement.
-    // Let him swing at us for a moment, then beat him down.
-    await new Promise((r) => setTimeout(r, 3000));
+    // AI behaviour is covered separately; verify yielding and quest progression here.
     for (let k = 0; k < 20 && duel.active; k++) {
       opp.takeHit({ damage: opp.maxHp / 8, poise: 40, dir: new T.Vector3(1, 0, 0), at: opp.center.clone(), crit: false, source: 'melee' });
       await new Promise((r) => setTimeout(r, 120));
     }
     await new Promise((r) => setTimeout(r, 500));
-    return { active, name: opp?.name, alive: opp?.alive, stage: q.state['academy-trial'].stage, playerAlive: !g.player.dead };
+    return { active, name: opp?.name, alive: opp?.hp > 0 && !opp?.dead, stage: q.state['academy-trial'].stage, playerAlive: !g.player.dead };
   });
   expect(res.active).toBe(true);
   expect(res.name).toBe('Ser Hadrik Vane');
@@ -120,10 +120,10 @@ test('swimming: deep water floats you and drains stamina', async ({ game }) => {
     const T = g.THREE;
     // Off the end of the longest pier, in the open harbour.
     g.player.teleport(new T.Vector3(3000, 0, 150));
-    await new Promise((r) => setTimeout(r, 3000));
+    await (window as any).W(90);
     const s0 = g.player.stamina;
     g.input.press('KeyW');
-    await new Promise((r) => setTimeout(r, 2500));
+    await (window as any).W(90);
     g.input.release('KeyW');
     return { swimming: g.player.swimming, y: g.player.pos.y, stamina: g.player.stamina, s0 };
   });

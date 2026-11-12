@@ -978,6 +978,7 @@ async function boot() {
   /** A sparring bout in the Academy ring; `onWin` runs if the player wins. */
   const bout = (spec: { name: string; look: Look; hp: number; damage?: number; pace?: number;level?:number;style?:DuelStyle }, onWin: () => void) => {
     if (player.mounted) horses.dismount();
+    portLife.drills.stop();
     duelWin = onWin;
     duel.start({ ...spec, ring: ringAt, radius: 9 });
     hud.toast(`${spec.name}: "Blades up. Begin!"`);
@@ -1006,6 +1007,7 @@ async function boot() {
   const startTourney = () => {
     const rec = npcs.find('gawen')?.rec;
     if (player.mounted) horses.dismount();
+    portLife.drills.stop();
     duelWin = () => quests.signal('tourney-won');
     duel.start({ name: rec?.name ?? 'Ser Gawen Ashby', look: rec!.look, hp: 340, damage: 15, pace: 0.95, ring: listsAt, radius: 9 });
     hud.toast('Grand Marshal Hart: "For Crown and Lance. Begin!"');
@@ -1366,8 +1368,8 @@ async function boot() {
     });
   /** The undercity: the Quiet Hands in their den, and whatever the Hands' jobs put in the cistern. */
   const fillUndercity = (it: Interior, extras: Interactable[]) => {
-    if (it.keeperSpot) lookInside(SALLOW_LOOK, it.keeperSpot, it, extras, 'idle', 'Talk to Mother Sallow', () => lowerCity.den());
-    if (it.spots.nix) lookInside(NIX_LOOK, it.spots.nix, it, extras, 'idle', 'Talk to Nix the Fence', () => lowerCity.nix());
+    if (worldFlags.denKnown && it.keeperSpot) lookInside(SALLOW_LOOK, it.keeperSpot, it, extras, 'idle', 'Talk to Mother Sallow', () => lowerCity.den());
+    if (worldFlags.denKnown && it.spots.nix) lookInside(NIX_LOOK, it.spots.nix, it, extras, 'idle', 'Talk to Nix the Fence', () => lowerCity.nix());
     const c = it.spots.cistern?.pos;
     if (c && quests.isActive('cistern-rats', 0)) {
       // A brood around the pool, and their mother, fat as a hound.
@@ -1469,7 +1471,7 @@ async function boot() {
     const extras: Interactable[] = [];
     portLife.interior(it,extras);
     it.setDaylight(1 - time.state.night);
-    const keeper = it.door.keeper;
+    const keeper = it.door.keeper==='aurelle-factor'&&quests.isDone('aurelle-false-lights')?(quests.flag('aurelle-false-lights','warehouse')==='families'?'aurelle-cook':'mira'):it.door.keeper;
     const spot = it.keeperSpot;
     const svc = keeper ? town.npcs.find((n) => n.spec.id === keeper) : undefined;
     if (svc && spot) {
@@ -1852,6 +1854,7 @@ async function boot() {
     close:()=>dialogue.close(),save:()=>save(),give:giveItem,count:countItem,take:takeItem,
     enter:door=>void realm.enterInterior(door,door.kind??'hall',world.mats,spells,(label,text)=>dialogue.show('Port Aurelle',label,text,[{label:'Close.',run:()=>dialogue.close()}])),
     craft:(kind,name)=>arms.craft.show(kind,name,0),duelling:()=>duel.active,bout,
+    dismount:()=>{if(player.mounted)horses.dismount();},
     trade:(show,back)=>sailing.tradeOptions('portAurelle',show,back),
     pennant:()=>{for(const {r:record,ship}of sailing.ownedShips()){record.flag=0xd3b66e;ship?.repaint(record.hullColor,record.trim,record.sail,record.flag);}},
   });

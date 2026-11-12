@@ -1217,84 +1217,297 @@ export class Interior {
   }
 
   /** Authored Aurelle rooms share building blocks, but have distinct plans and purposes. */
-  private portRoom(){
-    if(this.door.pos.x<2690||this.door.pos.x>3000)return false;
-    const name=this.door.name??'',m=this.m,sm=sharedMats(),back=-this.D/2,left=-this.W/2,right=this.W/2;
-    const ledger=(x:number,z:number,text:string)=>{this.box(sm.ledger,.55,.06,.4,x,.86,z);this.inspectProp(x,z,'Read '+text,text+'. The pages record people, work and promises that keep the harbour running.');};
-    const chart=(x:number,z:number)=>{this.table(x,z,2.5,1.7);this.box(sm.cloth[2],2.1,.015,1.3,x,.84,z);for(let i=0;i<5;i++)this.cyl(sm.iron,.04,.06,x-.8+i*.4,.88,z+Math.sin(i)*.35,false,6);};
-    if(this.kind==='lighthouse'){
+  private portRoom() {
+    if (this.door.pos.x < 2690 || this.door.pos.x > 3000) return false;
+    const name = this.door.name ?? '',
+      m = this.m,
+      sm = sharedMats(),
+      back = -this.D / 2,
+      left = -this.W / 2,
+      right = this.W / 2;
+    const ledger = (x: number, z: number, text: string) => {
+      this.box(sm.ledger, 0.55, 0.06, 0.4, x, 0.86, z);
+      this.inspectProp(
+        x,
+        z,
+        'Read ' + text,
+        text +
+          '. The pages record people, work and promises that keep the harbour running.',
+      );
+    };
+    const chart = (x: number, z: number) => {
+      this.table(x, z, 2.5, 1.7);
+      this.box(sm.cloth[2], 2.1, 0.015, 1.3, x, 0.84, z);
+      for (let i = 0; i < 5; i++)
+        this.cyl(
+          sm.iron,
+          0.04,
+          0.06,
+          x - 0.8 + i * 0.4,
+          0.88,
+          z + Math.sin(i) * 0.35,
+          false,
+          6,
+        );
+    };
+    if (this.kind === 'lighthouse') {
       // A two-level signal house with stairs, a machinery well and a working gallery.
-      this.cyl(m.stone,.85,5.2,0,2.6,-.6,true,14);
-      for(let i=0;i<15;i++)this.box(m.stone,1.65,.26, .44,right-1.15,.13+i*.26,3-i*.42,0,true);
-      this.box(m.planks,this.W-1,.3,2,0,3.9,back+1.4,0,true);
-      this.box(m.planks,1.8,.3,this.D-3,left+1.2,3.9,0,0,true);
-      this.box(sm.iron,.1,1,this.D-3,left+2.1,4.5,0);
-      this.box(sm.iron,this.W-1,1,.1,0,4.5,back+2.45);
-      const lens=new THREE.Mesh(new THREE.IcosahedronGeometry(.9,1),sm.flameCore);lens.position.set(0,5.2,-.6);this.group.add(lens);
-      for(const x of [-1.7,1.7])this.box(sm.iron,.12,2.7,.15,x,5.2,-.6);
-      chart(left+1.7,2);this.shelf(left+.5,back+2,Math.PI/2,2.5,'books');
-      this.inspectProp(left+1.6,2,'Read Edda’s signal book','Two flashes: the main channel. Three flashes: a signal retired forty years ago. Edda has underlined the distinction twice.');
-      this.inspectProp(right-1,back+1.5,'Inspect the shutter mechanism','A hand crank, a brass timing wheel and an older shutter cut with fresh tool marks. The public lamp could have been copied from below.');
-      this.spots.signal={pos:this.at(0,back+1.4,4.1),yaw:0,seated:false};
-      this.wants.push({pos:this.at(0,0,5.5),color:0xffcf79,intensity:6,distance:15,decay:1.3,fire:false});return true;
+      this.cyl(m.stone, 0.85, 5.2, 0, 2.6, -0.6, true, 14);
+      for (let i = 0; i < 15; i++)
+        this.box(
+          m.stone,
+          1.65,
+          0.26,
+          0.44,
+          right - 1.15,
+          0.13 + i * 0.26,
+          3 - i * 0.42,
+          0,
+          true,
+        );
+      this.box(m.planks, this.W - 1, 0.3, 2, 0, 3.9, back + 1.4, 0, true);
+      this.box(m.planks, 1.8, 0.3, this.D - 3, left + 1.2, 3.9, 0, 0, true);
+      this.box(sm.iron, 0.1, 1, this.D - 3, left + 2.1, 4.5, 0);
+      this.box(sm.iron, this.W - 3.2, 1, 0.1, -1, 4.5, back + 2.45);
+      const lens = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.9, 1),
+        sm.flameCore,
+      );
+      lens.position.set(0, 5.2, -0.6);
+      this.group.add(lens);
+      for (const x of [-1.7, 1.7])
+        this.box(sm.iron, 0.12, 2.7, 0.15, x, 5.2, -0.6);
+      chart(left + 1.7, 2);
+      this.shelf(left + 0.5, back + 2, Math.PI / 2, 2.5, 'books');
+      this.inspectProp(
+        left + 1.6,
+        2,
+        'Read Edda’s signal book',
+        'Two flashes: the main channel. Three flashes: a signal retired forty years ago. Edda has underlined the distinction twice.',
+      );
+      this.inspectProp(
+        right - 1,
+        back + 1.5,
+        'Inspect the shutter mechanism',
+        'A hand crank, a brass timing wheel and an older shutter cut with fresh tool marks. The public lamp could have been copied from below.',
+      );
+      this.spots.signal = {
+        pos: this.at(0, back + 1.4, 4.1),
+        yaw: 0,
+        seated: false,
+      };
+      this.wants.push({
+        pos: this.at(0, 0, 5.5),
+        color: 0xffcf79,
+        intensity: 6,
+        distance: 15,
+        decay: 1.3,
+        fire: false,
+      });
+      return true;
     }
-    if(name==='Your Room at the Salty Anchor'){
-      this.box(m.timber,2.2,.45,3,right-1.5,.225,back+2.1,0,true);this.box(sm.cloth[2],2,.15,2.8,right-1.5,.55,back+2.1);
-      this.box(sm.cloth[0],1.5,.2,.55,right-1.5,.7,back+1.1);
-      this.box(m.planks,1.8,.75,1.1,left+1.4,.375,back+2,0,true);this.box(sm.iron,.2,.3,.08,left+1.4,.5,back+2.6);
-      chart(0,back+1.5);this.seat(0,back+2.8,Math.PI);this.rug(0,1,3.5,2.3);
-      this.inspectProp(left+1.4,back+2,'Inspect your chest','A sound lock, a dry lining and your name on a blue tag. Things left here will wait for you.');
-      this.inspectProp(0,back+1.5,'Read the pinned chart','Aurelle is marked in blue ink: Academy above, Exchange in the middle, the sea beyond. There is room in the margin for the places you will go.');return true;
+    if (name === 'Your Room at the Salty Anchor') {
+      this.box(m.timber, 2.2, 0.45, 3, right - 1.5, 0.225, back + 2.1, 0, true);
+      this.box(sm.cloth[2], 2, 0.15, 2.8, right - 1.5, 0.55, back + 2.1);
+      this.box(sm.cloth[0], 1.5, 0.2, 0.55, right - 1.5, 0.7, back + 1.1);
+      this.box(m.planks, 1.8, 0.75, 1.1, left + 1.4, 0.375, back + 2, 0, true);
+      this.box(sm.iron, 0.2, 0.3, 0.08, left + 1.4, 0.5, back + 2.6);
+      chart(0, back + 1.5);
+      this.seat(0, back + 2.8, Math.PI);
+      this.rug(0, 1, 3.5, 2.3);
+      this.inspectProp(
+        left + 1.4,
+        back + 2,
+        'Inspect your chest',
+        'A sound lock, a dry lining and your name on a blue tag. Things left here will wait for you.',
+      );
+      this.inspectProp(
+        0,
+        back + 1.5,
+        'Read the pinned chart',
+        'Aurelle is marked in blue ink: Academy above, Exchange in the middle, the sea beyond. There is room in the margin for the places you will go.',
+      );
+      return true;
     }
-    if(name.includes('Customs House')){
-      this.counter(0,1,this.W-3,0);this.table(-2,back+2,2,1);this.table(2,back+2,2,1);
-      for(const x of [left+.6,right-.6])this.shelf(x,back+2,x<0?Math.PI/2:-Math.PI/2,3.5,'books');
-      ledger(-2,back+2,'the certified customs copy');ledger(2,back+2,'the arrivals slate');
-      this.keeperSpot={pos:this.at(0,-.2),yaw:0,seated:false};return true;
+    if (name.includes('Customs House')) {
+      this.counter(0, 1, this.W - 3, 0);
+      this.table(-2, back + 2, 2, 1);
+      this.table(2, back + 2, 2, 1);
+      for (const x of [left + 0.6, right - 0.6])
+        this.shelf(
+          x,
+          back + 2,
+          x < 0 ? Math.PI / 2 : -Math.PI / 2,
+          3.5,
+          'books',
+        );
+      ledger(-2, back + 2, 'the certified customs copy');
+      ledger(2, back + 2, 'the arrivals slate');
+      this.keeperSpot = { pos: this.at(0, -0.2), yaw: 0, seated: false };
+      return true;
     }
-    if(name.includes('Bonded Warehouse')){
-      for(const x of [left+2,right-2])for(let i=0;i<4;i++){this.crate(x,back+2+i*2,1.3);this.box(m.planks,1.1,1.1,1.1,x,1.85,back+2+i*2,0,true);}
-      this.table(0,back+2,2.3,1.2);ledger(0,back+2,'Renn’s private cargo tally');this.keeperSpot={pos:this.at(1.8,back+3),yaw:0,seated:false};
-      this.inspectProp(left+2,0,'Inspect the company marks','Fresh Renn Maritime paint barely covers a fishing cooperative’s stamp. A smaller mark records the date of insurance.');return true;
+    if (name.includes('Bonded Warehouse')) {
+      for (const x of [left + 2, right - 2])
+        for (let i = 0; i < 4; i++) {
+          this.crate(x, back + 2 + i * 2, 1.3);
+          this.box(m.planks, 1.1, 1.1, 1.1, x, 1.85, back + 2 + i * 2, 0, true);
+        }
+      this.table(0, back + 2, 2.3, 1.2);
+      ledger(0, back + 2, 'Renn’s private cargo tally');
+      this.keeperSpot = { pos: this.at(1.8, back + 3), yaw: 0, seated: false };
+      this.inspectProp(
+        left + 2,
+        0,
+        'Inspect the company marks',
+        'Fresh Renn Maritime paint barely covers a fishing cooperative’s stamp. A smaller mark records the date of insurance.',
+      );
+      return true;
     }
-    if(name.includes('Sail Loft')){
-      this.table(0,0,Math.max(3,this.W-4),3);this.box(sm.cloth[0],this.W-4,.025,2.4,0,.86,0);
-      this.shelf(left+.5,back+2,Math.PI/2,3.5,'cloth');for(let i=0;i<4;i++)this.cyl(sm.cloth[i],.25,2.2,right-.8,1.1,back+1+i*.7,false,10);
-      this.inspectProp(0,0,'Inspect the cutting pattern','A cutter’s mainsail, annotated with repair patches and measurements in three different hands.');return true;
+    if (name.includes('Sail Loft')) {
+      this.table(0, 0, Math.max(3, this.W - 4), 3);
+      this.box(sm.cloth[0], this.W - 4, 0.025, 2.4, 0, 0.86, 0);
+      this.shelf(left + 0.5, back + 2, Math.PI / 2, 3.5, 'cloth');
+      for (let i = 0; i < 4; i++)
+        this.cyl(
+          sm.cloth[i],
+          0.25,
+          2.2,
+          right - 0.8,
+          1.1,
+          back + 1 + i * 0.7,
+          false,
+          10,
+        );
+      this.inspectProp(
+        0,
+        0,
+        'Inspect the cutting pattern',
+        'A cutter’s mainsail, annotated with repair patches and measurements in three different hands.',
+      );
+      return true;
     }
-    if(name.includes('Expedition Office')){
-      chart(0,back+2);for(const x of [left+1,right-1])for(let z=0;z<3;z++)this.crate(x,z*1.1,.8);
-      this.shelf(left+.4,back+1,Math.PI/2,3,'jars');this.keeperSpot={pos:this.at(0,back+3.2),yaw:Math.PI,seated:false};
-      this.inspectProp(0,back+2,'Read Bruni’s packing list','Lanterns tested. Rope inspected. Food for the crossing and seven days beyond it. Every box carries a second signature.');return true;
+    if (name.includes('Expedition Office')) {
+      chart(0, back + 2);
+      for (const x of [left + 1, right - 1])
+        for (let z = 0; z < 3; z++) this.crate(x, z * 1.1, 0.8);
+      this.shelf(left + 0.4, back + 1, Math.PI / 2, 3, 'jars');
+      this.keeperSpot = {
+        pos: this.at(0, back + 3.2),
+        yaw: Math.PI,
+        seated: false,
+      };
+      this.inspectProp(
+        0,
+        back + 2,
+        'Read Bruni’s packing list',
+        'Lanterns tested. Rope inspected. Food for the crossing and seven days beyond it. Every box carries a second signature.',
+      );
+      return true;
     }
-    if(name.includes('Coach House')){
-      this.counter(0,back+2,this.W-4,0);for(const x of [left+2,right-2]){this.bench(x,0,3,Math.PI/2);this.crate(x,back+1,.8);}
-      this.keeperSpot={pos:this.at(0,back+1),yaw:0,seated:false};this.inspectProp(0,back+2,'Read the coach board','Elder Glen, the Wayfarer’s Rest and the port. Departures follow the road bells; the ostler holds a seat for late travellers.');return true;
+    if (name.includes('Coach House')) {
+      this.counter(0, back + 2, this.W - 4, 0);
+      for (const x of [left + 2, right - 2]) {
+        this.bench(x, 0, 3, Math.PI / 2);
+        this.crate(x, back + 1, 0.8);
+      }
+      this.keeperSpot = { pos: this.at(0, back + 1), yaw: 0, seated: false };
+      this.inspectProp(
+        0,
+        back + 2,
+        'Read the coach board',
+        'Elder Glen, the Wayfarer’s Rest and the port. Departures follow the road bells; the ostler holds a seat for late travellers.',
+      );
+      return true;
     }
-    if(name.includes('Citadel')){
-      chart(0,0);this.bookcase(left+.4,back+2,Math.PI/2,3,3);this.bookcase(right-.4,back+2,-Math.PI/2,3,3);
-      this.inspectProp(0,0,'Study the approaches chart','Reefs, channels and signal bearings, corrected in a careful hand after every winter storm. An older channel is crossed out in red.');return true;
+    if (name.includes('Citadel')) {
+      chart(0, 0);
+      this.bookcase(left + 0.4, back + 2, Math.PI / 2, 3, 3);
+      this.bookcase(right - 0.4, back + 2, -Math.PI / 2, 3, 3);
+      this.inspectProp(
+        0,
+        0,
+        'Study the approaches chart',
+        'Reefs, channels and signal bearings, corrected in a careful hand after every winter storm. An older channel is crossed out in red.',
+      );
+      return true;
     }
-    if(name.includes('Assembly Hall')){
-      for(const x of [-this.W/4,this.W/4]){this.table(x,0,this.W/3,2);this.bench(x,1.4,this.W/3,Math.PI);this.bench(x,-1.4,this.W/3,0);}
-      for(let i=0;i<3;i++)this.box(sm.cloth[i+1],1.3,2.4,.05,-3+i*3,2.2,back+.3);
-      this.dummy(left+2,back+2);this.keeperSpot={pos:this.at(0,back+2),yaw:0,seated:false};
-      this.inspectProp(0,back+1,'Read the cadet duty board','A rotating duty: harbour patrol, witness escort, infirmary supplies and night signal watch. Training continues beyond the ring.');return true;
+    if (name.includes('Assembly Hall')) {
+      for (const x of [-this.W / 4, this.W / 4]) {
+        this.table(x, 0, this.W / 3, 2);
+        this.bench(x, 1.4, this.W / 3, Math.PI);
+        this.bench(x, -1.4, this.W / 3, 0);
+      }
+      for (let i = 0; i < 3; i++)
+        this.box(sm.cloth[i + 1], 1.3, 2.4, 0.05, -3 + i * 3, 2.2, back + 0.3);
+      this.dummy(left + 2, back + 2);
+      this.keeperSpot = { pos: this.at(0, back + 2), yaw: 0, seated: false };
+      this.inspectProp(
+        0,
+        back + 1,
+        'Read the cadet duty board',
+        'A rotating duty: harbour patrol, witness escort, infirmary supplies and night signal watch. Training continues beyond the ring.',
+      );
+      return true;
     }
-    if(name.includes('Dormitory')){
-      for(const x of [left+1.3,right-1.3])for(const z of [back+2,1]){this.box(m.timber,1.7,.4,2.5,x,.2,z,0,true);this.box(sm.cloth[2],1.55,.15,2.3,x,.5,z);this.crate(x,z+1.8,.5);}
-      this.inspectProp(0,back+1,'Read the cadets’ wall','Practice times, a bad drawing of Hadrik and a list of names beside the words WHO OWES BREAKFAST. Dorian’s name appears twice.');return true;
+    if (name.includes('Dormitory')) {
+      for (const x of [left + 1.3, right - 1.3])
+        for (const z of [back + 2, 1]) {
+          this.box(m.timber, 1.7, 0.4, 2.5, x, 0.2, z, 0, true);
+          this.box(sm.cloth[2], 1.55, 0.15, 2.3, x, 0.5, z);
+          this.crate(x, z + 1.8, 0.5);
+        }
+      this.inspectProp(
+        0,
+        back + 1,
+        'Read the cadets’ wall',
+        'Practice times, a bad drawing of Hadrik and a list of names beside the words WHO OWES BREAKFAST. Dorian’s name appears twice.',
+      );
+      return true;
     }
-    if(name.includes('Merchants’ Exchange')){
-      chart(0,0);for(const x of [left+1.2,right-1.2]){this.shelf(x,back+1,x<0?Math.PI/2:-Math.PI/2,3,'jars');this.barrel(x,1);}
-      this.inspectProp(0,0,'Read the public cargo board','Ships, cargo, origin, owner. Changes are signed in front of witnesses. There is room for anybody to check the sums.');return true;
+    if (name.includes('Merchants’ Exchange')) {
+      chart(0, 0);
+      for (const x of [left + 1.2, right - 1.2]) {
+        this.shelf(x, back + 1, x < 0 ? Math.PI / 2 : -Math.PI / 2, 3, 'jars');
+        this.barrel(x, 1);
+      }
+      this.inspectProp(
+        0,
+        0,
+        'Read the public cargo board',
+        'Ships, cargo, origin, owner. Changes are signed in front of witnesses. There is room for anybody to check the sums.',
+      );
+      return true;
     }
     // The established tavern, home, smithy, armoury and library plans are already
     // structurally distinct; give the port versions their own contextual details.
-    if(name.includes('Salty Anchor'))this.inspectProp(left+1,1,'Inspect the old crew table','Seven names surround a compass rose. Bess has kept one place clear, despite the evening crowd.');
-    if(name.includes('Drowned Lantern'))this.inspectProp(right-1,1,'Inspect the lantern ledger','Room accounts in ordinary ink. Other accounts appear only when the page is held toward the green lamp.');
-    if(name.includes('Communal Kitchen'))this.inspectProp(left+1,1,'Read the kitchen tally','Bowls first, debts later. The tally counts households and returning boats, not coins.');
-    if(name.includes('Keeper’s House'))this.inspectProp(left+1,1,'Inspect the spare shutters','The spare shutter has two openings. A third has been cut and filled again with a new piece of brass.');
+    if (name.includes('Salty Anchor'))
+      this.inspectProp(
+        left + 1,
+        1,
+        'Inspect the old crew table',
+        'Seven names surround a compass rose. Bess has kept one place clear, despite the evening crowd.',
+      );
+    if (name.includes('Drowned Lantern'))
+      this.inspectProp(
+        right - 1,
+        1,
+        'Inspect the lantern ledger',
+        'Room accounts in ordinary ink. Other accounts appear only when the page is held toward the green lamp.',
+      );
+    if (name.includes('Communal Kitchen'))
+      this.inspectProp(
+        left + 1,
+        1,
+        'Read the kitchen tally',
+        'Bowls first, debts later. The tally counts households and returning boats, not coins.',
+      );
+    if (name.includes('Keeper’s House'))
+      this.inspectProp(
+        left + 1,
+        1,
+        'Inspect the spare shutters',
+        'The spare shutter has two openings. A third has been cut and filled again with a new piece of brass.',
+      );
     return false;
   }
 

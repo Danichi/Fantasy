@@ -27,6 +27,8 @@ export class AcademyExercises {
     private flags: Record<string, boolean | number | string>,
     private toast: (s: string) => void,
     private save: () => void,
+    private mastered: (school: School) => void,
+    private prepare: () => void,
   ) {
     this.ring.y = heightAt(this.ring.x, this.ring.z);
     this.off.push(
@@ -104,6 +106,7 @@ export class AcademyExercises {
     ];
   }
   start(school: School) {
+    this.prepare();
     this.stop();
     this.active = school;
     this.count = 0;
@@ -166,8 +169,9 @@ export class AcademyExercises {
       this.flags[key] = true;
       this.player.prog.addXp(450);
       this.toast('Practical mastered. +450 XP.');
-      this.save();
     } else this.toast('Practical complete. Your instructor nods.');
+    this.mastered(this.active);
+    this.save();
     this.stop();
   }
   update(dt: number) {

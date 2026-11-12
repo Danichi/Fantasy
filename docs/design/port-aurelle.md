@@ -4,7 +4,7 @@ Port Aurelle is Cresha’s working maritime city: cream stone and blue slate abo
 
 ## Geography and navigation
 
-`src/world/portCity.ts` is the worker-safe source of truth for the city footprint, scalloped quay, terraces, causeway, street graph, district anchors, fishing neighbourhood and sailing berths. Construction, quests, festivals, residents, terrain and sailing use these locations. The inner harbour holds fishing craft and training boats; the outer basin serves commerce and expeditions. Four owned-ship berths and a separate rental berth sit beside the piers.
+`src/world/portCity.ts` is the worker-safe source of truth for the city footprint, scalloped quay, terraces, causeway, street graph, district anchors, fishing neighbourhood and sailing berths. Construction, quests, festivals, residents, terrain and sailing use these locations. The inner harbour holds fishing craft and training boats; the outer basin serves commerce and expeditions. Four owned-ship berths and a separate rental berth sit beside the piers. Larger fleets use spaced offshore moorings; migration uses the same allocation.
 
 Eight surface districts:
 
@@ -30,7 +30,7 @@ Six linked quests introduce a self-contained harbour investigation alongside the
 3. **What the Water Keeps:** recover the oilskin log from the nearby wreck and compare Edda’s signals.
 4. **A Favour Below:** recover the guarded vault ledger or bargain with Sallow; pay gold or settle an existing obligation.
 5. **The Harbour’s Witnesses:** secure testimony and choose Academy protection, Quiet Hands access, or public exposure.
-6. **The Night of False Lights:** begin the night operation, defeat Captain Serrat, restore the signal, sound the rescue bell, and decide the warehouse’s future.
+6. **The Night of False Lights:** begin the night operation, defeat Captain Serrat, climb to the lighthouse gallery and restore the signal, sound the rescue bell, and decide the warehouse’s future.
 
 Academy protection removes the signal captain’s accompanying guard. Quiet Hands support opens a maintenance approach. Choices and collected evidence are quest flags, while the restored light, returned crew and memorial follow persistent world state. The confiscated warehouse’s charter records the chosen community use. Barrow offers the rescuer’s gold pennant after the story.
 
@@ -75,7 +75,7 @@ Encounter strength is authored by location and rank, rather than tracking the pl
 
 Gale partners use mobile skirmishing, Boundary partners use heavier defence and retaliation, and Cross partners press close openings. Academy duels remain non-lethal. Explicit non-boss classification keeps their posture rules appropriate despite higher HP.
 
-Practical lessons teach dodge-and-counter, perfect parries and guard counters against a real practice partner. Completion is recorded once, with repeat practice available. Leaving the ring or starting a duel ends the practical and clears its damage floor.
+Practical lessons teach dodge-and-counter, perfect parries and guard counters against a real practice partner. First Lessons requires completion of one chosen school’s practical alongside the instructor introductions. Earlier mastery counts, and completed older saves keep their progress. Completion is recorded once, with repeat practice available. Leaving the ring or starting a duel ends the practical and clears its damage floor.
 
 Eastward road tiers rise from the introductory Glen encounters to level 14 approaches and level 18 port-country encounters. Creature health now grows quadratically with level; wild-danger scaling is steeper too. Instanced dungeons use authored tiers rather than deriving strength from their remote world coordinates. Port cistern rats and their matron are substantially stronger than farm pests.
 

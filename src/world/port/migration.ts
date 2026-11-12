@@ -1,5 +1,10 @@
 import type { SaveData } from '../../save';
-import { AURELLE, PORT_BERTHS, PORT_REVISION } from '../portCity';
+import {
+  AURELLE,
+  PORT_BERTHS,
+  PORT_REVISION,
+  portOwnedBerth,
+} from '../portCity';
 /** Migrate once, before sailing and world flags are restored. Keep quest IDs and stages. */
 export function migrateAurelle(save: SaveData | null) {
   if (!save || Number(save.world?.flags?.['pa:revision'] ?? 0) >= PORT_REVISION)
@@ -16,7 +21,7 @@ export function migrateAurelle(save: SaveData | null) {
     let berth = 0;
     for (const ship of sailing.ships) {
       if (ship.port !== 'portAurelle') continue;
-      const [x, z, yaw] = PORT_BERTHS[berth++ % PORT_BERTHS.length];
+      const [x, z, yaw] = portOwnedBerth(berth++);
       Object.assign(ship, { x, z, yaw });
     }
     if (sailing.rental?.port === 'portAurelle') {

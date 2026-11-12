@@ -20,6 +20,7 @@ export class PortKit {
   readonly iron: THREE.Material;
   readonly leaf: THREE.Material;
   readonly cream: THREE.Material;
+  private disposed = false;
   private surfaces = new Map<string, THREE.MeshStandardMaterial>();
   constructor(
     scene: THREE.Scene,
@@ -229,6 +230,7 @@ export class PortKit {
           this.m.timber,
         );
       }
+    return o;
   }
   flag(
     x: number,
@@ -549,9 +551,14 @@ export class PortKit {
     for (const m of this.lamps) m.emissiveIntensity = 0.2 + night * 2.4;
   }
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     for (const c of this.colliders)
-      if (physics.world.getCollider(c.handle))
-        physics.world.removeCollider(c, true);
+      if (physics.world.getCollider(c.handle)) {
+        const body = c.parent();
+        if (body) physics.world.removeRigidBody(body);
+        else physics.world.removeCollider(c, true);
+      }
     this.root.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh) mesh.geometry.dispose();

@@ -44,6 +44,7 @@ interface Deps {
   enter(door: Door): void;
   craft(kind: StationKind, name: string): void;
   duelling(): boolean;
+  dismount(): void;
   bout(spec: Omit<DuelSpec, 'ring' | 'radius'>, win: () => void): void;
 }
 export class PortLife {
@@ -62,6 +63,7 @@ export class PortLife {
   private visible = true;
   private carried: THREE.Mesh[] = [];
   private bellHour = -1;
+  private warehouseState = '';
   constructor(private d: Deps) {
     const { quests: q, flags: f } = d;
     q.add(...AURELLE_QUESTS, ...AURELLE_SIDE_QUESTS);
@@ -82,7 +84,15 @@ export class PortLife {
       f,
       d.toast,
       d.save,
+      (school) => {
+        q.signal(`pa-drill-${school}`);
+      },
+      d.dismount,
     );
+    q.hooks.set('academy:practicals', () => {
+      for (const school of ['gale', 'boundary', 'cross'])
+        if (f['pa:drill:' + school]) q.signal('pa-drill-' + school);
+    });
     for (const [npc, school] of [
       ['lyra', 'gale'],
       ['hadrik', 'boundary'],
@@ -142,6 +152,26 @@ export class PortLife {
         : [],
     );
     this.services.set('aurelle-cook', () => [
+      ...(q.isDone('aurelle-false-lights') &&
+      q.flag('aurelle-false-lights', 'warehouse') === 'families'
+        ? [
+            {
+              label: 'Collect a storehouse grain ration.',
+              run: () => {
+                if (f['pa:rationDay'] === d.time.day)
+                  return d.toast(
+                    'Your household ration has been collected today.',
+                  );
+                f['pa:rationDay'] = d.time.day;
+                d.give('wheat', 3);
+                d.save();
+                d.toast(
+                  'Maren marks the public tally. Three wheat sheaves, from the harbour’s common store.',
+                );
+              },
+            },
+          ]
+        : []),
       {
         label: 'Use the communal kitchen.',
         run: () => {
@@ -180,6 +210,17 @@ export class PortLife {
         if (id === 'aurelle-false-lights') {
           f['pa:rescued'] = true;
           f['pa:pennant'] = true;
+          if (
+            q.flag('aurelle-witnesses', 'allies') === 'public' &&
+            !f['pa:publicPurse']
+          ) {
+            f['pa:publicPurse'] = true;
+            d.player.prog.addGold(240);
+            d.toast(
+              'The assembled captains contribute a public rescue purse. +240 gold.',
+            );
+          }
+          d.save();
           events.emit('deed', {
             id: 'aurelle-light',
             renown: 8,
@@ -323,21 +364,6 @@ export class PortLife {
         this.d.save();
       },
       () => q.wants('pa-supper'),
-    );
-    this.hotspot(
-      [2960, -13],
-      'Restore the Aurelle Light',
-      () => {
-        q.signal('pa-lens');
-        this.d.flags['pa:lens'] = true;
-        sfx.kindle(0.15);
-        this.read(
-          'The True Light',
-          'The damaged shutter drops away. Two steady flashes sweep the approaches. Far out in the dark, a ship answers.',
-        );
-        this.d.save();
-      },
-      () => q.wants('pa-lens'),
     );
     this.hotspot(
       AURELLE.bell,
@@ -743,9 +769,18 @@ export class PortLife {
       label: string,
       fn: () => void,
       enabled = () => true,
-    ) =>
-      extras.push({
+    ) => {
+      for (let i = it.interactables.length - 1; i >= 0; i--) {
+        const old = it.interactables[i];
+        if (
+          /^(Read|Inspect) /.test(old.label()) &&
+          old.pos.distanceTo(pos) < 0.6
+        )
+          it.interactables.splice(i, 1);
+      }
+      return extras.push({
         pos,
+        level: 1.8,
         radius: 1.8,
         label: () => (enabled() ? label : ''),
         enabled,
@@ -753,6 +788,7 @@ export class PortLife {
           if (enabled()) fn();
         },
       });
+    };
     const inspect = (
       x: number,
       z: number,
@@ -780,6 +816,7 @@ export class PortLife {
         () => {
           q.signal('pa-lens');
           this.d.flags['pa:lens'] = true;
+          sfx.kindle(0.15);
           this.d.save();
           this.read(
             'The True Light',
@@ -891,6 +928,22 @@ export class PortLife {
         }
       }
     }
+    if (name.includes('Cadets’ Dormitory')) {
+      add(
+        it.at(-2, -it.D / 2 + 2),
+        'Sleep in your Academy cot',
+        () => {
+          this.d.time.skipTo(6);
+          this.rest();
+          this.d.save();
+          this.read(
+            'The Academy Dormitory',
+            'A bugle at six. You wake rested, with a fresh duty on the board.',
+          );
+        },
+        () => q.isDone('academy-trial'),
+      );
+    }
     if (name === 'Your Room at the Salty Anchor') {
       add(it.at(-2, -2), 'Open your storage chest', () => this.storage());
       add(it.at(2, -2), 'Rest until morning', () => {
@@ -976,6 +1029,48 @@ export class PortLife {
     port.stateGroups.get('room')!.visible = !!f['pa:room'];
     port.stateGroups.get('expedition')!.visible = q.isDone('aurelle-bruni');
     port.stateGroups.get('returnedCrew')!.visible = !!f['pa:crewHome'];
+    port.stateGroups.get('kitchen')!.visible = q.isDone('aurelle-supper');
+    port.stateGroups.get('repairs')!.visible = q.isDone('aurelle-frame');
+    const ending = q.isDone('aurelle-false-lights')
+      ? String(q.flag('aurelle-false-lights', 'warehouse'))
+      : '';
+    port.stateGroups.get('warehouseFamilies')!.visible = ending === 'families';
+    port.stateGroups.get('warehouseSchool')!.visible = ending === 'school';
+    if (ending !== this.warehouseState) {
+      this.warehouseState = ending;
+      const sign = port.landmarks.get('warehouseSign') as THREE.Mesh;
+      const tex = (sign.material as THREE.MeshStandardMaterial).map!;
+      const canvas = tex.image as HTMLCanvasElement,
+        ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#263f52';
+      ctx.fillRect(0, 0, 768, 192);
+      ctx.strokeStyle = '#d5b578';
+      ctx.lineWidth = 8;
+      ctx.strokeRect(8, 8, 752, 176);
+      ctx.fillStyle = '#f0e1bc';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '600 38px Cinzel';
+      ctx.fillText(
+        ending === 'families'
+          ? 'NETTERS’ STOREHOUSE'
+          : ending === 'school'
+            ? 'AURELLE SAILING SCHOOL'
+            : 'RENN MARITIME',
+        384,
+        78,
+        710,
+      );
+      ctx.font = '26px Inter';
+      ctx.fillText(
+        ending ? 'Held in trust for the harbour' : 'Bonded warehouse',
+        384,
+        133,
+        710,
+      );
+      tex.needsUpdate = true;
+    }
+
     const festival = FESTIVALS.find((x) => x.id === 'harbourWeek')!;
     port.stateGroups.get('festival')!.visible = isOpen(
       festival,
@@ -1111,16 +1206,20 @@ export class PortLife {
     }
   }
   absent(id: string): boolean | undefined {
-    if (id === 'aldric-aurelle') return !this.d.flags.aldricFreed;
-    if (id === 'aurelle-factor')
-      return (
-        this.d.quests.isActive('aurelle-false-lights', 1) ||
-        this.d.quests.isDone('aurelle-false-lights')
-      );
-    if (id === 'aurelle-navigator')
-      return !this.d.quests.isDone('aurelle-old-crew');
-    if (id.startsWith('aurelle-returned')) return !this.d.flags['pa:crewHome'];
+    if (id === 'aldric-aurelle' && !this.d.flags.aldricFreed) return true;
+    if (
+      id === 'aurelle-factor' &&
+      (this.d.quests.isActive('aurelle-false-lights', 1) ||
+        this.d.quests.isDone('aurelle-false-lights'))
+    )
+      return true;
+    if (id === 'aurelle-navigator' && !this.d.quests.isDone('aurelle-old-crew'))
+      return true;
+    if (id.startsWith('aurelle-returned') && !this.d.flags['pa:crewHome'])
+      return true;
+    return undefined;
   }
+
   setVisible(visible: boolean) {
     this.visible = visible;
     this.d.port.kit.root.visible = visible;

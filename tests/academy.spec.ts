@@ -56,7 +56,7 @@ test('a Squire climbs the ladder, passes Mell\'s examination and rises to Knight
     const stage = q.state['academy-aspirant'].stage;
     q.options('marrow', () => {}, () => {})[0].run();
     // The dormitory: a free night for cadets.
-    const dorm = g.realm.overworldInteractables.find((i: any) => /dormitory/i.test(i.label()));
+    const dorm = g.realm.overworldInteractables.find((i: any) => /^Sleep in the Academy dormitory/i.test(i.label()));
     g.time.hour = 22;
     g.player.hp = 10;
     const dormOk = dorm.enabled();

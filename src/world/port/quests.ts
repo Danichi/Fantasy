@@ -331,7 +331,7 @@ export const AURELLE_QUESTS: QuestDef[] = [
         ],
       },
       {
-        note: 'Restore the true signal and sound the harbour bell to guide the ship home.',
+        note: 'Climb the lighthouse stairs to restore the signal at the upper gallery, then sound the harbour bell to guide the ship home.',
         objectives: [
           signal('pa-lens', 'Restore the lighthouse signal', 'lens'),
           signal(

@@ -846,6 +846,10 @@ export function buildPortAurelle(
     'expedition',
     'festival',
     'returnedCrew',
+    'kitchen',
+    'repairs',
+    'warehouseFamilies',
+    'warehouseSchool',
   ]) {
     const g = new THREE.Group();
     g.name = name;
@@ -853,6 +857,76 @@ export function buildPortAurelle(
     k.root.add(g);
     stateGroups.set(name, g);
   }
+  const warehouseSign = k.sign(
+    'RENN MARITIME',
+    'Bonded warehouse',
+    2906.1,
+    132,
+    Math.PI / 2,
+    4.4,
+    4.5,
+  );
+  landmarks.set('warehouseSign', warehouseSign);
+  const smallProp = (
+    group: string,
+    geo: THREE.BufferGeometry,
+    mat: THREE.Material,
+    x: number,
+    y: number,
+    z: number,
+  ) => {
+    const o = new THREE.Mesh(geo, mat);
+    o.position.set(x, y, z);
+    stateGroups.get(group)!.add(o);
+  };
+  const kitchenY = heightAt(2892, 323);
+  smallProp(
+    'kitchen',
+    new THREE.BoxGeometry(4, 0.15, 1.2),
+    m.planks,
+    2892,
+    kitchenY + 0.8,
+    323,
+  );
+  smallProp(
+    'kitchen',
+    new THREE.SphereGeometry(0.4, 12, 8),
+    k.iron,
+    2892,
+    kitchenY + 1,
+    323,
+  );
+  for (let i = 0; i < 6; i++)
+    smallProp(
+      'kitchen',
+      new THREE.CylinderGeometry(0.16, 0.12, 0.1, 10),
+      k.cream,
+      2890.5 + i * 0.6,
+      kitchenY + 0.93,
+      323.2,
+    );
+  for (let i = 0; i < 4; i++)
+    smallProp(
+      'repairs',
+      new THREE.BoxGeometry(0.25, 1.2, 1),
+      k.teal,
+      2919 + i * 5,
+      sy + 1,
+      46,
+    );
+  for (let i = 0; i < 6; i++)
+    smallProp(
+      'warehouseFamilies',
+      new THREE.BoxGeometry(0.8, 0.8, 0.8),
+      m.planks,
+      2909 + (i % 3),
+      heightAt(2909, 146) + 0.4 + Math.floor(i / 3) * 0.8,
+      146,
+    );
+  const schoolBoat = buildShip('fishing', 0x3a7d89).group;
+  schoolBoat.scale.setScalar(0.35);
+  schoolBoat.position.copy(v(2909, 146, 0.6));
+  stateGroups.get('warehouseSchool')!.add(schoolBoat);
   const memorial = stateGroups.get('memorial')!;
   const plaque = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.3, 0.2), k.brass);
   plaque.position.copy(v(...AURELLE.memorial, 1.4));

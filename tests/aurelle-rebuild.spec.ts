@@ -1,4 +1,4 @@
-import { test, expect, SLOW } from './fixtures';
+import { test, expect, boot, SLOW } from './fixtures';
 
 test('Aurelle has distinct districts, purposeful interiors and two safe harbour basins', async ({
   game,
@@ -197,7 +197,14 @@ test('False Lights plays through physical evidence, witnesses, combat and a pers
       source: 'melee',
     });
     g.portLife.update(1 / 60, true);
-    act('Restore the Aurelle Light');
+    await g.realm.enterInterior(
+      g.doors.find((d: any) => d.kind === 'lighthouse'),
+      'lighthouse',
+      g.world.mats,
+      g.spells,
+    );
+    act('Restore the true signal');
+    await g.realm.leaveInterior();
     act('Sound the rescue signal');
     speak('mira', 'aurelle-false-lights', 'fishing families');
     g.portLife.update(1 / 60, true);
@@ -512,4 +519,268 @@ test('Academy practicals require their own partner and award mastery only once',
   expect(result.noRepeat).toBe(true);
   expect(result.stopped).toBe(true);
   expect(result.cleared).toBe(0);
+});
+
+test('the official evidence route is the usable interaction on its archive prop', async ({
+  game,
+}) => {
+  const r = await game.page.evaluate(async () => {
+    const g = (window as any).__game,
+      q = g.quests;
+    q.state['aurelle-empty-berth'] = { status: 'done', stage: 0, progress: [] };
+    q.accept('aurelle-cargo');
+    const door = g.doors.find((d: any) => d.name === 'The Customs House');
+    await g.realm.enterInterior(door, door.kind, g.world.mats, g.spells);
+    const prop = g.realm.interactables.find(
+      (i: any) => i.label() === 'Read the customs archive',
+    );
+    g.player.teleport(prop.pos.clone().add(new g.THREE.Vector3(0, 0.2, 0)));
+    const near = g.realm.interactables
+      .filter(
+        (i: any) =>
+          i.enabled() && i.label() && i.pos.distanceTo(prop.pos) < 1.8,
+      )
+      .sort(
+        (a: any, b: any) =>
+          a.pos.distanceTo(prop.pos) - b.pos.distanceTo(prop.pos),
+      );
+    const label = near[0].label();
+    near[0].action();
+    g.dialogue.close();
+    const stage = q.state['aurelle-cargo'].stage;
+    await g.realm.leaveInterior();
+    return { label, stage, official: q.flag('aurelle-cargo', 'official') };
+  });
+  expect(r.label).toBe('Read the customs archive');
+  expect(r.stage).toBe(1);
+  expect(r.official).toBe(true);
+});
+
+test('a rented room, stored equipment quality and investigation progress survive a real reload', async ({
+  page,
+}) => {
+  test.setTimeout(420_000 * SLOW);
+  await boot(page, '?test&save');
+  await page.evaluate(() => {
+    const g = (window as any).__game;
+    g.player.prog.gold = 1000;
+    let menu: any = [];
+    g.portLife.services
+      .get('bess')(
+        (_t: any, opts: any) => (menu = opts),
+        () => {},
+      )[0]
+      .run();
+    menu.find((o: any) => o.label.includes('Take the room')).run();
+    const item = g.player.equip.add('armingSword', 1, 3),
+      eq = g.player.equip;
+    const eligible = eq.items.filter(
+      (i: any) =>
+        !Object.values(eq.equipped).includes(i.uid) &&
+        !eq.quick.includes(i.uid) &&
+        !eq.moves.includes(i.uid) &&
+        eq.activeSpell !== i.uid,
+    );
+    g.portLife.storage('deposit', Math.floor(eligible.indexOf(item) / 8));
+    g.dialogue.options.find((o: any) => o.label.includes(item.def.name)).run();
+    g.dialogue.close();
+    g.quests.accept('aurelle-empty-berth');
+    g.portLife.interactables
+      .find((i: any) => i.label().includes('Brightwater’s empty berth'))
+      .action();
+    g.dialogue.close();
+    g.save();
+  });
+  await page.reload();
+  await page.waitForFunction(() => (window as any).__game?.steps > 60, null, {
+    timeout: 180_000 * SLOW,
+  });
+  const r = await page.evaluate(() => {
+    const g = (window as any).__game;
+    return {
+      room: g.worldFlags['pa:room'],
+      stash: JSON.parse(g.worldFlags['pa:stash']),
+      progress: g.quests.state['aurelle-empty-berth'].progress,
+      revision: g.worldFlags['pa:revision'],
+    };
+  });
+  expect(r.room).toBe(true);
+  expect(r.stash).toEqual([{ id: 'armingSword', qty: 1, q: 3 }]);
+  expect(r.progress[0]).toBe(1);
+  expect(r.revision).toBe(2);
+});
+
+test('First Lessons requires a chosen practical and respects prior mastery and completed saves', async ({
+  game,
+}) => {
+  const r = await game.page.evaluate(() => {
+    const g = (window as any).__game,
+      q = g.quests,
+      d = g.portLife.drills;
+    q.state['academy-trial'] = { status: 'done', stage: 1, progress: [1] };
+    q.accept('academy-lessons');
+    for (const npc of ['lyra', 'hadrik', 'sable', 'mell']) {
+      const o = q
+        .options(
+          npc,
+          () => {},
+          () => {},
+        )
+        .find((x: any) => x.label.includes('First Lessons'));
+      if (!o) throw new Error('Missing instructor ' + npc);
+      o.run();
+    }
+    const talksAlone = q.state['academy-lessons'].stage;
+    d.start('boundary');
+    const at = d.partner.center.clone();
+    for (let i = 0; i < 3; i++) g.events.emit('perfectParry', { at });
+    const afterPractical = q.state['academy-lessons'].stage;
+    // Completing training before enrolment is recognised on entering this stage.
+    delete q.state['academy-lessons'];
+    q.accept('academy-lessons');
+    const recognised = q.state['academy-lessons'].progress[5];
+    q.fromJSON({
+      'academy-lessons': { status: 'done', stage: 1, progress: [1] },
+    });
+    return {
+      talksAlone,
+      afterPractical,
+      recognised,
+      legacyDone: q.isDone('academy-lessons'),
+    };
+  });
+  expect(r).toEqual({
+    talksAlone: 0,
+    afterPractical: 1,
+    recognised: 1,
+    legacyDone: true,
+  });
+});
+
+test('starting an Academy bout ends practice before establishing duel protection', async ({
+  game,
+}) => {
+  const r = await game.page.evaluate(() => {
+    const g = (window as any).__game;
+    g.quests.state['road-to-port'] = {
+      status: 'done',
+      stage: 1,
+      progress: [1],
+    };
+    g.portLife.drills.start('gale');
+    g.quests.accept('academy-trial');
+    g.duel.opponent.update = () => {};
+    g.portLife.update(1 / 60, true);
+    const r = {
+      active: g.duel.active,
+      practice: g.portLife.drills.active,
+      floor: g.player.damageFloor,
+    };
+    g.duel.stop();
+    return r;
+  });
+  expect(r.active).toBe(true);
+  expect(r.practice).toBeNull();
+  expect(r.floor).toBeGreaterThan(0);
+});
+
+test('the lighthouse signal is reached by walking its stairs to the upper gallery', async ({
+  game,
+}) => {
+  test.setTimeout(240_000 * SLOW);
+  const r = await game.page.evaluate(async () => {
+    const g = (window as any).__game;
+    g.quests.state['aurelle-false-lights'] = {
+      status: 'active',
+      stage: 2,
+      progress: [0, 0],
+    };
+    const door = g.doors.find((d: any) => d.kind === 'lighthouse');
+    await g.realm.enterInterior(door, door.kind, g.world.mats, g.spells);
+    const it = g.realm.interior;
+    const route = [
+      [it.W / 2 - 1.15, 3.9],
+      [it.W / 2 - 1.15, -it.D / 2 + 1.4],
+      [0, -it.D / 2 + 1.4],
+    ];
+    const blocked: any[] = [];
+    g.input.press('KeyW');
+    for (const [x, z] of route) {
+      const to = it.at(x, z);
+      let dist = Infinity;
+      for (let i = 0; i < 1300; i++) {
+        dist = Math.hypot(g.player.pos.x - to.x, g.player.pos.z - to.z);
+        if (dist < 0.45) break;
+        g.cam.yaw = Math.atan2(to.x - g.player.pos.x, to.z - g.player.pos.z);
+        g.stepSim();
+        if (i % 60 === 59) await new Promise((r) => setTimeout(r, 15));
+      }
+      if (dist >= 0.45) {
+        blocked.push({ to: to.toArray(), actual: g.player.pos.toArray() });
+        break;
+      }
+    }
+    g.input.release('KeyW');
+    const signal = g.realm.interactables.find(
+      (i: any) => i.label() === 'Restore the true signal',
+    );
+    const height = g.player.pos.y - it.group.position.y;
+    const inReach =
+      signal && g.player.pos.distanceTo(signal.pos) < signal.radius;
+    if (inReach && height > 3.7) signal.action();
+    const restored = g.worldFlags['pa:lens'];
+    g.dialogue.close();
+    await g.realm.leaveInterior();
+    return { blocked, height, inReach, restored };
+  });
+  expect(r.blocked).toEqual([]);
+  expect(r.height).toBeGreaterThan(3.7);
+  expect(r.inReach).toBe(true);
+  expect(r.restored).toBe(true);
+  expect(game.errors).toEqual([]);
+});
+
+test('large fleets use separate moorings and leave the rental berth clear', async ({
+  game,
+}) => {
+  const r = await game.page.evaluate(async () => {
+    const g = (window as any).__game;
+    const { PORT_BERTHS, portOwnedBerth } = await import(
+      '/src/world/portCity.ts' as string
+    );
+    const { heightAt } = await import('/src/world/terrainHeight.ts' as string);
+    const { migrateAurelle } = await import(
+      '/src/world/port/migration.ts' as string
+    );
+    const owned = Array.from({ length: 6 }, () => g.sailing.buy('sloop'));
+    const rented = g.sailing.rent('skiff');
+    const coords = owned.map((r: any) => [r.x, r.z]);
+    const save: any = {
+      world: {
+        flags: {},
+        sailing: {
+          ships: owned.map((r: any) => ({ ...r })),
+          rental: { port: 'portAurelle' },
+        },
+      },
+    };
+    migrateAurelle(save);
+    return {
+      unique: new Set(coords.map((c: any) => c.join(','))).size,
+      clear: coords.every(
+        ([x, z]: number[]) =>
+          Math.hypot(x - rented.pos.x, z - rented.pos.z) > 18,
+      ),
+      depths: coords.map(([x, z]: number[]) => heightAt(x, z)),
+      migrated: save.world.sailing.ships.map((r: any) => [r.x, r.z, r.yaw]),
+      expected: owned.map((_: any, i: number) => portOwnedBerth(i)),
+      hire: [save.world.sailing.rental.x, save.world.sailing.rental.z],
+      hireExpected: PORT_BERTHS[PORT_BERTHS.length - 1].slice(0, 2),
+    };
+  });
+  expect(r.unique).toBe(6);
+  expect(r.clear).toBe(true);
+  for (const depth of r.depths) expect(depth).toBeLessThan(-2);
+  expect(r.migrated).toEqual(r.expected);
+  expect(r.hire).toEqual(r.hireExpected);
 });
