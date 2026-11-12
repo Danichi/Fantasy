@@ -489,8 +489,16 @@ const BAKED_DIR = '/assets/icons/';
 /** Load the baked icon manifest: those icons are plain images, no rendering at all. */
 export async function loadBakedIcons() {
   try {
-    const m = (await (await fetch(BAKED_DIR + 'manifest.json')).json()) as { square: string[]; wide: string[]; v: string; ext?: string };
+    const m = (await (await fetch(BAKED_DIR + 'manifest.json')).json()) as {
+      square: string[];
+      wide: string[];
+      v: string;
+      ext?: string;
+      /** painted skill emblems and class medallions: emblem key ('pyromancer:Fireball', 'class:ranger') to file */
+      emblems?: Record<string, string>;
+    };
     const ext = m.ext ?? 'png';
+    for (const [key, file] of Object.entries(m.emblems ?? {})) emblems.set(key, `${BAKED_DIR}${file}.${ext}?v=${m.v}`);
     for (const id of m.square) {
       baked.square.add(id);
       cache.set(id, `${BAKED_DIR}${id}.${ext}?v=${m.v}`);
