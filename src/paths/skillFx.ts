@@ -4,6 +4,8 @@ import { MagicCircles, type Style } from '../magic/circles';
 import { physics } from '../physics/physics';
 import { targets, hurtSegment, type Target } from '../combat/targets';
 import { segmentPointDistance } from '../core/math';
+import { GroundDecals, STYLE_DECAL } from '../fx/decals';
+import { STYLE_FX, Billboard, burstTex, slashTex, stillTex, loopTex, vfxMaterial, setOpacity, setFrame, slashGeometry, type BurstKey } from '../fx/vfxSprites';
 
 // Visual building blocks for class skills: projectiles (wind blades, spears,
 // tornadoes, meteors), lingering zones, shield bubbles, pillars of light and
@@ -15,10 +17,11 @@ import { segmentPointDistance } from '../core/math';
 export const PALETTE: Record<Style, { hot: number; cool: number; body: THREE.Color }> = {
   fire: { hot: 0xfff05a, cool: 0xff2a00, body: new THREE.Color(4.0, 1.1, 0.1) },
   light: { hot: 0xffffff, cool: 0xffc400, body: new THREE.Color(3.6, 2.9, 0.8) },
-  gale: { hot: 0xe6fffb, cool: 0x00e8cc, body: new THREE.Color(0.25, 3.4, 2.9) },
+  // Gale reads electric blue-white and Cross (steel) crimson, after the combat reference boards.
+  gale: { hot: 0xeaf4ff, cool: 0x2f7dff, body: new THREE.Color(0.45, 1.7, 4.6) },
   wind: { hot: 0xecffd8, cool: 0x2bff5e, body: new THREE.Color(0.7, 3.6, 0.8) },
   frost: { hot: 0xf2fbff, cool: 0x1e8cff, body: new THREE.Color(0.5, 2.1, 4.4) },
-  steel: { hot: 0xffffff, cool: 0x4ab4ff, body: new THREE.Color(1.6, 2.6, 4.2) },
+  steel: { hot: 0xffe4dc, cool: 0xff1e32, body: new THREE.Color(4.4, 0.45, 0.55) },
   shadow: { hot: 0xffd2ff, cool: 0xa21cff, body: new THREE.Color(2.6, 0.35, 4.4) },
   blood: { hot: 0xffd4d4, cool: 0xff0a2a, body: new THREE.Color(4.4, 0.2, 0.45) },
   void: { hot: 0xff9cff, cool: 0x5a10ff, body: new THREE.Color(1.8, 0.15, 4.6) },
@@ -80,6 +83,7 @@ const sprite = (map: THREE.Texture, color: THREE.ColorRepresentation, opacity = 
   s.renderOrder = 11;
   return s;
 };
+const BLUE_SCHOOLS = new Set<Style>(['gale', 'frost', 'water', 'storm']);
 const FLAT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
 
 const glow = (color: THREE.Color, opacity = 1) =>
@@ -161,10 +165,15 @@ export class SkillFx {
     arc: new THREE.RingGeometry(0.6, 1.0, 40, 1, -1.2, 2.4).rotateX(-Math.PI / 2),
     edge: new THREE.RingGeometry(0.97, 1.02, 48, 1, -1.25, 2.5).rotateX(-Math.PI / 2),
     wall: new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0),
+    slashPaint: slashGeometry(),
   };
+
+  /** Lingering marks on the ground: scorches, frost, cracks (fx/decals.ts). */
+  readonly decals: GroundDecals;
 
   constructor(private scene: THREE.Scene, readonly fx: FX) {
     this.circles = new MagicCircles(scene);
+    this.decals = new GroundDecals(scene);
   }
 
   /** A school's saturated colour (particle tails). */
@@ -173,6 +182,17 @@ export class SkillFx {
   }
 
   // ---- one-shot flourishes ---------------------------------------------------------
+  /** Run `fn` after `delay` seconds of game time (staggered patterns). */
+  later(delay: number, fn: () => void) {
+    let done = false;
+    this.addTimed(new THREE.Group(), delay, (_o, u) => {
+      if (u >= 1 && !done) {
+        done = true;
+        fn();
+      }
+    });
+  }
+
   private addTimed(obj: THREE.Object3D, life: number, update: Timed['update']) {
     this.scene.add(obj);
     this.timed.push({ obj, t: 0, life, update });
@@ -187,14 +207,26 @@ export class SkillFx {
     const edge = new THREE.Mesh(this.geo.edge, glow(new THREE.Color(2.2, 2.2, 2.2), 1));
     edge.scale.setScalar(1.12);
     m.add(outer, core, edge);
+    // The painted ribbon (when its texture has loaded) carries the look; the
+    // procedural arcs drop to a faint underlay that keeps the hit readable.
+    const ribbonTex = slashTex(STYLE_FX[style].slash);
+    let ribbon: THREE.Mesh | null = null;
+    if (ribbonTex) {
+      ribbon = new THREE.Mesh(this.geo.slashPaint, vfxMaterial({ map: ribbonTex, gain: 2.2, occlude: 0.45 }));
+      ribbon.renderOrder = 12;
+      m.add(ribbon);
+    }
+    const under = ribbon ? 0.25 : 1;
     m.position.copy(pos);
     m.rotation.set(tilt, yaw - Math.PI / 2, 0, 'YXZ');
     m.scale.set(radius, 1, radius * spread);
-    this.addTimed(m, 0.38, (o, u) => {
+    this.addTimed(m, ribbon ? 0.42 : 0.38, (o, u) => {
       o.scale.set(radius * (0.8 + u * 0.55), 1, radius * spread * (0.8 + u * 0.55));
-      (outer.material as THREE.MeshBasicMaterial).opacity = 0.95 * (1 - u);
-      (core.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - u) * (1 - u);
-      (edge.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - u * 2.2);
+      (outer.material as THREE.MeshBasicMaterial).opacity = 0.95 * (1 - u) * under;
+      (core.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - u) * (1 - u) * under;
+      (edge.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - u * 2.2) * under;
+      // Snap on at full strength, then thin out from the tail.
+      if (ribbon) setOpacity(ribbon.material as THREE.Material, Math.min(1, u * 12) * Math.pow(1 - u, 1.4));
     });
     // Sparks flung off along the arc.
     const c = PALETTE[style];
@@ -234,9 +266,33 @@ export class SkillFx {
     });
   }
 
+  /**
+   * A painted, animated burst (fire blooming into smoke, ice shattering, lightning
+   * crackling) that faces the camera at `pos`. Does nothing until its texture has loaded.
+   */
+  paintedBurst(pos: THREE.Vector3, key: BurstKey, size: number, life = 0.75, gain = 1.8) {
+    const map = burstTex(key);
+    if (!map) return false;
+    const b = new Billboard(vfxMaterial({ map, grid: 4, gain, occlude: 0.55 }));
+    b.position.copy(pos);
+    b.roll = Math.random() * Math.PI * 2;
+    b.scale.setScalar(size);
+    this.addTimed(b, life, (o, u) => {
+      const mat = (o as THREE.Mesh).material as THREE.Material;
+      setFrame(mat, Math.min(15, u * 16));
+      setOpacity(mat, Math.min(1, (1 - u) * 4));
+      o.scale.setScalar(size * (0.92 + 0.16 * u));
+    });
+    return true;
+  }
+
   /** Everything a spell does when it lands: flash, burst, shockwaves, sparks and rising embers. */
   impact(pos: THREE.Vector3, style: Style, size = 1) {
     const c = PALETTE[style];
+    this.paintedBurst(pos, STYLE_FX[style].burst, 3.2 * size);
+    // Big enough hits mark the ground under them.
+    const mark = STYLE_DECAL[style];
+    if (mark && size >= 0.5) this.decals.add(pos, mark, 2.4 * size, 10 + size * 6, 2.2);
     this.flash(pos, style, 1.2 * size);
     this.fx.add.spawn({ pos, spread: 6 * size, count: Math.round(45 * size), life: [0.25, 0.6], size: [0.45 * size, 0.04], color: c.hot, color2: c.cool, drag: 3, jitter: 0.3 * size });
     this.fx.add.spawn({ pos, spread: 11 * size, count: Math.round(30 * size), life: [0.2, 0.5], size: [0.07, 0.01], color: 0xffffff, color2: c.cool, gravity: 9, drag: 1.5, upBias: 0.5 });
@@ -255,7 +311,23 @@ export class SkillFx {
       ((o as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.55 * (1 - u);
     });
     this.flash(pos.clone().setY(pos.y + 1), style, 1.1 + Math.min(radius, 8) * 0.12);
+    // Painted pattern: a big bloom at the centre, then a ring of eruptions racing outward.
+    const key = STYLE_FX[style].burst;
+    if (this.paintedBurst(pos.clone().setY(pos.y + 1), key, Math.min(9, 2.2 + radius * 0.9), 0.8)) {
+      const n = Math.max(6, Math.min(12, Math.round(radius * 1.8)));
+      const turn = Math.random() * Math.PI * 2;
+      for (let ring = 0; ring < 2; ring++) {
+        const rr = radius * (ring === 0 ? 0.5 : 0.9);
+        for (let i = 0; i < n; i++) {
+          const a = turn + ((i + ring * 0.5) / n) * Math.PI * 2;
+          const at = pos.clone().add(new THREE.Vector3(Math.cos(a) * rr, 0.7, Math.sin(a) * rr));
+          this.later(0.05 + ring * 0.09 + Math.random() * 0.03, () => this.paintedBurst(at, key, 1.3 + radius * 0.22, 0.6));
+        }
+      }
+    }
     this.ring(pos, style, radius * 2.4);
+    const mark = STYLE_DECAL[style];
+    if (mark) this.decals.add(pos.clone().setY(pos.y + 0.5), mark, Math.min(12, radius * 2.2), 18);
     this.spinSlash(pos, radius * 0.8, style);
     // Jets thrown outward along the ground.
     for (let i = 0; i < 20; i++) {
@@ -306,6 +378,7 @@ export class SkillFx {
 
   burst(pos: THREE.Vector3, style: Style, amount = 1, spread = 5) {
     const c = PALETTE[style];
+    this.paintedBurst(pos, STYLE_FX[style].burst, 1.4 + amount * 1.4, 0.6);
     this.flash(pos, style, 0.5 + amount * 0.6);
     this.fx.add.spawn({ pos, spread, count: Math.round(55 * amount), life: [0.3, 0.7], size: [0.5, 0.05], color: c.hot, color2: c.cool, drag: 3, jitter: 0.3 });
     this.fx.add.spawn({ pos, spread: spread * 1.4, count: Math.round(20 * amount), life: [0.4, 0.9], size: [0.06, 0.01], color: c.hot, color2: c.cool, gravity: 6, drag: 1, upBias: 0.4 });
@@ -319,6 +392,17 @@ export class SkillFx {
     core.scale.set(0.45, 1, 0.45);
     m.add(outer, core);
     m.position.copy(pos);
+    const beamTex = stillTex('pillar');
+    if (beamTex) {
+      const beam = new Billboard(vfxMaterial({ map: beamTex, gain: 2.4, occlude: 0.3, tint: PALETTE[style].hot }));
+      beam.upright = true;
+      beam.position.copy(pos).setY(pos.y + height * 0.5);
+      this.addTimed(beam, 0.9, (o, u) => {
+        const w = radius * 3.2 * (u < 0.12 ? u / 0.12 : 1 - (u - 0.12) * 0.6);
+        o.scale.set(Math.max(0.01, w), height, 1);
+        setOpacity((o as THREE.Mesh).material as THREE.Material, 1 - u);
+      });
+    }
     this.addTimed(m, 0.75, (o, u) => {
       const w = radius * (u < 0.15 ? u / 0.15 : 1 - (u - 0.15) * 0.8);
       o.scale.set(Math.max(0.01, w), height, Math.max(0.01, w));
@@ -327,6 +411,8 @@ export class SkillFx {
     });
     this.fx.add.spawn({ pos: pos.clone().setY(pos.y + 0.3), spread: radius * 3, count: 50, life: [0.3, 0.8], size: [0.2, 0.02], color: PALETTE[style].hot, color2: PALETTE[style].cool, upBias: 2.5, drag: 2, jitter: radius * 0.5 });
     this.ring(pos, style, radius * 4);
+    const mark = STYLE_DECAL[style];
+    if (mark) this.decals.add(pos.clone().setY(pos.y + 0.5), mark, radius * 3, 14);
     this.flash(pos.clone().setY(pos.y + 0.6), style, radius * 2.2);
     this.flash(pos.clone().setY(pos.y + height * 0.8), style, radius * 1.4);
     this.spiral(pos, style, height * 0.7, radius * 1.2, 30);
@@ -405,11 +491,30 @@ export class SkillFx {
     m.scale.setScalar(radius);
     m.renderOrder = 4;
     const t0 = performance.now();
-    this.addTimed(m, 9999, (o) => {
+    // The painted hex-lattice shield is blue (Boundary); other schools keep the plain glow.
+    const shellTex = BLUE_SCHOOLS.has(style) ? stillTex('dome') : null;
+    let shell: Billboard | null = null;
+    if (shellTex) {
+      shell = new Billboard(vfxMaterial({ map: shellTex, gain: 1.5, occlude: 0.2 }));
+      this.scene.add(shell);
+      // The painted lattice is the shield now; the plain sphere stays as a faint inner haze.
+      (m.material as THREE.MeshBasicMaterial).opacity = 0.06;
+    }
+    this.addTimed(m, 9999, (o, _u, dt) => {
       o.position.copy(anchor()).setY(anchor().y + 1);
-      const k = 1 + Math.sin((performance.now() - t0) / 180) * 0.03;
+      const s = (performance.now() - t0) / 1000;
+      const k = 1 + Math.sin(s * 5.5) * 0.03;
       o.scale.setScalar(radius * k);
-      if (!alive()) (this.timed.find((t) => t.obj === o)!).t = 1e9;
+      if (shell) {
+        shell.position.copy(o.position);
+        shell.scale.setScalar(radius * 2.15 * k * Math.min(1, s * 6));
+        shell.roll += dt * 0.15;
+        setOpacity(shell.material as THREE.Material, Math.min(1, s * 5) * (0.75 + 0.25 * Math.sin(s * 3)));
+      }
+      if (!alive()) {
+        (this.timed.find((t) => t.obj === o)!).t = 1e9;
+        if (shell) this.scene.remove(shell);
+      }
     });
     this.fx.add.spawn({ pos: anchor().clone().setY(anchor().y + 1), spread: 3, count: 40, life: [0.3, 0.6], size: [0.12, 0.01], color: PALETTE[style].hot, color2: PALETTE[style].cool, jitter: radius * 0.8, drag: 2 });
   }
@@ -493,9 +598,35 @@ export class SkillFx {
       g.children[1].scale.setScalar(0.8);
       mesh = g;
     }
+    // Painted layer: wind blades carry the school's slash ribbon; orbs carry a
+    // rolling, looping core (the Fireball's roil for fire, the school's burst held
+    // at its brightest frames for everything else).
+    if (o.shape === 'blade') {
+      const map = slashTex(STYLE_FX[o.style].slash);
+      if (map) {
+        const r = new THREE.Mesh(this.geo.slashPaint, vfxMaterial({ map, gain: 2.3, occlude: 0.4 }));
+        r.renderOrder = 12;
+        r.scale.setScalar(1.05);
+        mesh.add(r);
+      }
+    } else if (o.shape === 'orb') {
+      const loop = o.style === 'fire' ? loopTex('fireball') : null;
+      const map = loop ?? burstTex(STYLE_FX[o.style].burst);
+      if (map) {
+        const b = new Billboard(vfxMaterial({ map, grid: 4, gain: 1.9, occlude: 0.55 }));
+        b.scale.setScalar(loop ? 1.5 : 2.6);
+        b.userData.loop = loop ? [0, 16] : [5, 4];
+        mesh.userData.paint = b;
+        this.scene.add(b);
+        // The painted core is the orb now: shrink the solid sphere to a hot pip and thin the glow shell.
+        mesh.children[0].scale.setScalar(0.35);
+        ((mesh.children[1] as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.12;
+      }
+    }
     const halo = sprite(textures().glow, PALETTE[o.style].body.clone().multiplyScalar(0.5), 0.9);
     halo.scale.setScalar(o.shape === 'tornado' ? 3.2 : o.shape === 'spear' ? 1.6 : 2.4);
     if (o.shape === 'tornado') halo.position.y = 1.2;
+    if (mesh.userData.paint) halo.material.opacity = 0.3;
     mesh.add(halo);
     mesh.scale.setScalar(size);
     const dir = o.dir.clone().normalize();
@@ -528,6 +659,7 @@ export class SkillFx {
 
   update(dt: number) {
     this.circles.update(dt);
+    this.decals.update(dt);
     for (const t of this.timed) {
       t.t += dt;
       t.update(t.obj, Math.min(1, t.t / t.life), dt);
@@ -545,6 +677,14 @@ export class SkillFx {
       p.pos.addScaledVector(p.dir, step);
       p.travelled += step;
       p.mesh.position.copy(p.pos);
+      const paint = p.mesh.userData.paint as Billboard | undefined;
+      if (paint) {
+        const [f0, n] = paint.userData.loop as [number, number];
+        paint.position.copy(p.pos);
+        paint.scale.setScalar((n === 16 ? 1.5 : 2.6) * (p.size ?? 1));
+        paint.roll += dt * 4;
+        setFrame(paint.material as THREE.Material, f0 + ((p.t * 20) % n));
+      }
       const c = PALETTE[p.style];
       if (p.shape === 'tornado') {
         p.mesh.rotation.y += dt * 9;
@@ -576,6 +716,11 @@ export class SkillFx {
       if (p.done) {
         this.scene.remove(p.mesh);
         p.mesh.traverse((o) => ((o as THREE.Mesh).material as THREE.Material | undefined)?.dispose?.());
+        const paint = p.mesh.userData.paint as Billboard | undefined;
+        if (paint) {
+          this.scene.remove(paint);
+          (paint.material as THREE.Material).dispose();
+        }
         this.impact(p.pos, p.style, 0.55 * (p.size ?? 1));
         p.onEnd?.(p.pos.clone());
       }
