@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { STYLE_FX, sigilTex, vfxMaterial, setOpacity } from '../fx/vfxSprites';
 
 // Procedural magic circles (runes drawn on a canvas) and expanding shockwave
 // rings. Both are additive, emissive-bright planes that fade over their life.
@@ -92,10 +93,10 @@ interface Live {
 const COLORS: Record<Style, THREE.Color> = {
   fire: new THREE.Color(4.0, 1.2, 0.12),
   light: new THREE.Color(3.6, 2.8, 0.7),
-  gale: new THREE.Color(0.25, 3.4, 2.9),
+  gale: new THREE.Color(0.45, 1.7, 4.6),
   wind: new THREE.Color(0.7, 3.6, 0.8),
   frost: new THREE.Color(0.5, 2.1, 4.4),
-  steel: new THREE.Color(1.6, 2.6, 4.2),
+  steel: new THREE.Color(4.4, 0.45, 0.55),
   shadow: new THREE.Color(2.6, 0.35, 4.4),
   blood: new THREE.Color(4.4, 0.2, 0.45),
   void: new THREE.Color(1.8, 0.15, 4.6),
@@ -119,8 +120,25 @@ export class MagicCircles {
     return new THREE.MeshBasicMaterial({ map, color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, opacity: 0 });
   }
 
+  /** The painted magic circle for a school, if it has loaded (see fx/vfxSprites.ts). */
+  private painted(style: Style) {
+    const map = sigilTex(STYLE_FX[style].sigil);
+    return map ? vfxMaterial({ map, gain: 2.1, occlude: 0.4 }) : null;
+  }
+
   /** Circle lying on the ground at `pos`. */
   ground(pos: THREE.Vector3, style: Style, size: number, life: number) {
+    const paint = this.painted(style);
+    if (paint) {
+      // One detailed painted circle replaces the two procedural figures.
+      const m = new THREE.Mesh(this.geo, paint);
+      m.rotation.x = -Math.PI / 2;
+      m.position.copy(pos).setY(pos.y + 0.05);
+      m.renderOrder = 5;
+      this.scene.add(m);
+      this.live.push({ mesh: m, t: 0, life, kind: 'circle', size: size * 1.15, spin: 0.45 });
+      return;
+    }
     const m = new THREE.Mesh(this.geo, this.material(this.tex[FIGURE[style]], COLORS[style]));
     m.rotation.x = -Math.PI / 2;
     m.position.copy(pos).setY(pos.y + 0.05);
@@ -138,7 +156,7 @@ export class MagicCircles {
 
   /** Circle standing upright, facing `dir`, that tracks a moving anchor. */
   facing(follow: () => { pos: THREE.Vector3; quat: THREE.Quaternion }, style: Style, size: number, life: number) {
-    const m = new THREE.Mesh(this.geo, this.material(this.tex[FIGURE[style]], COLORS[style]));
+    const m = new THREE.Mesh(this.geo, this.painted(style) ?? this.material(this.tex[FIGURE[style]], COLORS[style]));
     m.renderOrder = 5;
     this.scene.add(m);
     this.live.push({ mesh: m, t: 0, life, kind: 'circle', size, follow, spin: -1.6 });
@@ -169,7 +187,9 @@ export class MagicCircles {
         // Draw in quickly, hold, fade out.
         const grow = 1 - Math.pow(1 - Math.min(1, l.t / 0.22), 3);
         l.mesh.scale.setScalar(l.size * (0.6 + 0.4 * grow));
-        mat.opacity = Math.min(1, l.t / 0.15) * (1 - Math.max(0, (u - 0.7) / 0.3)) * 0.9;
+        const op = Math.min(1, l.t / 0.15) * (1 - Math.max(0, (u - 0.7) / 0.3)) * 0.9;
+        if ((mat as unknown as THREE.ShaderMaterial).isShaderMaterial) setOpacity(mat, op);
+        else mat.opacity = op;
         if (l.follow) {
           const f = l.follow();
           l.mesh.position.copy(f.pos);
