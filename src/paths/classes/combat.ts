@@ -250,7 +250,7 @@ export class CombatClasses {
       rt.addBuff('slip', 1.5);
       p.onHitStop?.(0.14);
       rt.vfx.ring(p.pos, 'gale', 3.5);
-      rt.vfx.fx.add.spawn({ pos: p.center, spread: 2, count: 20, life: [0.2, 0.4], size: [0.12, 0.01], color: 0xe8fffb, color2: 0x00e8cc, drag: 3 });
+      rt.vfx.fx.add.spawn({ pos: p.center, spread: 2, count: 20, life: [0.2, 0.4], size: [0.12, 0.01], color: 0xeaf4ff, color2: 0x2f7dff, drag: 3 });
       if (foe && rt.has('afterimage')) {
         rt.later(0.15, () => {
           if (!foe.alive) return;
