@@ -115,3 +115,35 @@ Whole objects (windows, doors) use `--decal`: no tiling, the picture fills a box
 7. **Clean-up.** `public/assets/textures/*_1k.jpg` (22 MB of photographic sets) is no longer loaded once every painting is in place and can be removed.
 
 **Performance note.** The game is tuned for integrated graphics. The kit adds one normal-map sample per surface and three texture samples to near terrain, and uses far less texture memory than the photographic sets it replaces in dungeons (one shared 1024 px painting instead of three 1024 px maps per material).
+
+## 8. People (11 November 2026)
+
+Everyone is now sculpted in code on the character kit's skeleton (`src/npc/sculpt.ts`): smooth swept limbs, a head with a real face (lidded eyes with a light in them, a nose, lips, brows, ears), hands with fingers, and clothes built in layers. The kit still supplies the skeleton and the animations.
+
+| | |
+|---|---|
+| ![before](progress/characters-before.jpg) | Before: the hero and townsfolk from the kit. |
+| ![hero](progress/hero-starter-armour.jpg) | The hero's starting look: a road-worn gambeson in your colour, a leather cuirass, a steel pauldron and a leather shoulder guard, splinted vambraces, knee cops, strapped boots. |
+| ![hero face](progress/hero-face.jpg) | The hero's face. |
+| ![townsfolk](progress/townsfolk.jpg) | A townsperson: one mesh, coloured per vertex (one draw call). |
+| ![face](progress/townsfolk-face.jpg) | A townsperson's face. |
+
+- **Hero**: one mesh per material, with painted leather, quilting and steel ([leather](materials/leather.jpg), [gambeson](materials/gambeson.jpg), [steel](materials/steel.jpg)). The pauldron, knee cops and splints step aside when mail or plate is worn on that slot.
+- **Townsfolk, guards, bandits, travellers**: the same body in a peasant's or ranger's clothes, from the same `Look` as before (skin, hair, cloth, linen, hood, pauldron, bracers). `?kitfolk` in the URL brings back the old kit characters to compare.
+- **Named characters** have a garb of their own (`garb` on a `Look`, set in `src/npc/cast.ts`): a cut (fitted tunic, or a robe under a mantle) and pieces over it (plate, tabard, cloak or half-cape, sash, long scarf, work apron, kerchief or straw hat, satchel, long beard, a heavier build).
+
+  ![named cast](progress/named-cast.jpg)
+
+  | Who | Signature | Garb |
+  |---|---|---|
+  | Kaela Voss, Gale Mentor | teal and white | fitted teal tunic, white half-cape, white sash, long white scarf |
+  | Ser Corvin, Boundary Mentor | gunmetal and deep red | plate, red tabard, red cloak |
+  | Master Veyr, Old Duelist | ochre and black | close black tunic, ochre sash and half-cape |
+  | Magus Orren | violet | long robe, deeper mantle edged in gold, hood, beard to the chest |
+  | Master Fröst, Smith | ice blue and leather | heavy build, leather apron, white beard |
+  | Ilyra Moss, Apothecary | leaf green | hooded robe, satchel |
+  | Sera Lumis, Arcanist | deep blue | hooded robe edged in gold |
+  | Mara Bell, Tessa Rowan, Vela Thread | terracotta, wheat, lilac | dress and apron; a sash, a kerchief, a tape-yellow sash |
+  | Bram Oakhand, Hobb Reed | tan, green | leather apron; straw hat |
+  | Captain Brannoc and the Watch | Cresha blue | plate, tabard and cloak; the watch a blue tabard |
+- **Still to do**: children are small adults; hair is simple; long robes and skirts follow the legs only roughly; faces do not yet blink or speak; hooded faces are hard to see.

@@ -216,7 +216,7 @@ function lookFor(job: Job, rnd: () => number): Look {
     linen: pick(LINENS),
     height: job === 'child' ? 1.3 : female ? 1.62 + rnd() * 0.1 : 1.72 + rnd() * 0.12,
   };
-  if (job === 'guard') look.cloth = 0x3a5f9e; // the town watch wears Cresha blue
+  if (job === 'guard') (look.cloth = 0x3a5f9e), (look.garb = { tabard: true, accent: 0x3a5f9e, trim: 0xd8c070 }); // the town watch wears Cresha blue
   if (job === 'shepherd') { look.cloth = 0x6a7f3a; look.hood = rnd() < 0.5; }
   return look;
 }

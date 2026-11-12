@@ -74,6 +74,53 @@ for (const [name, v] of views) {
       g.cam.update = () => {};
     }
     const { heightAt } = await import('/src/world/terrain.ts');
+    // A portrait: { "focus": "hero" | "npc", "stand": [x, z], "pick": 0, "dist": 2.4, "height": 1.35, "turn": 0.4 }
+    // puts the camera in front of the hero, or of the pick-th nearest townsperson to `stand`.
+    if (v.focus) {
+      // { "focus": "cast", "id": "kaela" }: one of the named townspeople at their post.
+      const cast = v.focus === 'cast' ? g.town.npcs.find((n) => n.spec.id === v.id) : null;
+      if (v.focus === 'cast' && !cast) return { error: 'no such cast member: ' + v.id };
+      const [sx, sz] = cast ? [cast.pos.x + 3, cast.pos.z + 3] : v.stand;
+      g.time.skipTo?.(v.hour ?? 10);
+      g.weather.forced = 'clear';
+      g.player.teleport(new T.Vector3(sx, heightAt(sx, sz) + 0.3, sz));
+      g.player.char.root.visible = v.focus === 'hero';
+      g.r.camera.position.set(sx, heightAt(sx, sz) + 2, sz + 4);
+      for (let i = 0; i < (v.settle ?? 60); i++) await new Promise((r) => setTimeout(r, 100));
+      let pos, yaw, who = null;
+      if (cast) {
+        await cast.loaded;
+        pos = cast.pos.clone();
+        const [tx, tz] = v.toward ?? [0, 0];
+        yaw = Math.atan2(tx - pos.x, tz - pos.z);
+      } else if (v.focus === 'hero') {
+        g.player.yaw = v.yaw ?? 0;
+        await new Promise((r) => setTimeout(r, 600));
+        pos = g.player.pos.clone();
+        yaw = g.player.yaw;
+      } else {
+        const near = g.npcs.npcs.filter((n) => n.actor && !n.hidden && !n.moving).sort((p, q) => Math.hypot(p.pos.x - sx, p.pos.z - sz) - Math.hypot(q.pos.x - sx, q.pos.z - sz));
+        const n = near[Math.min(v.pick ?? 0, near.length - 1)];
+        if (!n) return { error: 'no townsperson nearby' };
+        who = n;
+        pos = n.pos.clone();
+        yaw = n.yaw;
+      }
+      // (The hero's yaw 0 faces -Z; a townsperson's faces +Z.)
+      const d = v.dist ?? 2.4, hgt = v.height ?? 1.35;
+      const set = () => {
+        if (who) { pos.copy(who.pos); yaw = who.yaw; }
+        const a = yaw + (v.focus === 'hero' ? Math.PI : 0) + (v.turn ?? 0.45);
+        g.r.camera.position.set(pos.x + Math.sin(a) * d, pos.y + hgt, pos.z + Math.cos(a) * d);
+        g.r.camera.lookAt(pos.x, pos.y + (v.lookAt ?? hgt - 0.15), pos.z);
+      };
+      for (let i = 0; i < 12; i++) { set(); await new Promise((r) => setTimeout(r, 100)); }
+      set();
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const starter = [];
+      if (v.focus === 'hero') g.player.char.model.traverse((o) => { if (o.userData.starterSlot) starter.push(o.name + ':' + o.visible); });
+      return { fps: window.__fps, starter, worn: v.focus === 'hero' ? Object.keys(g.player.equip.equipped ?? {}) : undefined, at: pos.toArray().map((n) => +n.toFixed(1)), who: who ? { name: who.rec.name, job: who.rec.job, look: who.rec.look } : undefined };
+    }
     const [fx, fy, fz] = v.from, [ax, ay, az] = v.at;
     const stand = v.stand ?? [fx, fz];
     g.time.skipTo?.(v.hour ?? 10);

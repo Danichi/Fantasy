@@ -33,3 +33,7 @@ t flagstones --calm=0.3 --normal=1.1
 # Whole objects (not tiled): house windows and doors.
 t window --decal --size=512 --normal-size=256 --normal=0.8 --glow
 t door --decal --size=512 --normal-size=512 --normal=0.9
+# The hero's outfit.
+t leather --normal=0.8 --calm=0.5 --feather=14
+t gambeson --normal=1.3 --calm=0.5
+t steel --normal=0.7 --calm=0.5 --feather=14
