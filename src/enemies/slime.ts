@@ -167,6 +167,8 @@ export class Slime implements Target {
   stunned = false;
   hp: number;
   maxHp: number;
+  damageScale=1;
+  level=2;
   radius: number;
   halfHeight = 0;
   position = new THREE.Vector3();
@@ -521,7 +523,7 @@ export class Slime implements Target {
     if (segmentPointDistance(a, b, this.center) > this.v.radius * 0.9 + 0.32) return;
     this.hitDone = true;
     const res = player.receiveAttack({
-      damage: this.v.damage,
+      damage: this.v.damage*this.damageScale,
       from: this.position.clone(),
       parryable: true,
       poise: this.v.damage * 2.2,

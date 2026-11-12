@@ -1,3 +1,5 @@
+import { wildlifeScale } from '../../combat/tiers';
+import type { Target } from '../../combat/targets';
 import * as THREE from 'three';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { physics } from '../../physics/physics';
@@ -1048,6 +1050,16 @@ export class KitInstance {
       const s = new Slime(kind, p, this.scene, this.fx);
       mob = { kind, obj: s, room, update: (dt, pl) => s.update(dt, pl, this.mobs.filter((q) => q.obj instanceof Slime).map((q) => q.obj as Slime)), dead: () => s.dead };
     }
+    // Instanced coordinates have no geographical meaning. Each dungeon has an
+    // authored tier, rather than inheriting the road tier of its remote origin.
+    const level=this.def.id==='crypt'?5+this.floor*2:this.def.id==='hollowRidge'?14: this.def.id==='drownedShrine'?24:8;
+    const target=mob.obj as typeof mob.obj & Target;
+    const scale=wildlifeScale(level);target.level=level;
+    target.hp=target.maxHp=Math.round(target.maxHp*scale.hp);
+    if(mob.obj instanceof Bandit)mob.obj.hitDamage*=scale.dmg;
+    if(mob.obj instanceof OrcMob)mob.obj.hitDamage*=scale.dmg;
+    if(mob.obj instanceof Undead||mob.obj instanceof Slime)mob.obj.damageScale=scale.dmg;
+    if(mob.obj instanceof Rat)mob.obj.hitDamage*=scale.dmg;
     this.mobs.push(mob);
     return mob;
   }

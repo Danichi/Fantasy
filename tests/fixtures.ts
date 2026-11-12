@@ -62,6 +62,7 @@ export const test = base.extend<{ game: Game }, { persistent: BrowserContext; sh
       const dir = path.join(process.cwd(), '.pw-cache', `w${workerInfo.parallelIndex}`);
       const ctx = await chromium.launchPersistentContext(dir, {
         headless: true,
+        executablePath: opts.launchOptions?.executablePath,
         args: opts.launchOptions?.args,
         viewport: opts.viewport ?? { width: 1280, height: 720 },
         baseURL: opts.baseURL,

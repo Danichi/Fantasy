@@ -93,10 +93,11 @@ test('the Academy entrance trial is a real, non-lethal duel that can be won', as
     const duel = g.duel;
     const active = duel.active;
     const opp = duel.opponent;
+    opp.update = () => {}; // This test verifies non-lethal yielding and quest advancement.
     // Let him swing at us for a moment, then beat him down.
     await new Promise((r) => setTimeout(r, 3000));
     for (let k = 0; k < 20 && duel.active; k++) {
-      opp.takeHit({ damage: 40, poise: 40, dir: new T.Vector3(1, 0, 0), at: opp.center.clone(), crit: false, source: 'melee' });
+      opp.takeHit({ damage: opp.maxHp / 8, poise: 40, dir: new T.Vector3(1, 0, 0), at: opp.center.clone(), crit: false, source: 'melee' });
       await new Promise((r) => setTimeout(r, 120));
     }
     await new Promise((r) => setTimeout(r, 500));

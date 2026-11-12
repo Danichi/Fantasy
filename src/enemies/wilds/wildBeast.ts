@@ -74,6 +74,7 @@ export class WildBeast implements Target {
   stunned = false;
   hp: number;
   maxHp: number;
+  level:number;
   radius: number;
   halfHeight: number;
   position = new THREE.Vector3();
@@ -146,7 +147,8 @@ export class WildBeast implements Target {
     this.leash = opts.leash ?? 46;
     this.alerted = !!opts.alerted;
     const d = this.danger;
-    let hp = spec.hp * (1 + d * 1.4), dmg = spec.damage * (1 + d * 0.9), speed = spec.speed * (1 + d * 0.12), scale = 1;
+    this.level=Math.round(5+d*20+this.elites.length*2);
+    let hp = spec.hp * (1 + d * 4 + d*d*7), dmg = spec.damage * (1 + d * 1.6), speed = spec.speed * (1 + d * 0.12), scale = 1;
     const moves = new Set<MoveId>(spec.moves);
     for (const e of this.elites) {
       hp *= e.hp;

@@ -53,6 +53,24 @@ are stripped). To add or replace clips, follow **`tools/mixamo-checklist.md`**
 and run `npm run import:mixamo`. Townsfolk merge their parts into one mesh
 (`src/npc/charMerge.ts`); `?nomerge` builds them in parts to compare.
 
+## Port Aurelle: the bright harbour
+
+The port has been rebuilt around eight districts, two harbour basins, an
+expanded Academy, a two-level lighthouse and the old city beneath the quays.
+Ask Mira about the Brightwater’s empty berth to begin **The False Lights of
+Aurelle**, a six-part investigation with evidence routes, allies and a harbour
+rescue. Six local stories, eighteen discoveries, daily work, fishing auctions
+and a room with storage at the Salty Anchor give you reasons to return.
+
+The Academy now fields level 14–28 opponents with 1,800–6,400 HP. Lyra,
+Hadrik and Sable offer practical combat lessons. Road and monster tiers rise
+beyond Elder Glen; Academy fights still end in a non-lethal yield.
+
+Existing saves retain progression. Heroes saved in the rebuilt footprint
+resume safely at Westgate; owned ships keep their cargo and receive new berths.
+See [the Port Aurelle guide](docs/design/port-aurelle.md) for districts,
+activities, progression and implementation details.
+
 ## The crypt (first dungeon)
 
 The crypt entrance is at the end of the north road, in the hills. Inside:

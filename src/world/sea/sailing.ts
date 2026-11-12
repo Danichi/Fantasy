@@ -5,7 +5,7 @@ import { heightAt } from '../terrainHeight';
 import { addDropGlow, bestRarity } from '../dropGlow';
 import { SEA_LEVEL } from '../worldMap';
 import { waterSurfaceAt } from '../waterLevel';
-import { QUAY_X } from '../portCity';
+import { QUAY_X, PORT_BERTHS, PORT_LANDING, AURELLE, quayAt } from '../portCity';
 import { buildCharacter, type BuiltCharacter, type Look } from '../../npc/charBuilder';
 import { Ship, NO_CONTROL, POINT_NAMES, SECTION_NAMES, type ShipControls, type ShipPerks } from './ship';
 import { HULLS, HULL_ORDER, UPGRADES, SLOTS, STOCK_FIT, type HullId, type Fit } from './shipTypes';
@@ -125,7 +125,7 @@ export interface SailingHooks {
 
 interface Port { id: string; name: string; zone: THREE.Vector3; r: number; berths: [number, number, number][]; landing: THREE.Vector3; crown?: boolean }
 const PORTS: Port[] = [
-  { id: 'portAurelle', name: 'Port Aurelle', crown: true, zone: new THREE.Vector3(QUAY_X + 50, 0, 200), r: 150, berths: [[QUAY_X + 64, 172, Math.PI / 2], [QUAY_X + 64, 196, Math.PI / 2], [QUAY_X + 64, 218, Math.PI / 2], [QUAY_X + 92, 184, Math.PI / 2], [QUAY_X + 92, 210, Math.PI / 2], [QUAY_X + 52, 318, Math.PI / 2]], landing: new THREE.Vector3(QUAY_X - 4, 0, 196) },
+  { id: 'portAurelle', name: 'Port Aurelle', crown: true, zone: new THREE.Vector3(QUAY_X + 50, 0, 200), r: 150, berths: PORT_BERTHS, landing: new THREE.Vector3(PORT_LANDING[0], 0, PORT_LANDING[1]) },
   { id: 'crownQuay', name: 'The Crown Quay', crown: true, zone: new THREE.Vector3(-3990, 0, -1010), r: 90, berths: [[-3990, -1000, Math.PI], [-3985, -985, Math.PI]], landing: new THREE.Vector3(-3916, 0, -1010) },
 ];
 /** What the shipwright calls the monster materials an upgrade needs. */
@@ -2921,12 +2921,12 @@ export function harbourFolk(v: (x: number, z: number) => THREE.Vector3): { recor
     const p = post(id, at[0], at[1]);
     records.push({ id, name, title, job: id, settlement: 'portAurelle', look, named: true, lines, schedule: [{ from: 0, activity: 'sleep', place: 'homes' }, { from: hours[0], activity, place: p }, { from: hours[1], activity: 'drink', place: 'tavern' }, { from: Math.min(23.8, hours[1] + 2), activity: 'sleep', place: 'homes' }] });
   };
-  named('shipwright', 'Master Hale Barrow', 'Aurelle Shipwrights · Hulls, Upgrades, Repairs', { body: 'male', outfit: 'ranger', hair: 'buzzed', beard: true, hairColor: 0xb8b4ae, skin: 0xe0b894, cloth: 0x6a4a2a, bracers: true, height: 1.84 }, [QUAY_X - 6, 62], [6, 20],
+  named('shipwright', 'Master Hale Barrow', 'Aurelle Shipwrights · Hulls, Upgrades, Repairs', { body: 'male', outfit: 'ranger', hair: 'buzzed', beard: true, hairColor: 0xb8b4ae, skin: 0xe0b894, cloth: 0x6a4a2a, bracers: true, height: 1.84 }, [2900, 82], [6, 20],
     { any: ['Every hull is a promise to the sea. I make good promises.', 'Serpent scales make the finest plating there is. Bring me some and I\'ll show you.'] }, 'work');
-  named('rigby', 'Sal Rigby', 'Crew Broker · The Salty Anchor', { body: 'female', outfit: 'peasant', hair: 'buns', hairColor: 0x8a3f22, skin: 0xa8744e, linen: 0xe8c8c0, cloth: 0x2f4a6a, height: 1.68 }, [2776, 262], [9, 23],
+  named('rigby', 'Sal Rigby', 'Crew Broker · The Salty Anchor', { body: 'female', outfit: 'peasant', hair: 'buns', hairColor: 0x8a3f22, skin: 0xa8744e, linen: 0xe8c8c0, cloth: 0x2f4a6a, height: 1.68 }, [AURELLE.saltyAnchor[0]-8, AURELLE.saltyAnchor[1]+10], [9, 23],
     { any: ['Need hands? I know every sailor in this port, and which ones you can trust with a rope.', 'A crew that\'s paid is a crew that stays.'] }, 'talk');
   HARBOUR_SAILORS.forEach((c, i) => {
-    const at: [number, number] = c.haunt === 'tavern' ? [2780 + (i % 3) * 3, 266 + (i % 2) * 2] : c.haunt === 'wharf' ? [2916 + i * 2, 308] : [QUAY_X - 3, 120 + i * 14];
+    const at: [number, number] = c.haunt === 'tavern' ? [2780 + (i % 3) * 3, 266 + (i % 2) * 2] : c.haunt === 'wharf' ? [2916 + i * 2, 308] : [quayAt(120+i*14)-9, 120+i*14];
     named(c.id, c.name, `${ROLE_INFO[c.role].name} · looking for a berth (level ${c.level})`, c.look, at, [7, 21],
       { any: [`${ROLE_INFO[c.role].does}. That's me. ${c.wage} gold a day and I'm yours.`, c.traits.length ? TRAIT_INFO[c.traits[0]].split(':')[0] + ', they call me. Fair enough.' : 'Know any captains hiring?'] }, c.haunt === 'tavern' ? 'drink' : 'idle');
   });

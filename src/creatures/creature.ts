@@ -1,3 +1,4 @@
+import { wildlifeScale } from '../combat/tiers';
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { physics, groups, G_ENEMY, STATIC_ONLY } from '../physics/physics';
@@ -15,8 +16,7 @@ import { combat, type AttackKind } from '../combat/core';
 
 /** How a creature's level scales it: health, damage and the XP it is worth. */
 export function levelScale(level: number) {
-  const l = Math.max(1, level) - 1;
-  return { hp: 1 + l * 0.14, dmg: 1 + l * 0.09, xp: 1 + l * 0.16 };
+  return wildlifeScale(level);
 }
 
 export interface CreatureBase {

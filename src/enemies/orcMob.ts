@@ -69,6 +69,8 @@ export class OrcMob implements Target {
   stunned = false;
   hp = 85;
   maxHp = 85;
+  hitDamage=17;
+  level=4;
   radius = 0.34;
   halfHeight = 0.82;
   position = new THREE.Vector3();
@@ -92,7 +94,7 @@ export class OrcMob implements Target {
   constructor(at: THREE.Vector3, private scene: THREE.Scene, private fx: FX) {
     this.position.copy(at);
     this.brain = new HumanoidBrain(this, { ...ARCHETYPES.brute, run: 3.2 }, MOVESETS.orc, {
-      damage: () => 17,
+      damage: () => this.hitDamage,
       duration: (c) => this.anim?.duration(c) || 1.5,
       onParried: () => {
         this.stunned = true;
