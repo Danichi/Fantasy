@@ -972,7 +972,8 @@ export function buildPortAurelle(
     k.house(x, z, w, d, f, yaw, { kind: 'home', name }, tint);
   }
   // Deliberate public courts are stone; garden courts retain their grass.
-  const paving = (x: number, z: number, w: number, d: number) =>
+  const paving = (x: number, z: number, w: number, d: number) => {
+    k.clearGrass(x, z, w, d);
     mesh(
       new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2),
       m.bridgeStone ?? m.stone,
@@ -980,6 +981,7 @@ export function buildPortAurelle(
       heightAt(x, z) + 0.035,
       z,
     );
+  };
   paving(2792, 172, 48, 44);
   paving(2820, 83, 37, 29);
   paving(2746, 264, 30, 12);

@@ -90,3 +90,24 @@ PortLife owns event subscriptions, temporary combatants, practical lessons and i
 The rebuild has dedicated Playwright coverage for its structure, harbour depths, complete investigation, guarded and negotiated evidence routes, non-lethal combat tiers, public walking routes, practical mastery, daily reward limits, quality-preserving storage and legacy migration. Existing Academy, port and interior tests also exercise the retained progression.
 
 Run with the normal bundled Playwright browser, or set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to an installed Chromium executable. GPU-less runs use `PW_SWIFTSHADER=1`.
+## Verification for this change
+
+- `npm run build`: passed, including TypeScript and the production Vite build.
+- Port/Academy coverage: 19 scenarios passed in the complete run. The two failing cases (lighthouse stairs and the old trial test's wall-clock timing) pass after correction. An additional migration test confirms a hero leaves a moved berth safely while a hired boat on a voyage keeps its position. All 15 dedicated rebuild cases have passing results across that run and the focused reruns.
+- The broader eight-file run passed 44 of 54 scenarios, including the combat balance, creatures, rebuilt dungeons, interiors, fishing, ship purchase/refit and save/reload checks. Dummy-hit and sailing scenarios still report failures in the software-rendered browser. Five of seven selected failures also reproduced on main at `c5c84b1`; a further ship-combat rerun fails the grapeshot crew assertion, and its cause remains unresolved. These failures remain visible in the validation record.
+- Unpacked Linux and Windows desktop folders package successfully. Windows packaging uses the verified Electron distribution with executable metadata editing and signing disabled; native Windows execution and installer signing were not tested.
+- City and lighthouse screenshots were captured at 1440×900 with the Low visual preset and shadows enabled. The final capture reports no JavaScript page errors.
+
+## Screenshots
+
+![Port Aurelle overview](port-aurelle/overview.png)
+
+![Grand Exchange](port-aurelle/exchange.png)
+
+![Great Quays](port-aurelle/quays.png)
+
+![Academy approach](port-aurelle/academy.png)
+
+![Lantern Ward](port-aurelle/lantern.png)
+
+![The lighthouse stairs and gallery](port-aurelle/lighthouse.png)

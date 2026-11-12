@@ -4,6 +4,7 @@ import { registerDoor, type Door } from '../doors';
 import { StaticBatch } from '../cityKit';
 import { heightAt } from '../terrainHeight';
 import { physics } from '../../physics/physics';
+import { GRASS_MASKS } from '../groundWindow';
 
 /** A shared nautical kit. All small scenery is merged into spatial material batches. */
 export class PortKit {
@@ -13,6 +14,7 @@ export class PortKit {
   readonly lamps: THREE.MeshStandardMaterial[] = [];
   readonly colliders: ReturnType<typeof physics.addBox>[] = [];
   readonly owned = new Set<THREE.Material>();
+  private grassMasks: (typeof GRASS_MASKS)[number][] = [];
   readonly stone: THREE.MeshStandardMaterial;
   readonly blue: THREE.Material;
   readonly teal: THREE.Material;
@@ -542,6 +544,11 @@ export class PortKit {
       );
     }
   }
+  clearGrass(x: number, z: number, w: number, d: number) {
+    const mask = { x, z, hx: w / 2 + 0.6, hz: d / 2 + 0.6, amount: 1 };
+    GRASS_MASKS.push(mask);
+    this.grassMasks.push(mask);
+  }
   finish() {
     this.batch.build(this.root, 48);
   }
@@ -553,6 +560,10 @@ export class PortKit {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    for (const mask of this.grassMasks) {
+      const i = GRASS_MASKS.indexOf(mask);
+      if (i >= 0) GRASS_MASKS.splice(i, 1);
+    }
     for (const c of this.colliders)
       if (physics.world.getCollider(c.handle)) {
         const body = c.parent();

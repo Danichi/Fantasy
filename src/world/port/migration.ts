@@ -40,7 +40,7 @@ export function migrateAurelle(save: SaveData | null) {
     ) {
       moveHeroFrom(rental);
       const [x, z, yaw] = PORT_BERTHS[PORT_BERTHS.length - 1];
-      Object.assign(sailing.rental, { x, z, yaw });
+      Object.assign(rental, { x, z, yaw });
     }
   }
   world.flags['pa:revision'] = PORT_REVISION;
