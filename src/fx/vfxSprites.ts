@@ -20,7 +20,7 @@ export type SlashKey = 'blue' | 'crimson' | 'gold' | 'emerald' | 'ember' | 'viol
 /** Top-down magic circles. */
 export type SigilKey = 'arcane' | 'holy' | 'fire' | 'frost' | 'void' | 'nature' | 'blood' | 'earth';
 /** Looping 4x4 flipbooks. */
-export type LoopKey = 'fireball' | 'bolt';
+export type LoopKey = 'fireball';
 /** Single images. */
 export type StillKey = 'dome' | 'pillar';
 
@@ -70,7 +70,7 @@ export function preloadVfx() {
   for (const k of ['fire', 'frost', 'storm', 'spark', 'holy', 'void', 'earth', 'nature', 'blood', 'water', 'wind']) tex(`burst_${k}.webp`);
   for (const k of ['blue', 'crimson', 'gold', 'emerald', 'ember', 'violet']) tex(`slash_${k}.webp`);
   for (const k of ['arcane', 'holy', 'fire', 'frost', 'void', 'nature', 'blood', 'earth']) tex(`sigil_${k}.webp`);
-  for (const k of ['fireball', 'bolt']) tex(`loop_${k}.webp`);
+  tex('loop_fireball.webp');
   for (const k of ['dome', 'pillar']) tex(`${k}.webp`);
 }
 
