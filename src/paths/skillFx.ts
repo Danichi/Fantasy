@@ -4,7 +4,7 @@ import { MagicCircles, type Style } from '../magic/circles';
 import { physics } from '../physics/physics';
 import { targets, hurtSegment, type Target } from '../combat/targets';
 import { segmentPointDistance } from '../core/math';
-import { STYLE_FX, Billboard, burstTex, slashTex, stillTex, vfxMaterial, setOpacity, setFrame, slashGeometry, type BurstKey } from '../fx/vfxSprites';
+import { STYLE_FX, Billboard, burstTex, slashTex, stillTex, loopTex, vfxMaterial, setOpacity, setFrame, slashGeometry, type BurstKey } from '../fx/vfxSprites';
 
 // Visual building blocks for class skills: projectiles (wind blades, spears,
 // tornadoes, meteors), lingering zones, shield bubbles, pillars of light and
@@ -584,6 +584,28 @@ export class SkillFx {
       g.children[1].scale.setScalar(0.8);
       mesh = g;
     }
+    // Painted layer: wind blades carry the school's slash ribbon; orbs carry a
+    // rolling, looping core (the Fireball's roil for fire, the school's burst held
+    // at its brightest frames for everything else).
+    if (o.shape === 'blade') {
+      const map = slashTex(STYLE_FX[o.style].slash);
+      if (map) {
+        const r = new THREE.Mesh(this.geo.slashPaint, vfxMaterial({ map, gain: 2.3, occlude: 0.4 }));
+        r.renderOrder = 12;
+        r.scale.setScalar(1.05);
+        mesh.add(r);
+      }
+    } else if (o.shape === 'orb') {
+      const loop = o.style === 'fire' ? loopTex('fireball') : null;
+      const map = loop ?? burstTex(STYLE_FX[o.style].burst);
+      if (map) {
+        const b = new Billboard(vfxMaterial({ map, grid: 4, gain: 2.3, occlude: 0.5 }));
+        b.scale.setScalar(loop ? 1.5 : 2.6);
+        b.userData.loop = loop ? [0, 16] : [5, 4];
+        mesh.userData.paint = b;
+        this.scene.add(b);
+      }
+    }
     const halo = sprite(textures().glow, PALETTE[o.style].body.clone().multiplyScalar(0.5), 0.9);
     halo.scale.setScalar(o.shape === 'tornado' ? 3.2 : o.shape === 'spear' ? 1.6 : 2.4);
     if (o.shape === 'tornado') halo.position.y = 1.2;
@@ -636,6 +658,14 @@ export class SkillFx {
       p.pos.addScaledVector(p.dir, step);
       p.travelled += step;
       p.mesh.position.copy(p.pos);
+      const paint = p.mesh.userData.paint as Billboard | undefined;
+      if (paint) {
+        const [f0, n] = paint.userData.loop as [number, number];
+        paint.position.copy(p.pos);
+        paint.scale.setScalar((n === 16 ? 1.5 : 2.6) * (p.size ?? 1));
+        paint.roll += dt * 4;
+        setFrame(paint.material as THREE.Material, f0 + ((p.t * 20) % n));
+      }
       const c = PALETTE[p.style];
       if (p.shape === 'tornado') {
         p.mesh.rotation.y += dt * 9;
@@ -667,6 +697,11 @@ export class SkillFx {
       if (p.done) {
         this.scene.remove(p.mesh);
         p.mesh.traverse((o) => ((o as THREE.Mesh).material as THREE.Material | undefined)?.dispose?.());
+        const paint = p.mesh.userData.paint as Billboard | undefined;
+        if (paint) {
+          this.scene.remove(paint);
+          (paint.material as THREE.Material).dispose();
+        }
         this.impact(p.pos, p.style, 0.55 * (p.size ?? 1));
         p.onEnd?.(p.pos.clone());
       }
