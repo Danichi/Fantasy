@@ -1125,7 +1125,10 @@ export class PortLife {
     }
     const lens = port.landmarks.get('lens') as THREE.Mesh;
     const mat = lens.material as THREE.MeshStandardMaterial;
-    const falseLight = q.isActive('aurelle-false-lights', 1);
+    const falseLight =
+      q.isActive('aurelle-false-lights') &&
+      q.state['aurelle-false-lights'].stage >= 1 &&
+      !f['pa:lens'];
     mat.emissive.set(falseLight ? '#bd4e32' : '#ffce76');
     mat.emissiveIntensity = falseLight ? 0.8 : 2;
     port.landmarks.get('beam')!.visible =

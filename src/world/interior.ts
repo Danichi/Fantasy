@@ -1263,8 +1263,19 @@ export class Interior {
           0.13 + i * 0.26,
           3 - i * 0.42,
           0,
-          true,
+          false,
         );
+      // Continuous support under the treads keeps the capsule from catching
+      // two risers at once halfway up this narrow staircase.
+      this.colliders.push(
+        physics.addBox(
+          this.at(right - 1.15, -0.09, 1.9),
+          new THREE.Vector3(0.825, 0.14, Math.hypot(6.62, 4.05) / 2),
+          new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(Math.atan2(4.05, 6.62), 0, 0),
+          ),
+        ),
+      );
       this.box(m.planks, this.W - 1, 0.3, 2, 0, 3.9, back + 1.4, 0, true);
       this.box(m.planks, 1.8, 0.3, this.D - 3, left + 1.2, 3.9, 0, 0, true);
       this.box(sm.iron, 0.1, 1, this.D - 3, left + 2.1, 4.5, 0);

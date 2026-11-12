@@ -88,24 +88,31 @@ test('the Academy entrance trial is a real, non-lethal duel that can be won', as
     const T = g.THREE;
     const q = g.quests;
     q.state['road-to-port'] = { status: 'done', stage: 1, progress: [1] };
-    g.player.teleport(new T.Vector3(2822, 7, 84));
+    const { heightAt } = await import('/src/world/terrainHeight.ts' as string);
+    g.player.teleport(new T.Vector3(2822, heightAt(2822, 84) + 0.3, 84));
     await new Promise((r) => setTimeout(r, 2500));
+    await (window as any).W(30);
     q.accept('academy-trial');
     const duel = g.duel;
     const active = duel.active;
+    let reason = '';
+    const onEnd = duel.onEnd;
+    duel.onEnd = (won: boolean, why: string) => { reason = why; onEnd?.(won, why); };
     const opp = duel.opponent;
     opp.update = () => {}; // This test verifies non-lethal yielding and quest advancement.
     // AI behaviour is covered separately; verify yielding and quest progression here.
     for (let k = 0; k < 20 && duel.active; k++) {
       opp.takeHit({ damage: opp.maxHp / 8, poise: 40, dir: new T.Vector3(1, 0, 0), at: opp.center.clone(), crit: false, source: 'melee' });
-      await new Promise((r) => setTimeout(r, 120));
+      g.stepSim(10);
     }
-    await new Promise((r) => setTimeout(r, 500));
-    return { active, name: opp?.name, alive: opp?.hp > 0 && !opp?.dead, stage: q.state['academy-trial'].stage, playerAlive: !g.player.dead };
+    g.stepSim(2);
+    duel.onEnd = onEnd;
+    return { reason, active, name: opp?.name, alive: opp?.hp > 0 && opp?.nonLethal, stage: q.state['academy-trial'].stage, playerAlive: !g.player.dead };
   });
   expect(res.active).toBe(true);
   expect(res.name).toBe('Ser Hadrik Vane');
   expect(res.alive).toBe(true); // he yields, he doesn't die
+  expect(res.reason).toMatch(/yields/);
   expect(res.stage).toBe(1);
   expect(res.playerAlive).toBe(true);
   expect(errors).toEqual([]);

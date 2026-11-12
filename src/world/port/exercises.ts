@@ -110,6 +110,7 @@ export class AcademyExercises {
     this.stop();
     this.active = school;
     this.count = 0;
+    this.dodgeAt = -100;
     const b = new Bandit(
       'sword',
       this.ring.clone().add(new THREE.Vector3(0, 0.2, -4)),

@@ -695,6 +695,9 @@ test('the lighthouse signal is reached by walking its stairs to the upper galler
       stage: 2,
       progress: [0, 0],
     };
+    g.time.hour = 19;
+    g.portLife.update(1 / 60, true);
+    const beforeBeam = g.port.landmarks.get('beam').visible;
     const door = g.doors.find((d: any) => d.kind === 'lighthouse');
     await g.realm.enterInterior(door, door.kind, g.world.mats, g.spells);
     const it = g.realm.interior;
@@ -731,12 +734,22 @@ test('the lighthouse signal is reached by walking its stairs to the upper galler
     const restored = g.worldFlags['pa:lens'];
     g.dialogue.close();
     await g.realm.leaveInterior();
-    return { blocked, height, inReach, restored };
+    g.portLife.update(1 / 60, true);
+    return {
+      blocked,
+      height,
+      inReach,
+      restored,
+      beforeBeam,
+      afterBeam: g.port.landmarks.get('beam').visible,
+    };
   });
   expect(r.blocked).toEqual([]);
   expect(r.height).toBeGreaterThan(3.7);
   expect(r.inReach).toBe(true);
   expect(r.restored).toBe(true);
+  expect(r.beforeBeam).toBe(false);
+  expect(r.afterBeam).toBe(true);
   expect(game.errors).toEqual([]);
 });
 
@@ -760,7 +773,7 @@ test('large fleets use separate moorings and leave the rental berth clear', asyn
         flags: {},
         sailing: {
           ships: owned.map((r: any) => ({ ...r })),
-          rental: { port: 'portAurelle' },
+          rental: { port: 'portAurelle', x: 3010, z: 318 },
         },
       },
     };
@@ -783,4 +796,59 @@ test('large fleets use separate moorings and leave the rental berth clear', asyn
   for (const depth of r.depths) expect(depth).toBeLessThan(-2);
   expect(r.migrated).toEqual(r.expected);
   expect(r.hire).toEqual(r.hireExpected);
+});
+
+test('migration brings a hero off a moved berth and leaves hired boats on voyages alone', async ({
+  game,
+}) => {
+  const r = await game.page.evaluate(async () => {
+    const { migrateAurelle } = await import(
+      '/src/world/port/migration.ts' as string
+    );
+    const docked: any = {
+      world: {
+        pos: [3010, 5, 196],
+        flags: {},
+        sailing: {
+          ships: [
+            { port: 'portAurelle', x: 3010, z: 196, cargo: { spices: 7 } },
+          ],
+          rental: null,
+        },
+      },
+    };
+    const voyage: any = {
+      world: {
+        pos: [5500, 3, 4800],
+        flags: {},
+        sailing: {
+          ships: [],
+          rental: {
+            port: 'portAurelle',
+            x: 5500,
+            z: 4800,
+            yaw: 1,
+            cargo: { grain: 4 },
+          },
+        },
+      },
+    };
+    migrateAurelle(docked);
+    migrateAurelle(voyage);
+    return {
+      docked: docked.world.pos,
+      cargo: docked.world.sailing.ships[0].cargo,
+      voyage: voyage.world.pos,
+      rental: voyage.world.sailing.rental,
+    };
+  });
+  expect(r.docked).toEqual([2710, 2, 150]);
+  expect(r.cargo).toEqual({ spices: 7 });
+  expect(r.voyage).toEqual([5500, 3, 4800]);
+  expect(r.rental).toMatchObject({
+    x: 5500,
+    z: 4800,
+    yaw: 1,
+    cargo: { grain: 4 },
+  });
 });
