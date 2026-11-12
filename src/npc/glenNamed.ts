@@ -50,7 +50,7 @@ const NAMED: Named[] = [
   },
   {
     id: 'brannoc', name: 'Captain Brannoc', title: 'Captain of the Watch', post: [4, 97], postYaw: Math.PI, activity: 'patrol', hours: [6, 26], home: 'home4',
-    look: { body: 'male', outfit: 'ranger', hair: 'buzzed', beard: true, hairColor: 0x1f1a17, skin: 0x7a4e32, cloth: 0x3a5f9e, pauldron: true, height: 1.9 },
+    look: { body: 'male', outfit: 'ranger', hair: 'buzzed', beard: true, hairColor: 0x1f1a17, skin: 0x7a4e32, cloth: 0x3a5f9e, pauldron: true, height: 1.9, garb: { armour: true, tabard: true, accent: 0x3a5f9e, trim: 0xd8c070, cloak: 'full' } },
     lines: { any: ['The Watch keeps the gates. The Guild keeps the roads. Everyone keeps their heads.', 'Goblins have been sniffing round the fields after dark.'], night: ['Quiet so far. I don\'t trust quiet.'] },
   },
   {

@@ -28,6 +28,31 @@ export function worldPos(o: THREE.Object3D, out = new THREE.Vector3()) {
   return out.setFromMatrixPosition(o.matrixWorld);
 }
 
+/**
+ * A turn laid on a bone on top of its animation, every frame (a head turning
+ * toward the player). The animation mixer only writes a bone when the clip's
+ * value changes, so on a still pose (an idle whose head doesn't move, a paused
+ * or distant character) last frame's turn would still be there and this
+ * frame's would be added to it: the head winds round and round. This keeps
+ * the animation's own pose and starts from it each time.
+ *
+ *   turn.begin(bone);  ...rotate the bone...  turn.end(bone);
+ */
+export class LayeredTurn {
+  private base = new THREE.Quaternion();
+  private wrote = new THREE.Quaternion();
+  private live = false;
+  /** After the mixer: put the bone back on the animation's pose if our last edit is still on it. */
+  begin(bone: THREE.Object3D) {
+    if (this.live && bone.quaternion.equals(this.wrote)) bone.quaternion.copy(this.base);
+    else this.base.copy(bone.quaternion);
+  }
+  end(bone: THREE.Object3D) {
+    this.wrote.copy(bone.quaternion);
+    this.live = true;
+  }
+}
+
 /** Pre-multiply a bone's world rotation by `q` (a world-space delta). */
 export function rotateWorld(bone: THREE.Object3D, q: THREE.Quaternion) {
   worldQuat(bone, _q2);

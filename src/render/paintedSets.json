@@ -50,12 +50,26 @@
     "color": "#443120",
     "source": "forest_floor.png"
   },
+  "gambeson": {
+    "normal": true,
+    "aspect": 0.9909,
+    "repeat": 1,
+    "color": "#d0c6b8",
+    "source": "gambeson.png"
+  },
   "grass": {
     "normal": true,
     "aspect": 0.9814,
     "repeat": 1,
     "color": "#5b8f3f",
     "source": "grass.png"
+  },
+  "leather": {
+    "normal": true,
+    "aspect": 1.0363,
+    "repeat": 1,
+    "color": "#804a2f",
+    "source": "leather.png"
   },
   "planks": {
     "normal": true,
@@ -91,6 +105,13 @@
     "repeat": 1,
     "color": "#b65b40",
     "source": "roof_tile.png"
+  },
+  "steel": {
+    "normal": true,
+    "aspect": 0.911,
+    "repeat": 1,
+    "color": "#848589",
+    "source": "steel.png"
   },
   "stone": {
     "normal": true,

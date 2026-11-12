@@ -1,5 +1,6 @@
 import { LEAN_TEST } from '../core/settings';
 import * as THREE from 'three';
+import { LayeredTurn } from '../player/ik';
 import { buildCharacter, type Look, type BuiltCharacter } from './charBuilder';
 import { heightAt } from '../world/terrainHeight';
 import type { WorldTime } from '../world/worldTime';
@@ -129,10 +130,13 @@ interface Actor {
   current: string;
   headBone?: THREE.Bone;
   headYaw: number;
+  /** keeps the head turn from piling up on a still pose */
+  headTurn: LayeredTurn;
   /** casting shadows (only close to the camera: the shadow pass re-skins every mesh) */
   shadow?: boolean;
 }
 
+const HEAD_UP = new THREE.Vector3(0, 1, 0);
 const SHADOW_R = 20;
 
 // Full animated characters cost ~10 draw calls each (twice with shadows), so
@@ -567,7 +571,7 @@ export class NpcManager {
       const acts = (built.mixer as unknown as { _actions: THREE.AnimationAction[] })._actions;
       const actions: Actor['actions'] = {};
       for (const a of acts) actions[a.getClip().name] = a;
-      const actor: Actor = { key, built, actions, current: '', headBone: built.bones.get('Head'), headYaw: 0 };
+      const actor: Actor = { key, built, actions, current: '', headBone: built.bones.get('Head'), headYaw: 0, headTurn: new LayeredTurn() };
       // Out of the scene until someone uses it: parked actors (dozens, one per
       // look baked for its sprite) otherwise cost a matrix update per bone every frame.
       this.bakeSprite(key, built);
@@ -783,7 +787,12 @@ export class NpcManager {
       const toP = Math.atan2(player.x - st.pos.x, player.z - st.pos.z) - st.yaw;
       const want = !st.moving && dist < 6 ? Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(toP), Math.cos(toP)))) : 0;
       a.headYaw = damp(a.headYaw, want, 4, dt);
-      if (a.headBone && Math.abs(a.headYaw) > 0.01) a.headBone.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), a.headYaw * 0.7);
+      if (a.headBone) {
+        // (On top of the clip's own pose, never on top of last frame's turn.)
+        a.headTurn.begin(a.headBone);
+        if (Math.abs(a.headYaw) > 0.01) a.headBone.rotateOnWorldAxis(HEAD_UP, a.headYaw * 0.7);
+        a.headTurn.end(a.headBone);
+      }
     }
     this.finishSprites(nSprites);
     // Hand out actors nearest-first; the nearest without a built look gets built next.

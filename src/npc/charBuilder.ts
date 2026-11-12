@@ -3,6 +3,7 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { captureRest, retargetClip, HUMANOID_TO_UE } from '../anim/retarget';
 import { characterAtlas, mergeParts, DYE_FNS, dyeBlock, dyeUniforms } from './charMerge';
+import { dressFolk } from './sculpt';
 
 // Storybook cast builder (docs/ART-DIRECTION.md §7). Characters are assembled
 // from Quaternius' CC0 kits: a Fantasy outfit (clothed body on the shared
@@ -24,7 +25,47 @@ const load = (file: string) => {
 
 export type Hair = 'long' | 'buns' | 'buzzed' | 'buzzedfemale' | 'simpleparted' | null;
 
+/**
+ * What sets a named character apart from the crowd (npc/sculpt.ts builds it):
+ * a cut of clothes, armour, and the pieces worn over them.
+ */
+export interface Garb {
+  /** the cut of the main garment: a fitted belted tunic, or a robe to the ankles under a mantle */
+  cut?: 'tunic' | 'robe';
+  /** plate: cuirass, gorget, both pauldrons, tassets, vambraces, greaves */
+  armour?: boolean;
+  /** a tabard down the front and back (accent colour) */
+  tabard?: boolean;
+  /** a cloak down the back, or a half-cape over the left shoulder (accent colour) */
+  cloak?: 'full' | 'half';
+  /** a broad sash at the waist with a tail at the hip (second colour) */
+  sash?: boolean;
+  /** a long scarf with two tails down the back (second colour) */
+  scarf?: boolean;
+  /** a work apron: bib and skirt */
+  apron?: 'leather' | 'linen';
+  hat?: 'kerchief' | 'straw';
+  /** a satchel at the hip on a strap across the chest */
+  satchel?: boolean;
+  /** tall boots whatever the outfit */
+  tallBoots?: boolean;
+  /** a beard down to the chest */
+  longBeard?: boolean;
+  /** a broader, heavier frame (1 = as everyone) */
+  build?: number;
+  /** cloak, cape, mantle and tabard */
+  accent?: number;
+  /** sash and scarf */
+  second?: number;
+  /** edging on robes and mantles */
+  trim?: number;
+  /** plate */
+  metal?: number;
+}
+
 export interface Look {
+  /** a named character's own outfit */
+  garb?: Garb;
   body: 'female' | 'male';
   outfit: 'peasant' | 'ranger';
   hood?: boolean;
@@ -238,17 +279,32 @@ const firstSkinned = (o: THREE.Object3D) => {
 /** Every file a character can be built from (the shared texture array covers them all). */
 /** `?nomerge` keeps characters in parts (to compare looks). */
 const NO_MERGE = typeof location !== 'undefined' && location.search.includes('nomerge');
+/** `?kitfolk` keeps the townsfolk as the old kit characters (to compare with the sculpted ones). */
+const KIT_FOLK = typeof location !== 'undefined' && location.search.includes('kitfolk');
 const ALL_FILES = ['base_female.glb', 'base_male.glb', 'hair_beard.glb', ...Object.values(HAIR_FILE), ...['female', 'male'].flatMap((b) => ['peasant', 'ranger'].map((o) => `outfit_${b}_${o}.glb`))];
 
 /**
- * `merge` (default) folds the parts into one skinned mesh: one draw call per
- * character (charMerge). The player's hero keeps its parts.
+ * By default the character is sculpted (npc/sculpt.ts): the kit supplies the
+ * skeleton and the animations, and the body, face and clothes are built in
+ * code as one smooth mesh (one draw call). `merge: false` returns the kit
+ * character in parts instead (the hero and the creator dress it themselves).
  */
 export async function buildCharacter(look: Look, clips: string[] = ['idle', 'talk'], opts: { merge?: boolean } = {}): Promise<BuiltCharacter> {
   const sex = look.body;
-  const [outfitG, baseG] = await Promise.all([load(`outfit_${sex}_${look.outfit}.glb`), load(`base_${sex}.glb`)]);
+  const folk = opts.merge !== false && !NO_MERGE && !KIT_FOLK;
+  const outfitG = await load(`outfit_${sex}_${look.outfit}.glb`);
   const model = SkeletonUtils.clone(outfitG.scene);
   model.updateMatrixWorld(true);
+  if (!folk) await dressKit(model, look, opts);
+  else dressFolk(model, look);
+  const anchor = firstSkinned(model)!;
+  return finishCharacter(model, anchor, look, clips);
+}
+
+/** The kit's own look: its outfit, with a head, hair and beard re-bound onto the outfit's rig. */
+async function dressKit(model: THREE.Object3D, look: Look, opts: { merge?: boolean }) {
+  const sex = look.body;
+  const baseG = await load(`base_${sex}.glb`);
 
   // Optional outfit pieces.
   const drop: string[] = [];
@@ -337,7 +393,11 @@ export async function buildCharacter(look: Look, clips: string[] = ['idle', 'tal
     const key = [sex, look.outfit, !!look.hood, !!look.pauldron, look.bracers !== false, look.hair ?? '', !!look.beard, look.skin ?? '', look.hairColor ?? ''].join('|');
     mergeParts(model, anchor, at, key, hue, linen);
   }
+}
 
+/** Height, animations and bounds for a dressed character. */
+async function finishCharacter(model: THREE.Object3D, anchor: THREE.SkinnedMesh, look: Look, clips: string[]): Promise<BuiltCharacter> {
+  const sex = look.body;
   // Normalise height (the rig is in metres already; this only fine-tunes).
   const root = new THREE.Group();
   root.add(model);

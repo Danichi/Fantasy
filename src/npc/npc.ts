@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { physics } from '../physics/physics';
 import { heightAt } from '../world/terrain';
-import { rotateWorld } from '../player/ik';
+import { rotateWorld, LayeredTurn } from '../player/ik';
 import { damp } from '../core/math';
 import { buildCharacter, type Look } from './charBuilder';
 
@@ -47,6 +47,7 @@ export class NPC {
   private uniforms = { uBreath: { value: 0 } };
   private t = Math.random() * 10;
   private headYaw = 0;
+  private headTurn = new LayeredTurn();
   private idleAction: THREE.AnimationAction | null = null;
   private talkAction: THREE.AnimationAction | null = null;
   private talking = false;
@@ -160,7 +161,12 @@ export class NPC {
       const yawTo = Math.atan2(to.x, to.z) - this.root.rotation.y;
       const wantYaw = to.length() < 7 ? Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(yawTo), Math.cos(yawTo)))) : 0;
       this.headYaw = damp(this.headYaw, wantYaw, 4, dt);
-      if (this.bones.head) rotateWorld(this.bones.head, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.headYaw * 0.75));
+      if (this.bones.head) {
+        // (On top of the clip's own pose, never on top of last frame's turn.)
+        this.headTurn.begin(this.bones.head);
+        rotateWorld(this.bones.head, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.headYaw * 0.75));
+        this.headTurn.end(this.bones.head);
+      }
       return;
     }
     this.mixer?.update(dt);

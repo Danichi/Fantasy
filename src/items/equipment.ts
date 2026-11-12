@@ -212,6 +212,16 @@ export class Equipment implements LimbFit {
     }
     this.rig.setCurl('Right', this.equipped.main != null ? 1 : 0.15);
     this.rig.setCurl('Left', this.equipped.off != null ? 1 : 0.15);
+    // The hero's starter armour (a pauldron, knee cops, splints: npc/sculpt.ts)
+    // gives way to real armour worn on the same slot.
+    // (Mail and plate, that is: leather and cloth sit under them well enough.)
+    this.char.model?.traverse((o) => {
+      const slot = o.userData.starterSlot as Slot | undefined;
+      if (!slot) return;
+      const worn = this.inSlot(slot)?.def;
+      const heavy = !!worn?.armor && (worn.look?.weight ?? 'plate') !== 'leather' && (worn.look?.weight ?? 'plate') !== 'robe';
+      o.visible = !(heavy && this.showArmor);
+    });
   }
 
   model(slot: 'main' | 'off') {
