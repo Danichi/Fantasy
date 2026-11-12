@@ -4,6 +4,7 @@ import { MagicCircles, type Style } from '../magic/circles';
 import { physics } from '../physics/physics';
 import { targets, hurtSegment, type Target } from '../combat/targets';
 import { segmentPointDistance } from '../core/math';
+import { GroundDecals, STYLE_DECAL } from '../fx/decals';
 import { STYLE_FX, Billboard, burstTex, slashTex, stillTex, loopTex, vfxMaterial, setOpacity, setFrame, slashGeometry, type BurstKey } from '../fx/vfxSprites';
 
 // Visual building blocks for class skills: projectiles (wind blades, spears,
@@ -167,8 +168,12 @@ export class SkillFx {
     slashPaint: slashGeometry(),
   };
 
+  /** Lingering marks on the ground: scorches, frost, cracks (fx/decals.ts). */
+  readonly decals: GroundDecals;
+
   constructor(private scene: THREE.Scene, readonly fx: FX) {
     this.circles = new MagicCircles(scene);
+    this.decals = new GroundDecals(scene);
   }
 
   /** A school's saturated colour (particle tails). */
@@ -285,6 +290,9 @@ export class SkillFx {
   impact(pos: THREE.Vector3, style: Style, size = 1) {
     const c = PALETTE[style];
     this.paintedBurst(pos, STYLE_FX[style].burst, 3.2 * size);
+    // Big enough hits mark the ground under them.
+    const mark = STYLE_DECAL[style];
+    if (mark && size >= 0.5) this.decals.add(pos, mark, 2.4 * size, 10 + size * 6, 2.2);
     this.flash(pos, style, 1.2 * size);
     this.fx.add.spawn({ pos, spread: 6 * size, count: Math.round(45 * size), life: [0.25, 0.6], size: [0.45 * size, 0.04], color: c.hot, color2: c.cool, drag: 3, jitter: 0.3 * size });
     this.fx.add.spawn({ pos, spread: 11 * size, count: Math.round(30 * size), life: [0.2, 0.5], size: [0.07, 0.01], color: 0xffffff, color2: c.cool, gravity: 9, drag: 1.5, upBias: 0.5 });
@@ -318,6 +326,8 @@ export class SkillFx {
       }
     }
     this.ring(pos, style, radius * 2.4);
+    const mark = STYLE_DECAL[style];
+    if (mark) this.decals.add(pos.clone().setY(pos.y + 0.5), mark, Math.min(12, radius * 2.2), 18);
     this.spinSlash(pos, radius * 0.8, style);
     // Jets thrown outward along the ground.
     for (let i = 0; i < 20; i++) {
@@ -401,6 +411,8 @@ export class SkillFx {
     });
     this.fx.add.spawn({ pos: pos.clone().setY(pos.y + 0.3), spread: radius * 3, count: 50, life: [0.3, 0.8], size: [0.2, 0.02], color: PALETTE[style].hot, color2: PALETTE[style].cool, upBias: 2.5, drag: 2, jitter: radius * 0.5 });
     this.ring(pos, style, radius * 4);
+    const mark = STYLE_DECAL[style];
+    if (mark) this.decals.add(pos.clone().setY(pos.y + 0.5), mark, radius * 3, 14);
     this.flash(pos.clone().setY(pos.y + 0.6), style, radius * 2.2);
     this.flash(pos.clone().setY(pos.y + height * 0.8), style, radius * 1.4);
     this.spiral(pos, style, height * 0.7, radius * 1.2, 30);
@@ -647,6 +659,7 @@ export class SkillFx {
 
   update(dt: number) {
     this.circles.update(dt);
+    this.decals.update(dt);
     for (const t of this.timed) {
       t.t += dt;
       t.update(t.obj, Math.min(1, t.t / t.life), dt);

@@ -3,6 +3,9 @@
 
   python3 tools/fx/process.py <raw_dir>
 
+Ground decals (fxgen_decal_*.png) are the exception: they are rendered with a
+transparent background and keep their alpha.
+
 Raw files are named fxgen_<asset>.<gif|png>, e.g. fxgen_burst_fire.gif or
 fxgen_sigil_frost.png. GIFs become 4x4 flipbooks (16 frames, 256 px each,
 1024 px sheet); stills are squared and resized. Everything is written as
@@ -41,6 +44,9 @@ def flipbook(path, cell=256, grid=4):
 
 
 def still(path, kind):
+    if kind == 'decal':
+        # Ground marks keep their real alpha (they darken and stain, they don't glow).
+        return ImageOps.fit(Image.open(path).convert('RGBA'), (512, 512), Image.LANCZOS)
     im = Image.open(path).convert('RGBA')
     im = Image.alpha_composite(Image.new('RGBA', im.size, (0, 0, 0, 255)), im).convert('RGB')
     if kind == 'trail':

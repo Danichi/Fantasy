@@ -10,6 +10,7 @@ import { Q } from '../core/settings';
 import type { Player } from '../player/player';
 import { ITEMS } from '../items/itemDefs';
 import { MagicCircles } from './circles';
+import { GroundDecals } from '../fx/decals';
 import { preloadVfx, Billboard, loopTex, burstTex, vfxMaterial, setFrame, setOpacity } from '../fx/vfxSprites';
 
 // Spell effects: Fireball projectiles, Healing Light aura, potion sparkles.
@@ -118,6 +119,7 @@ export class Spells {
   private circles: MagicCircles;
   private castSeen: object | null = null;
   private booms: { b: Billboard; t: number }[] = [];
+  private decals: GroundDecals;
 
   /** Lend a pooled light to something else (building interiors). */
   borrowLight(owner: object) {
@@ -130,6 +132,7 @@ export class Spells {
 
   constructor(private scene: THREE.Scene, private fx: FX, private player: Player) {
     this.circles = new MagicCircles(scene);
+    this.decals = new GroundDecals(scene);
     preloadVfx();
     this.lights = new LightPool(scene, Math.max(1, Q.maxDynamicLights));
     this.fireMat = new THREE.ShaderMaterial({ vertexShader: FIRE_VERT, fragmentShader: FIRE_FRAG, uniforms: { uTime: { value: 0 } } });
@@ -204,6 +207,7 @@ export class Spells {
       this.scene.add(b);
       this.booms.push({ b, t: 0 });
     }
+    this.decals.add(at, 'scorch', 2.6 * fb.group.scale.x + 1, 16, 2.5);
     // Hot core flash, then a wide fire burst.
     fx.add.spawn({ pos: at, spread: 1.5, count: 14, life: [0.12, 0.22], size: [1.6, 0.6], color: 0xfff6d8, color2: 0xffa040, jitter: 0.2 });
     fx.add.spawn({ pos: at, spread: 7, count: 110, life: [0.25, 0.75], size: [0.8, 0.08], color: 0xfff05a, color2: 0xff1e00, drag: 3, jitter: 0.4 });
@@ -333,6 +337,7 @@ export class Spells {
     }
     this.balls = this.balls.filter((b) => b.life > -99);
 
+    this.decals.update(dt);
     for (const bm of this.booms) {
       bm.t += dt;
       const u = Math.min(1, bm.t / 0.85);

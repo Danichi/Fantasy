@@ -22,7 +22,8 @@ existing particle work. Code: `src/fx/vfxSprites.ts`; art and pipeline:
 | Orb core | Looping roiling fire (Fireball) or a school's burst held at its brightest frames | Fireball, `orb` projectiles |
 | Shield | Hex-lattice energy sphere | `SkillFx.bubble` (blue schools) |
 | Pillar | Column of light with god rays, tinted to the school | `SkillFx.pillar` |
-| Blade trail | Painted streak along every melee swing, steel blue (gold when charged or perfect) | `fx/weaponTrail.ts` |
+| Blade trail | Painted streak along every melee swing in the weapon family's colour; charged or perfect blows burn toward white-hot and linger | `fx/weaponTrail.ts` |
+| Ground mark | Lingering decal under impacts, novas and smites (scorch, frost, glowing cracks, void burn, holy sun-wheel, lightning scar, wildflower bloom); fades after 10-18 s, at most 24 at once | `fx/decals.ts` |
 
 Every block falls back to the old procedural effect if its texture has not
 loaded, so nothing breaks while art streams in.
@@ -64,9 +65,34 @@ every forged technique (bolt, nova, smite, meteor, whirl...) picks them up.
 | Earth | rock and dust eruption | crimson | magma seal | debris rings |
 | Water | crown splash | blue | arcane blue | splash rings |
 
+## Weapon trail colours
+
+| Family | Trail |
+| --- | --- |
+| Sword | electric blue |
+| Greatsword | crimson |
+| Spear | gold |
+| Axe | fire orange |
+| Mace | violet |
+| Daggers | emerald |
+| Staff | arcane blue |
+
+## Ground marks by school
+
+| School | Mark |
+| --- | --- |
+| Fire | scorch with glowing embers |
+| Frost, water | hoarfrost patch |
+| Earth, blood | cracked crater, molten cracks |
+| Void, shadow | spiral void burn |
+| Light | seared sun-wheel |
+| Storm, gale | lightning (Lichtenberg) scar |
+| Nature, wind | spiral of moss and wildflowers |
+
+Steel (Cross) leaves no mark. Marks are found with a ray down from the
+impact, so they sit on floors in dungeons and towns too, and nothing is left
+when a spell bursts in mid-air.
+
 ## Next ideas
 
-- Ground decals that linger (scorch, frost patches, cracks) after impacts.
 - A distortion (heat haze) pass behind fire and wind bursts.
-- Per-weapon trails (spear gold, axe fire, daggers emerald) once weapons know
-  their family colour.

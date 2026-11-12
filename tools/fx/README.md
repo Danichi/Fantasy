@@ -36,7 +36,10 @@ each school's colour taken from the combat reference boards:
 - **Slashes** (`slash_<colour>.webp`): an upside-down U arch whose centre of
   curvature is the image centre, radius about 0.42 of the frame.
 - **Circles** (`sigil_<name>.webp`): top-down, centred, a small margin.
-- Everything is on pure black with no alpha: the shader reads brightness as
+- **Ground marks** (`decal_<name>.webp`): top-down, rendered with a real
+  transparent background (GPT Image 2.6 `background: transparent`) and kept
+  with alpha; they stain the ground rather than glow.
+- Everything else is on pure black with no alpha: the shader reads brightness as
   coverage (it glows, and darkens the ground a little behind the bright parts
   so effects read in daylight).
 

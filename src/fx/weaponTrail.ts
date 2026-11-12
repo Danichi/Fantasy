@@ -32,6 +32,22 @@ const FRAG = /* glsl */ `
 
 const MAX = 24;
 
+/**
+ * Trail colour per weapon family, after the combat reference board: sword
+ * electric blue, greatsword crimson, spear gold, axe fire orange, mace violet,
+ * daggers emerald, staff arcane blue.
+ */
+const FAMILY_TINT: Record<string, [number, number, number]> = {
+  sword: [0.55, 0.76, 1],
+  greatsword: [1, 0.26, 0.2],
+  spear: [1, 0.8, 0.36],
+  axe: [1, 0.5, 0.16],
+  mace: [0.72, 0.38, 1],
+  dagger: [0.34, 1, 0.46],
+  staff: [0.42, 0.62, 1],
+};
+const STEEL: [number, number, number] = [0.72, 0.84, 1];
+
 export class WeaponTrail {
   private pts: { base: THREE.Vector3; tip: THREE.Vector3; age: number }[] = [];
   private geo = new THREE.BufferGeometry();
@@ -41,6 +57,7 @@ export class WeaponTrail {
   private mat: THREE.ShaderMaterial;
   private mesh: THREE.Mesh;
   private life = 0.16;
+  private tint: [number, number, number] = STEEL;
 
   constructor(scene: THREE.Scene, private player: Player) {
     this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
@@ -82,6 +99,7 @@ export class WeaponTrail {
         const tip = m.localToWorld(new THREE.Vector3(0, m.userData.bladeTip, 0));
         const last = this.pts[this.pts.length - 1];
         if (!last || last.tip.distanceToSquared(tip) > 1e-4) this.pts.push({ base, tip, age: 0 });
+        this.tint = FAMILY_TINT[p.equip?.inSlot(h.hand)?.def.kind ?? ''] ?? STEEL;
         this.life = 0.12 + (a.tier ?? 0) * 0.04 + (h.dmg > 1.5 ? 0.06 : 0);
       }
     }
@@ -96,10 +114,12 @@ export class WeaponTrail {
       this.mat.uniforms.uMap.value = map;
       this.mat.uniforms.uPainted.value = 1;
     }
-    // Steel-blue light on an ordinary swing (the sword reference), molten gold on a charged or perfect one.
-    const [r, g, b] = charged ? [1, 0.72, 0.32] : painted ? [0.72, 0.84, 1] : [0.85, 0.9, 1];
+    // The weapon family's colour; a charged or perfect blow burns toward white-hot and lingers.
+    const t = painted ? this.tint : ([0.85, 0.9, 1] as [number, number, number]);
+    const hot = charged ? 0.45 : 0;
+    const [r, g, b] = [t[0] + (1 - t[0]) * hot, t[1] + (1 - t[1]) * hot, t[2] + (1 - t[2]) * hot];
     // The painted streak carries its own falloff toward the base, so the base needs less fading.
-    const baseA = painted ? 0.6 : 0.15, tipA = painted ? 0.85 : 0.55;
+    const baseA = painted ? (charged ? 0.8 : 0.6) : 0.15, tipA = painted ? (charged ? 1 : 0.85) : 0.55;
     for (let i = 0; i < MAX; i++) {
       const q = this.pts[Math.min(i, n - 1)];
       this.pos.set([q.base.x, q.base.y, q.base.z, q.tip.x, q.tip.y, q.tip.z], i * 6);
