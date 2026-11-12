@@ -265,7 +265,7 @@ export class SkillFx {
    * A painted, animated burst (fire blooming into smoke, ice shattering, lightning
    * crackling) that faces the camera at `pos`. Does nothing until its texture has loaded.
    */
-  paintedBurst(pos: THREE.Vector3, key: BurstKey, size: number, life = 0.75, gain = 2) {
+  paintedBurst(pos: THREE.Vector3, key: BurstKey, size: number, life = 0.75, gain = 1.8) {
     const map = burstTex(key);
     if (!map) return false;
     const b = new Billboard(vfxMaterial({ map, grid: 4, gain, occlude: 0.55 }));
@@ -483,8 +483,10 @@ export class SkillFx {
     const shellTex = BLUE_SCHOOLS.has(style) ? stillTex('dome') : null;
     let shell: Billboard | null = null;
     if (shellTex) {
-      shell = new Billboard(vfxMaterial({ map: shellTex, gain: 1.6, occlude: 0.15 }));
+      shell = new Billboard(vfxMaterial({ map: shellTex, gain: 1.5, occlude: 0.2 }));
       this.scene.add(shell);
+      // The painted lattice is the shield now; the plain sphere stays as a faint inner haze.
+      (m.material as THREE.MeshBasicMaterial).opacity = 0.06;
     }
     this.addTimed(m, 9999, (o, _u, dt) => {
       o.position.copy(anchor()).setY(anchor().y + 1);
@@ -599,16 +601,20 @@ export class SkillFx {
       const loop = o.style === 'fire' ? loopTex('fireball') : null;
       const map = loop ?? burstTex(STYLE_FX[o.style].burst);
       if (map) {
-        const b = new Billboard(vfxMaterial({ map, grid: 4, gain: 2.3, occlude: 0.5 }));
+        const b = new Billboard(vfxMaterial({ map, grid: 4, gain: 1.9, occlude: 0.55 }));
         b.scale.setScalar(loop ? 1.5 : 2.6);
         b.userData.loop = loop ? [0, 16] : [5, 4];
         mesh.userData.paint = b;
         this.scene.add(b);
+        // The painted core is the orb now: shrink the solid sphere to a hot pip and thin the glow shell.
+        mesh.children[0].scale.setScalar(0.35);
+        ((mesh.children[1] as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.12;
       }
     }
     const halo = sprite(textures().glow, PALETTE[o.style].body.clone().multiplyScalar(0.5), 0.9);
     halo.scale.setScalar(o.shape === 'tornado' ? 3.2 : o.shape === 'spear' ? 1.6 : 2.4);
     if (o.shape === 'tornado') halo.position.y = 1.2;
+    if (mesh.userData.paint) halo.material.opacity = 0.3;
     mesh.add(halo);
     mesh.scale.setScalar(size);
     const dir = o.dir.clone().normalize();

@@ -43,6 +43,10 @@ def flipbook(path, cell=256, grid=4):
 def still(path, kind):
     im = Image.open(path).convert('RGBA')
     im = Image.alpha_composite(Image.new('RGBA', im.size, (0, 0, 0, 255)), im).convert('RGB')
+    if kind == 'trail':
+        # Keep just the horizontal band: hot edge on top (blade tip), faint base below.
+        w, h = im.size
+        return crush(im.crop((0, int(h * 0.25), w, int(h * 0.73))).resize((1024, 256), Image.LANCZOS))
     size = STILL_SIZE.get(kind, 1024)
     if isinstance(size, tuple):
         return crush(ImageOps.fit(im, size, Image.LANCZOS))

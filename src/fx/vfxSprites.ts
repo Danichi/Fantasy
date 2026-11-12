@@ -22,7 +22,7 @@ export type SigilKey = 'arcane' | 'holy' | 'fire' | 'frost' | 'void' | 'nature' 
 /** Looping 4x4 flipbooks. */
 export type LoopKey = 'fireball';
 /** Single images. */
-export type StillKey = 'dome' | 'pillar';
+export type StillKey = 'dome' | 'pillar' | 'trail';
 
 /** Which painted set each school uses (colours follow the combat reference boards). */
 export const STYLE_FX: Record<Style, { burst: BurstKey; slash: SlashKey; sigil: SigilKey }> = {
@@ -71,7 +71,7 @@ export function preloadVfx() {
   for (const k of ['blue', 'crimson', 'gold', 'emerald', 'ember', 'violet']) tex(`slash_${k}.webp`);
   for (const k of ['arcane', 'holy', 'fire', 'frost', 'void', 'nature', 'blood', 'earth']) tex(`sigil_${k}.webp`);
   tex('loop_fireball.webp');
-  for (const k of ['dome', 'pillar']) tex(`${k}.webp`);
+  for (const k of ['dome', 'pillar', 'trail']) tex(`${k}.webp`);
 }
 
 /** Forget missing files and load again (dev: new art dropped into public/assets/fx). */
