@@ -1,3 +1,4 @@
+import './art/themes.css';
 // The adventurer's book: one window for every menu. Four tabs across the top
 // (Character, Skills, Journal, Map), each with a few sub-tabs beneath, all in
 // the same frame, at the same size and in the same place, so the menus read
@@ -143,6 +144,9 @@ export class MenuBook {
     if (!cur) return;
     this.lastTab = cur.tab.id;
     this.lastSub.set(cur.tab.id, cur.sub.id);
+    // ui/art/themes.css paints each tab and page its own way
+    this.frame.dataset.tab = cur.tab.id;
+    this.frame.dataset.sub = cur.sub.id;
     this.tabsEl.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === cur.tab.id));
     const subs = cur.tab.subs.filter((s) => s === cur.sub || !s.hidden?.());
     this.subsEl.innerHTML = subs.length > 1

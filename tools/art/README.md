@@ -24,3 +24,14 @@ named people first, then a stock type picked from their name and title), `src/ui
   sheet and a 2x2 ornament sheet. The crest and corner had a white haze, removed by dropping pale, unsaturated pixels.
 - The screen itself: `src/ui/titleScreen.ts` and `.css`. The game's name and tagline are `GAME_NAME` and
   `GAME_TAGLINE` at the top of that file.
+
+## Pause screen, page surfaces, workshop rooms
+
+- `title/icon-{resume,save,title,map,journal,character,rest,guild,gold}.webp`: a second 3x3 icon sheet for the
+  pause menu (`src/ui/pauseScreen.ts`, styled by `titleScreen.css`).
+- `theme/`: painted surfaces for the menu pages (`src/ui/art/themes.css`): `leather` (the bag panel, with its
+  tooled border) and `leather-plain` (its centre, for the small cards), `starchart` (Skills), `seachart`
+  (Seamanship), `journal` (Quests, People, Bestiary, Almanac), `herbal` (Herbal and the brewing book).
+- `scene/`: a room painted behind each workshop and shop window (`src/ui/art/scene.ts`): forge, kitchen,
+  loom, workbench, runestone, alchemy (the brewing bench), shop.
+- All gpt_image_2_6 16:9 2k, fetched and cut in the Higgsfield sandbox, then brought down as one zip.

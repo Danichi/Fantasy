@@ -228,6 +228,7 @@ import { MINE_CLEARING } from './world/mineEntrance';
 import { loadSave, writeSave, buildSave, applySave } from './save';
 import { buildSavePicker } from './ui/savePicker';
 import { createTitleScreen, type TitleToggle } from './ui/titleScreen';
+import { createPauseScreen } from './ui/pauseScreen';
 import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 import { afflictions } from './combat/afflictions';
@@ -2621,11 +2622,67 @@ async function boot() {
     else if (!inv.open) input.requestLock();
     if (!open) save();
   };
+  // Settings shared by the title and pause screens (ui/titleScreen.ts, ui/pauseScreen.ts).
+  const desk = (window as any).desktop as { quit(): void; toggleFullscreen(): void } | undefined;
+  const menuSettings = (withLoadInto: boolean): TitleToggle[] => {
+    const out: TitleToggle[] = [
+      { label: 'Music', value: () => (music.muted ? 'Off' : 'On'), next: () => (music.setMuted(!music.muted), music.muted ? 'Off' : 'On') },
+      {
+        label: 'Damage numbers',
+        value: () => (hud.damageNumbers ? 'On' : 'Off'),
+        next: () => {
+          hud.damageNumbers = !hud.damageNumbers;
+          writeDamageNumbers(hud.damageNumbers);
+          return hud.damageNumbers ? 'On' : 'Off';
+        },
+      },
+    ];
+    if (withLoadInto)
+      out.push({
+        label: 'Continue at',
+        value: () => (loadInto() === 'ghagrabba' ? 'Gate of Ghagrabba' : 'Where you left off'),
+        next: () => {
+          try {
+            localStorage.setItem(LOAD_KEY, loadInto() === 'ghagrabba' ? 'saved' : 'ghagrabba');
+          } catch { /* (no storage) */ }
+          return loadInto() === 'ghagrabba' ? 'Gate of Ghagrabba' : 'Where you left off';
+        },
+      });
+    if (desk) out.push({ label: 'Fullscreen', value: () => 'F11', next: () => (desk.toggleFullscreen(), 'F11') });
+    return out;
+  };
+  const showControls = () => {
+    overlays.help.style.zIndex = '500';
+    overlays.help.classList.remove('hidden');
+  };
+  const pauseScreen = createPauseScreen({
+    resume: () => overlays.start.click(),
+    save: () => {
+      save();
+      hud.toast('Game saved');
+    },
+    settings: menuSettings(false),
+    controls: showControls,
+    extra: () =>
+      SANDBOX_MODE
+        ? [
+            { label: 'Sandbox controls', icon: 'sandbox', run: () => (pauseScreen.hide(), overlays.start.click(), sandbox?.openControls()) },
+            { label: 'Return to your adventure', sub: 'Saves the Sandbox first', icon: 'continue', run: () => (save(), travelToSandbox(false)) },
+          ]
+        : [{ label: 'Combat Sandbox', sub: 'Every build at full power', icon: 'sandbox', run: () => (save(), travelToSandbox(true)) }],
+    toTitle: () => location.reload(),
+    quit: desk ? () => desk.quit() : undefined,
+  });
   const pause = () => {
-    if (!started || (TEST_MODE && !SANDBOX_MODE) || inv.open || skills.open) return;
+    if (!started || (TEST_MODE && !SANDBOX_MODE) || inv.open || skills.open || pauseScreen.open) return;
     pausedByUser = true;
-    const day = time.label.split(', ');
-    overlays.showPaused(true, `<span><b>REGION</b>${SANDBOX_MODE ? 'Sandbox' : regionName}</span><span><b>${day[0] ?? 'DAY'}</b>${day[1] ?? ''}</span><span><b>LEVEL</b>${player.prog.level}</span><span><b>GOLD</b>${player.prog.gold.toLocaleString()}</span>`);
+    const [d0, d1] = time.label.split(', ');
+    pauseScreen.show((player.prog.look as { name?: string } | undefined)?.name || 'The world waits', [
+      { label: 'Region', value: SANDBOX_MODE ? 'Sandbox' : regionName },
+      { label: d0 ?? 'Day', value: d1 ?? '' },
+      { label: 'Level', value: String(player.prog.level) },
+      { label: 'Gold', value: player.prog.gold.toLocaleString() },
+    ]);
   };
   // The save as it was at boot: a fresh game autosaves while booting (the main
   // quest begins), and that must not hide the character creator.
@@ -2642,41 +2699,14 @@ async function boot() {
   // The title screen (ui/titleScreen.ts): the first thing you see. The old start card stays as the pause screen.
   if (!TEST_MODE && !SANDBOX_MODE && !RETURNING_FROM_SANDBOX) {
     overlays.start.classList.add('hidden');
-    const desk = (window as any).desktop as { quit(): void; toggleFullscreen(): void } | undefined;
-    const settings: TitleToggle[] = [
-      { label: 'Music', value: () => (music.muted ? 'Off' : 'On'), next: () => (music.setMuted(!music.muted), music.muted ? 'Off' : 'On') },
-      {
-        label: 'Damage numbers',
-        value: () => (hud.damageNumbers ? 'On' : 'Off'),
-        next: () => {
-          hud.damageNumbers = !hud.damageNumbers;
-          writeDamageNumbers(hud.damageNumbers);
-          return hud.damageNumbers ? 'On' : 'Off';
-        },
-      },
-    ];
-    if (saveData)
-      settings.push({
-        label: 'Continue at',
-        value: () => (loadInto() === 'ghagrabba' ? 'Gate of Ghagrabba' : 'Where you left off'),
-        next: () => {
-          try {
-            localStorage.setItem(LOAD_KEY, loadInto() === 'ghagrabba' ? 'saved' : 'ghagrabba');
-          } catch { /* (no storage) */ }
-          return loadInto() === 'ghagrabba' ? 'Gate of Ghagrabba' : 'Where you left off';
-        },
-      });
-    if (desk) settings.push({ label: 'Fullscreen', value: () => 'F11', next: () => (desk.toggleFullscreen(), 'F11') });
+    const settings = menuSettings(!!saveData);
     createTitleScreen({
       begin: () => overlays.start.click(),
       sandbox: () => {
         save();
         travelToSandbox(true);
       },
-      controls: () => {
-        overlays.help.style.zIndex = '500';
-        overlays.help.classList.remove('hidden');
-      },
+      controls: showControls,
       settings,
       quit: desk ? () => desk.quit() : undefined,
     });

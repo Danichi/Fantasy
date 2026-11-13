@@ -119,3 +119,24 @@
 @media (prefers-reduced-motion: reduce) {
   #ui .ts-mist, #ui .ts-bg, #ui .ts-crest { animation: none; }
 }
+
+/* ---- the pause screen (pauseScreen.ts): same look, over the frozen world ---- */
+#ui .ts-root.ts-pause { background: none; backdrop-filter: blur(5px) saturate(.85); animation: tsPauseIn .25s ease-out; }
+@keyframes tsPauseIn { from { opacity: 0; backdrop-filter: blur(0) saturate(1); } }
+#ui .ts-root.ts-pause.ts-out { opacity: 0; transition: opacity .2s; }
+#ui .ts-pause .ts-shade { background:
+    linear-gradient(90deg, rgba(5, 4, 10, .9) 0%, rgba(5, 4, 10, .74) 26%, rgba(5, 4, 10, .3) 50%, rgba(5, 4, 10, .15) 70%),
+    radial-gradient(ellipse 120% 90% at 60% 45%, transparent 50%, rgba(0, 0, 0, .6) 100%); }
+#ui .ts-pause .ts-brand, #ui .ts-pause .ts-item { animation-duration: .45s; }
+#ui .ts-pause .ts-brand { animation-delay: 0s; }
+#ui .ts-pause .ts-crest { width: clamp(64px, 9vh, 96px); }
+#ui .ts-pause .ts-brand h1 { font-size: clamp(32px, 5vh, 48px); }
+#ui .ts-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 0 6px; }
+#ui .ts-stats span { display: flex; flex-direction: column; gap: 3px; padding: 7px 10px; border-left: 2px solid rgba(232, 199, 122, .5); background: linear-gradient(90deg, rgba(232, 199, 122, .08), transparent); }
+#ui .ts-stats small { font: 600 9.5px/1 var(--sans, sans-serif); letter-spacing: .2em; text-transform: uppercase; color: rgba(243, 230, 196, .5); }
+#ui .ts-stats b { font: 600 15px/1.1 var(--serif); letter-spacing: .04em; color: #fff1cf; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ui .ts-pause .ts-menu { gap: 0; }
+#ui .ts-pause .ts-item { padding-top: 5px; padding-bottom: 5px; }
+#ui .ts-pause .ts-icon, #ui .ts-pause .ts-icon img { width: 38px; height: 38px; }
+#ui .ts-pause .ts-label { font-size: clamp(15px, 2.2vh, 19px); }
+#ui .ts-label.ts-saved::after { content: 'Saved'; margin-top: 3px; font: italic 500 12px/1 var(--sans, sans-serif); letter-spacing: .06em; text-transform: none; color: #9fdc8a; }

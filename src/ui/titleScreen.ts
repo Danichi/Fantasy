@@ -18,7 +18,7 @@ import { buildSavePicker } from './savePicker';
 export const GAME_NAME = 'ELDERGLEN';
 export const GAME_TAGLINE = 'A tale of the Five Realms';
 
-const ART = '/assets/art/title';
+export const ART = '/assets/art/title';
 /** sessionStorage: "New Game" made a fresh slot and reloaded; open the creator straight away */
 const NEW_GAME_KEY = 'ts:newGame';
 
@@ -40,7 +40,7 @@ export interface TitleOptions {
   version?: string;
 }
 
-interface Item {
+export interface MenuItem {
   id: string;
   label: string;
   sub?: string;
@@ -49,6 +49,100 @@ interface Item {
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+/** The Settings panel's contents (title and pause screens). */
+export function settingsInto(body: HTMLElement, settings: TitleToggle[]) {
+  body.innerHTML = '<h2>Settings</h2><div class="ts-settings"></div>';
+  const box = body.querySelector('.ts-settings')!;
+  for (const s of settings) {
+    const b = document.createElement('button');
+    b.className = 'ts-toggle';
+    b.innerHTML = `<span>${esc(s.label)}</span><b>${esc(s.value())}</b>`;
+    b.addEventListener('click', () => (b.querySelector('b')!.textContent = s.next()));
+    box.append(b);
+  }
+}
+
+/** Fireflies and embers drifting up a canvas; returns a stop function. `lean` gives the parallax offset in px. */
+export function startMotes(cv: HTMLCanvasElement, lean: () => [number, number] = () => [0, 0]) {
+  const g = cv.getContext('2d')!;
+  const lowPower = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  type Mote = { x: number; y: number; vx: number; vy: number; r: number; ph: number; hue: number };
+  const motes: Mote[] = [];
+  const seed = () => {
+    cv.width = innerWidth * devicePixelRatio;
+    cv.height = innerHeight * devicePixelRatio;
+    motes.length = 0;
+    const n = lowPower ? 0 : Math.round(Math.min(90, innerWidth / 18));
+    for (let i = 0; i < n; i++)
+      motes.push({ x: Math.random(), y: 0.35 + Math.random() * 0.65, vx: (Math.random() - 0.5) * 0.012, vy: -0.004 - Math.random() * 0.012, r: 0.6 + Math.random() * 1.8, ph: Math.random() * 6.28, hue: Math.random() < 0.7 ? 42 : 22 });
+  };
+  seed();
+  addEventListener('resize', seed);
+  let raf = 0, last = performance.now();
+  const frame = (t: number) => {
+    raf = requestAnimationFrame(frame);
+    const dt = Math.min(0.05, (t - last) / 1000);
+    last = t;
+    const [px, py] = lean();
+    const W = cv.width, H = cv.height;
+    g.clearRect(0, 0, W, H);
+    g.globalCompositeOperation = 'lighter';
+    for (const m of motes) {
+      m.ph += dt * (1.2 + m.r * 0.3);
+      m.x += (m.vx + Math.sin(m.ph * 0.7) * 0.004) * dt;
+      m.y += m.vy * dt;
+      if (m.y < 0.2 || m.x < -0.02 || m.x > 1.02) {
+        m.y = 1.02;
+        m.x = Math.random();
+      }
+      const a = 0.35 + 0.65 * Math.max(0, Math.sin(m.ph));
+      const x = (m.x + (px / innerWidth) * 0.6) * W, y = (m.y + (py / innerHeight) * 0.6) * H, r = m.r * devicePixelRatio;
+      const grd = g.createRadialGradient(x, y, 0, x, y, r * 6);
+      grd.addColorStop(0, `hsla(${m.hue}, 100%, 75%, ${a})`);
+      grd.addColorStop(0.25, `hsla(${m.hue}, 100%, 55%, ${a * 0.35})`);
+      grd.addColorStop(1, `hsla(${m.hue}, 100%, 50%, 0)`);
+      g.fillStyle = grd;
+      g.fillRect(x - r * 6, y - r * 6, r * 12, r * 12);
+    }
+    g.globalCompositeOperation = 'source-over';
+  };
+  raf = requestAnimationFrame(frame);
+  return () => {
+    cancelAnimationFrame(raf);
+    removeEventListener('resize', seed);
+  };
+}
+
+/** Fill a menu column with painted-icon buttons; returns select(i) and the current index. */
+export function buildMenu(nav: HTMLElement, items: MenuItem[]) {
+  nav.innerHTML = items
+    .map(
+      (it, i) => `<button class="ts-item" role="menuitem" data-i="${i}" style="--d:${0.15 + i * 0.05}s">
+        <span class="ts-icon"><img src="${ART}/icon-${it.icon}.webp" alt="" draggable="false"></span>
+        <span class="ts-label">${it.label}${it.sub ? `<small>${it.sub}</small>` : ''}</span>
+      </button>`,
+    )
+    .join('');
+  const buttons = [...nav.querySelectorAll<HTMLButtonElement>('.ts-item')];
+  const m = {
+    sel: 0,
+    select(i: number) {
+      m.sel = (i + buttons.length) % buttons.length;
+      buttons.forEach((b, k) => b.classList.toggle('sel', k === m.sel));
+    },
+  };
+  m.select(0);
+  buttons.forEach((b, i) => {
+    b.addEventListener('pointerenter', () => m.select(i));
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      m.select(i);
+      items[i].run();
+    });
+  });
+  return m;
+}
 
 export function createTitleScreen(o: TitleOptions) {
   const slots = listSlots();
@@ -97,52 +191,16 @@ export function createTitleScreen(o: TitleOptions) {
     ty = (e.clientY / innerHeight - 0.5) * -10;
   });
 
-  // Fireflies and embers.
-  const cv = el.querySelector('.ts-motes') as HTMLCanvasElement;
-  const g = cv.getContext('2d')!;
-  type Mote = { x: number; y: number; vx: number; vy: number; r: number; ph: number; hue: number };
-  const motes: Mote[] = [];
-  const seed = () => {
-    cv.width = innerWidth * devicePixelRatio;
-    cv.height = innerHeight * devicePixelRatio;
-    motes.length = 0;
-    const n = lowPower ? 0 : Math.round(Math.min(90, innerWidth / 18));
-    for (let i = 0; i < n; i++)
-      motes.push({ x: Math.random(), y: 0.35 + Math.random() * 0.65, vx: (Math.random() - 0.5) * 0.012, vy: -0.004 - Math.random() * 0.012, r: 0.6 + Math.random() * 1.8, ph: Math.random() * 6.28, hue: Math.random() < 0.7 ? 42 : 22 });
-  };
-  seed();
-  addEventListener('resize', seed);
-  let raf = 0, last = performance.now();
-  const frame = (t: number) => {
-    raf = requestAnimationFrame(frame);
-    const dt = Math.min(0.05, (t - last) / 1000);
-    last = t;
+  // Fireflies and embers, and the painting easing toward the mouse.
+  const stopMotes = startMotes(el.querySelector('.ts-motes') as HTMLCanvasElement, () => [px, py]);
+  let raf = 0;
+  const lean = () => {
+    raf = requestAnimationFrame(lean);
     px += (tx - px) * 0.04;
     py += (ty - py) * 0.04;
     bg.style.transform = `translate3d(${px}px, ${py}px, 0) scale(1.06)`;
-    const W = cv.width, H = cv.height;
-    g.clearRect(0, 0, W, H);
-    g.globalCompositeOperation = 'lighter';
-    for (const m of motes) {
-      m.ph += dt * (1.2 + m.r * 0.3);
-      m.x += (m.vx + Math.sin(m.ph * 0.7) * 0.004) * dt;
-      m.y += m.vy * dt;
-      if (m.y < 0.2 || m.x < -0.02 || m.x > 1.02) {
-        m.y = 1.02;
-        m.x = Math.random();
-      }
-      const a = 0.35 + 0.65 * Math.max(0, Math.sin(m.ph));
-      const x = (m.x + px / innerWidth * 0.6) * W, y = (m.y + py / innerHeight * 0.6) * H, r = m.r * devicePixelRatio;
-      const grd = g.createRadialGradient(x, y, 0, x, y, r * 6);
-      grd.addColorStop(0, `hsla(${m.hue}, 100%, 75%, ${a})`);
-      grd.addColorStop(0.25, `hsla(${m.hue}, 100%, 55%, ${a * 0.35})`);
-      grd.addColorStop(1, `hsla(${m.hue}, 100%, 50%, 0)`);
-      g.fillStyle = grd;
-      g.fillRect(x - r * 6, y - r * 6, r * 12, r * 12);
-    }
-    g.globalCompositeOperation = 'source-over';
   };
-  raf = requestAnimationFrame(frame);
+  raf = requestAnimationFrame(lean);
 
   // ---- the menu -----------------------------------------------------------
   const panel = el.querySelector('.ts-panel') as HTMLElement;
@@ -160,21 +218,13 @@ export function createTitleScreen(o: TitleOptions) {
     panel.hidden = false;
   };
   const openSettings = () => {
-    body.innerHTML = '<h2>Settings</h2><div class="ts-settings"></div>';
-    const box = body.querySelector('.ts-settings')!;
-    for (const s of o.settings) {
-      const b = document.createElement('button');
-      b.className = 'ts-toggle';
-      b.innerHTML = `<span>${esc(s.label)}</span><b>${esc(s.value())}</b>`;
-      b.addEventListener('click', () => (b.querySelector('b')!.textContent = s.next()));
-      box.append(b);
-    }
+    settingsInto(body, o.settings);
     panel.dataset.kind = 'settings';
     panel.hidden = false;
   };
   const originName = (id: string) => (ORIGINS as Record<string, { name: string }>)[id]?.name ?? id;
 
-  const items: Item[] = [];
+  const items: MenuItem[] = [];
   if (hero)
     items.push({
       id: 'continue',
@@ -206,29 +256,9 @@ export function createTitleScreen(o: TitleOptions) {
   if (o.quit) items.push({ id: 'quit', label: 'Quit', icon: 'quit', run: o.quit });
 
   const nav = el.querySelector('.ts-menu') as HTMLElement;
-  nav.innerHTML = items
-    .map(
-      (it, i) => `<button class="ts-item" role="menuitem" data-i="${i}" style="--d:${0.55 + i * 0.07}s">
-        <span class="ts-icon"><img src="${ART}/icon-${it.icon}.webp" alt="" draggable="false"></span>
-        <span class="ts-label">${it.label}${it.sub ? `<small>${it.sub}</small>` : ''}</span>
-      </button>`,
-    )
-    .join('');
-  const buttons = [...nav.querySelectorAll<HTMLButtonElement>('.ts-item')];
-  let sel = 0;
-  const select = (i: number) => {
-    sel = (i + buttons.length) % buttons.length;
-    buttons.forEach((b, k) => b.classList.toggle('sel', k === sel));
-  };
-  select(0);
-  buttons.forEach((b, i) => {
-    b.addEventListener('pointerenter', () => select(i));
-    b.addEventListener('click', (e) => {
-      e.stopPropagation();
-      select(i);
-      items[i].run();
-    });
-  });
+  const menu = buildMenu(nav, items);
+  nav.querySelectorAll<HTMLElement>('.ts-item').forEach((b, i) => b.style.setProperty('--d', `${0.55 + i * 0.07}s`));
+  const select = (i: number) => menu.select(i);
 
   // Keys: up and down, Enter, Escape closes a panel. Nothing reaches the game underneath.
   const onKey = (e: KeyboardEvent) => {
@@ -236,11 +266,11 @@ export function createTitleScreen(o: TitleOptions) {
     const t = e.target as HTMLElement;
     if (t.closest('input, textarea, form')) return;
     e.stopPropagation();
-    if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') select(sel + 1);
-    else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') select(sel - 1);
+    if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') select(menu.sel + 1);
+    else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') select(menu.sel - 1);
     else if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      items[sel].run();
+      items[menu.sel].run();
     } else if (e.key === 'Escape') closePanel();
     else return;
     e.preventDefault();
@@ -262,8 +292,8 @@ export function createTitleScreen(o: TitleOptions) {
     active = false;
     el.remove();
     cancelAnimationFrame(raf);
+    stopMotes();
     removeEventListener('keydown', onKey, true);
-    removeEventListener('resize', seed);
     video.pause();
     video.removeAttribute('src');
     video.load();

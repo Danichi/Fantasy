@@ -1,3 +1,4 @@
+import { showScene } from './art/scene';
 import { ITEMS, itemValue, traitLines, STAT_LABEL, type ItemDef, type ItemStats } from '../items/itemDefs';
 import { iconFor } from './icons';
 import { isWeaponKind } from '../items/weapons/kinds';
@@ -94,6 +95,7 @@ export class ShopUI {
     this.sold = [];
     this.open = true;
     this.el.classList.remove('hidden');
+    showScene('shop');
     this.render(true);
     this.onToggle?.(true);
   }
@@ -101,6 +103,7 @@ export class ShopUI {
   close() {
     if (!this.open) return;
     this.open = false;
+    showScene(null);
     this.el.classList.add('hidden');
     this.onToggle?.(false);
   }
