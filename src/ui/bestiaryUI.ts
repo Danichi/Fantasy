@@ -1,4 +1,5 @@
 import './bestiary.css';
+import ART from './art/artManifest.json';
 import { ITEMS } from '../items/itemDefs';
 import { iconFor } from './icons';
 import { dropTable } from '../items/catalog/sources';
@@ -26,6 +27,9 @@ const SIGIL: Record<string, string> = {
   wyrm: '<path d="M24 8l5 9 13-5-6 13 8 5-14 2-6 10-6-10-14-2 8-5-6-13 13 5z"/><circle cx="24" cy="22" r="3" class="eye"/>',
   bandit: '<path d="M10 40q0-16 6-24q8-10 16 0q6 8 6 24z"/><path d="M15 25q9-4 18 0v5q-9 3-18 0z" class="eye"/><circle cx="20" cy="27" r="1.6" class="pupil"/><circle cx="28" cy="27" r="1.6" class="pupil"/>',
 };
+/** Painted plates (Higgsfield, public/assets/art/beast/<id>.webp), where one exists. */
+const PLATES = new Set<string>(ART.beast);
+const plate = (id: string, cls = '') => (PLATES.has(id) ? `<img class="bx-plate ${cls}" src="/assets/art/beast/${id}.webp" alt="" draggable="false">` : '');
 const sigil = (fam: string, cls = '') => `<svg class="bx-sigil ${cls}" viewBox="0 0 48 48" aria-hidden="true">${SIGIL[fam] ?? SIGIL.beast}</svg>`;
 
 const FAMILY_LABEL: Record<string, string> = {
@@ -124,11 +128,11 @@ export class BestiaryUI {
 
     const card = (x: { e: BeastEntry; kills: number }) => {
       const s = stageOf(x.kills, x.e.boss);
-      if (!x.kills) return `<button class="bx-card unknown" disabled title="Not yet recorded">${sigil(x.e.family, 'dim')}<b>? ? ?</b><small>Unrecorded</small></button>`;
+      if (!x.kills) return `<button class="bx-card unknown" disabled title="Not yet recorded">${plate(x.e.id, 'shadow') || sigil(x.e.family, 'dim')}<b>? ? ?</b><small>Unrecorded</small></button>`;
       const pips = [1, 2, 3, 4].map((i) => `<i class="${s >= i ? 'on' : ''}"></i>`).join('');
       const m = markOf(x.kills, x.e.boss);
       return `<button class="bx-card fam-${x.e.family} ${s >= 4 ? 'mastered' : ''} ${this.selected === x.e.id ? 'sel' : ''}" data-entry="${x.e.id}">
-        ${sigil(x.e.family)}<b>${esc(x.e.name)}</b><small>${x.kills} slain</small><span class="bx-pips">${pips}</span>${m ? `<span class="bx-mark m${m}" title="${MARK_NAMES[m]}">${'★'.repeat(m)}</span>` : ''}</button>`;
+        ${plate(x.e.id) || sigil(x.e.family)}<b>${esc(x.e.name)}</b><small>${x.kills} slain</small><span class="bx-pips">${pips}</span>${m ? `<span class="bx-mark m${m}" title="${MARK_NAMES[m]}">${'★'.repeat(m)}</span>` : ''}</button>`;
     };
     let nav = '';
     if (this.tab === 'bosses') nav = `<div class="bx-grid">${pool.sort((a, b) => Number(!a.kills) - Number(!b.kills) || a.e.tier - b.e.tier).map(card).join('')}</div>`;
@@ -204,7 +208,7 @@ export class BestiaryUI {
       : '';
     return `<div class="bx-page fam-${e.family}">
       <div class="bx-hero">
-        <div class="bx-medal ${s >= 4 ? 'gold' : ''}">${sigil(e.family, 'big')}</div>
+        <div class="bx-medal ${s >= 4 ? 'gold' : ''} ${PLATES.has(e.id) ? 'has-plate' : ''}">${plate(e.id, 'big') || sigil(e.family, 'big')}</div>
         <div class="bx-title">
           <div class="bx-kicker">${e.boss ? 'GREAT FOE' : (FAMILY_LABEL[e.family] ?? e.family).toUpperCase()} · TIER ${e.tier}</div>
           <h2>${esc(e.name)}</h2>

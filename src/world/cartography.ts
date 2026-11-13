@@ -67,7 +67,7 @@ export interface CartoDeps {
   gold(): number;
   addGold(n: number): void;
   toast(m: string): void;
-  card(title: string, sub?: string): void;
+  card(title: string, sub?: string, region?: string): void;
   xp(n: number): void;
   day(): number;
   save(): void;
@@ -293,7 +293,7 @@ export class Cartography {
     this.d.xp(400);
     const done = Object.keys(REGION_PIECES).filter((r) => this.d.flags['chart:' + r]).length;
     const title = done >= 18 ? 'Mapmaker of the Known World' : done >= 10 ? 'Cartographer' : done >= 3 ? 'Surveyor' : '';
-    this.d.card(`${REGION_NAMES[region]}: Fully Charted`, title && [3, 10, 18].includes(done) ? `You are known now as ${title}` : `${done} of 18 regions charted`);
+    this.d.card(`${REGION_NAMES[region]}: Fully Charted`, title && [3, 10, 18].includes(done) ? `You are known now as ${title}` : `${done} of 18 regions charted`, region);
   }
 
   /** An old chart's mistakes: places it shows that aren't there any more. */

@@ -263,14 +263,16 @@ export class HUD {
 
   private regionCardEl: HTMLDivElement | null = null;
   /** Big painted region title when the player enters a region (smaller on re-entry). */
-  regionCard(name: string, subtitle: string, first: boolean) {
+  regionCard(name: string, subtitle: string, first: boolean, art?: string | null) {
     if (!this.regionCardEl) {
       this.regionCardEl = document.createElement('div');
       this.regionCardEl.className = 'region-card';
       this.root.appendChild(this.regionCardEl);
     }
     const el = this.regionCardEl;
-    el.innerHTML = `<div class="rc-name"></div><div class="rc-rule"></div><div class="rc-sub"></div>`;
+    // The first time in, a painted view of the region (ui/art) behind the title.
+    el.innerHTML = `${first && art ? `<img class="rc-art" src="${art}" alt="">` : ''}<div class="rc-name"></div><div class="rc-rule"></div><div class="rc-sub"></div>`;
+    el.classList.toggle('with-art', !!(first && art));
     el.querySelector('.rc-name')!.textContent = name;
     el.querySelector('.rc-sub')!.textContent = subtitle;
     el.classList.toggle('quiet', !first);
