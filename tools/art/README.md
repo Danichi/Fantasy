@@ -35,3 +35,13 @@ named people first, then a stock type picked from their name and title), `src/ui
 - `scene/`: a room painted behind each workshop and shop window (`src/ui/art/scene.ts`): forge, kitchen,
   loom, workbench, runestone, alchemy (the brewing bench), shop.
 - All gpt_image_2_6 16:9 2k, fetched and cut in the Higgsfield sandbox, then brought down as one zip.
+
+## UI kit (`public/assets/art/ui/`, `src/ui/art/uikit.css`)
+
+- One sheet of six plates (gpt_image_2_6, transparent): red, iron, parchment and leather button plates, a round
+  close button and a square item slot. Each long plate was rebuilt in the sandbox as its two painted end caps
+  with a mirrored repeat of a clean piece of its face between them, so it stretches as a nine-slice
+  (`border-image`, slice 40/110) without smearing the centre ornament.
+- `frame.webp`: a carved walnut and gold window frame, rebuilt the same way (real corners, mirrored repeats of
+  each edge, the top crest cut out as `frame-crest.webp`). Drawn over the book's edges (`.bk-ornate`) and round
+  the shop, workshop and brewing windows.

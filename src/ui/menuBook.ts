@@ -1,4 +1,5 @@
 import './art/themes.css';
+import './art/uikit.css';
 // The adventurer's book: one window for every menu. Four tabs across the top
 // (Character, Skills, Journal, Map), each with a few sub-tabs beneath, all in
 // the same frame, at the same size and in the same place, so the menus read
@@ -39,6 +40,7 @@ export class MenuBook {
   private veil: HTMLDivElement;
   private frame: HTMLDivElement;
   private tabsEl: HTMLDivElement;
+  private ornate: HTMLDivElement;
   private subsEl: HTMLDivElement;
   /** the last sub-page open on each tab (a tab reopens where you left it) */
   private lastSub = new Map<string, string>();
@@ -62,6 +64,9 @@ export class MenuBook {
 
     this.frame = document.createElement('div');
     this.frame.className = 'book-frame interactive hidden';
+    // the carved and gilded frame drawn over the page's edges (art/uikit.css)
+    this.ornate = document.createElement('div');
+    this.ornate.className = 'bk-ornate hidden';
     this.frame.innerHTML = `
       <div class="bk-head">
         <div class="bk-tabs">${tabs.map((t) => `<button data-tab="${t.id}"><span>${t.label}</span><kbd>${t.key}</kbd></button>`).join('')}</div>
@@ -79,6 +84,7 @@ export class MenuBook {
       else if (b.dataset.sub) this.show(this.shownTab()!.id, b.dataset.sub);
     });
     root.appendChild(this.frame);
+    root.appendChild(this.ornate);
   }
 
   private allSubs() {
@@ -135,6 +141,7 @@ export class MenuBook {
     this.shown = key;
     const showing = !!cur;
     this.frame.classList.toggle('hidden', !showing);
+    this.ornate.classList.toggle('hidden', !showing);
     this.veil.classList.toggle('hidden', !showing || !!cur?.sub.see);
     this.button.classList.toggle('hidden', showing);
     document.body.classList.toggle('book-open', showing);
@@ -156,6 +163,7 @@ export class MenuBook {
     document.body.classList.toggle('book-one', subs.length <= 1);
     const el = cur.sub.el();
     this.frame.classList.toggle('free', !el);
+    this.ornate.classList.toggle('hidden', !el);
     if (el) {
       el.classList.add('bk-page');
       this.placed = el;
