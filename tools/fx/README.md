@@ -58,3 +58,21 @@ each school's colour taken from the combat reference boards:
 
 `node tools/fx/shoot.mjs [outDir]` boots the game and screenshots each
 school's slash, circle and impact.
+
+# Painted icons (`public/assets/icons/`)
+
+Inventory icons, skill emblems and class crests are painted with Higgsfield
+(`gpt_image_2_6`, transparent PNG, 2048 px) as 5x5 sheets, then sliced.
+
+- `icon-sheets.json` lists every sheet: its name, the ids in cell order, and the exact prompt.
+- `slice-icons.py <sheet.png> 5 <id,...> [--wide-list wide.txt]` cuts a sheet into 256 px webp icons
+  (long weapons also get a 256x112 diagonal version in `wide/`). An id like `emblem/pyromancer-fireball`
+  writes into the `emblem/` folder.
+- `tier-tint.py <base.webp> <baseId>` recolours one neutral steel icon into the eight metals.
+- `brew-tiers.py <base.webp> <recipeId>` makes the five brew qualities: Crude dulled, Fine to Masterwork
+  with a halo, and quality pips in the corner.
+- `emblem-manifest.py emblem-keys.json` lists the painted emblems in `manifest.json` (key `emblems`,
+  emblem key to file) and bumps the version. `ui/icons.ts` uses them in place of the procedural
+  medallions for skill nodes, the hotbar and class medallions (`class:<id>`).
+- `icon-sheets-pending.txt` holds finished sheets that are generated but not yet sliced into the repo
+  (sheet name, job id, image URL).
