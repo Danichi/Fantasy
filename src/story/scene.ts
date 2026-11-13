@@ -3,6 +3,7 @@ import { buildCharacter, type BuiltCharacter, type Look } from '../npc/charBuild
 import { heightAt } from '../world/terrainHeight';
 import type { DialogueOption, DialogueUI } from '../ui/dialogue';
 import type { StoryUI } from './ui';
+import { playFilm, type FilmHandle, type FilmId } from './film';
 
 // The scene director (main story): short scripted scenes written as async
 // functions. A scene can take the camera, put up the letterbox, show
@@ -115,6 +116,7 @@ export class Director {
   private advance = false;
   /** stop the world while the scene plays (the default) */
   holdWorld = false;
+  private film: FilmHandle | null = null;
   private queue: { name: string; script: SceneScript; resolve: () => void }[] = [];
 
   constructor(private h: SceneHost) {
@@ -123,7 +125,9 @@ export class Director {
       if (e.code === 'Escape') {
         e.stopImmediatePropagation();
         e.preventDefault();
-        this.skip();
+        // During a film, Esc ends just the film; the scene goes on.
+        if (this.film) this.film.skip();
+        else this.skip();
       } else if ((e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter') && !h.dialogue.open) {
         e.stopImmediatePropagation();
         this.advance = true;
@@ -177,6 +181,7 @@ export class Director {
 
   skip() {
     if (!this.active) return;
+    this.film?.skip();
     this.skipping = true;
     for (const a of this.actors) a.arrive();
     if (this.camAnim) this.camAnim.t = this.camAnim.dur;
@@ -306,6 +311,15 @@ export class Director {
         });
       },
       shake: (n) => h.shake(n),
+      film: async (id) => {
+        if (this.fast) return false;
+        h.ui.subtitle(null, null);
+        const f = playFilm(id);
+        this.film = f;
+        const shown = await f.done;
+        if (this.film === f) this.film = null;
+        return shown;
+      },
       choose: (who, title, text, options) => new Promise<number>((resolve) => {
         if (h.fast() && this.autoChoice !== undefined) return resolve(this.autoChoice);
         h.ui.subtitle(null, null);
@@ -335,5 +349,7 @@ export interface SceneApi {
   remove(a: StoryActor): void;
   dark(v: number, sec?: number): Promise<void>;
   shake(n: number): void;
+  /** play a painted story film full screen (skipped in fast mode) */
+  film(id: FilmId): Promise<boolean>;
   choose(who: string, title: string, text: string, options: { label: string; tone?: DialogueOption['tone'] }[]): Promise<number>;
 }

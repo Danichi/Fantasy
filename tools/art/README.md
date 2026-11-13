@@ -45,3 +45,31 @@ named people first, then a stock type picked from their name and title), `src/ui
 - `frame.webp`: a carved walnut and gold window frame, rebuilt the same way (real corners, mirrored repeats of
   each edge, the top crest cut out as `frame-crest.webp`). Drawn over the book's edges (`.bk-ornate`) and round
   the shop, workshop and brewing windows.
+
+## Story films (`public/assets/film/`, `src/story/film.ts`)
+
+Painted cutscenes played full screen by the story director (`s.film(id)` in `src/story/scene.ts`). Esc or the
+Skip button ends just the film; tests and fast mode never play them.
+
+| film | where it plays | shots |
+| --- | --- | --- |
+| `fall` | New game, the prologue (replaces the whispered prologue lines; captions in `FILMS.fall`) | star over the kingdom, the Hollow King, seven powers round the empty throne, four graves, the star plunging, shades in the wheat, waking |
+| `wheel` | Act I, touching the east-gate waystone | the Sunwheel waking under your hand |
+| `malric` | Act I, Malric at the crypt | the Wheelbreaker coming up out of the crypt with the box |
+| `dark` | Act I, looking through the ring | the Dark: the same hills, the Gravewood rift |
+| `bells` | Act I, the Night of Bells | rifts round the Glen, the wall holding |
+| `dawn` | Act I end | dawn after the Night of Bells |
+| `academy` | Act II, the archive | Port Aurelle and the Academy on the cliffs |
+| `feast` | Act II, the Feast of the Dawn | Varro walking through the hall |
+| `duel` | Act II, the Plaza of Crowns | Malric waiting, Varro on the balcony |
+| `turning` | Act III, the turning of the wheel | the ring of stones turning |
+| `wheelshield` | Act III, Ysra steps in | the Wheel-Shield and Ysra |
+
+- Key frames: gpt_image_2_6, 16:9, 2k. Clips: seedance_2_0 / seedance_2_0_mini, 720p, start_image = the key
+  frame, no audio. Only one unlimited video job runs at a time.
+- Prologue narration: seed_audio, preset voice Helena, all ten lines in one take; caption times from
+  faster-whisper, offset 1.5 s.
+- Cut in the Higgsfield sandbox with `film_build.py` (crossfades of 1 s, fade in and out, x264 crf 24 veryfast,
+  1280x720, 24 fps, faststart).
+- The prologue: `film_build.py fall "f1:9.0,f4:9.0,f5:7.2,f6:14.2,f7:12.2,f2:5.8,f3:5.1" prologue.wav 1.5`; the
+  others are one 8 s shot each (`bells` 10 s). `wheelshield` plays mid-scene, after Ysra steps in.

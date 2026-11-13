@@ -1,0 +1,29 @@
+/* Story films (film.ts): a full-screen painted cutscene over everything. */
+#ui .story-film, body > .story-film {
+  position: fixed; inset: 0; z-index: 90; background: #000; opacity: 0;
+  transition: opacity .7s ease; pointer-events: auto; cursor: default;
+}
+#ui .story-film.on, body > .story-film.on { opacity: 1; }
+.story-film video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.story-film .film-bars i {
+  position: absolute; left: 0; right: 0; height: 9vh; background: #000;
+}
+.story-film .film-bars i:first-child { top: 0; }
+.story-film .film-bars i:last-child { bottom: 0; }
+.story-film .film-cap {
+  position: absolute; left: 50%; bottom: 12vh; transform: translateX(-50%);
+  width: min(900px, 84vw); margin: 0; text-align: center;
+  font: italic 500 clamp(17px, 1.6vw, 24px)/1.45 'Cormorant Garamond', 'Georgia', serif;
+  color: #f3e6c4; letter-spacing: .02em;
+  text-shadow: 0 2px 6px #000, 0 0 18px #000c;
+  opacity: 0; transition: opacity .9s ease;
+}
+.story-film .film-cap.on { opacity: 1; }
+.story-film .film-skip {
+  position: absolute; right: 26px; bottom: calc(9vh + 14px);
+  background: #0008; color: #d9c79a; border: 1px solid #d9c79a55; border-radius: 3px;
+  font: 600 12px/1 'Cinzel', serif; letter-spacing: .14em; text-transform: uppercase;
+  padding: 8px 12px; cursor: pointer; opacity: .55; transition: opacity .2s;
+}
+.story-film .film-skip:hover { opacity: 1; }
+.story-film .film-skip kbd { font: inherit; opacity: .7; margin-left: 6px; }

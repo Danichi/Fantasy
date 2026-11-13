@@ -220,8 +220,10 @@ export function setupAct1(c: ActCtx) {
       // Before anything: the dark, and a voice in it.
       await s.fade(1, 0);
       s.bars(true);
-      await s.wait(1.2);
-      for (const [line, sec] of PROLOGUE) await s.voice(line, sec);
+      // The prologue is a painted film (narrated); the whispered lines are the fallback.
+      const filmed = await s.film('fall');
+      await s.wait(filmed ? 0.4 : 1.2);
+      if (!filmed) for (const [line, sec] of PROLOGUE) await s.voice(line, sec);
       await s.wait(0.8);
       await s.card('Act I', 'The Fifth Summon', '', 3);
       const me = player.pos.clone();
@@ -316,6 +318,7 @@ export function setupAct1(c: ActCtx) {
   const wakeWheel = () => {
     void story.play('wheel', async (s) => {
       s.bars(true);
+      await s.film('wheel');
       await s.dark(0.1, 0.5);
       await s.say(null, 'The carving goes hot under your palm. Gold light runs out of the spokes and up your arm.', 3);
       await s.voice('There you are. It is me, the Dawn: the voice you heard when you fell.', 3.6);
@@ -374,6 +377,7 @@ export function setupAct1(c: ActCtx) {
     const at = around(CRYPT_DOOR, 7, 1.2);
     void story.play('malric', async (s) => {
       s.bars(true);
+      await s.film('malric');
       const rook = await s.actor(WARDENS[0].look as never, around(CRYPT_DOOR, 5, 2.4), 0);
       rook.play('crouch', true);
       const m = await s.actor(CHAMPIONS.malric.look, at, 0);
@@ -447,6 +451,7 @@ export function setupAct1(c: ActCtx) {
     const at = ground(STANDING_STONES.x, STANDING_STONES.z);
     void story.play('ring', async (s) => {
       s.bars(true);
+      await s.film('dark');
       await s.dark(1, 2.2);
       await s.say(null, 'The hill is still there. The stones are still there. But the sky is the colour of a wound, and everything is wrong.', 3.6);
       const gw = ground(GRAVEWOOD.x, GRAVEWOOD.y);
@@ -572,6 +577,7 @@ export function setupAct1(c: ActCtx) {
     };
     void story.play('bells', async (s) => {
       s.bars(true);
+      await s.film('bells');
       await s.card('Act I', 'The Night of Bells', '', 2.6);
       await s.say('Captain Brannoc', ready.length >= 3
         ? 'Here they come. Every rift at once. And for once we\'re ready for them. Watch! To the pens!'
@@ -641,6 +647,7 @@ export function setupAct1(c: ActCtx) {
       if (!story.h.test && c.time.hour > 4 && c.time.hour < 20) {
         /* (it's day already) */
       } else if (!story.h.test) c.time.skipTo(6);
+      await s.film('dawn');
       await s.fade(0, 1.6);
       await s.voice('You lived. Good. My fourth champion didn\'t survive his first year.', 3.6);
       await s.voice('There is an Academy by the sea where they make knights. Go there. Grow teeth.', 3.4);

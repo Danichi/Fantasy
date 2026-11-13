@@ -161,6 +161,7 @@ export function setupAct3(c: ActCtx, h: Act3Hooks) {
     F.turning = 1;
     void story.play('turning', async (s) => {
       s.bars(true);
+      await s.film('turning');
       await s.cam(RING_AT.clone().add(new THREE.Vector3(9, 5, 9)), RING_AT.clone().setY(RING_AT.y + 1.5), 0);
       await s.say(null, 'One by one the spokes go into the sockets, and lock, and the ring of stones begins, very slowly, to turn.', 3.6);
       await s.voice('Yes. Yes. Five spokes. Five of twelve. Not since the First Age has my wheel turned this far.', 4);
@@ -207,6 +208,7 @@ export function setupAct3(c: ActCtx, h: Act3Hooks) {
       await s.champion(1, 'Ysra the Undying', 'the Thornmother\'s Blade', 'Champion of the Verdant Mother', 3.6);
       await s.say('Ysra the Undying', 'Not this one. Not yet.', 2.6);
       await s.say('The Wheel-Shield', '...', 2);
+      await s.film('wheelshield');
       await s.say(null, 'Two people who have been fed by gods for eighty years look at each other over your head. The grass between them goes grey. Then the Wheel-Shield lowers his shield, and is simply not there any more.', 5);
       await s.say('Ysra the Undying', 'Little sapling. I knew your first. Elin. She was braver than you, and she died anyway.', 3.6);
       await s.say('Ysra the Undying', 'The Thornmother has not decided what you are for. When she has, I will come for you. Grow, until then. Grow fast.', 4);
