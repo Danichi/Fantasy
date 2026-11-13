@@ -107,7 +107,7 @@ export class Part implements Target, SeaTarget {
 }
 
 /** A monster encounter: parts to shoot at, a health pool for the boss bar, its own fight. */
-export interface BeastSave {id:BeastId;danger:number;pos:[number,number,number];phase:PhaseState;parts:{hp:number;alive:boolean}[];}
+export interface BeastSave {id:BeastId;danger:number;pos:[number,number,number];phase:PhaseState;parts:{hp:number;alive:boolean}[]; limbs?:PhaseState[];}
 export abstract class SeaBeast {
   abstract readonly id: BeastId;
   readonly group = new THREE.Group();
@@ -129,8 +129,11 @@ export abstract class SeaBeast {
     this.pos.copy(at);
     scene.add(this.group);
   }
-  snapshot():BeastSave {return {id:this.id,danger:this.danger,pos:this.pos.toArray() as [number,number,number],phase:phaseState(this),parts:this.parts_.map(p=>({hp:p.hp,alive:p.alive}))};}
-  restore(saved:BeastSave){this.pos.fromArray(saved.pos);restorePhase(this,saved.phase);saved.parts.forEach((v,i)=>{const p=this.parts_[i];if(!p)return;p.hp=Math.min(p.maxHp,v.hp);p.alive=v.alive;if(!v.alive)targets.delete(p);});}
+  snapshot():BeastSave {return {id:this.id,danger:this.danger,pos:this.pos.toArray() as [number,number,number],phase:phaseState(this),parts:this.parts_.map(p=>({hp:p.hp,alive:p.alive})),limbs:this.limbState()};}
+  protected limbState():PhaseState[]{return [];}
+  protected restoreLimbs(_states:PhaseState[]){}
+  protected rebuildParts(_saved:BeastSave,_ship:Ship|null){}
+  restore(saved:BeastSave,ship:Ship|null=null){this.pos.fromArray(saved.pos);restorePhase(this,saved.phase);this.rebuildParts(saved,ship);saved.parts.forEach((v,i)=>{const p=this.parts_[i];if(!p)return;p.hp=Math.min(p.maxHp,v.hp);if(!v.alive)p.break();else p.alive=true;});restorePhase(this,saved.phase);this.restoreLimbs(saved.limbs??[]);}
   get name() {
     return BEAST_NAMES[this.id];
   }
@@ -216,6 +219,9 @@ export class Kraken extends SeaBeast {
     this.parts_.push(this.eye);
   }
 
+  protected limbState(){return this.tentacles.map(t=>phaseState(t));}
+  protected restoreLimbs(states:PhaseState[]){this.tentacles.forEach((t,i)=>{if(states[i])restorePhase(t,states[i]);});}
+  protected rebuildParts(saved:BeastSave,ship:Ship|null){if(!ship)return;const n=Math.max(0,saved.parts.length-1);for(let i=0;i<n;i++)this.grow(ship,i,n);this.tentacles.forEach((t,i)=>{if(saved.limbs?.[i])restorePhase(t,saved.limbs[i]);});this.head.visible=this.state==='eye';this.head.position.copy(this.pos);this.head.lookAt(ship.pos);this.eye.lockable=this.head.visible;}
   private grow(ship: Ship, i: number, n: number) {
     // Tentacles rise in a ring round the hull.
     const side = i % 2 ? 1 : -1;
@@ -480,6 +486,7 @@ export class CrabColossus extends SeaBeast {
     this.parts_.push(this.bodyPart);
   }
 
+  protected rebuildParts(saved:BeastSave,ship:Ship|null){if(!ship)return;for(let k=1;k<saved.parts.length;k++)this.makeClaw(ship,k-1);this.body.visible=this.state!=='tell';}
   private makeClaw(ship: Ship, k: number) {
     const shell = mat(0xd8602a, { roughness: 0.45 });
     const arm = new THREE.Group();

@@ -1,3 +1,4 @@
+import { shipMotion, restoreMotion } from './shipState';
 import { seaRandom } from './runtime';
 import { AURELLE, LIGHTHOUSE } from '../portCity';
 import * as THREE from 'three';
@@ -224,6 +225,8 @@ export class Regatta {
     return out;
   }
 
+  snapshot(){const r=this.race;if(!r)return undefined;const ship=(s:Ship)=>({pos:s.pos.toArray() as [number,number,number],yaw:s.yaw,motion:shipMotion(s),sections:[...s.sections],sails:s.sailHp});return {course:r.course.id,mine:ship(r.mine),rival:ship(r.rival),next:r.next,rivalNext:r.rivalNext,t:r.t,countdown:r.countdown,rivalTack:r.rivalTack};}
+  restore(saved:NonNullable<ReturnType<Regatta['snapshot']>>){this.start(saved.course);const r=this.race!;for(const k of ['mine','rival'] as const){const s=r[k],v=saved[k];s.pos.fromArray(v.pos);s.yaw=v.yaw;s.sections=[...v.sections];s.sailHp=v.sails;restoreMotion(s,v.motion);}for(const k of ['next','rivalNext','t','countdown','rivalTack'] as const)r[k]=saved[k];}
   toJSON() {
     return [...this.wins];
   }

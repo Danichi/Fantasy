@@ -8,6 +8,7 @@ import type { HouseSpec } from './buildings';
 export type InteriorKind = 'home' | 'tavern' | 'shop' | 'smithy' | 'guild' | 'hall' | 'undercity' | 'throne' | 'temple' | 'library' | 'palace' | 'sanctum' | 'lighthouse' | 'cabin';
 
 export interface Door {
+  shipTrophies?: string[];
   returnTo?: () => { pos:THREE.Vector3; yaw:number };
   /** the doorstep, just outside, on the ground */
   pos: THREE.Vector3;

@@ -1102,7 +1102,7 @@ async function boot() {
     dismount: () => { if (player.mounted) horses.dismount(); },
     fish: spot => fishing.start(spot),
     enterCabin: ship => {
-      const door:Door={pos:ship.pos.clone(),yaw:ship.yaw,kind:'cabin',name:`Cabin of the ${ship.name}`,spec:{w:10,d:12,floors:1,roof:'tile',seed:4152},returnTo:()=>{sailing.leaveCabin();return{pos:player.pos.clone(),yaw:ship.yaw};}};
+      const door:Door={pos:ship.pos.clone(),yaw:ship.yaw,kind:'cabin',shipTrophies:[...sailing.trophies].map(id=>({kraken:'The Kraken',crab:'The Crab Colossus',sirens:'The Siren Choir',wyrm:'The Storm Wyrm',oldTeeth:'Old Teeth',leviathan:'The Leviathan'} as Record<string,string>)[id]??id),name:`Cabin of the ${ship.name}`,spec:{w:10,d:12,floors:1,roof:'tile',seed:4152},returnTo:()=>{sailing.leaveCabin();return{pos:player.pos.clone(),yaw:ship.yaw};}};
       void realm.enterInterior(door,'cabin',world.mats,spells);
     },
   });
@@ -2358,7 +2358,6 @@ async function boot() {
   // and the world their stage hooks touch (flags, NPCs, spawners) exists.
   migrateMainQuest(saveData?.world?.quests, !!saveData?.world?.story);
   quests.fromJSON(saveData?.world?.quests);
-  sailing.restoreVoyage();
   // ---- Origins (feat/origins): passives, Renown, legendary abilities, flight, NPC reactions ----
   const origins = wireOrigins({ player, skillRt, fx, scene: r.scene, input, cam, hud, dialogue, shopUI, quests, realm, time, weather, gravewood, foraging });
   events.on('mapRevealed', () => worldMap.markFogDirty());
@@ -2404,6 +2403,7 @@ async function boot() {
   // Guild contracts show in the quest log (tracker, journal, map, waypoint).
   const guildContracts = linkGuildContracts(town.guild, quests);
   guildContracts.restore();
+  sailing.restoreVoyage();
   realm.onSave = save;
   microDiscoveries.onSave = save;
   // A new game starts the story (after save exists: starting a quest autosaves).
@@ -2658,20 +2658,20 @@ async function boot() {
     if (input.wasPressed('skills')) skills.toggle();
     if (input.pressedKey('KeyN')) seaPanel.toggle();
     // L: the Wardens' Bestiary (L is the ship's lantern only when aboard).
-    if (input.pressedKey('KeyL') && !sailing.aboard) {
+    if (input.pressedKey('KeyL') && !sailing.aboard && !player.swimming) {
       if (!bestiary.unlocked) hud.toast('You have no bestiary yet. The Glen Wardens keep one.');
       else if (bestiaryUI.open) bestiaryUI.toggle(false);
       else book.show('bestiary');
     }
     if (input.wasPressed('help')) overlays.toggleHelp();
-    if (input.wasPressed('toggleBar') && !sailing.atHelm) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
+    if (input.wasPressed('toggleBar') && !sailing.atHelm && !player.swimming) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
     if (input.wasPressed('map')) {
       if (realm.mode === 'dungeon') mapUI.toggle();
       else if (realm.mode === 'interior') hud.toast('Step outside to read the map.');
       else worldMap.toggle();
     }
     if(!sailing.atHelm && !player.swimming) slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
-    if (realm.mode === 'overworld') { updateSea(STEP,player.pos,weather.p); sailing.preStep(STEP); }
+    if (realm.mode === 'overworld') { updateSea(STEP,sailing.current?.pos??player.pos,weather.p); sailing.preStep(STEP); }
     player.update(STEP, input, cam);
     combat.tick(STEP); // posture, poise and wind-ups of everything that fights (combat/core.ts)
     director.tick(STEP, player); // attack turns (combat/ai.ts)

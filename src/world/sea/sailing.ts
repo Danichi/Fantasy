@@ -1,3 +1,5 @@
+import { HarbourLandings } from './landings';
+import { phaseState, restorePhase, type PhaseState } from './snapshot';
 import { ShipStores, type StoresSave } from './stores';
 import type { PirateSave } from './seaThreats';
 import type { BeastSave } from './seaMonsters';
@@ -76,6 +78,13 @@ export interface WreckRecord { id: string; name: string; hull: HullId; x: number
 export interface Rental { hull: HullId; until: number; deposit: number; port: string; x: number; z: number; yaw: number; sections: number[]; water: number; cargo?: Record<string, number>; motion?: ShipMotion }
 export interface SailingSave {
   version?: number;
+  escort?:ReturnType<Consort['snapshot']>;
+  swimmer?:{depth:number;breath:number;stamina:number;pos:[number,number,number]};
+  race?:ReturnType<Regatta['snapshot']>;
+  eventState?:ReturnType<SeaEvent['snapshot']>;
+  operation?:{phase:PhaseState;plugs:number[];shot:ShotKind;routeNext:number;doneContracts:string[]};
+  floating?:{pos:[number,number,number];gold:number;items:[string,number][]}[];
+  customsState?:{pos:[number,number,number];yaw:number;motion:ShipMotion;phase:PhaseState};
   sea?:SeaWeatherSave;
   stores?:StoresSave;
   voyageMetres?:number;
@@ -183,13 +192,18 @@ export class Sailing {
   settings = defaultSeaSettings();
   readonly voyages: SeaVoyages;
   readonly route: RouteGuide;
+  readonly landings:HarbourLandings;
   readonly stores=new ShipStores();
   private voyageMetres=0;
   private pendingEncounters:SailingSave['encounters'];
   inCabin = false;
   private pendingResume: SailingSave['resume'];
+  private pendingRace:SailingSave['race'];
+  private pendingSwimmer:SailingSave['swimmer'];
+  private pendingEvent:SailingSave['eventState'];
   private lastVessel = '';
   private paidDeaths = new WeakSet<object>();
+  private sinkingShips=new Set<Ship>();
   get travelMode(): TravelMode { return this.inCabin?'cabin':this.player.swimming?(this.player.underwater?'diving':'swimming'):this.boarding?'boarding':this.current?(this.atHelm?(this.current.hull==='rowboat'?'rowing':'helm'):'deck'):'ashore'; }
 
   wrecks: WreckRecord[] = [];
@@ -238,7 +252,7 @@ export class Sailing {
   private trawlT = 0;
   private spyglass = false;
   private fovWas = 62;
-  private tackSaid = 0;
+  private tackSaid = -30001;
   private surfSaid = false;
   /** the shot in the guns, the last thunder broadside, the swivel's reload, a ram's cooldown */
   shot: ShotKind = 'ball';
@@ -283,6 +297,9 @@ export class Sailing {
 
   constructor(private scene: THREE.Scene, private fx: FX, private player: Player, private input: Input, private cam: ThirdPersonCamera, private hooks: SailingHooks) {
     this.route = new RouteGuide(scene);
+    this.landings=new HarbourLandings(scene,player,top=>{if(this.current)this.leaveShip(top);else this.player.teleport(top.clone());this.cam.seafaring=false;this.hooks.toast('You climb onto the quay.');this.hooks.save();});
+    for(const z of [172,228,336])this.interactables.push(this.landings.add(new THREE.Vector3(quayAt(z)-2,0,z),new THREE.Vector3(quayAt(z)+3,0,z)));
+
     this.voyages = new SeaVoyages(scene, id=>hooks.signal?.(id), hooks.toast, (gold,xp)=>{hooks.addGold(gold);this.addXp(xp);hooks.save();});
     this.gunnery = new Gunnery(scene, fx);
     this.bolts = new Bolts(scene);
@@ -530,144 +547,474 @@ export class Sailing {
   }
 
   pushClear() {
-    const s=this.current;if(!s)return;
-    if(this.pirates.some(p=>!p.plundered&&p.ship.pos.distanceTo(s.pos)<200))return this.hooks.toast('Break contact before pushing clear.');
-    if(this.player.stamina<25)return this.hooks.toast('Rest before pushing the boat clear.');
-    let best:THREE.Vector3|null=null,depth=SEA_LEVEL-heightAt(s.pos.x,s.pos.z);
-    for(const radius of [2,4,6,8])for(let i=0;i<24;i++){const a=i*Math.PI/12,p=s.pos.clone().add(new THREE.Vector3(Math.cos(a)*radius,0,Math.sin(a)*radius));const d=SEA_LEVEL-heightAt(p.x,p.z);if(d>depth){depth=d;best=p;}}
-    if(!best)return this.hooks.toast('No deeper water is in reach. Turn toward the channel or unload cargo at the nearest landing.');
-    const local=s.toLocal(this.player.pos);s.pos.copy(best);s.speed=0;s.anchored=true;this.ctl.anchor=true;this.ctl.sail=0;s.place();s.place();
-    if(this.atHelm)this.placeHelm();else this.player.teleport(s.toWorld(local));this.player.stamina-=25;this.hooks.close();this.hooks.save();this.hooks.toast('The crew ease the hull toward deeper water. Check the channel before raising sail.');
+    const s = this.current;
+    if (!s) return;
+    if (this.pirates.some((p) => !p.plundered && p.ship.pos.distanceTo(s.pos) < 200))
+      return this.hooks.toast('Break contact before pushing clear.');
+    if (this.player.stamina < 25) return this.hooks.toast('Rest before pushing the boat clear.');
+    let best: THREE.Vector3 | null = null,
+      depth = SEA_LEVEL - heightAt(s.pos.x, s.pos.z);
+    for (const radius of [2, 4, 6, 8])
+      for (let i = 0; i < 24; i++) {
+        const a = (i * Math.PI) / 12,
+          p = s.pos.clone().add(new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius));
+        const d = SEA_LEVEL - heightAt(p.x, p.z);
+        if (d > depth) {
+          depth = d;
+          best = p;
+        }
+      }
+    if (!best) return this.hooks.toast('No deeper water is in reach. Turn toward the channel or unload cargo at the nearest landing.');
+    const local = s.toLocal(this.player.pos);
+    s.pos.copy(best);
+    s.speed = 0;
+    s.anchored = true;
+    this.ctl.anchor = true;
+    this.ctl.sail = 0;
+    s.place();
+    s.place();
+    if (this.atHelm) this.placeHelm();
+    else this.player.teleport(s.toWorld(local));
+    this.player.stamina -= 25;
+    this.hooks.close();
+    this.hooks.save();
+    this.hooks.toast('The crew ease the hull toward deeper water. Check the channel before raising sail.');
   }
   private storesMenu() {
-    const s=this.current,st=this.stores.state;
-    const buy=(n:number)=>{if(!s||!this.portAt(s.pos))return this.hooks.toast('Fresh provisions are sold at a harbour.');const cost=n*3;if(this.hooks.gold()<cost)return this.hooks.toast(`Provisions cost ${cost}g.`);this.hooks.addGold(-cost);st.rations+=n;st.water+=n;this.hooks.save();this.storesMenu();};
-    this.hooks.talk('Ship’s stores','Provisions & wages',`${Math.floor(st.rations)} rations · ${Math.floor(st.water)} fresh-water measures. Enough for ${this.stores.days(this.crew).toFixed(1)} days with the current crew.\nDaily wages: ${Math.round(this.crew.filter(c=>c.hire==='permanent').reduce((n,c)=>n+c.wage,0)*this.perks.wages)}g. Unpaid wages: ${st.wageDebt}g. A cook helps morale; each person uses one ration and one measure of water per day.`,[
-      {label:'Buy 10 rations and 10 water — 30g',run:()=>buy(10)},{label:'Buy 30 rations and 30 water — 90g',run:()=>buy(30)},
-      {label:`Settle unpaid wages — ${st.wageDebt}g`,run:()=>{if(this.hooks.gold()<st.wageDebt)return this.hooks.toast('You do not have enough gold to clear the wages.');this.hooks.addGold(-st.wageDebt);st.wageDebt=0;this.cheer(.1);this.hooks.save();this.storesMenu();}},
-      {label:'Back',run:()=>this.openOrders()},
-    ]);
+    const s = this.current,
+      st = this.stores.state;
+    const buy = (n: number) => {
+      if (!s || !this.portAt(s.pos)) return this.hooks.toast('Fresh provisions are sold at a harbour.');
+      const cost = n * 3;
+      if (this.hooks.gold() < cost) return this.hooks.toast(`Provisions cost ${cost}g.`);
+      this.hooks.addGold(-cost);
+      st.rations += n;
+      st.water += n;
+      this.hooks.save();
+      this.storesMenu();
+    };
+    this.hooks.talk(
+      'Ship’s stores',
+      'Provisions & wages',
+      `${Math.floor(st.rations)} rations · ${Math.floor(st.water)} fresh-water measures. Enough for ${this.stores.days(this.crew).toFixed(1)} days with the current crew.\nDaily wages: ${Math.round(this.crew.filter((c) => c.hire === 'permanent').reduce((n, c) => n + c.wage, 0) * this.perks.wages)}g. Unpaid wages: ${st.wageDebt}g. A cook helps morale; each person uses one ration and one measure of water per day.`,
+      [
+        { label: 'Buy 10 rations and 10 water — 30g', run: () => buy(10) },
+        { label: 'Buy 30 rations and 30 water — 90g', run: () => buy(30) },
+        {
+          label: `Settle unpaid wages — ${st.wageDebt}g`,
+          run: () => {
+            if (this.hooks.gold() < st.wageDebt) return this.hooks.toast('You do not have enough gold to clear the wages.');
+            this.hooks.addGold(-st.wageDebt);
+            st.wageDebt = 0;
+            this.cheer(0.1);
+            this.hooks.save();
+            this.storesMenu();
+          },
+        },
+        { label: 'Back', run: () => this.openOrders() },
+      ],
+    );
   }
-  private encounterSnapshot():NonNullable<SailingSave['encounters']> {
-    const prey=this.current??this.ships.get(this.lastVessel)??null;
-    const pirates=this.pirates.filter(p=>!p.plundered&&!p.ship.sunk&&p.ship.pos.distanceTo(this.player.pos)<2200);
-    const lines:NonNullable<SailingSave['encounters']>['lines']=[];
-    for(const t of this.gunnery.tethers){const id=[...this.ships].find(([,s])=>s===t.ship)?.[0];if(!id)continue;
-      if(t.target===this.serpent)lines.push({ship:id,monster:'serpent',part:0,len:t.len,heavy:t.heavy,strain:t.strain,tow:t.tow});
-      else {const i=this.beast?.parts().indexOf(t.target)??-1;if(i>=0)lines.push({ship:id,monster:'beast',part:i,len:t.len,heavy:t.heavy,strain:t.strain,tow:t.tow});}
+  private encounterSnapshot(): NonNullable<SailingSave['encounters']> {
+    const prey = this.current ?? this.ships.get(this.lastVessel) ?? null;
+    const pirates = this.pirates.filter((p) => !p.plundered && !p.ship.sunk && p.ship.pos.distanceTo(this.player.pos) < 2200);
+    const lines: NonNullable<SailingSave['encounters']>['lines'] = [];
+    for (const t of this.gunnery.tethers) {
+      const id = [...this.ships].find(([, s]) => s === t.ship)?.[0];
+      if (!id) continue;
+      if (t.target === this.serpent)
+        lines.push({ ship: id, monster: 'serpent', part: 0, len: t.len, heavy: t.heavy, strain: t.strain, tow: t.tow });
+      else {
+        const i = this.beast?.parts().indexOf(t.target) ?? -1;
+        if (i >= 0) lines.push({ ship: id, monster: 'beast', part: i, len: t.len, heavy: t.heavy, strain: t.strain, tow: t.tow });
+      }
     }
-    return {pirates:pirates.map(p=>p.snapshot(prey)),serpent:this.serpent?.alive?this.serpent.snapshot():undefined,beast:this.beast&&!this.trophiesTaken.has(this.beast)?this.beast.snapshot():undefined,boarding:this.boarding?pirates.indexOf(this.boarding):-1,overboard:this.overboard.map(o=>({id:o.c.id,pos:o.pos.toArray() as [number,number,number],time:o.t})),lines};
+    return {
+      pirates: pirates.map((p) => p.snapshot(prey)),
+      serpent: this.serpent?.alive ? this.serpent.snapshot() : undefined,
+      beast: this.beast && !this.trophiesTaken.has(this.beast) ? this.beast.snapshot() : undefined,
+      boarding: this.boarding ? pirates.indexOf(this.boarding) : -1,
+      overboard: this.overboard.map((o) => ({ id: o.c.id, pos: o.pos.toArray() as [number, number, number], time: o.t })),
+      lines,
+    };
   }
   private restoreEncounters() {
-    const data=this.pendingEncounters;this.pendingEncounters=undefined;if(!data)return;
-    const prey=this.ships.get(this.pendingResume?.id??this.lastVessel)??null;
-    for(const p of data.pirates){const pirate=this.spawnPirate(new THREE.Vector3(...p.pos),p.danger,{name:p.name,captain:p.captain,tag:p.tag,bounty:p.bounty,hull:p.hull,fit:p.fit});pirate.restore(p,prey);}
-    this.boarding=data.boarding>=0?this.pirates[data.boarding]??null:null;
-    if(this.boarding?.state==='taken')this.plunderBy=this.boarding;
-    if(data.serpent){const s=this.spawnSerpent(new THREE.Vector3(...data.serpent.pos),data.serpent.danger);s.restore(data.serpent);}
-    if(data.beast){const b=makeBeast(data.beast.id,this.scene,this.fx,new THREE.Vector3(...data.beast.pos),data.beast.danger);b.restore(data.beast);if(b instanceof Leviathan)b.onBreach=(dir,size)=>this.current?.rogue(dir,size);this.beast=b;}
-    for(const o of data.overboard){const c=this.crew.find(c=>c.id===o.id);if(!c||o.time<=0)continue;c.status='overboard';const mark=new THREE.Mesh(new THREE.SphereGeometry(.35,8,6),new THREE.MeshBasicMaterial({color:0xe3bb65}));const pos=new THREE.Vector3(...o.pos);mark.position.copy(pos);this.scene.add(mark);this.overboard.push({c,pos,t:o.time,mark});}
-    for(const l of data.lines){const ship=this.ships.get(l.ship),target=l.monster==='serpent'?this.serpent:this.beast?.parts()[l.part];if(ship&&target)this.gunnery.restoreLine(ship,target,l);}
+    const data = this.pendingEncounters;
+    this.pendingEncounters = undefined;
+    const eventPrey = this.ships.get(this.pendingResume?.id ?? this.lastVessel) ?? this.ships.values().next().value;
+    const e = this.pendingEvent;
+    this.pendingEvent = undefined;
+    if (e && eventPrey) {
+      this.event = makeSeaEvent(
+        e.id,
+        this.scene,
+        this.fx,
+        eventPrey,
+        this.perks.bigGame,
+        () => new Ship(this.scene, 'sloop', STOCK_FIT(), { name: 'Coastal Trader', hullColor: 0x765438, trim: 0xbba76c }),
+        new THREE.Vector3(...e.pos),
+      );
+      this.event.restore(e);
+    }
+    if (!data) return;
+    const prey = this.ships.get(this.pendingResume?.id ?? this.lastVessel) ?? this.regatta.race?.mine ?? null;
+    for (const p of data.pirates) {
+      const pirate = this.spawnPirate(new THREE.Vector3(...p.pos), p.danger, {
+        name: p.name,
+        captain: p.captain,
+        tag: p.tag,
+        bounty: p.bounty,
+        hull: p.hull,
+        fit: p.fit,
+      });
+      pirate.restore(p, prey);
+    }
+    this.boarding = data.boarding >= 0 ? (this.pirates[data.boarding] ?? null) : null;
+    if (this.boarding?.state === 'taken') this.plunderBy = this.boarding;
+    if (data.serpent) {
+      const s = this.spawnSerpent(new THREE.Vector3(...data.serpent.pos), data.serpent.danger);
+      s.restore(data.serpent);
+    }
+    if (data.beast) {
+      const b = makeBeast(data.beast.id, this.scene, this.fx, new THREE.Vector3(...data.beast.pos), data.beast.danger);
+      b.restore(data.beast, prey);
+      if (b instanceof Leviathan) b.onBreach = (dir, size) => this.current?.rogue(dir, size);
+      this.beast = b;
+    }
+    for (const o of data.overboard) {
+      const c = this.crew.find((c) => c.id === o.id);
+      if (!c || o.time <= 0) continue;
+      c.status = 'overboard';
+      const mark = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), new THREE.MeshBasicMaterial({ color: 0xe3bb65 }));
+      const pos = new THREE.Vector3(...o.pos);
+      mark.position.copy(pos);
+      this.scene.add(mark);
+      this.overboard.push({ c, pos, t: o.time, mark });
+    }
+    for (const l of data.lines) {
+      const ship = this.ships.get(l.ship),
+        target = l.monster === 'serpent' ? this.serpent : this.beast?.parts()[l.part];
+      if (ship && target) this.gunnery.restoreLine(ship, target, l);
+    }
   }
 
   private key(action: import('../../core/input').Action) {
-    return this.input.bindings[action].slice(0,1).map(k=>k.replace(/^Key/,'').replace(/^Digit/,'').replace('Mouse0','LMB').replace('Mouse2','RMB').replace('ShiftLeft','Shift')).join('/');
+    return this.input.bindings[action]
+      .slice(0, 1)
+      .map((k) =>
+        k
+          .replace(/^Key/, '')
+          .replace(/^Digit/, '')
+          .replace('Mouse0', 'LMB')
+          .replace('Mouse2', 'RMB')
+          .replace('ShiftLeft', 'Shift'),
+      )
+      .join('/');
   }
-  private swimHints() { return `${this.key('forward')}/${this.key('back')}/${this.key('left')}/${this.key('right')} swim · ${this.key('sprint')} faster · ${this.key('swimUp')} rise · ${this.key('swimDown')} dive · ${this.key('interact')} ladder / climb · ${this.key('seaOrders')} settings`; }
+  private swimHints() {
+    return `${this.key('forward')}/${this.key('back')}/${this.key('left')}/${this.key('right')} swim · ${this.key('sprint')} faster · ${this.key('swimUp')} rise · ${this.key('swimDown')} dive · ${this.key('interact')} ladder / climb · ${this.key('seaOrders')} settings`;
+  }
   private helmHints() {
-    if(!this.atHelm)return `${this.key('interact')} interact with helm, ladder or berth · ${this.key('seaOrders')} ship & navigation · Mouse look`;
-    return `${this.key('forward')}/${this.key('back')} ${this.current?.hull==='rowboat'?'row / stop':'more / less sail'} · ${this.key('left')}/${this.key('right')} steer · ${this.key('interact')} helm / dock · ${this.key('seaOrders')} ship & navigation${this.current?.hull==='rowboat'?'':` · ${this.key('seaAnchor')} anchor · ${this.key('seaReef')} reef`}${this.current?.stats.guns?' · LMB fire the battery you face':''}`;
+    if (!this.atHelm)
+      return `${this.key('interact')} interact with helm, ladder or berth · ${this.key('seaOrders')} ship & navigation · Mouse look`;
+    return `${this.key('forward')}/${this.key('back')} ${this.current?.hull === 'rowboat' ? 'row / stop' : 'more / less sail'} · ${this.key('left')}/${this.key('right')} steer · ${this.key('interact')} helm / dock · ${this.key('seaOrders')} ship & navigation${this.current?.hull === 'rowboat' ? '' : ` · ${this.key('seaAnchor')} anchor · ${this.key('seaReef')} reef`}${this.current?.stats.guns ? ' · LMB fire the battery you face' : ''}`;
   }
-  private warning(s:Ship) {
-    if(s.capsized)return 'Capsized — swim to the boat and use the righting prompt.';
-    if(s.water>.65)return 'Flooding critically — use the pumps and plug damaged sections.';
-    if(s.fire>.05)return 'Fire aboard — leave the helm and help the crew with the buckets.';
-    if(s.grounded)return 'Grounded — lower sail, turn toward deep water, or use P to push clear.';
-    if(this.stores.days(this.crew)<1)return 'Provisions are running low. Resupply through P at the next harbour.';
-    if(s.anchored)return `Anchor down. ${this.key('forward')} gets under way; ${this.key('seaAnchor')} raises the anchor.`;
-    if(s.sailSet>.1&&s.offWind<32&&s.hull!=='rowboat')return 'Wind straight ahead. Steer left or right to fill the sail; C rows small boats clear.';
-    if(s.crew<s.def.crewMin)return 'Short-handed — hire crew at a harbour for better handling.';
-    if(STORMS.some(c=>Math.hypot(c.x-s.pos.x,c.z-s.pos.z)<c.r+500 && c.power>.4) && s.stormExposure<.3)return `Storm front nearby — ${this.key('seaReef')} reef sails before it arrives.`;
-    if(s.thrown>.3)return `Rough water — ${this.key('seaReef')} reef sails and seek shelter.`;
+  private warning(s: Ship) {
+    if (s.capsized) return 'Capsized — swim to the boat and use the righting prompt.';
+    if (s.water > 0.65) return 'Flooding critically — use the pumps and plug damaged sections.';
+    if (s.fire > 0.05) return 'Fire aboard — leave the helm and help the crew with the buckets.';
+    if (s.grounded) return `Grounded — lower sail, turn toward deep water, or use ${this.key('seaOrders')} to push clear.`;
+    if (this.stores.days(this.crew) < 1) return 'Provisions are running low. Resupply through P at the next harbour.';
+    if (s.anchored) return `Anchor down. ${this.key('forward')} gets under way; ${this.key('seaAnchor')} raises the anchor.`;
+    if (s.sailSet > 0.1 && s.offWind < 32 && s.hull !== 'rowboat')
+      return `Wind straight ahead. Steer left or right to fill the sail; ${this.key('seaRow')} rows small boats clear.`;
+    if (s.crew < s.def.crewMin) return 'Short-handed — hire crew at a harbour for better handling.';
+    if (STORMS.some((c) => Math.hypot(c.x - s.pos.x, c.z - s.pos.z) < c.r + 500 && c.power > 0.4) && s.stormExposure < 0.3)
+      return `Storm front nearby — ${this.key('seaReef')} reef sails before it arrives.`;
+    if (s.thrown > 0.3) return `Rough water — ${this.key('seaReef')} reef sails and seek shelter.`;
     return '';
   }
-  private targetReadout(s:Ship) {
-    const side=this.cam.forward().dot(new THREE.Vector3(-Math.cos(s.yaw),0,Math.sin(s.yaw)))>0?1:-1;
-    const beam=new THREE.Vector3(-Math.cos(s.yaw)*side,0,Math.sin(s.yaw)*side);
-    const target=this.nearestEnemy(s,beam,.82,140);
-    return target?`${'name' in target?String(target.name):'Target'} · ${formatDistance(target.pos.distanceTo(s.pos))} · ${side>0?'right':'left'} arc`:'No target in battery arc';
+  private targetReadout(s: Ship) {
+    const side = this.cam.forward().dot(new THREE.Vector3(-Math.cos(s.yaw), 0, Math.sin(s.yaw))) > 0 ? 1 : -1;
+    const beam = new THREE.Vector3(-Math.cos(s.yaw) * side, 0, Math.sin(s.yaw) * side);
+    const target = this.nearestEnemy(s, beam, 0.82, 140);
+    return target
+      ? `${target.name ?? 'Sea target'} · ${formatDistance(target.pos.distanceTo(s.pos))} · ${side > 0 ? 'right' : 'left'} arc`
+      : 'No target in battery arc';
   }
-  private navigationReadout(s:Ship) {
-    this.route.update(s.pos);const r=this.route.route;
-    if(r){const distance=this.route.remaining(s.pos);return `${r.destination} · ${formatDistance(distance)} · ~${Math.max(1,Math.ceil(distance/Math.max(2,Math.abs(s.speed))/60))} min · leg ${Math.min(this.route.next,r.points.length-1)} / ${r.points.length-1}`;}
-    const pin=this.hooks.waypoint?.();return pin?`Chart pin · ${formatDistance(Math.hypot(pin.x-s.pos.x,pin.z-s.pos.z))}`:'P: choose a harbour, training course or coastal job';
+  private navigationReadout(s: Ship) {
+    this.route.update(s.pos);
+    const r = this.route.route;
+    if (r) {
+      const distance = this.route.remaining(s.pos);
+      return `${r.destination} · ${formatDistance(distance)} · ~${Math.max(1, Math.ceil(distance / Math.max(2, Math.abs(s.speed)) / 60))} min · leg ${Math.min(this.route.next, r.points.length - 1)} / ${r.points.length - 1}`;
+    }
+    const pin = this.hooks.waypoint?.();
+    return pin
+      ? `Chart pin · ${formatDistance(Math.hypot(pin.x - s.pos.x, pin.z - s.pos.z))}`
+      : `${this.key('seaOrders')}: choose a harbour, training course or coastal job`;
   }
   openOrders() {
-    showBridge({name:this.current?.name??'On the water',status:this.current?`${this.current.name} · ${sailName(this.ctl.sail)} · ${this.warning(this.current)||'Ready for orders.'}\nProvisions: ${this.stores.days(this.crew).toFixed(1)} crew-days. Wages owed: ${this.stores.state.wageDebt}g.`:'Swimming is available from any shore. Space rises, C dives, Shift swims faster. Rest at the surface to recover.',settings:this.settings,input:this.input,
-      save:()=>this.hooks.save(),close:()=>this.hooks.close(),show:(text,opts)=>this.hooks.talk('Captain’s orders','Ship & navigation',text,opts),
-      navigate:()=>this.chooseRoute(),jobs:()=>this.coastalJobs(),shipMenu:()=>this.openCabin(),
-      walk:()=>{this.hooks.close();this.leaveHelm();},helm:()=>{this.hooks.close();this.takeHelm();},
-      anchor:()=>{this.ctl.sail=0;this.ctl.anchor=true;if(this.current)this.current.anchored=true;this.hooks.close();},
-      recover:()=>this.pushClear(),stores:()=>this.storesMenu(),dive:()=>this.enterWater(),cabin:()=>this.enterCabin(),atHelm:this.atHelm,aboard:!!this.current,log:this.voyages.state.log,
+    showBridge({
+      name: this.current?.name ?? 'On the water',
+      status: this.current
+        ? `${this.current.name} · ${sailName(this.ctl.sail)} · ${this.warning(this.current) || 'Ready for orders.'}\nProvisions: ${this.stores.days(this.crew).toFixed(1)} days with this crew. Wages owed: ${this.stores.state.wageDebt}g.`
+        : 'Swimming is available from any shore. Space rises, C dives, Shift swims faster. Rest at the surface to recover.',
+      settings: this.settings,
+      input: this.input,
+      save: () => this.hooks.save(),
+      close: () => this.hooks.close(),
+      show: (text, opts) => this.hooks.talk('Captain’s orders', 'Ship & navigation', text, opts),
+      navigate: () => this.chooseRoute(),
+      jobs: () => this.coastalJobs(),
+      shipMenu: () => this.openCabin(),
+      walk: () => {
+        this.hooks.close();
+        this.leaveHelm();
+      },
+      helm: () => {
+        this.hooks.close();
+        this.takeHelm();
+      },
+      anchor: () => {
+        this.ctl.sail = 0;
+        this.ctl.anchor = true;
+        if (this.current) this.current.anchored = true;
+        this.hooks.close();
+      },
+      recover: () => this.pushClear(),
+      stores: () => this.storesMenu(),
+      dive: () => this.enterWater(),
+      cabin: () => this.enterCabin(),
+      atHelm: this.atHelm,
+      aboard: !!this.current,
+      log: this.voyages.state.log,
     });
   }
   private chooseRoute() {
-    const ship=this.current;
-    if(!ship)return this.hooks.talk('Charts','Navigation','Board a boat to chart a route matched to its draft.',[{label:'Back',run:()=>this.openOrders()}]);
-    this.hooks.talk('Charts','Choose a destination','Routes are checked for shallow water. Follow the gold line and slow down at the harbour. Every crossing is sailed.',[
-      ...PORTS.map(p=>({label:`${p.name} · ${formatDistance(ship.pos.distanceTo(p.zone))}`,run:()=>{
-        const route=chartRoute(ship.pos,p.zone,ship.def.draft,p.name);
-        if(!route)return this.hooks.talk('Charts','No clear route','These charts cannot find a safe water route for this hull. Try a shallower vessel, a coastal intermediate stop, or mark your own passage on the map.',[{label:'Back',run:()=>this.chooseRoute()}]);
-        this.route.set(route);this.voyages.record(`Charted a course to ${p.name}.`);this.hooks.save();this.hooks.close();
-      }})),{label:'Read the world chart',run:()=>{this.hooks.close();this.hooks.openMap?.();}},{label:'Clear course',run:()=>{this.route.set(null);this.hooks.save();this.openOrders();}},{label:'Back',run:()=>this.openOrders()},
-    ]);
+    const ship = this.current;
+    if (!ship)
+      return this.hooks.talk('Charts', 'Navigation', 'Board a boat to chart a route matched to its draft.', [
+        { label: 'Back', run: () => this.openOrders() },
+      ]);
+    this.hooks.talk(
+      'Charts',
+      'Choose a destination',
+      'Routes are checked for shallow water. Follow the gold line and slow down at the harbour. Every crossing is sailed.',
+      [
+        ...PORTS.map((p) => ({
+          label: `${p.name} · ${formatDistance(ship.pos.distanceTo(p.zone))}`,
+          run: () => {
+            const route = chartRoute(ship.pos, p.zone, ship.def.draft, p.name);
+            if (!route)
+              return this.hooks.talk(
+                'Charts',
+                'No clear route',
+                'These charts cannot find a safe water route for this hull. Try a shallower vessel, a coastal intermediate stop, or mark your own passage on the map.',
+                [{ label: 'Back', run: () => this.chooseRoute() }],
+              );
+            this.route.set(route);
+            this.voyages.record(`Charted a course to ${p.name}.`);
+            this.hooks.save();
+            this.hooks.close();
+          },
+        })),
+        {
+          label: 'Read the world chart',
+          run: () => {
+            this.hooks.close();
+            this.hooks.openMap?.();
+          },
+        },
+        {
+          label: 'Clear course',
+          run: () => {
+            this.route.set(null);
+            this.hooks.save();
+            this.openOrders();
+          },
+        },
+        { label: 'Back', run: () => this.openOrders() },
+      ],
+    );
   }
   private coastalJobs() {
-    const day=this.hooks.day();
-    this.hooks.talk('Dockmaster Mira','Coastal work',this.voyages.state.active?'Finish your current job and return to Aurelle for payment.':'Short working voyages from Aurelle. One payment per job each day. Bring supplies, aid a fisherman, or take a sounding.',[
-      ...(this.hooks.wants?.('sea-course')||this.hooks.wants?.('sea-dock')?[{label:'Prepare the free Sea Legs training skiff',run:()=>{if(this.portAt(this.current?.pos??this.player.pos)?.id!=='portAurelle')return this.hooks.toast('Mira’s training boats are launched at Port Aurelle.');if(this.rental){this.hooks.close();const s=this.ships.get('rental');if(s)this.board(s);return;}const s=this.rent('skiff');this.rental!.deposit=0;this.hooks.close();this.board(s);this.takeHelm();}}]:[]),
-      ...COASTAL_JOBS.map(j=>({label:`${j.name} — ${j.pay}g${this.voyages.state.paid[j.id]===day?' · completed today':''}`,run:()=>{
-        if(this.portAt(this.current?.pos??this.player.pos)?.id!=='portAurelle')return this.hooks.toast('Accept this job at Port Aurelle.');
-        if(this.voyages.state.paid[j.id]===day)return this.hooks.toast('This job has already paid today.');
-        if(!this.voyages.start(j.id))return this.hooks.toast('Complete or abandon your active coastal job first.');this.hooks.save();this.hooks.talk('Coastal work',j.name,j.brief,[{label:'Set sail',run:()=>this.hooks.close()}]);
-      }})),
-      ...(this.voyages.state.active?[{label:'Abandon the current coastal job',run:()=>{delete this.voyages.state.active;this.hooks.save();this.coastalJobs();}}]:[]),{label:'Back',run:()=>this.openOrders()},
-    ]);
+    const day = this.hooks.day();
+    this.hooks.talk(
+      'Dockmaster Mira',
+      'Coastal work',
+      this.voyages.state.active
+        ? 'Finish your current job and return to Aurelle for payment.'
+        : 'Short working voyages from Aurelle. One payment per job each day. Bring supplies, aid a fisherman, or take a sounding.',
+      [
+        ...(this.hooks.wants?.('sea-course') || this.hooks.wants?.('sea-dock')
+          ? [
+              {
+                label: 'Prepare the free Sea Legs training skiff',
+                run: () => {
+                  if (this.portAt(this.current?.pos ?? this.player.pos)?.id !== 'portAurelle')
+                    return this.hooks.toast('Mira’s training boats are launched at Port Aurelle.');
+                  if (this.rental) {
+                    this.hooks.close();
+                    const s = this.ships.get('rental');
+                    if (s) this.board(s);
+                    return;
+                  }
+                  const s = this.rent('skiff');
+                  this.rental!.deposit = 0;
+                  this.hooks.close();
+                  this.board(s);
+                  this.takeHelm();
+                },
+              },
+            ]
+          : []),
+        ...COASTAL_JOBS.map((j) => ({
+          label: `${j.name} — ${j.pay}g${this.voyages.state.paid[j.id] === day ? ' · completed today' : ''}`,
+          run: () => {
+            if (this.portAt(this.current?.pos ?? this.player.pos)?.id !== 'portAurelle')
+              return this.hooks.toast('Accept this job at Port Aurelle.');
+            if (this.voyages.state.paid[j.id] === day) return this.hooks.toast('This job has already paid today.');
+            if (!this.voyages.start(j.id)) return this.hooks.toast('Complete or abandon your active coastal job first.');
+            this.hooks.save();
+            this.hooks.talk('Coastal work', j.name, j.brief, [{ label: 'Set sail', run: () => this.hooks.close() }]);
+          },
+        })),
+        ...(this.voyages.state.active
+          ? [
+              {
+                label: 'Abandon the current coastal job',
+                run: () => {
+                  delete this.voyages.state.active;
+                  this.hooks.save();
+                  this.coastalJobs();
+                },
+              },
+            ]
+          : []),
+        { label: 'Back', run: () => this.openOrders() },
+      ],
+    );
   }
   hireRowboat() {
-    if(this.rental)return this.hooks.toast('Return your current hired boat before hiring another.');
-    if(this.hooks.gold()<5)return this.hooks.toast('A rowing boat costs 5g.');
-    this.hooks.addGold(-5);const s=this.rent('rowboat');this.hooks.close();this.board(s);this.hooks.save();
+    if (this.rental) return this.hooks.toast('Return your current hired boat before hiring another.');
+    if (this.hooks.gold() < 5) return this.hooks.toast('A rowing boat costs 5g.');
+    this.hooks.addGold(-5);
+    const s = this.rent('rowboat');
+    this.hooks.close();
+    this.board(s);
+    this.hooks.save();
   }
-  launchRowboat(at:THREE.Vector3,yaw:number) {
-    if(this.rental)return this.hooks.toast('A hired boat is already waiting for you.');
-    const s=this.rent('rowboat');s.pos.copy(at);s.yaw=yaw;s.place();s.place();this.board(s);
+  launchRowboat(at: THREE.Vector3, yaw: number) {
+    if (this.rental) return this.hooks.toast('A hired boat is already waiting for you.');
+    const s = this.rent('rowboat');
+    s.pos.copy(at);
+    s.yaw = yaw;
+    s.place();
+    s.place();
+    this.board(s);
   }
   enterWater() {
-    const s=this.current;if(!s)return;
-    if(Math.abs(s.speed)>2.5)return this.hooks.toast('Slow down before using the boarding ladder.');
-    this.hooks.close();if(this.atHelm)this.leaveHelm();this.ctl.sail=0;this.ctl.anchor=true;s.anchored=true;
-    const at=s.toWorld(new THREE.Vector3(s.beam/2+1.7,0,0));at.y=(waterSurfaceAt(at.x,at.z)??SEA_LEVEL)-1;
-    this.current=null;this.player.vehicle=null;this.cam.extra=0;this.cam.seafaring=false;this.player.teleport(at);this.player.swimming=true;this.hooks.save();
+    const s = this.current;
+    if (!s) return;
+    if (Math.abs(s.speed) > 2.5) return this.hooks.toast('Slow down before using the boarding ladder.');
+    this.hooks.close();
+    if (this.atHelm) this.leaveHelm();
+    this.ctl.sail = 0;
+    this.ctl.anchor = true;
+    s.anchored = true;
+    const at = s.toWorld(new THREE.Vector3(s.beam / 2 + 1.7, 0, 0));
+    at.y = (waterSurfaceAt(at.x, at.z) ?? SEA_LEVEL) - 1;
+    this.current = null;
+    this.player.vehicle = null;
+    this.cam.extra = 0;
+    this.cam.seafaring = false;
+    this.player.teleport(at);
+    this.player.swimming = true;
+    this.hooks.save();
   }
   private enterCabin() {
-    const s=this.current;if(!s||s.length<10)return this.hooks.toast('This small boat has an open deck.');
-    if(Math.abs(s.speed)>.7||this.pirates.some(p=>!p.plundered&&p.ship.pos.distanceTo(s.pos)<250))return this.hooks.toast('Heave to in safe water before going below.');
-    this.hooks.close();if(this.atHelm)this.leaveHelm();this.ctl.anchor=true;this.ctl.sail=0;s.anchored=true;this.inCabin=true;this.hooks.enterCabin?.(s);
+    const s = this.current;
+    if (!s || s.length < 10) return this.hooks.toast('This small boat has an open deck.');
+    if (Math.abs(s.speed) > 0.7 || this.pirates.some((p) => !p.plundered && p.ship.pos.distanceTo(s.pos) < 250))
+      return this.hooks.toast('Heave to in safe water before going below.');
+    this.hooks.close();
+    if (this.atHelm) this.leaveHelm();
+    this.ctl.anchor = true;
+    this.ctl.sail = 0;
+    s.anchored = true;
+    this.inCabin = true;
+    this.hooks.enterCabin?.(s);
   }
-  leaveCabin() {this.inCabin=false;const s=this.current;if(s){s.enableDeck();this.player.teleport(s.toWorld(new THREE.Vector3(0,s.def.deckY+.3,0)));}this.hooks.save();}
+  leaveCabin() {
+    this.inCabin = false;
+    const s = this.current;
+    if (s) {
+      s.enableDeck();
+      this.player.teleport(s.toWorld(new THREE.Vector3(0, s.def.deckY + 0.3, 0)));
+    }
+    this.hooks.save();
+  }
   restoreVoyage() {
-    const r=this.pendingResume;const seed=seaRuntime.seed;this.restoreEncounters();this.pendingResume=undefined;seaRuntime.seed=seed;if(!r)return;const ship=this.ships.get(r.id);if(!ship||ship.sunk)return;
-    this.lastVessel=r.id;
-    if(r.mode==='swimming'||r.mode==='diving'||r.mode==='ashore')return;
-    const motion=shipMotion(ship),metres=this.voyageMetres;this.board(ship);restoreMotion(ship,motion);this.voyageMetres=metres;
-    this.ctl={...r.controls};this.lashed=r.lashed;this.reload={...r.reload};this.harpoonT=r.harpoon;this.windCd=r.windCd;this.pressCd=r.pressCd;
-    if(r.mode==='helm'||r.mode==='rowing'){this.takeHelm();this.ctl={...r.controls};this.placeHelm();}
-    else {this.atHelm=false;this.player.vehicle=null;const deck=this.boarding?.ship??ship;deck.enableDeck();const local=new THREE.Vector3(...r.local);if(Math.abs(local.x)>deck.beam||Math.abs(local.z)>deck.length)local.set(0,deck.def.deckY+.3,0);this.player.teleport(deck.toWorld(local));}
-    this.voyageFrom.copy(ship.pos);this.frame(0);
+    const seed = seaRuntime.seed;
+    const sw = this.pendingSwimmer;
+    this.pendingSwimmer = undefined;
+    if (sw) {
+      this.player.teleport(new THREE.Vector3(...sw.pos));
+      this.player.swimming = true;
+      this.player.diveDepth = sw.depth;
+      this.player.breath = sw.breath;
+      this.player.stamina = Math.min(this.player.maxStamina, sw.stamina);
+    }
+    const r = this.pendingResume;
+    if (this.pendingRace) {
+      this.regatta.restore(this.pendingRace);
+      this.pendingRace = undefined;
+    }
+    this.restoreEncounters();
+    this.pendingResume = undefined;
+    seaRuntime.seed = seed;
+    if (!r) return;
+    const ship = r.id === 'regatta' ? this.regatta.race?.mine : this.ships.get(r.id);
+    if (!ship || ship.sunk) return;
+    this.lastVessel = r.id;
+    if (r.mode === 'swimming' || r.mode === 'diving' || r.mode === 'ashore') return;
+    const motion = shipMotion(ship),
+      metres = this.voyageMetres,
+      wavebroken = this.wavebroken,
+      checked = this.customsChecked;
+    this.board(ship);
+    this.wavebroken = wavebroken;
+    this.customsChecked = checked;
+    restoreMotion(ship, motion);
+    this.voyageMetres = metres;
+    this.ctl = { ...r.controls };
+    this.lashed = r.lashed;
+    this.reload = { ...r.reload };
+    this.harpoonT = r.harpoon;
+    this.windCd = r.windCd;
+    this.pressCd = r.pressCd;
+    if (r.mode === 'helm' || r.mode === 'rowing') {
+      this.takeHelm();
+      this.ctl = { ...r.controls };
+      this.placeHelm();
+    } else {
+      this.atHelm = false;
+      this.player.vehicle = null;
+      const deck = this.boarding?.ship ?? ship;
+      deck.enableDeck();
+      const local = new THREE.Vector3(...r.local);
+      if (Math.abs(local.x) > deck.beam || Math.abs(local.z) > deck.length) local.set(0, deck.def.deckY + 0.3, 0);
+      this.player.teleport(deck.toWorld(local));
+    }
+    this.voyageFrom.copy(ship.pos);
+    this.frame(0);
   }
 
-  restInCabin() { if(this.inCabin && this.current?.anchored)this.hooks.sleep?.(); }
+  restInCabin() {
+    if (this.inCabin && this.current?.anchored) this.hooks.sleep?.();
+  }
+
   // ---- getting aboard and ashore -----------------------------------------------------------
 
   /** Step aboard a ship: big ships put you on deck, a skiff at the tiller. */
@@ -789,7 +1136,7 @@ export class Sailing {
     // The crew learn from every voyage.
     const sailed = this.voyageMetres;
     for (const c of this.crew) if (c.status === 'aboard' && c.hire === 'permanent') {
-      crewXp(c, Math.round(15 + sailed / 40));
+      if(sailed>80)crewXp(c, Math.round(15 + sailed / 40));
       // After a couple of voyages a crewman asks something of you.
       c.voyages = (c.voyages ?? 0) + (sailed > 300 ? 1 : 0);
       if (!c.wish && c.voyages >= 2) {
@@ -1045,9 +1392,10 @@ export class Sailing {
   /** Before the player moves: ships sail, decks carry what stands on them, threats act. */
   preStep(dt: number) {
     seaRuntime.time += dt;
+    for(const s of this.sinkingShips){s.update(dt,NO_CONTROL(),{skill:0,assisted:true});if(s.sinkT>15){s.dispose();this.sinkingShips.delete(s);}}
     if(this.inCabin)return;
     if(this.input.wasPressed('seaOrders') && !this.input.uiMode) this.openOrders();
-    this.stores.update(this.hooks.hours(),this.crew,!!this.current&&!!this.portAt(this.current.pos));
+    this.stores.update(this.hooks.hours(),this.crew,!!this.current);
     this.voyages.update(dt,this.current,!!this.hooks.wants?.('sea-course'));
     if(this.voyages.state.training===3 && this.hooks.wants?.('sea-course'))this.hooks.signal?.('sea-course');
     const ship = this.current;
@@ -1070,6 +1418,7 @@ export class Sailing {
       } else this.cam.fovBase = this.fovWas;
     }
     this.windCd = Math.max(0, this.windCd - dt);
+    this.reload[-1]=Math.max(0,this.reload[-1]-dt);this.reload[1]=Math.max(0,this.reload[1]-dt);this.harpoonT=Math.max(0,this.harpoonT-dt);this.swivelT=Math.max(0,this.swivelT-dt);
     this.pressCd = Math.max(0, this.pressCd - dt);
     // The markets settle back, hour by hour.
     const hourNow = Math.floor(this.hooks.hours());
@@ -1268,9 +1617,7 @@ export class Sailing {
     }
     // Guns: fire the broadside on the side you're looking at.
     const eff = crewEffects(this.crew, ship.thrown);
-    this.reload[-1] = Math.max(0, this.reload[-1] - dt);
-    this.reload[1] = Math.max(0, this.reload[1] - dt);
-    this.harpoonT = Math.max(0, this.harpoonT - dt);
+
     const look = this.cam.forward();
     const right = new THREE.Vector3(-Math.cos(ship.yaw), 0, Math.sin(ship.yaw));
     const side = (look.dot(right) > 0 ? 1 : -1) as -1 | 1;
@@ -1281,7 +1628,7 @@ export class Sailing {
       this.hooks.toast(`${SHOT_NAMES[this.shot]} in the guns.`);
     }
     if (!this.shotKinds().includes(this.shot)) this.shot = 'ball';
-    this.swivelT = Math.max(0, this.swivelT - dt);
+
     const swivels = ship.fit.guns === 1;
     if (inp.wasPressed('attack') && swivels && this.swivelT <= 0) {
       // Swivel guns: one at a time, aimed freely from the rail.
@@ -1592,6 +1939,8 @@ export class Sailing {
 
   /** A ship of yours is lost: gone for good, its wreck stays on the seabed. */
   private lose(ship: Ship) {
+    ship.disableDeck();
+    this.sinkingShips.add(ship);
     if (this.current === ship) {
       if (this.atHelm) { this.atHelm = false; this.player.vehicle = null; this.cam.extra = 0; this.cam.seafaring=false; }
       this.current = null;
@@ -1841,6 +2190,7 @@ export class Sailing {
       if (PORTS.some((p) => p.id === ip.def.id)) continue;
       PORTS.push({ id: ip.def.id, name: ip.def.name, zone: ip.zone, r: 110, berths: ip.berths, landing: ip.landing });
       this.lighthouses.set(ip.def.id, ip.lighthouse);
+      const outward=ip.zone.clone().sub(ip.landing).setY(0).normalize();for(let d=1;d<=12;d+=.5){const water=ip.landing.clone().addScaledVector(outward,d);if(SEA_LEVEL-heightAt(water.x,water.z)>1.4){this.interactables.push(this.landings.add(ip.landing,water));break;}}
       if (ip.def.style === 'azure' || ip.def.style === 'sunken' || ip.def.style === 'emerald') this.seedPearlBeds(ip);
       const self = this;
       const at = ip.lighthouse.pos.clone();
@@ -2404,6 +2754,7 @@ export class Sailing {
   /** Map marks: your ships, wrecks, lit lighthouses, storms (Weather Eye), contract ports. */
   seaMarkers() {
     const out: { x: number; z: number; kind: 'ship' | 'wreck' | 'light' | 'storm' | 'dest' | 'treasure'; label?: string }[] = [];
+    const target=this.voyages.target(!!this.hooks.wants?.('sea-course'));if(target)out.push({x:target.x,z:target.z,kind:'dest',label:target.label});
     for (const r of this.records) {
       const sh = this.ships.get(r.id);
       if (sh && !sh.sunk) out.push({ x: sh.pos.x, z: sh.pos.z, kind: 'ship', label: r.name });
@@ -2634,10 +2985,10 @@ export class Sailing {
       name: ship.name, hull: ship.def.name,
       rowboat:ship.hull==='rowboat', order:this.ctl.sail, advanced:this.settings.advanced, units:this.settings.units, travelMode:this.travelMode,
       modeLabel:this.travelMode==='rowing'?'At the oars':this.atHelm?'At the helm':'On deck',
-      destination:this.voyages.description(ship,!!this.hooks.wants?.('sea-course'))??this.navigationReadout(ship),
+      destination:this.regatta.race?this.regatta.notes(ship).join(' · '):this.voyages.description(ship,!!this.hooks.wants?.('sea-course'))??this.navigationReadout(ship),
       warning:this.warning(ship), ammunition:SHOT_NAMES[this.shot], target:this.targetReadout(ship),
       tether:this.gunnery.tetheredTo(ship)?`Harpoon attached · ${Math.round(this.gunnery.tetheredTo(ship)!.len)} m · Hold ${this.key('offhand')} to reel · ${this.key('seaCut')} release`:'',
-      hints:this.helmHints(),
+      hints:this.helmHints()+(ship.stats.harpoon?` · ${this.key('offhand')} harpoon / reel`:'')+(this.shotKinds().length>1?` · ${this.key('seaShot')} ammunition`:'')+(this.perks.windcaller?' · Y windcall':'')+(this.perks.fullPress?' · U full press':''),
       danger: dangerAt(ship.pos.x, ship.pos.z), dangerName: DANGER_NAMES[Math.min(5, Math.round(dangerAt(ship.pos.x, ship.pos.z)))],
       heading: ship.yaw, windRel: windYaw - ship.yaw, windSpeed: ship.windSpeed, knots: Math.abs(ship.speed) * 1.94, point: POINT_NAMES(ship.offWind), trim: ship.trim, assisted: this.assisted,
       sail: ship.sailSet, reefed: ship.reefed, anchored: ship.anchored, sections: ship.sections.map((h) => h / ship.stats.hull), sails: ship.sailHp / ship.stats.sails, water: ship.water,
@@ -3021,47 +3372,196 @@ export class Sailing {
       if (!this.portAt(ship.pos)) rec.port = null;
     }
     if (ship.owner === 'rental' && this.rental) {
-      Object.assign(this.rental, { x: ship.pos.x, z: ship.pos.z, yaw: ship.yaw, sections: [...ship.sections], water: ship.water, motion:shipMotion(ship) });
+      Object.assign(this.rental, {
+        x: ship.pos.x,
+        z: ship.pos.z,
+        yaw: ship.yaw,
+        sections: [...ship.sections],
+        water: ship.water,
+        motion: shipMotion(ship),
+      });
     }
   }
 
   toJSON(): SailingSave {
     for (const s of this.ships.values()) this.syncRecord(s);
-    const id=this.current?[...this.ships].find(([,s])=>s===this.current)?.[0]:this.lastVessel;
-    const resumeShip=id?this.ships.get(id):null;
-    const local=resumeShip?(this.boarding?.ship??resumeShip).toLocal(this.player.pos).toArray() as [number,number,number]:[0,0,0] as [number,number,number];
-    return { version:2, sea:saveSeaWeather(), stores:{...this.stores.state}, voyageMetres:this.voyageMetres, encounters:this.encounterSnapshot(), route:this.route.route, settings:{...this.settings}, bindings:structuredClone(this.input.bindings), voyages:structuredClone(this.voyages.state), runtime:{time:seaRuntime.time,seed:seaRuntime.seed,seaTime:SEA.t},
-      resume:id&&resumeShip&&!resumeShip.sunk?{id,mode:this.travelMode,local,controls:{...this.ctl},lashed:this.lashed,reload:{...this.reload},harpoon:this.harpoonT,windCd:this.windCd,pressCd:this.pressCd}:undefined,
-      ships: this.records, rental: this.rental, crew: this.crew, xp: Math.round(this.xp), mode: this.mode, wrecks: this.wrecks, stats: this.stats, paidDay: this.paidDay, picks: this.picks, currents: [...this.knownCurrents], trophies: [...this.trophies], supply: this.supply, contracts: this.contracts, landfalls: [...this.landfalls], lit: [...this.lit], treasures: this.treasures, regatta: this.regatta.toJSON(), pearls: this.pearlDay, commission: this.commission };
+    const id =
+      this.current === this.regatta.race?.mine
+        ? 'regatta'
+        : this.current
+          ? [...this.ships].find(([, s]) => s === this.current)?.[0]
+          : this.lastVessel;
+    const resumeShip = id === 'regatta' ? this.regatta.race?.mine : id ? this.ships.get(id) : null;
+    const local = resumeShip
+      ? ((this.boarding?.ship ?? resumeShip).toLocal(this.player.pos).toArray() as [number, number, number])
+      : ([0, 0, 0] as [number, number, number]);
+    const operationKeys = [
+      'consortHired',
+      'pirateT',
+      'monsterT',
+      'wasStorm',
+      'windT',
+      'rogueT',
+      'rogueWarn',
+      'wavebroken',
+      'starDay',
+      'trawlT',
+      'tackSaid',
+      'thunderAt',
+      'swivelT',
+      'ramT',
+      'customsChecked',
+      'supplyHour',
+      'eventT',
+      'moraleHour',
+      'mutiny',
+      'windCd',
+      'pressCd',
+    ];
+    const phase = phaseState(this);
+    for (const k of Object.keys(phase)) if (!operationKeys.includes(k)) delete phase[k];
+    return {
+      version: 2,
+      escort: this.consort?.snapshot(),
+      swimmer: this.player.swimming
+        ? {
+            depth: this.player.diveDepth,
+            breath: this.player.breath,
+            stamina: this.player.stamina,
+            pos: this.player.pos.toArray() as [number, number, number],
+          }
+        : undefined,
+      race: this.regatta.snapshot(),
+      eventState: this.event?.snapshot(),
+      operation: { phase, plugs: [...this.plugT], shot: this.shot, routeNext: this.route.next, doneContracts: [...this.doneContracts] },
+      floating: this.loot.map((l) => ({ pos: l.pos.toArray() as [number, number, number], gold: l.gold, items: l.items })),
+      customsState:
+        this.customs && this.customs.state !== 'gone'
+          ? {
+              pos: this.customs.ship.pos.toArray() as [number, number, number],
+              yaw: this.customs.ship.yaw,
+              motion: shipMotion(this.customs.ship),
+              phase: phaseState(this.customs),
+            }
+          : undefined,
+      sea: saveSeaWeather(),
+      stores: { ...this.stores.state },
+      voyageMetres: this.voyageMetres,
+      encounters: this.encounterSnapshot(),
+      route: this.route.route,
+      settings: { ...this.settings },
+      bindings: structuredClone(this.input.bindings),
+      voyages: structuredClone(this.voyages.state),
+      runtime: { time: seaRuntime.time, seed: seaRuntime.seed, seaTime: SEA.t },
+      resume:
+        id && resumeShip && !resumeShip.sunk
+          ? {
+              id,
+              mode: this.travelMode,
+              local,
+              controls: { ...this.ctl },
+              lashed: this.lashed,
+              reload: { ...this.reload },
+              harpoon: this.harpoonT,
+              windCd: this.windCd,
+              pressCd: this.pressCd,
+            }
+          : undefined,
+      ships: this.records,
+      rental: this.rental,
+      crew: this.crew,
+      xp: Math.round(this.xp),
+      mode: this.mode,
+      wrecks: this.wrecks,
+      stats: this.stats,
+      paidDay: this.paidDay,
+      picks: this.picks,
+      currents: [...this.knownCurrents],
+      trophies: [...this.trophies],
+      supply: this.supply,
+      contracts: this.contracts,
+      landfalls: [...this.landfalls],
+      lit: [...this.lit],
+      treasures: this.treasures,
+      regatta: this.regatta.toJSON(),
+      pearls: this.pearlDay,
+      commission: this.commission,
+    };
   }
 
   fromJSON(d: SailingSave | undefined) {
-    this.player.vehicle=null;this.cam.extra=0;this.cam.seafaring=false;
-    this.clearCrewActors();this.gunnery.clear();
-    for(const p of this.pirates)p.dispose();this.pirates=[];
-    this.serpent?.dispose();this.serpent=null;this.beast?.dispose();this.beast=null;
-    this.boarding=null;this.plunderBy=null;
-    this.customs?.dispose();this.customs=null;this.event?.dispose();this.event=null;
-    for(const o of this.overboard)this.scene.remove(o.mark);this.overboard=[];
-    this.rental=null;this.inCabin=false;
+    this.player.vehicle = null;
+    this.cam.extra = 0;
+    this.cam.seafaring = false;
+    this.clearCrewActors();
+    this.gunnery.clear();
+    this.consort?.dispose();
+    this.consort = null;
+    for (const s of this.sinkingShips) s.dispose();
+    this.sinkingShips.clear();
+    for (const p of this.pirates) p.dispose();
+    this.pirates = [];
+    this.serpent?.dispose();
+    this.serpent = null;
+    this.beast?.dispose();
+    this.beast = null;
+    this.boarding = null;
+    this.plunderBy = null;
+    this.customs?.dispose();
+    this.customs = null;
+    this.event?.dispose();
+    this.event = null;
+    for (const o of this.overboard) this.scene.remove(o.mark);
+    this.overboard = [];
+    this.rental = null;
+    this.inCabin = false;
 
     for (const s of this.ships.values()) s.dispose();
     this.ships.clear();
     this.current = null;
     this.atHelm = false;
+    this.pendingSwimmer = d?.swimmer;
     this.pendingResume = d?.resume;
-    this.pendingEncounters=d?.encounters;
+    this.pendingRace = d?.race;
+    this.pendingEncounters = d?.encounters;
     this.stores.fromJSON(d?.stores);
-    this.voyageMetres=d?.voyageMetres??0;
+    this.voyageMetres = d?.voyageMetres ?? 0;
     restoreSeaWeather(d?.sea);
-    this.settings={...defaultSeaSettings(),...d?.settings};
-    if(d?.bindings)for(const [action,codes]of Object.entries(d.bindings))if(action in this.input.bindings && Array.isArray(codes)&&codes.length)this.input.bindings[action as keyof Input['bindings']]=codes.filter(c=>typeof c==='string');
+    this.settings = { ...defaultSeaSettings(), ...d?.settings };
+    if (d?.bindings)
+      for (const [action, codes] of Object.entries(d.bindings))
+        if (action in this.input.bindings && Array.isArray(codes) && codes.length)
+          this.input.bindings[action as keyof Input['bindings']] = codes.filter((c) => typeof c === 'string');
     this.voyages.fromJSON(d?.voyages);
-    this.route.set(d?.route??null);
-    if(d?.runtime){seaRuntime.time=d.runtime.time;seaRuntime.seed=d.runtime.seed;SEA.t=d.runtime.seaTime;}
+    this.route.set(d?.route ?? null);
+    if (d?.operation) {
+      restorePhase(this, d.operation.phase);
+      this.plugT = [...d.operation.plugs];
+      this.shot = d.operation.shot;
+      this.route.next = Math.min(Math.max(1, d.operation.routeNext), Math.max(1, (this.route.route?.points.length ?? 2) - 1));
+      this.doneContracts = new Set(d.operation.doneContracts ?? []);
+    }
+    for (const l of this.loot) this.scene.remove(l.mesh);
+    this.loot = [];
+    for (const l of d?.floating ?? []) this.dropLoot(new THREE.Vector3(...l.pos), l.gold, l.items);
+    if (d?.customsState) {
+      const c = d.customsState;
+      this.customs = new CustomsCutter(this.scene, new THREE.Vector3(...c.pos));
+      this.customs.ship.yaw = c.yaw;
+      restoreMotion(this.customs.ship, c.motion);
+      restorePhase(this.customs, c.phase);
+    }
+    this.pendingEvent = d?.eventState;
+    if (d?.runtime) {
+      seaRuntime.time = d.runtime.time;
+      seaRuntime.seed = d.runtime.seed;
+      SEA.t = d.runtime.seaTime;
+    }
     if (!d) return;
     this.records = d.ships ?? [];
-    this.crew = (d.crew ?? []).filter((c) => c.hire === 'permanent').map((c) => ({ ...c, status: d.resume && d.resume.mode!=='ashore' ? c.status : c.status==='lost'?'lost':'ashore' }));
+    this.crew = (d.crew ?? [])
+      .filter((c) => c.hire === 'permanent' || (!!d.resume && d.resume.mode !== 'ashore'))
+      .map((c) => ({ ...c, status: d.resume && d.resume.mode !== 'ashore' ? c.status : c.status === 'lost' ? 'lost' : 'ashore' }));
     this.xp = d.xp ?? 0;
     this.mode = d.mode ?? 'assisted';
     this.wrecks = d.wrecks ?? [];
@@ -3087,9 +3587,31 @@ export class Sailing {
     for (const w of this.wrecks) this.showWreck(w);
     if (d.rental) {
       this.rental = d.rental;
-      const ship = this.spawn({ id: 'rental', hull: d.rental.hull, name: 'Hired Boat', fit: STOCK_FIT(), hullColor: 0x6a4a2a, trim: 0x2f7f86, sections: d.rental.sections, sails: HULLS[d.rental.hull].sails, water: d.rental.water, x: d.rental.x, z: d.rental.z, yaw: d.rental.yaw, port: d.rental.port, cargo: d.rental.cargo, motion:d.rental.motion });
+      const ship = this.spawn({
+        id: 'rental',
+        hull: d.rental.hull,
+        name: 'Hired Boat',
+        fit: STOCK_FIT(),
+        hullColor: 0x6a4a2a,
+        trim: 0x2f7f86,
+        sections: d.rental.sections,
+        sails: HULLS[d.rental.hull].sails,
+        water: d.rental.water,
+        x: d.rental.x,
+        z: d.rental.z,
+        yaw: d.rental.yaw,
+        port: d.rental.port,
+        cargo: d.rental.cargo,
+        motion: d.rental.motion,
+      });
       ship.owner = 'rental';
     }
+    if (d.escort) {
+      const e = d.escort;
+      this.consort = new Consort(this.scene, new THREE.Vector3(...e.pos), e.yaw, e.name);
+      this.consort.restore(e);
+    }
+    if (d.runtime) seaRuntime.seed = d.runtime.seed;
   }
 
   /** Everything off the water (tests). */
@@ -3100,11 +3622,36 @@ export class Sailing {
     this.crew = [];
     this.xp = 0;
     this.mode = 'assisted';
+    this.reload = { [-1]: 0, [1]: 0 };
+    this.harpoonT = 0;
+    this.swivelT = 0;
+    this.ramT = 0;
+    this.windT = 0;
+    this.windCd = 0;
+    this.pressCd = 0;
+    this.tackSaid = -30001;
+    this.wasStorm = false;
+    this.pirateT = 40;
+    this.monsterT = 80;
+    this.eventT = 70;
+    this.paidDay = -1;
+    this.moraleHour = -1;
+    this.supplyHour = -1;
+    this.customsChecked = false;
+    this.voyageMetres = 0;
+    this.doneContracts.clear();
+    for (const m of this.wreckMeshes.values()) this.scene.remove(m);
+    this.wreckMeshes.clear();
+    this.wrecks = [];
+    this.stats = { metres: 0, pirates: 0, monsters: 0, storms: 0 };
     this.picks = {};
     this.perkCache = seaPerks({});
     this.knownCurrents.clear();
     this.lashed = null;
-    if (this.spyglass) { this.spyglass = false; this.cam.fovBase = this.fovWas; }
+    if (this.spyglass) {
+      this.spyglass = false;
+      this.cam.fovBase = this.fovWas;
+    }
     this.player.vehicle = null;
     this.cam.extra = 0;
     for (const p of this.pirates) p.dispose();
@@ -3131,9 +3678,9 @@ export class Sailing {
     this.regatta.fromJSON(undefined);
     this.voyages.fromJSON();
     seaRuntime.reset();
-    this.inCabin=false;
-    this.lastVessel='';
-    this.cam.seafaring=false;
+    this.inCabin = false;
+    this.lastVessel = '';
+    this.cam.seafaring = false;
     this.pearlDay = {};
     this.commission = null;
     this.showSlip();
@@ -3150,6 +3697,8 @@ export class Sailing {
     this.clearCrewActors();
     this.hud.hide();
   }
+
+
 }
 
 // ---- harbour folk -------------------------------------------------------------------------------

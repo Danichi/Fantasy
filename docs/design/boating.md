@@ -1,6 +1,8 @@
 # Boats, Sailing and Seamanship (design plan v0.3)
 
-Status: a plan, with Malachi's decisions folded in (2026-10-03). The first
+Current implementation: [v0.5 seafaring rebuild](seafaring-rework.md).
+
+Original plan, with Malachi's decisions folded in (2026-10-03). The first
 playable slice is built (see "Built so far" below). Numbers are starting points
 to tune; names are placeholders. It follows the progression model in `combat-paths.md`
 (XP invested in disciplines; Callings are real power) and the Grand Ocean phase
@@ -12,8 +14,8 @@ of the World Expansion plan (six ship types, sea encounters, ports, islands).
 
 Almost the whole plan is built. Still to come: the Iron Kettle voyage to the
 White Mountains (it needs the mountains' coastal landing, World Expansion
-phase 10), passengers, heaving to, and ship interiors you walk into (the
-captain's cabin is a menu for now).
+phase 10). The v0.5 rebuild adds heaving to, walkable captain’s cabins,
+coastal rescue work, a new HUD, explicit swimming controls and voyage restoration.
 
 | Area | What works | Where |
 |---|---|---|

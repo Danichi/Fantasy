@@ -172,9 +172,10 @@ test('broadsides hit, pirates grapple and board, and the harpoon finds a sea ser
     const right = new T.Vector3(-Math.cos(gal.yaw), 0, Math.sin(gal.yaw));
     g.cam.yaw = Math.atan2(right.x, right.z);
     inp.press('Mouse0');
+    g.stepSim();
+    out.fired = sl.gunnery.flying;
     await wait(120);
     inp.release('Mouse0');
-    out.fired = sl.gunnery.flying;
     await wait(2500);
     out.pirateHull = +pr.ship.hullFrac.toFixed(2);
     // Heave to: they close under sweeps, grapple and send boarders.

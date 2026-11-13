@@ -640,6 +640,8 @@ export class Consort {
     this.ship.place();
   }
 
+  snapshot(){return {pos:this.ship.pos.toArray() as [number,number,number],yaw:this.ship.yaw,name:this.name,motion:shipMotion(this.ship),sections:[...this.ship.sections],sails:this.ship.sailHp,reload:{...this.reload}};}
+  restore(s:ReturnType<Consort['snapshot']>){this.ship.sections=[...s.sections];this.ship.sailHp=s.sails;restoreMotion(this.ship,s.motion);this.reload={...s.reload};}
   update(dt: number, leader: Ship | null, foes: PirateShip[], gunnery: Gunnery) {
     const s = this.ship;
     if (s.sunk) return s.update(dt, NO_CONTROL(), { skill: 0.5, assisted: true });

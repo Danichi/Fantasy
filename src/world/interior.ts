@@ -1260,7 +1260,9 @@ export class Interior {
       this.spots.cabinBunk = {pos:this.at(left+2.3,back+2.2),yaw:0,seated:false};
       this.spots.cabinChest = {pos:this.at(left+2,1.2),yaw:0,seated:false};
       this.inspectProp(right-1.4,1.5,'Inspect the captain’s desk','A compass, a tide glass and space for the records of your voyages. The crew know to bring important news here.');
-      for(let i=0;i<5;i++) this.cyl(sm.iron,.13,.35,right-.6,.5,back+1+i*.45,false,8);
+      const trophies=this.door.shipTrophies??[];this.shelf(right-.4,back+4.2,-Math.PI/2,2,'books');
+      trophies.forEach((name,i)=>{this.cyl(sm.iron,.15,.4,right-.7,.75,back+3.5+i*.32,false,8);});
+      this.inspectProp(right-1,back+4.2,'Inspect the trophy shelf',trophies.length?'Trophies of your voyages: '+trophies.join(', ')+'.':'An empty shelf, waiting for the trophies of your voyages.');
       return true;
     }
     if (this.kind === 'lighthouse') {

@@ -516,7 +516,7 @@ export class Player {
       return;
     }
     if (!input.uiMode) this.readInput(input, cam);
-    else this.moveIntent.set(0, 0, 0);
+    else {this.moveIntent.set(0,0,0);if(this.swimming){this.diveHeld=false;this.riseHeld=false;this.sprinting=false;}}
     // In a boat: the boat moves you (world/boats.ts); no walking or fighting.
     if (this.vehicle) {
       const v = this.vehicle;
@@ -568,6 +568,7 @@ export class Player {
     if (this.vehicle || this.swimming) {
       this.diveHeld = input.held('swimDown');
       this.riseHeld = input.held('swimUp');
+      this.attackHeld=false;this.attackHeldFor=0;this.stillForDomain=false;this.parryHeldT=0;
       this.sprinting = this.swimming && input.held('sprint') && this.moveIntent.lengthSq() > 0 && this.stamina > 1;
       this.buffer = null;
       this.act = null;
@@ -1094,7 +1095,7 @@ export class Player {
         }
       }
     } else this.drownT = 0;
-    // Diving: hold jump to go under, let go to rise; breath runs out down there.
+    // Diving has separate descend/rise controls; releasing them gently surfaces.
     if (this.swimming) {
       const room = Math.max(0, depth - 2.2);
       this.diveDepth = Math.max(0, Math.min(room, this.diveDepth + (this.diveHeld ? 2.4 : this.riseHeld ? -4.2 : -0.9) * dt));

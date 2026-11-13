@@ -1,3 +1,4 @@
+import { phaseState, restorePhase, type PhaseState } from './snapshot';
 import { seaRandom } from './runtime';
 import * as THREE from 'three';
 import { SEA_LEVEL } from '../worldMap';
@@ -61,6 +62,8 @@ export abstract class SeaEvent {
     this.pos.copy(at);
     scene.add(this.group);
   }
+  snapshot(){return {id:this.id,pos:this.pos.toArray() as [number,number,number],phase:phaseState(this),parts:this.parts.map(p=>({hp:p.hp,alive:p.alive}))};}
+  restore(saved:{phase:PhaseState;parts:{hp:number;alive:boolean}[]}){restorePhase(this,saved.phase);saved.parts.forEach((v,i)=>{const p=this.parts[i];if(!p)return;p.hp=v.hp;if(!v.alive)p.break();});}
   abstract update(dt: number, ship: Ship | null, ctx: EventCtx): void;
   dispose() {
     for (const p of this.parts) p.dispose();
@@ -414,15 +417,15 @@ class Merchant extends SeaEvent {
 }
 
 /** Raise a sea event near the ship. `makeShip` builds a passing merchantman. */
-export function makeSeaEvent(id: SeaEventId, scene: THREE.Scene, fx: FX, ship: Ship, bigGame: boolean, makeShip: () => Ship): SeaEvent {
-  const ahead = (d: number, side = 0) => ship.pos.clone().add(new THREE.Vector3(Math.sin(ship.yaw) * d + Math.cos(ship.yaw) * side, 0, Math.cos(ship.yaw) * d - Math.sin(ship.yaw) * side));
+export function makeSeaEvent(id: SeaEventId, scene: THREE.Scene, fx: FX, ship: Ship, bigGame: boolean, makeShip: () => Ship, forcedAt?:THREE.Vector3): SeaEvent {
+  const ahead = (d: number, side = 0) => forcedAt?.clone()??ship.pos.clone().add(new THREE.Vector3(Math.sin(ship.yaw) * d + Math.cos(ship.yaw) * side, 0, Math.cos(ship.yaw) * d - Math.sin(ship.yaw) * side));
   switch (id) {
-    case 'dolphins': return new Dolphins(scene, fx, ship.pos.clone());
+    case 'dolphins': return new Dolphins(scene, fx, forcedAt?.clone()??ship.pos.clone());
     case 'whale': return new Whale(scene, fx, ahead(60, (seaRandom() < 0.5 ? -1 : 1) * 70));
     case 'flotsam': return new Flotsam(scene, fx, ahead(110, (seaRandom() - 0.5) * 60), false);
     case 'bottle': return new Flotsam(scene, fx, ahead(90, (seaRandom() - 0.5) * 40), true);
     case 'waterspout': return new Waterspout(scene, fx, ahead(220, (seaRandom() - 0.5) * 120));
-    case 'bloom': return new Bloom(scene, fx, ship.pos.clone());
+    case 'bloom': return new Bloom(scene, fx, forcedAt?.clone()??ship.pos.clone());
     case 'survivors': return new Survivors(scene, fx, ahead(140, (seaRandom() - 0.5) * 80));
     case 'shoal': return new Shoal(scene, fx, ahead(130, (seaRandom() - 0.5) * 80), bigGame);
     case 'merchant': {
