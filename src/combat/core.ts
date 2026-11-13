@@ -71,7 +71,7 @@ export function armourOf(t: Target): Armour {
 }
 
 /** A boss (or a boss-sized brute) by its own word or its health. */
-export const isBoss = (t: Target) => !!t.boss || t.maxHp >= 700;
+export const isBoss = (t: Target) => t.boss ?? t.maxHp >= 700;
 
 // ---------------------------------------------------------------------------
 // Per-enemy combat state

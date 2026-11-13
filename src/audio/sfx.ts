@@ -51,6 +51,12 @@ function env(g: GainNode, t0: number, peak: number, attack: number, hold: number
 
 export const sfx = {
   enabled: true,
+  /** Aurelle's bronze bell: a low fundamental and gently dissonant partials. */
+  harbourBell(volume=.2){
+    if(!this.enabled)return;
+    const {c,out}=audio(),t=c.currentTime+.01;
+    [220,591,978,1466].forEach((f,i)=>{const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=f;env(g,t,volume/(1+i*.9),.006,.03,3.8-i*.5);o.connect(g).connect(out);o.start(t);o.stop(t+4);});
+  },
 
   /** A Lost Lantern near: a faint glass chime, three soft bells. */
   chime(volume = 0.12) {

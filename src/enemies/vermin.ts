@@ -56,6 +56,9 @@ export class Rat implements Target {
   lockable = true;
   hp = 16;
   maxHp = 16;
+  hitDamage=5;
+  level=1;
+  label='Rat';
   readonly root = ratModel();
   yaw = Math.random() * 6.28;
   private cooldown = 1 + Math.random();
@@ -117,7 +120,7 @@ export class Rat implements Target {
         this.cooldown = 1.1 + Math.random() * 0.6;
         const dir = to.normalize();
         player.receiveAttack({
-          damage: 5,
+          damage: this.hitDamage,
           from: this.position.clone(),
           parryable: true,
           poise: 4,

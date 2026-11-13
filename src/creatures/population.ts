@@ -55,7 +55,9 @@ export interface Den {
 /** Level of the wild at a point: the region's range, pushed up away from roads. */
 export function zoneLevel(x: number, z: number, rand = Math.random) {
   const reg = REGIONS[regionAt(x, z)] ?? REGIONS.cresha;
-  const [lo, hi] = reg.levels;
+  const [baseLo, hi] = reg.levels;
+  // Inland roads lead into tougher country before the next region boundary.
+  const lo = reg.id === 'cresha' ? Math.min(hi, baseLo + Math.floor(Math.max(0,x-600)/180)) : baseLo;
   const off = THREE.MathUtils.smoothstep(Math.min(roadDist(x, z), 400), 12, 160);
   const span = Math.min(hi - lo, 12);
   const l = lo + span * (0.1 + 0.75 * off) + (rand() - 0.5) * 1.6;

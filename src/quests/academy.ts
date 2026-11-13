@@ -1,3 +1,4 @@
+import type { DuelStyle } from '../combat/tiers';
 import * as THREE from 'three';
 import type { QuestDef, QuestLog } from './questLog';
 import type { DialogueOption } from '../ui/dialogue';
@@ -25,14 +26,14 @@ const cadetLook = (hair: Look['hair'], hairColor: number, skin: number, female =
   ({ body: female ? 'female' : 'male', outfit: 'ranger', hair, hairColor, skin, cloth: 0x2f5f9a, height: female ? 1.7 : 1.8 });
 
 /** The ladder, bottom rung first. `id` names a resident whose look is borrowed. */
-export const LADDER: { name: string; id?: string; look?: Look; hp: number; damage: number; pace: number; purse: number }[] = [
-  { name: 'Cadet Pell Ashby', look: cadetLook('buzzed', 0x6a4428, 0xe0b894), hp: 150, damage: 10, pace: 1.3, purse: 15 },
-  { name: 'Cadet Wren Tidewell', look: cadetLook('buns', 0xa04a28, 0xfff0e6, true), hp: 180, damage: 12, pace: 1.15, purse: 20 },
-  { name: 'Cadet Dorian Vale', id: 'dorian', hp: 240, damage: 14, pace: 1, purse: 30 },
-  { name: 'Instructor Lyra Quen', id: 'lyra', hp: 280, damage: 15, pace: 0.8, purse: 40 },
-  { name: 'Master Sable Ro', id: 'sable', hp: 320, damage: 17, pace: 0.85, purse: 50 },
-  { name: 'Ser Hadrik Vane', id: 'hadrik', hp: 380, damage: 19, pace: 0.9, purse: 65 },
-  { name: 'Knight-Captain Elian Marrow', id: 'marrow', hp: 440, damage: 21, pace: 0.8, purse: 90 },
+export const LADDER: { name: string; id?: string; look?: Look; hp: number; damage: number; pace: number; purse: number; level:number; style:DuelStyle }[] = [
+  { name: 'Cadet Pell Ashby', look: cadetLook('buzzed', 0x6a4428, 0xe0b894), hp: 1800, damage: 62, pace: 1.12, purse: 45, level: 14, style: 'boundary' },
+  { name: 'Cadet Wren Tidewell', look: cadetLook('buns', 0xa04a28, 0xfff0e6, true), hp: 2100, damage: 68, pace: 0.98, purse: 60, level: 15, style: 'gale' },
+  { name: 'Cadet Dorian Vale', id: 'dorian', hp: 2600, damage: 78, pace: 0.84, purse: 85, level: 17, style: 'cross' },
+  { name: 'Instructor Lyra Quen', id: 'lyra', hp: 3400, damage: 92, pace: 0.7, purse: 110, level: 20, style: 'gale' },
+  { name: 'Master Sable Ro', id: 'sable', hp: 4100, damage: 108, pace: 0.78, purse: 140, level: 22, style: 'cross' },
+  { name: 'Ser Hadrik Vane', id: 'hadrik', hp: 5000, damage: 128, pace: 0.88, purse: 180, level: 25, style: 'boundary' },
+  { name: 'Knight-Captain Elian Marrow', id: 'marrow', hp: 6400, damage: 148, pace: 0.72, purse: 240, level: 28, style: 'cross' },
 ];
 export const ASPIRANT_RUNGS = 4;
 
@@ -77,7 +78,7 @@ interface Deps {
   close: () => void;
   toast: (m: string) => void;
   save: () => void;
-  bout: (spec: { name: string; look: Look; hp: number; damage: number; pace: number }, onWin: () => void) => void;
+  bout: (spec: { name: string; look: Look; hp: number; damage: number; pace: number; level?:number;style?:DuelStyle }, onWin: () => void) => void;
   dormitory: THREE.Vector3;
   rnd?: () => number;
 }
@@ -113,7 +114,7 @@ export function setupAcademy(d: Deps) {
     if (!look) return;
     flags.ladderDay = d.time.day;
     d.close();
-    d.bout({ name: r.name, look, hp: r.hp, damage: r.damage, pace: r.pace }, () => {
+    d.bout({ name: r.name, look, hp: r.hp, damage: r.damage, pace: r.pace,level:r.level,style:r.style }, () => {
       flags.ladder = b.n! + 1;
       d.player.prog.addGold(r.purse);
       d.toast(`Rung ${b.n! + 1} of ${LADDER.length}: ${r.name} beaten. +${r.purse}g from the purse.`);
@@ -130,7 +131,7 @@ export function setupAcademy(d: Deps) {
     return [{
       label: 'The sparring ladder',
       run: () => show(`${standing} ${b.ok ? 'Want your bout?' : b.why}`, [
-        ...(b.ok ? [{ label: `Fight ${b.rung!.name}`, run: fight }] : []),
+        ...(b.ok ? [{ label: `Fight ${b.rung!.name} · Lv ${b.rung!.level}`, run: fight }] : []),
         { label: 'Back.', run: back },
       ]),
     }];

@@ -1,3 +1,4 @@
+import { roadTier } from '../combat/tiers';
 import { reactOf } from '../combat/core';
 import * as THREE from 'three';
 import { ignoresPlayer } from '../origins/stealth';
@@ -102,6 +103,10 @@ export class Bandit implements Target {
   hp: number;
   maxHp: number;
   name: string;
+  level = 2;
+  label?: string;
+  armour?: import('../combat/core').Armour;
+  poiseMax?: number;
   private group = new THREE.Group();
   protected built: BuiltCharacter | null = null;
   private actions: Record<string, THREE.AnimationAction> = {};
@@ -142,7 +147,10 @@ export class Bandit implements Target {
   constructor(readonly role: BanditRole, at: THREE.Vector3, private scene: THREE.Scene, private bolts: Bolts, readonly home = at.clone(), look?: Look) {
     this.kind = role === 'chief' ? 'banditChief' : 'bandit';
     this.name = role === 'chief' ? 'Varn the Hollow' : role === 'crossbow' ? 'Bandit Crossbowman' : 'Bandit Cutthroat';
+    this.label=this.name;
     this.maxHp = this.hp = role === 'chief' ? 420 : role === 'crossbow' ? 80 : 110;
+    const tier=roadTier(at.x,at.z);
+    this.level=tier.level;this.maxHp=this.hp=Math.round(this.hp*tier.hp);this.hitDamage=Math.round(this.hitDamage*tier.damage);
     this.position.copy(at);
     this.patrolTarget = at.clone();
     const arch = this.id % 3 === 0 ? ARCHETYPES.skirmisher : ARCHETYPES.grunt;

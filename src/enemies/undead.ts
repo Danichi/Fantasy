@@ -252,6 +252,8 @@ export class Undead implements Target {
   stunned = false;
   hp: number;
   maxHp: number;
+  damageScale=1;
+  level=3;
   radius = 0.34;
   halfHeight = 0.82;
   position = new THREE.Vector3();
@@ -282,7 +284,7 @@ export class Undead implements Target {
   private mats: THREE.MeshStandardMaterial[] = [];
 
   constructor(readonly kind: UndeadKind, at: THREE.Vector3, yaw: number, private scene: THREE.Scene, private fx: FX) {
-    this.stats = STATS[kind];
+    this.stats = { ...STATS[kind] };
     this.hp = this.maxHp = this.stats.hp;
     this.position.copy(at);
     this.yaw = yaw;
@@ -293,7 +295,7 @@ export class Undead implements Target {
       ? { ...ARCHETYPES.shield, run: this.stats.speed * this.pace * 1.5, strafe: 1.2 }
       : { ...ARCHETYPES.grunt, run: this.stats.speed * this.pace, strafe: 0.55, hold: 2.6, evade: 0, retaliate: 0.15, aggression: 0.9 };
     this.brain = new HumanoidBrain(this, arch, MOVESETS[kind], {
-      damage: () => this.stats.damage,
+      damage: () => this.stats.damage*this.damageScale,
       duration: (c) => this.anim?.duration(c) || 1.4,
       shield: kind === 'skeleton',
       onParried: () => {

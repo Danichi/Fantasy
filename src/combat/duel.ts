@@ -1,3 +1,5 @@
+import type { DuelStyle } from './tiers';
+import { ARCHETYPES } from './ai';
 import * as THREE from 'three';
 import { Bandit, type Bolts } from '../enemies/bandit';
 import type { Look } from '../npc/charBuilder';
@@ -15,6 +17,8 @@ export interface DuelSpec {
   /** swing damage and a cooldown multiplier (lower is faster) */
   damage?: number;
   pace?: number;
+  level?: number;
+  style?: DuelStyle;
   /** ring centre and radius: stepping out forfeits */
   ring: THREE.Vector3;
   radius: number;
@@ -39,6 +43,13 @@ export class Duel {
     b.maxHp = b.hp = spec.hp;
     b.alerted = true;
     b.nonLethal = true;
+    (b as import('./targets').Target).boss=false;b.label=spec.name;b.level=spec.level??14;b.armour='leather';
+    b.postureMax=Math.round(180+spec.hp*.045);b.poiseMax=65+Math.round((spec.level??14)*2);
+    if(spec.style){
+      Object.assign(b.brain.arch,ARCHETYPES[spec.style==='gale'?'skirmisher':spec.style==='boundary'?'brute':'grunt']);
+      if(spec.style==='cross'){b.brain.arch.guard=.35;b.brain.arch.retaliate=.65;}
+      if(spec.style==='boundary'){b.armour='plate';b.brain.arch.guard=.5;}
+    }
     b.hitDamage = spec.damage ?? 16;
     b.pace = spec.pace ?? 1;
     this.opponent = b;

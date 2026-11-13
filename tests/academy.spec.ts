@@ -20,6 +20,10 @@ test('a Squire climbs the ladder, passes Mell\'s examination and rises to Knight
     const rank1 = a.rank();
     q.accept('academy-aspirant');
     const gold0 = g.player.prog.gold;
+    // Stream the remote ring before starting a bout from the shared Glen spawn.
+    g.player.teleport(new T.Vector3(2822,7,84));
+    await new Promise(r=>setTimeout(r,2500));
+    const reasons:string[]=[];const end=g.duel.onEnd;g.duel.onEnd=(won:boolean,why:string)=>{reasons.push(why);end?.(won,why);};
     // Four ladder bouts on four days.
     const names: string[] = [];
     let refused = '';
@@ -28,9 +32,10 @@ test('a Squire climbs the ladder, passes Mell\'s examination and rises to Knight
       a.fight();
       await new Promise((r) => setTimeout(r, 400));
       const opp = g.duel.opponent;
+      opp.update = () => {}; // Quest progression is independent of AI combat tuning.
       names.push(opp?.name);
       for (let i = 0; i < 40 && g.duel.active; i++) {
-        opp.takeHit({ damage: 45, poise: 40, dir: new T.Vector3(1, 0, 0), at: opp.center.clone(), crit: false, source: 'melee' });
+        opp.takeHit({ damage: opp.maxHp / 10, poise: 40, dir: new T.Vector3(1, 0, 0), at: opp.center.clone(), crit: false, source: 'melee' });
         await new Promise((r) => setTimeout(r, 100));
       }
       await new Promise((r) => setTimeout(r, 300));
@@ -51,22 +56,23 @@ test('a Squire climbs the ladder, passes Mell\'s examination and rises to Knight
     const stage = q.state['academy-aspirant'].stage;
     q.options('marrow', () => {}, () => {})[0].run();
     // The dormitory: a free night for cadets.
-    const dorm = g.realm.overworldInteractables.find((i: any) => /dormitory/i.test(i.label()));
+    const dorm = g.realm.overworldInteractables.find((i: any) => /^Sleep in the Academy dormitory/i.test(i.label()));
     g.time.hour = 22;
     g.player.hp = 10;
     const dormOk = dorm.enabled();
     dorm.action();
     return {
       rank0, rank1, names, refused, ladder, purse, verdict, stage, done: q.isDone('academy-aspirant'), rank2: a.rank(),
-      hour: g.time.hour, hp: g.player.hp, maxHp: g.player.maxHp, dormOk, rungs: LADDER.length,
+      reasons, hour: g.time.hour, hp: g.player.hp, maxHp: g.player.maxHp, dormOk, rungs: LADDER.length,
     };
   });
+  console.log('Academy progression', JSON.stringify({names:res.names,reasons:res.reasons,ladder:res.ladder}));
   expect(res.rank0).toBe('none');
   expect(res.rank1).toBe('squire');
   expect(res.names).toEqual(['Cadet Pell Ashby', 'Cadet Wren Tidewell', 'Cadet Dorian Vale', 'Instructor Lyra Quen']);
   expect(res.refused).toMatch(/One bout a day/);
   expect(res.ladder).toBe(4);
-  expect(res.purse).toBe(15 + 20 + 30 + 40);
+  expect(res.purse).toBe(45 + 60 + 85 + 110);
   expect(res.verdict).toMatch(/^5 of 5/);
   expect(res.stage).toBe(1);
   expect(res.done).toBe(true);
@@ -109,6 +115,8 @@ test('the Quiet Hands: a hidden trapdoor, Aldric\'s debt, and the black market',
     g.lowerCity.nix();
     const after = opts();
     g.dialogue['options'].find((o: any) => /fell off the wagons/.test(o.label)).run();
+    // Select supplies: the shop opens on its first stocked category.
+    (document.querySelector('.shop2 [data-act=filter][data-f=supplies]') as HTMLButtonElement)?.click();
     // (Goods show in the merchant window.)
     const shop = [...document.querySelectorAll('.shop2 .sc-name')].map((e) => e.textContent ?? '');
     g.town.shopUI.close();

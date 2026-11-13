@@ -1,6 +1,6 @@
 {
   "name": "fantasy-game",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Third-person Souls-like fantasy action RPG (three.js + Rapier)",
   "scripts": {
     "dev": "npm run assets:visual && vite",

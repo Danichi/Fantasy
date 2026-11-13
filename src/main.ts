@@ -1,3 +1,7 @@
+import { PortLife } from './world/port/life';
+import { migrateAurelle } from './world/port/migration';
+import { PORT_REVISION } from './world/portCity';
+import { ACADEMY_TRIAL, ACADEMY_RIVAL, type DuelStyle } from './combat/tiers';
 // Fonts are bundled so the game works offline (desktop build).
 import { combat } from './combat/core';
 import { director } from './combat/ai';
@@ -269,6 +273,7 @@ async function boot() {
   await player.init(r.scene, spawn);
   mark('player');
   const saveData = TEST_MODE && !location.search.includes('save') ? null : loadSave();
+  migrateAurelle(saveData);
   if (saveData) {
     applySave(player, saveData);
     // Saves from before the opening handed you a shield: a hero who is armed but
@@ -971,15 +976,16 @@ async function boot() {
   let duelWin: (() => void) | null = null;
   const ringAt = PORT_SPOTS.academyRing.clone().setY(heightAt(PORT_SPOTS.academyRing.x, PORT_SPOTS.academyRing.z));
   /** A sparring bout in the Academy ring; `onWin` runs if the player wins. */
-  const bout = (spec: { name: string; look: Look; hp: number; damage?: number; pace?: number }, onWin: () => void) => {
+  const bout = (spec: { name: string; look: Look; hp: number; damage?: number; pace?: number;level?:number;style?:DuelStyle }, onWin: () => void) => {
     if (player.mounted) horses.dismount();
+    portLife.drills.stop();
     duelWin = onWin;
     duel.start({ ...spec, ring: ringAt, radius: 9 });
     hud.toast(`${spec.name}: "Blades up. Begin!"`);
   };
   const startDuel = (who: 'hadrik' | 'dorian') => {
     const rec = npcs.find(who)?.rec;
-    bout({ name: rec?.name ?? (who === 'hadrik' ? 'Ser Hadrik Vane' : 'Cadet Dorian Vale'), look: rec!.look, hp: who === 'hadrik' ? 260 : 220 }, () => quests.signal(who === 'hadrik' ? 'trial-won' : 'rival-won'));
+    bout({ name: rec?.name ?? (who === 'hadrik' ? 'Ser Hadrik Vane' : 'Cadet Dorian Vale'), look: rec!.look, ...(who === 'hadrik' ? ACADEMY_TRIAL : ACADEMY_RIVAL) }, () => quests.signal(who === 'hadrik' ? 'trial-won' : 'rival-won'));
   };
   let duelLose: (() => void) | null = null;
   duel.onEnd = (won, reason) => {
@@ -1001,6 +1007,7 @@ async function boot() {
   const startTourney = () => {
     const rec = npcs.find('gawen')?.rec;
     if (player.mounted) horses.dismount();
+    portLife.drills.stop();
     duelWin = () => quests.signal('tourney-won');
     duel.start({ name: rec?.name ?? 'Ser Gawen Ashby', look: rec!.look, hp: 340, damage: 15, pace: 0.95, ring: listsAt, radius: 9 });
     hud.toast('Grand Marshal Hart: "For Crown and Lance. Begin!"');
@@ -1361,8 +1368,8 @@ async function boot() {
     });
   /** The undercity: the Quiet Hands in their den, and whatever the Hands' jobs put in the cistern. */
   const fillUndercity = (it: Interior, extras: Interactable[]) => {
-    if (it.keeperSpot) lookInside(SALLOW_LOOK, it.keeperSpot, it, extras, 'idle', 'Talk to Mother Sallow', () => lowerCity.den());
-    if (it.spots.nix) lookInside(NIX_LOOK, it.spots.nix, it, extras, 'idle', 'Talk to Nix the Fence', () => lowerCity.nix());
+    if (worldFlags.denKnown && it.keeperSpot) lookInside(SALLOW_LOOK, it.keeperSpot, it, extras, 'idle', 'Talk to Mother Sallow', () => lowerCity.den());
+    if (worldFlags.denKnown && it.spots.nix) lookInside(NIX_LOOK, it.spots.nix, it, extras, 'idle', 'Talk to Nix the Fence', () => lowerCity.nix());
     const c = it.spots.cistern?.pos;
     if (c && quests.isActive('cistern-rats', 0)) {
       // A brood around the pool, and their mother, fat as a hound.
@@ -1371,8 +1378,9 @@ async function boot() {
         const at = new THREE.Vector3(c.x + Math.cos(a) * 5.5, 0, c.z - 4.7 + Math.sin(a) * 4.2);
         const rat = new Rat(at, r.scene, fx);
         rat.kind = 'cistern-rat';
+        rat.hp=rat.maxHp=480;rat.hitDamage=34;rat.level=14;
         if (i === 0) {
-          rat.hp = 70;
+          rat.hp=rat.maxHp=2200;rat.hitDamage=64;rat.level=19;rat.label='The Bilge Matron';
           rat.root.scale.setScalar(2.1);
           rat.radius = 0.6;
         }
@@ -1461,8 +1469,9 @@ async function boot() {
   };
   realm.onInterior = (it) => {
     const extras: Interactable[] = [];
+    portLife.interior(it,extras);
     it.setDaylight(1 - time.state.night);
-    const keeper = it.door.keeper;
+    const keeper = it.door.keeper==='aurelle-factor'&&quests.isDone('aurelle-false-lights')?(quests.flag('aurelle-false-lights','warehouse')==='families'?'aurelle-cook':'mira'):it.door.keeper;
     const spot = it.keeperSpot;
     const svc = keeper ? town.npcs.find((n) => n.spec.id === keeper) : undefined;
     if (svc && spot) {
@@ -1499,6 +1508,7 @@ async function boot() {
     return extras;
   };
   realm.onInteriorLeave = () => {
+    portLife.leaveInterior();
     herbalism.leaveInterior();
     clearSanctum();
     const b = inside.borrowed;
@@ -1789,6 +1799,7 @@ async function boot() {
     return quests.markers().filter((m) => m.quest === tracked).map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label, tracked: true }));
   };
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
+  worldFlags['pa:revision']=PORT_REVISION;
   mentorMemory.flags = worldFlags; // which mentors you've asked about their other classes
   // Kaela Voss's drill yard (combat rework): a drill for each part of the fighting.
   const kaelaSpec = NPCS.find((n) => n.id === 'kaela');
@@ -1836,6 +1847,22 @@ async function boot() {
     save: () => save(),
   });
   realm.overworldInteractables.push(...academy.interactables, ...lowerCity.interactables);
+  const portLife=new PortLife({
+    scene:r.scene,port,player,quests,bolts:encounters.bolts,npcs,flags:worldFlags,time,
+    toast:m=>hud.toast(m),card:(a,b)=>hud.regionCard(a,b,false),
+    read:(title,text,opts)=>dialogue.show(title,'Port Aurelle',text,opts??[{label:'Close.',run:()=>dialogue.close()}]),
+    close:()=>dialogue.close(),save:()=>save(),give:giveItem,count:countItem,take:takeItem,
+    enter:door=>void realm.enterInterior(door,door.kind??'hall',world.mats,spells,(label,text)=>dialogue.show('Port Aurelle',label,text,[{label:'Close.',run:()=>dialogue.close()}])),
+    craft:(kind,name)=>arms.craft.show(kind,name,0),duelling:()=>duel.active,bout,
+    dismount:()=>{if(player.mounted)horses.dismount();},
+    trade:(show,back)=>sailing.tradeOptions('portAurelle',show,back),
+    pennant:()=>{for(const {r:record,ship}of sailing.ownedShips()){record.flag=0xd3b66e;ship?.repaint(record.hullColor,record.trim,record.sail,record.flag);}},
+  });
+  realm.overworldInteractables.push(...portLife.interactables);
+  for(const [id,svc]of portLife.services){const prev=folkServices.get(id);folkServices.set(id,(show,back)=>[...(prev?.(show,back)??[]),...svc(show,back)]);}
+  {const absent=npcs.absent;npcs.absent=id=>portLife.absent(id)??absent?.(id)??false;}
+  hideHooks.push(h=>portLife.setVisible(!h));
+
   // The Gravewood: the graveyard trap in the dead wood south-west of the glen.
   const gravewood = new Gravewood(r.scene, world.mats, fx, {
     toast: (m) => hud.toast(m),
@@ -2833,6 +2860,7 @@ async function boot() {
       else if (Math.hypot(player.pos.x - SUNSPIRE.x, player.pos.z - SUNSPIRE.z) > 520) wasInGhagrabba = false;
       gwKey.update(dt);
       port.update(dt, ts.night);
+      portLife.update(dt,worldRunning);
       capital.update(dt, player.pos, ts.night);
       boats.update(dt);
       if (worldRunning) riverLife.update(dt, player.pos, player.sprinting, ts.night);
@@ -2867,7 +2895,7 @@ async function boot() {
       inside.borrowed?.n.update(dt, player.pos);
       for (const c of inside.built) c.mixer.update(dt);
       for (const rat of inside.rats) rat.update(dt, player);
-      if (!paused) updateSanctum(dt);
+      if (!paused) {updateSanctum(dt);portLife.updateInterior(dt);}
     }
     worldMap.setRegionLabel(`${regionName} · ${time.label.split(', ')[1]} ${time.moonGlyph}`);
     flowers.update(dt, r.camera.position);
@@ -2977,6 +3005,7 @@ async function boot() {
       social.barks.clear();
       trouble.reset();
       requests.reset();
+      portLife.reset();
       for (const k of Object.keys(worldFlags)) delete worldFlags[k];
       bestiary.reload();
       lanterns.reset();
@@ -3003,7 +3032,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
+      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       yard, combatDebug, // combat rework: the drill yard and the F9 overlay

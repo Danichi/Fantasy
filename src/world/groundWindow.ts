@@ -91,6 +91,15 @@ export class GroundWindow {
         } else {
           [grass, flower, tint] = blendedGround(x, z);
         }
+        const h = heightAt(x, z);
+        // Beach sand only near the waterline: above it, the grass comes back.
+        if (reliefAt(x, z) === RELIEF.beach && h > SEA_LEVEL + 1.5) {
+          const up = Math.min(1, (h - SEA_LEVEL - 1.5) / 2.5);
+          grass += (0.9 - grass) * up;
+          flower += (0.8 - flower) * up;
+          tint *= 1 - up;
+        }
+        // Roads and authored yards stay clear even on elevated coastal terrain.
         const onRoad = roadCoverage(x, z);
         if (onRoad > 0) {
           grass *= 1 - onRoad;
@@ -103,14 +112,6 @@ export class GroundWindow {
             flower *= 1 - m.amount;
             if (m.tint !== undefined) tint = m.tint; // e.g. dead, dry grass
           }
-        }
-        const h = heightAt(x, z);
-        // Beach sand only near the waterline: above it, the grass comes back.
-        if (reliefAt(x, z) === RELIEF.beach && h > SEA_LEVEL + 1.5) {
-          const up = Math.min(1, (h - SEA_LEVEL - 1.5) / 2.5);
-          grass += (0.9 - grass) * up;
-          flower += (0.8 - flower) * up;
-          tint *= 1 - up;
         }
         if (h < SEA_LEVEL + 0.5) {
           // Nothing grows under the sea; the tideline thins out.

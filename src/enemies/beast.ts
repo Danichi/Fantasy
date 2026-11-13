@@ -1,3 +1,4 @@
+import { roadTier } from '../combat/tiers';
 import { combat, type AttackKind } from '../combat/core';
 import * as THREE from 'three';
 import { ignoresPlayer } from '../origins/stealth';
@@ -67,6 +68,8 @@ export class Beast implements Target {
   stunned = false;
   hp: number;
   maxHp: number;
+  level = 2;
+  private damageScale=1;
   radius: number;
   halfHeight: number;
   position = new THREE.Vector3();
@@ -104,7 +107,8 @@ export class Beast implements Target {
   ) {
     this.kind = variantKind;
     const v = BEAST_VARIANTS[variantKind];
-    this.hp = this.maxHp = v.hp;
+    const tier=roadTier(at.x,at.z);this.level=tier.level;this.damageScale=tier.damage;
+    this.hp = this.maxHp = Math.round(v.hp*tier.hp);
     this.radius = v.radius;
     this.halfHeight = 0.45;
     this.home = at.clone();
@@ -265,7 +269,7 @@ export class Beast implements Target {
     if (d > BEAST_VARIANTS[this.variantKind].attackRange + 0.25) return;
     const dir = d > 0.001 ? to.normalize() : new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
     const res = player.receiveAttack({
-      damage: BEAST_VARIANTS[this.variantKind].damage,
+      damage: BEAST_VARIANTS[this.variantKind].damage*this.damageScale,
       from: this.position.clone(),
       parryable: true,
       poise: BEAST_VARIANTS[this.variantKind].damage * 1.8,

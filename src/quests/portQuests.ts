@@ -38,14 +38,17 @@ export const PORT_QUESTS: QuestDef[] = [
   },
   {
     id: 'academy-lessons', title: 'First Lessons', giver: 'marrow', region: 'portAurelle', main: true, requires: ['academy-trial'],
-    summary: 'A new cadet meets the school instructors and the Academy archivist.',
-    offer: 'Cadets learn from all three schools before they specialise. Present yourself to Instructor Lyra Quen of the Gale school, Ser Hadrik of the Boundary, and Master Sable Ro of the Cross. Then see Archivist Mell in the library: the world you have fallen into has a long memory.',
+    summary: 'A new cadet meets the instructors and archivist, then proves one school’s lesson in the ring.',
+    offer: 'Cadets learn from all three schools before they specialise. Present yourself to Instructor Lyra Quen of the Gale school, Ser Hadrik of the Boundary, and Master Sable Ro of the Cross. Then see Archivist Mell in the library: the world you have fallen into has a long memory. Choose one instructor’s practical lesson and complete it in the ring before reporting back.',
     stages: [
-      { note: 'Meet the Academy\'s instructors and its archivist.', objectives: [
+      { note: 'Meet the instructors and archivist, and complete one school’s practical lesson in the ring.', anyOrder: true, hook: 'academy:practicals', objectives: [
         { type: 'talk', npc: 'lyra', text: 'Meet Instructor Lyra Quen (Gale)', say: 'Speed is not running fast. Speed is never stopping. Keep your momentum and the fight bends around you.' },
         { type: 'talk', npc: 'hadrik', text: 'Meet Ser Hadrik Vane (Boundary)', say: 'You again. Good. The Boundary is a promise: nothing crosses this line. Hold still, hold the line, and let them break on it.' },
         { type: 'talk', npc: 'sable', text: 'Meet Master Sable Ro (Cross)', say: 'Every attack is a door. Parry, and step through it before it closes.' },
         { type: 'talk', npc: 'mell', text: 'Meet Archivist Mell in the library', say: 'A summoned hero! The chronicles record four. Each one arrived when something old was waking. Come back when you have questions; I have more books than answers.' },
+        { type: 'signal', id: 'pa-drill-gale', group: 'school', text: 'Complete Gale: evade and answer (or another school)', at: [ACADEMY_RING.x, ACADEMY_RING.z] },
+        { type: 'signal', id: 'pa-drill-boundary', group: 'school', text: 'Complete Boundary: perfect parries (or another school)', at: [ACADEMY_RING.x, ACADEMY_RING.z] },
+        { type: 'signal', id: 'pa-drill-cross', group: 'school', text: 'Complete Cross: guard counters (or another school)', at: [ACADEMY_RING.x, ACADEMY_RING.z] },
       ] },
       { note: 'Return to Ser Elian Marrow.', objectives: [{ type: 'talk', npc: 'marrow', text: 'Return to Ser Elian Marrow', say: 'Good. Now meet the rest of your class. One of them in particular has been asking about you.' }] },
     ],

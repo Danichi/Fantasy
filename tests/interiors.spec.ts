@@ -107,7 +107,7 @@ test('down the trapdoor: the Quiet Hands’ den, the cistern rats and the drowne
     await W(40);
     out.floor = g.player.pos.y > -0.5 && g.player.pos.y < 1;
     // Clear the cistern.
-    for (const rat of g.inside.rats) rat.takeHit({ damage: 999, poise: 0, dir: new T.Vector3(0, 0, 1), at: rat.center.clone(), crit: false, source: 'melee' });
+    for (const rat of g.inside.rats) rat.takeHit({ damage: rat.maxHp + 1, poise: 0, dir: new T.Vector3(0, 0, 1), at: rat.center.clone(), crit: false, source: 'melee' });
     await W(5);
     out.ratsStage = g.quests.state['cistern-rats'].stage;
     // Fish out the satchel.

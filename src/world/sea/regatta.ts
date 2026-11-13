@@ -1,3 +1,4 @@
+import { AURELLE, LIGHTHOUSE } from '../portCity';
 import * as THREE from 'three';
 import { events } from '../../core/events';
 import { SEA_LEVEL } from '../worldMap';
@@ -18,7 +19,7 @@ interface Course { id: CourseId; name: string; hull: HullId; level: number; buoy
 export const COURSES: Course[] = [
   { id: 'harbourCup', name: 'The Harbour Cup', hull: 'skiff', level: 1, start: [3060, 260], buoys: [[3170, 110], [3330, -50], [3470, 150], [3320, 390], [3070, 270]], rival: 0.88, prize: 150, xp: 120,
     say: ['"Skiffs, round the harbour buoys. I\'ve won it nine years running, sweetheart. Try to keep up."', '"Well! Beaten in my own harbour. The Lighthouse Run is a different thing, mind."'] },
-  { id: 'lighthouseRun', name: 'The Lighthouse Run', hull: 'cutter', level: 8, start: [3060, 260], buoys: [[3020, -140], [3300, -360], [3800, -120], [3700, 440], [3070, 270]], rival: 0.98, prize: 400, xp: 300,
+  { id: 'lighthouseRun', name: 'The Lighthouse Run', hull: 'cutter', level: 8, start: [3060, 260], buoys: [[LIGHTHOUSE[0]+70, LIGHTHOUSE[1]-120], [3300, -360], [3800, -120], [3700, 440], [3070, 270]], rival: 0.98, prize: 400, xp: 300,
     say: ['"Cutters, out round the light and the outer marks. The wind does what it likes out there."', '"Twice. You\'ve twice beaten me. Nobody\'s done that. The Stream Race, then, if you dare it."'] },
   { id: 'streamRace', name: 'The Stream Race', hull: 'brigantine', level: 15, start: [3110, 300], buoys: [[3900, 620], [4550, 1050], [4300, 1650], [3600, 950], [3110, 310]], rival: 1.06, prize: 1000, xp: 700,
     say: ['"Brigantines, out to the Aurelle Stream and home. Open water. If the pirates come, you sail through them."', '"Three for three. Take my pennant, Captain. You\'ve earned the harbour\'s name, and mine."'] },
@@ -39,7 +40,7 @@ export interface RegattaHost {
   save(): void;
 }
 
-const LANDING = new THREE.Vector3(2930, 0, 300); // Mira's wharf
+const LANDING = new THREE.Vector3(AURELLE.regatta[0], 0, AURELLE.regatta[1]); // Mira's wharf
 
 export class Regatta {
   wins = new Set<CourseId>();
