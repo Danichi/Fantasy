@@ -857,7 +857,8 @@ export class Sailing {
                   if (this.rental) {
                     this.hooks.close();
                     const s = this.ships.get('rental');
-                    if (s) this.board(s);
+                    if (s && this.portAt(s.pos)?.id === 'portAurelle') this.board(s);
+                    else this.hooks.toast('Your hired boat is away from Aurelle. Return it before preparing a training skiff.');
                     return;
                   }
                   const s = this.rent('skiff');

@@ -589,3 +589,39 @@ test('paid escorts restore, sunk hulls finish disappearing, and water menus rele
   expect(r.released).toBe(true);
   expect(game.errors).toEqual([]);
 });
+
+test('the compact sailing HUD leaves boarding prompts visible and restores land combat panels ashore', async ({ game }) => {
+  const { page } = game;
+  await page.setViewportSize({ width: 640, height: 360 });
+  try {
+    await page.evaluate(() => {
+      const g = (window as any).__game,
+        s = g.sailing;
+      const ship = s.rent('rowboat');
+      s.board(ship);
+      g.stepSim(2);
+      s.frame(1);
+      g.hud.prompt('Dock at Port Aurelle');
+    });
+    await page.waitForTimeout(100);
+    const r = await page.evaluate(() => {
+      const g = (window as any).__game,
+        s = g.sailing;
+      const hud = document.querySelector('.sea-hud')!.getBoundingClientRect(),
+        prompt = document.querySelector('.prompt')!.getBoundingClientRect();
+      const hidden = getComputedStyle(document.querySelector('.loadout-wrap')!).display;
+      const inside = hud.left >= 0 && hud.right <= innerWidth && hud.bottom <= innerHeight;
+      const clear = prompt.bottom < hud.top;
+      s.leaveShip(new g.THREE.Vector3(2938, 2, 196));
+      s.frame(1);
+      return { hidden, inside, clear, land: getComputedStyle(document.querySelector('.loadout-wrap')!).display };
+    });
+    expect(r.hidden).toBe('none');
+    expect(r.inside).toBe(true);
+    expect(r.clear).toBe(true);
+    expect(r.land).toBe('flex');
+    expect(game.errors).toEqual([]);
+  } finally {
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
+});

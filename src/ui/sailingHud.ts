@@ -55,6 +55,10 @@ export interface HelmReadout {
 }
 
 const CSS = `
+body:is([data-sea-travel="helm"],[data-sea-travel="rowing"],[data-sea-travel="swimming"],[data-sea-travel="diving"]) :is(.loadout-wrap,.quest-tracker,.hint,.book-button,.compass,.waypoint){display:none !important}
+body:is([data-sea-travel="helm"],[data-sea-travel="rowing"],[data-sea-travel="swimming"],[data-sea-travel="diving"]) .sea-hud{bottom:16px}
+body:is([data-sea-travel="helm"],[data-sea-travel="rowing"],[data-sea-travel="swimming"],[data-sea-travel="diving"]) .prompt{top:auto;bottom:calc(var(--sea-hud-height,220px) + 28px);z-index:45;max-width:calc(100vw - 40px);box-sizing:border-box}
+
 .sea-hud{position:fixed;left:50%;bottom:94px;transform:translateX(-50%);width:min(760px,calc(100vw - 32px));box-sizing:border-box;color:#f5ead4;background:linear-gradient(135deg,rgba(13,31,43,.96),rgba(11,20,33,.93));border:1px solid #a48d60;border-top:3px solid #d4b875;border-radius:10px;padding:12px 18px;font:13px Inter,sans-serif;z-index:42;pointer-events:none;box-shadow:0 6px 28px #0008}
 .sea-hud header{display:flex;align-items:center;justify-content:space-between;gap:12px}.sea-hud h3{font:600 17px Cinzel,serif;margin:0;color:#f7dfaa}.sea-hud .sea-mode{color:#a9c8cf;font-size:11px;text-transform:uppercase;letter-spacing:.12em}.sea-hud .sea-grid{display:flex;flex-wrap:wrap;gap:14px;margin:10px 0}.sea-hud .sea-stat{flex:1;min-width:75px}.sea-hud small{display:block;color:#b4c7ca;font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}.sea-hud strong{font-size:16px;font-weight:600}.sea-hud .sea-track{height:5px;margin-top:5px;background:#ffffff18;border-radius:3px;overflow:hidden}.sea-hud .sea-track i{display:block;height:100%;background:#76c8ac}.sea-hud .sea-route{color:#e8d29d}.sea-hud .sea-message{color:#97c3d0;margin-top:7px}.sea-hud .warn{color:#ffb18c}.sea-hud footer{border-top:1px solid #ffffff20;margin-top:9px;padding-top:8px;color:#c4d3d4;font-size:11px;line-height:1.6}.sea-hud kbd{font:600 10px Inter,sans-serif;color:#fff1cc;padding:2px 4px;border:1px solid #9d8c66;border-radius:3px}.sea-hud details{margin-top:8px;color:#b4c7ca}.sea-hud .sea-extra{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;margin-top:8px}.sea-hud .sea-battery{position:fixed;left:50%;top:28%;transform:translateX(-50%);font-size:13px;color:#fff3d4;padding:5px 10px;background:#0c2030b8;border:1px solid #c9a55a;border-radius:4px}.sea-water{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at center,rgba(20,90,110,.1),rgba(4,30,46,.6));z-index:5}
 @media(max-height:500px){.sea-hud{bottom:48px;padding:6px 10px;font-size:11px;max-height:calc(100vh - 100px);overflow:hidden}.sea-hud .sea-grid{margin:5px 0}.sea-hud h3{font-size:13px}.sea-hud footer{margin-top:4px;padding-top:3px;line-height:1.3}.sea-hud .sea-extra{margin-top:4px}}
@@ -87,9 +91,13 @@ export class SailingHud {
     this.water.className = 'sea-water';
     root.append(this.el);
     document.body.append(this.water);
+    new ResizeObserver(() => document.body.style.setProperty('--sea-hud-height', `${this.el.getBoundingClientRect().height}px`)).observe(
+      this.el,
+    );
   }
   hide() {
     this.el.style.display = 'none';
+    delete document.body.dataset.seaTravel;
     this.t = 0;
   }
   setBreath(breath: number, under: boolean) {
@@ -100,11 +108,13 @@ export class SailingHud {
   swim(stamina: number, depth: number, fast: boolean, nearBoat: boolean, hints: string) {
     this.el.style.display = 'block';
     this.el.dataset.mode = this.under ? 'diving' : 'swimming';
+    document.body.dataset.seaTravel = this.el.dataset.mode;
     this.el.innerHTML = `<header><h3>${this.under ? 'Below the surface' : fast ? 'Swimming fast' : 'Swimming'}</h3><span class="sea-mode">${this.under ? depth.toFixed(1) + ' m deep' : 'Surface water'}</span></header><div class="sea-grid">${stat('Stamina', pct(stamina), stamina)}${stat('Breath', pct(this.air), this.air)}</div><div class="sea-message ${this.air < 0.3 || stamina < 0.15 ? 'warn' : ''}">${this.air < 0.3 ? 'Air is running low — rise to the surface.' : stamina < 0.15 ? 'Rest at the surface or climb aboard.' : nearBoat ? 'A boat is nearby. Swim to its side to climb aboard.' : 'Rest at the surface to recover. Look for a ladder or a shallow shore.'}</div><footer>${hints}</footer>`;
   }
   update(dt: number, r: HelmReadout) {
     this.el.style.display = 'block';
     this.el.dataset.mode = r.travelMode ?? (r.atHelm ? 'helm' : 'deck');
+    document.body.dataset.seaTravel = this.el.dataset.mode;
     this.t -= dt;
     if (this.t > 0) return;
     this.t = 0.1;
