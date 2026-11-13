@@ -1,6 +1,9 @@
 import { SANDBOX_SETTINGS_KEY } from './mode';
-export type Scenario = 'dummy' | 'melee' | 'ranged' | 'group';
+export type Scenario = 'dummy' | 'moving' | 'melee' | 'ranged' | 'group';
 export interface SandboxSettings {
+  drill: string;
+  speed: number;
+  footprints: boolean;
   combat: string;
   magic: string;
   immortal: boolean;
@@ -14,6 +17,9 @@ export interface SandboxSettings {
 }
 export function readSandboxSettings(): SandboxSettings {
   const defaults: SandboxSettings = {
+    drill: 'free',
+    speed: 1,
+    footprints: true,
     combat: 'gale',
     magic: '',
     immortal: true,
@@ -28,11 +34,13 @@ export function readSandboxSettings(): SandboxSettings {
   try {
     const s = JSON.parse(localStorage.getItem(SANDBOX_SETTINGS_KEY) ?? 'null');
     if (!s || typeof s !== 'object') return defaults;
-    for (const key of ['immortal', 'unlimited', 'instantCooldowns', 'enemyAI', 'autoReset'] as const)
+    for (const key of ['footprints', 'immortal', 'unlimited', 'instantCooldowns', 'enemyAI', 'autoReset'] as const)
       if (typeof s[key] === 'boolean') defaults[key] = s[key];
+    if (['free', 'sequence', 'cut', 'delayed', 'lunge', 'cleave', 'whirl', 'flurry'].includes(s.drill)) defaults.drill = s.drill;
+    if ([0.25, 0.5, 1].includes(s.speed)) defaults.speed = s.speed;
     if (typeof s.combat === 'string') defaults.combat = s.combat;
     if (typeof s.magic === 'string') defaults.magic = s.magic;
-    if (['dummy', 'melee', 'ranged', 'group'].includes(s.scenario)) defaults.scenario = s.scenario;
+    if (['dummy', 'moving', 'melee', 'ranged', 'group'].includes(s.scenario)) defaults.scenario = s.scenario;
     if (Number.isFinite(s.targetHp)) defaults.targetHp = Math.max(100, Math.min(10000000, Math.round(s.targetHp)));
     if (Number.isFinite(s.enemyDamage)) defaults.enemyDamage = Math.max(1, Math.min(10000, Math.round(s.enemyDamage)));
   } catch {}

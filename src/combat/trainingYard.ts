@@ -41,7 +41,7 @@ export const DRILLS: Drill[] = [
   },
   {
     id: 'dodge', name: 'Perfect dodges', need: 2, goal: 'perfect dodges, each followed by a counter', xp: 70, partner: ['lunge', 'delayed', 'cleave'],
-    brief: 'Roll (Space) the moment it swings, not before. Time slows for you, and the next blow you land is a counter. Twice: dodge, then hit back while the window is open.',
+    brief: 'Quickstep (Space while locked on) or roll (Shift + Space) the moment it swings, not before. Time slows for you, and the next blow you land is a counter. Twice: dodge, then hit back while the window is open.',
   },
   {
     id: 'posture', name: 'Break their guard', need: 1, goal: 'finisher', xp: 90, partner: ['cut', 'flurry'], postureMax: 70,
@@ -79,7 +79,7 @@ export const BASICS: Step[] = [
   { id: 'lock', need: 1, goal: 'locked on', partner: ['cut'], say: 'Now someone who hits back. Press Q (or the middle mouse button) to lock on to her. Locked on, you circle her instead of wandering off.' },
   { id: 'block', need: 2, goal: 'blows blocked', partner: ['cut'], say: 'Hold right click to raise your guard, shield or blade. Take two of her cuts on it. Blocking costs stamina: the green bar. When it runs out, your guard breaks.' },
   { id: 'parry', need: 1, goal: 'parry', partner: ['cut'], say: 'Better than a block: a parry. Press F just as her blade arrives. Too early and you only knock it aside. Turn one blow.' },
-  { id: 'dodge', need: 2, goal: 'attacks dodged', partner: ['lunge', 'cleave'], say: 'Some blows can\'t be stopped. A red glint means get out of the way. Space rolls you clear, the way you push (or straight ahead, if you push nowhere). Dodge two of her attacks.' },
+  { id: 'dodge', need: 2, goal: 'attacks dodged', partner: ['lunge', 'cleave'], say: 'Some blows can\'t be stopped. A red glint means get out of the way. Space quicksteps while locked on; Shift + Space rolls. Push a direction to choose your escape. Dodge two of her attacks.' },
   { id: 'kick', need: 1, goal: 'kick, then a cut', partner: ['cut'], say: 'When someone hides behind their guard, kick it in: G. Then cut while they stagger.' },
   { id: 'finish', need: 1, goal: 'finisher', partner: ['cut', 'flurry'], postureMax: 70, say: 'Everything you land, block or parry wears down her posture: the bar under her health. When it breaks she reels. Get close and strike for a finisher.' },
 ];
@@ -405,7 +405,7 @@ export class TrainingYard {
     const st = this.cur();
     if (st?.id === 'lock' && this.partner && this.player.lock === this.partner) this.stepProgress();
     if (st?.id === 'dodge') {
-      const dodging = this.player.act?.def.id === 'roll' || this.player.act?.def.id === 'backstep';
+      const dodging = !!this.player.act?.def.roll;
       if (dodging && !this.wasDodging && this.time - this.lastTell < 1.4) this.stepProgress();
       this.wasDodging = dodging;
     }

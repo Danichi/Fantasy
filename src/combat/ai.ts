@@ -1,3 +1,4 @@
+import { physics } from '../physics/physics';
 import * as THREE from 'three';
 import { dampAngle, segmentPointDistance } from '../core/math';
 import { combat, combatOf, reactOf, type AttackKind } from './core';
@@ -29,7 +30,7 @@ class Director {
 
   /** How many may swing at once. */
   get capacity() {
-    return 2 + (this.turtle > 2 ? 1 : 0) + (this.vulnerable ? 1 : 0);
+    return 2 + (this.turtle > 2 ? 1 : 0);
   }
   /** Ask to attack. Bosses and lone fighters always may. */
   request(t: Target, solo = false): boolean {
@@ -76,6 +77,12 @@ export interface MoveDef {
   end?: number;
   /** start it from this far (m, centre to centre); at least this close for gap-closers */
   reach: number;
+  /** Actual contact reach, independent from the distance at which a charge starts. */
+  strikeReach?: number;
+  label?: string;
+  /** Seconds of visible preparation and direction commitment. */
+  tell?: number;
+  commit?: number;
   minRange?: number;
   /** cos of the blow's cone in front (default 0.2); sweep hits all round */
   arc?: number;
@@ -159,6 +166,25 @@ export interface BrainHooks {
   onGuard?(up: boolean): void;
 }
 
+export const moveReach = (m: MoveDef) => m.strikeReach ?? Math.min(m.reach, 2.6) + 0.35;
+export const moveName = (m: MoveDef) =>
+  m.label ??
+  (
+    {
+      cut: 'Sword cut',
+      cut2: 'Returning cut',
+      cut3: 'Finishing cut',
+      flurry: 'Three-cut string',
+      overhead: 'Heavy overhead',
+      delayed: 'Held overhead',
+      lunge: 'Lunging thrust',
+      kick: 'Guard breaker',
+      leapSlam: 'Leaping slam',
+      spin: 'Sweeping cuts',
+      grab: 'Grab',
+    } as Record<string, string>
+  )[m.id] ??
+  m.id.replace(/([a-z])([A-Z])/g, '$1 $2');
 export type BrainMode = 'approach' | 'hold' | 'attack' | 'evade' | 'guard' | 'broken';
 
 const _v = new THREE.Vector3();
@@ -169,6 +195,11 @@ export class HumanoidBrain {
   /** clip seconds into the move */
   mt = 0;
   private held = 0;
+  private committed = false;
+  private rate = 1;
+  /** Practice drills may loop a predictable sequence; ordinary enemies still choose tactically. */
+  practiceSequence = false;
+  private sequenceAt = 0;
   private blowDone: boolean[] = [];
   private cooldown = 0.6 + Math.random();
   private moveCd = new Map<string, number>();
@@ -205,6 +236,8 @@ export class HumanoidBrain {
   /** Swap the move list (the drill yard's sparring partner throws only what the drill is about). */
   setMoves(list: MoveDef[]) {
     (this as { moves: MoveDef[] }).moves = list;
+    this.interrupt();
+    this.sequenceAt = 0;
     this.byId.clear();
     for (const m of list) this.byId.set(m.id, m);
   }
@@ -253,12 +286,13 @@ export class HumanoidBrain {
     this.planned = null;
     this.mode = 'approach';
     this.hop = this.spin = 0;
-    combat.release(this.body);
+    combat.cancel(this.body);
     this.cooldown = Math.max(this.cooldown, 0.5);
   }
 
   /** Choose a move: those that reach from here weigh most, but it can plan to close in for any. */
   private pick(dist: number): MoveDef | null {
+    if (this.practiceSequence) return this.moves[this.sequenceAt++ % this.moves.length] ?? null;
     let total = 0;
     const ok: [MoveDef, number][] = [];
     const learnt = Math.min(3, this.parried);
@@ -285,10 +319,13 @@ export class HumanoidBrain {
     this.move = m;
     this.mt = 0;
     this.held = m.hold ?? 0;
+    this.committed = false;
+    const minTell = m.tell ?? (m.kind === 'unblockable' ? 0.8 : m.kind === 'grab' ? 0.75 : m.kind === 'heavy' ? 0.7 : 0.48);
+    this.rate = Math.min(m.speed, m.blows[0][0] / Math.max(0.08, minTell - this.held));
     this.blowDone = m.blows.map(() => false);
     this.mode = 'attack';
-    const firstBlow = m.blows[0][0] / m.speed + (m.hold ?? 0);
-    combat.windup(this.body, firstBlow * 0.92, m.kind ?? 'normal', m.armour ? firstBlow + (m.blows[m.blows.length - 1][1] - m.blows[0][0]) / m.speed : 0);
+    const firstBlow = m.blows[0][0] / this.rate + (m.hold ?? 0);
+    combat.windup(this.body, firstBlow, m.kind ?? 'normal', m.armour ? firstBlow + (m.blows[m.blows.length - 1][1] - m.blows[0][0]) / this.rate : 0, { managed: true, name: moveName(m), range: moveReach(m), arc: m.arc ?? 0.2, shape: m.sweep ? 'circle' : 'cone', blows: m.blows.length });
   }
 
   private endOf(m: MoveDef) {
@@ -314,7 +351,6 @@ export class HumanoidBrain {
     const dist = to.length();
     const dir = dist > 1e-4 ? to.clone().divideScalar(dist) : new THREE.Vector3(0, 0, 1);
     const wantYaw = Math.atan2(dir.x, dir.z);
-    const fwd = new THREE.Vector3(Math.sin(b.yaw), 0, Math.cos(b.yaw));
     this.strafe = 0;
     this.backing = false;
 
@@ -324,19 +360,41 @@ export class HumanoidBrain {
       const first = m.blows[0][0];
       if (this.held > 0 && this.mt >= (m.holdAt ?? first * 0.6)) {
         this.held -= dt; // frozen in the wind-up: the delayed swing
-        b.yaw = dampAngle(b.yaw, wantYaw, m.track ?? 6, dt);
-      } else this.mt += dt * m.speed;
+        if (!this.committed) b.yaw = dampAngle(b.yaw, wantYaw, m.track ?? 6, dt);
+      } else this.mt += dt * this.rate;
       const t = this.mt;
-      if (t < first) b.yaw = dampAngle(b.yaw, wantYaw, m.track ?? 8, dt);
-      else if (t < first + 0.1) combat.release(b);
+      const commitAt = Math.max(0, first - (m.commit ?? (m.kind === 'heavy' ? 0.22 : 0.16)) * this.rate);
+      if (this.held <= 0 && t >= commitAt) this.committed = true;
+      if (!this.committed) b.yaw = dampAngle(b.yaw, wantYaw, m.track ?? 8, dt);
+      const blow = m.blows.findIndex(([, end]) => t <= end);
+      const i = blow < 0 ? m.blows.length - 1 : blow;
+      const [hitFrom, hitTo] = m.blows[i];
+      const previousEnd = i ? m.blows[i - 1][1] : 0;
+      const phase = t > m.blows[m.blows.length - 1][1] ? 'recovery' : t >= hitFrom ? 'active' : this.committed ? 'commit' : 'windup';
+      const from = phase === 'recovery' ? hitTo : phase === 'active' ? hitFrom : previousEnd;
+      const to = phase === 'recovery' ? this.endOf(m) : phase === 'active' ? hitTo : hitFrom;
+      combat.describe(b, {
+        name: moveName(m),
+        kind: m.kind ?? 'normal',
+        phase,
+        left: Math.max(0, (to - t) / this.rate + this.held),
+        total: Math.max(0.01, (to - from) / this.rate + (phase === 'windup' ? (m.hold ?? 0) : 0)),
+        range: moveReach(m),
+        arc: m.arc ?? 0.2,
+        yaw: b.yaw,
+        shape: m.sweep ? 'circle' : 'cone',
+        managed: true,
+        blow: i + 1,
+        blows: m.blows.length,
+      });
       // Lunge through the blow.
       const last = m.blows[m.blows.length - 1];
       const lead = m.lungeLead ?? 0.22;
       const lunging = m.lunge && t > first - lead && t < last[1] && dist > 1.1;
       const k = Math.exp(-14 * dt);
       const sp = lunging ? m.lunge! : 0;
-      b.vel.x = b.vel.x * k + fwd.x * sp * (1 - k);
-      b.vel.z = b.vel.z * k + fwd.z * sp * (1 - k);
+      b.vel.x = b.vel.x * k + Math.sin(b.yaw) * sp * (1 - k);
+      b.vel.z = b.vel.z * k + Math.cos(b.yaw) * sp * (1 - k);
       if (m.leap) this.hop = Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (t - first * 0.4) / (first * 0.75))))) * m.leap;
       if (m.spin) this.spin = m.spin * Math.PI * 2 * THREE.MathUtils.smoothstep(t, first - 0.1, last[1] + 0.05);
       m.blows.forEach(([a, z], i) => {
@@ -481,12 +539,13 @@ export class HumanoidBrain {
   private finishMove(m: MoveDef, dist: number) {
     this.moveCd.set(m.id, m.cooldown ?? 0);
     // Chain into a follow-up while the player is still in reach.
-    const nx = m.next?.length && Math.random() < (m.nextChance ?? 0.5) ? this.byId.get(m.next[Math.floor(Math.random() * m.next.length)]) : undefined;
+    const nx = !this.practiceSequence && m.next?.length && Math.random() < (m.nextChance ?? 0.5) ? this.byId.get(m.next[Math.floor(Math.random() * m.next.length)]) : undefined;
     if (nx && dist < nx.reach + 0.4 && combat.canAct(this.body)) {
       this.start(nx);
       return;
     }
     director.release(this.body);
+    combat.cancel(this.body);
     this.move = null;
     this.mode = 'hold';
     this.modeT = 0;
@@ -500,8 +559,8 @@ export class HumanoidBrain {
     const fwd = new THREE.Vector3(Math.sin(b.yaw), 0, Math.cos(b.yaw));
     const to = player.pos.clone().sub(b.position).setY(0);
     const d = to.length();
-    const reach = Math.min(m.reach, 2.6) + 0.35;
-    if (d > reach) return false;
+    const reach = moveReach(m);
+    if (d > reach || !physics.lineOfSight(b.center, player.center, 0.12)) return false;
     if (!m.sweep && d > 0.5 && to.normalize().dot(fwd) < (m.arc ?? 0.2)) return false;
     const a = player.pos.clone().setY(player.pos.y + 0.3), c = player.pos.clone().setY(player.pos.y + 1.6);
     if (segmentPointDistance(a, c, b.center) > reach + 0.6) return false;
@@ -565,10 +624,10 @@ export const MOVESETS = {
 
 /** UAL clips (people built with the character kit: bandits, raiders). Two swings, held and retimed into a set. */
 export const UAL_MOVES: MoveDef[] = [
-  { id: 'cut', clip: 'sword_attack', speed: 1.15, blows: [[0.52, 0.72]], end: 1.2, reach: 2.2, dmg: 1, poise: 26, lunge: 3, next: ['flurry', 'cut'], nextChance: 0.35 },
-  { id: 'flurry', clip: 'sword_combo', speed: 1.1, blows: [[0.45, 0.62], [1.05, 1.25], [1.9, 2.15]], end: 2.5, reach: 2.2, dmg: 0.75, poise: 20, lunge: 2.2, weight: 0.8, cooldown: 4 },
-  { id: 'lunge', clip: 'sword_attack', speed: 1.25, blows: [[0.52, 0.72]], end: 1.1, reach: 5, minRange: 2.8, dmg: 1.2, poise: 34, lunge: 7, lungeLead: 0.45, weight: 1, cooldown: 3 },
-  { id: 'delayed', clip: 'sword_attack', speed: 1.1, blows: [[0.52, 0.72]], end: 1.2, reach: 2.3, dmg: 1.25, poise: 34, hold: 0.55, holdAt: 0.36, lunge: 3, weight: 0.5, cooldown: 4 },
-  { id: 'cleave', clip: 'sword_attack', speed: 0.8, blows: [[0.52, 0.76]], end: 1.3, reach: 2.6, dmg: 1.8, poise: 70, kind: 'unblockable', armour: true, lunge: 3.5, leap: 0.35, weight: 0.45, cooldown: 7 },
-  { id: 'whirl', clip: 'sword_attack', speed: 0.95, blows: [[0.5, 0.8]], end: 1.25, reach: 2.4, dmg: 1.1, poise: 40, kind: 'heavy', sweep: true, spin: 1, armour: true, weight: 0.4, cooldown: 6 },
+  { id: 'cut', label: 'Sword cut', strikeReach: 2.1, tell: 0.52, clip: 'sword_attack', speed: 1.15, blows: [[0.52, 0.72]], end: 1.2, reach: 2.2, dmg: 1, poise: 26, lunge: 3, next: ['flurry', 'cut'], nextChance: 0.35 },
+  { id: 'flurry', label: 'Three-cut string', strikeReach: 2.1, tell: 0.52, clip: 'sword_combo', speed: 1.1, blows: [[0.45, 0.62], [1.05, 1.25], [1.9, 2.15]], end: 2.5, reach: 2.2, dmg: 0.75, poise: 20, lunge: 2.2, weight: 0.8, cooldown: 4 },
+  { id: 'lunge', label: 'Lunging thrust', strikeReach: 2.35, tell: 0.65, commit: 0.22, clip: 'sword_attack', speed: 1.25, blows: [[0.52, 0.72]], end: 1.1, reach: 5, minRange: 2.8, dmg: 1.2, poise: 34, lunge: 7, lungeLead: 0.45, weight: 1, cooldown: 3 },
+  { id: 'delayed', label: 'Held overhead', strikeReach: 2.2, clip: 'sword_attack', speed: 1.1, blows: [[0.52, 0.72]], end: 1.2, reach: 2.3, dmg: 1.25, poise: 34, hold: 0.55, holdAt: 0.36, lunge: 3, weight: 0.5, cooldown: 4 },
+  { id: 'cleave', label: 'Leaping cleave', strikeReach: 2.4, tell: 0.85, commit: 0.24, clip: 'sword_attack', speed: 0.8, blows: [[0.52, 0.76]], end: 1.3, reach: 2.6, dmg: 1.8, poise: 70, kind: 'unblockable', armour: true, lunge: 3.5, leap: 0.35, weight: 0.45, cooldown: 7 },
+  { id: 'whirl', label: 'Sweeping cut', strikeReach: 2.35, tell: 0.75, clip: 'sword_attack', speed: 0.95, blows: [[0.5, 0.8]], end: 1.25, reach: 2.4, dmg: 1.1, poise: 40, kind: 'heavy', sweep: true, spin: 1, armour: true, weight: 0.4, cooldown: 6 },
 ];

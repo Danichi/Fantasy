@@ -1,3 +1,4 @@
+import type { AttackRead } from './readability';
 import * as THREE from 'three';
 import { events } from '../core/events';
 import { targets, type HitInfo, type Target } from './targets';
@@ -90,6 +91,7 @@ export class CombatState {
   /** can't be staggered again for this long */
   immuneT = 0;
   /** in the wind-up of an attack (a blow now is a counter-hit) */
+  read: AttackRead | null = null;
   windupT = 0;
   windupKind: AttackKind = 'normal';
   /** the kind of the attack its last tell announced, until the blow has had time to land */
@@ -121,6 +123,11 @@ export class CombatState {
   }
 
   update(dt: number) {
+    if (!this.t.alive) this.read = null;
+    if (this.read && !this.read.managed) {
+      this.read.left = Math.max(0, this.read.left - dt);
+      if (this.read.left === 0) this.read = null;
+    }
     this.windupT = Math.max(0, this.windupT - dt);
     this.armedT = Math.max(0, this.armedT - dt);
     this.superArmourT = Math.max(0, this.superArmourT - dt);
@@ -171,8 +178,23 @@ export const combat = {
    * gold heavy, red unblockable, yellow grab) and opens the counter-hit window.
    * `armour` gives it super armour through the swing.
    */
-  windup(t: Target, sec: number, kind: AttackKind = 'normal', armour = 0) {
+  windup(t: Target, sec: number, kind: AttackKind = 'normal', armour = 0, details: Partial<AttackRead> = {}) {
     const s = combatOf(t);
+    s.read = {
+      name: 'Attack',
+      kind,
+      phase: 'windup',
+      left: sec,
+      total: sec,
+      range: 0,
+      arc: 0.2,
+      yaw: t.yaw ?? 0,
+      shape: 'cone',
+      managed: false,
+      blow: 1,
+      blows: 1,
+      ...details,
+    };
     s.windupT = sec;
     s.windupKind = kind;
     s.armedKind = kind;
@@ -182,7 +204,25 @@ export const combat = {
   },
   /** The swing is out: no longer a counter-hit window. */
   release(t: Target) {
-    combatOf(t).windupT = 0;
+    const s = combatOf(t);
+    s.windupT = 0;
+    if (s.read && !s.read.managed) s.read = null;
+  },
+  describe(t: Target, read: AttackRead) {
+    const s = combatOf(t);
+    const release = read.phase === 'active' && s.read?.phase !== 'active';
+    s.read = read;
+    s.windupT = read.phase === 'windup' || read.phase === 'commit' ? read.left : 0;
+    if (release) events.emit('attackReleased', { target: t, kind: read.kind });
+  },
+  cancel(t: Target) {
+    const s = states.get(t);
+    if (s) {
+      s.read = null;
+      s.windupT = 0;
+      s.armedT = 0;
+      s.superArmourT = 0;
+    }
   },
   superArmour(t: Target, sec: number) {
     const s = combatOf(t);
@@ -205,6 +245,7 @@ export const combat = {
     if (s.posture < s.postureMax) return false;
     s.posture = s.postureMax;
     s.brokenT = breakTime(t);
+    s.read = null;
     s.windupT = 0;
     s.superArmourT = 0;
     t.onBreak?.(s.brokenT);
@@ -348,6 +389,7 @@ export function strike(t: Target, s: StrikeSpec): StrikeResult {
     if (s.react) react = maxReact(react, s.react);
   }
   if (react !== 'none') {
+    st.read = null;
     st.immuneT = react === 'knockdown' ? 1.6 : 1.1;
     st.lastReact = react;
     st.reactAgo = 0;

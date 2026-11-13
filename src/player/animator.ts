@@ -33,6 +33,7 @@ interface LocoClip extends Split {
 interface OneShot {
   key: string;
   action: THREE.AnimationAction;
+  lower?: THREE.AnimationAction;
   w: number;
   target: number;
   time: number;
@@ -135,13 +136,13 @@ export class Animator {
     this.hasLocomotion = this.loco.some((l) => l.tier === 'run') && !!this.idle;
   }
 
-  private action(key: string, upperOnly = false) {
-    const id = upperOnly ? key + ':upperOnly' : key;
+  private action(key: string, upperOnly = false, lowerOnly = false) {
+    const id = upperOnly ? key + ':upperOnly' : lowerOnly ? key + ':lowerOnly' : key;
     let a = this.actions.get(id);
     if (!a) {
       const clip = this.char.clips.get(key);
       if (!clip) return null;
-      a = this.mixer.clipAction(upperOnly ? filterClip(clip, false) : clip);
+      a = this.mixer.clipAction(upperOnly || lowerOnly ? filterClip(clip, lowerOnly) : clip);
       a.play();
       a.timeScale = 0;
       a.setEffectiveWeight(0);
@@ -170,10 +171,10 @@ export class Animator {
     }
     if (!key) return;
     let s = this.full.get(key);
-    const action = s?.action ?? this.action(key);
+    const action = s?.action ?? this.action(key, true);
     if (!action) return;
     if (!s) {
-      s = { key, action, w: 0, target: 1, time, fadeIn, fadeOut };
+      s = { key, action, lower: this.action(key, false, true) ?? undefined, w: 0, target: 1, time, fadeIn, fadeOut };
       this.full.set(key, s);
     }
     s.target = 1;
@@ -204,6 +205,9 @@ export class Animator {
     return Math.min(1, w);
   }
 
+  /** How much locomotion may pass through the lower half of a full-body action. */
+  mobility = 0;
+
   /** Advance fades and locomotion, then pose the skeleton. */
   update(dt: number, loco: LocoInput) {
     // Fades.
@@ -213,6 +217,7 @@ export class Animator {
         s.w = s.target > s.w ? Math.min(s.target, s.w + rate * dt) : Math.max(s.target, s.w - rate * dt);
         if (s.w <= 0 && s.target <= 0) {
           s.action.setEffectiveWeight(0);
+          s.lower?.setEffectiveWeight(0);
           m.delete(k);
         }
       }
@@ -237,7 +242,9 @@ export class Animator {
     for (const s of this.full.values()) sumFull += ease(s.w);
     for (const s of this.full.values()) {
       s.action.time = Math.min(s.time, s.action.getClip().duration - 1e-4);
-      s.action.setEffectiveWeight(sumFull > 0 ? (ease(s.w) / Math.max(1, sumFull)) : 0);
+      const weight = sumFull > 0 ? ease(s.w) / Math.max(1, sumFull) : 0;
+      s.action.setEffectiveWeight(weight);
+      if (s.lower) { s.lower.time = s.action.time; s.lower.setEffectiveWeight(weight * (1 - this.mobility)); }
     }
     for (const s of this.upper.values()) {
       const d = s.action.getClip().duration;
@@ -249,6 +256,7 @@ export class Animator {
     // Locomotion.
     const speed = Math.hypot(loco.local.x, loco.local.z);
     const baseW = 1 - fullW;
+    const legW = 1 - fullW * (1 - this.mobility);
     // (eased, so a quick stop lets the legs settle rather than snapping to idle)
     const moveWant = loco.grounded ? smoothstep(0.05, 0.9, speed) : 0.3;
     this.moveW += (moveWant - this.moveW) * (1 - Math.exp(-(moveWant > this.moveW ? 18 : 9) * dt));
@@ -257,7 +265,7 @@ export class Animator {
     if (this.idle) {
       this.idleTime = (this.idleTime + dt) % this.idle.dur;
       this.idle.lower.time = this.idle.upper.time = this.idleTime;
-      this.idle.lower.setEffectiveWeight(idleW * baseW);
+      this.idle.lower.setEffectiveWeight(idleW * legW);
       this.idle.upper.setEffectiveWeight(idleW * baseW * (1 - upperW));
     }
     if (this.loco.length) {
@@ -309,7 +317,7 @@ export class Animator {
       this.loco.forEach((l, i) => {
         const w = sum > 0 ? (weights[i] / sum) * moveW * baseW : 0;
         l.lower.time = l.upper.time = this.phase * l.dur;
-        l.lower.setEffectiveWeight(w);
+        l.lower.setEffectiveWeight(sum > 0 ? weights[i] / sum * moveW * legW : 0);
         l.upper.setEffectiveWeight(w * (1 - upperW));
       });
     }
@@ -337,7 +345,7 @@ export class Animator {
   }
 
   stopAll() {
-    for (const s of this.full.values()) s.action.setEffectiveWeight(0);
+    for (const s of this.full.values()) { s.action.setEffectiveWeight(0); s.lower?.setEffectiveWeight(0); }
     for (const s of this.upper.values()) s.action.setEffectiveWeight(0);
     this.full.clear();
     this.upper.clear();

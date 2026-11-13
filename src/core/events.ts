@@ -38,6 +38,7 @@ export interface GameEvents {
   /** every blow the player lands, after the target took it */
   strike: { target: import('../combat/targets').Target; at: Vector3; damage: number; crit: boolean; reason?: import('../combat/core').CritReason; react: import('../combat/core').Reaction; broke: boolean; armour: import('../combat/core').Armour; type: import('../combat/core').DmgType; heavy: boolean; typeMult: number; killed: boolean };
   /** an enemy winds up an attack: its tell (the colour says how to answer it) */
+  attackReleased: { target: import('../combat/targets').Target; kind: import('../combat/core').AttackKind };
   telegraph: { target: import('../combat/targets').Target; kind: import('../combat/core').AttackKind; sec: number };
   /** an enemy's posture broke (open to a finisher), and recovered */
   postureBreak: { target: import('../combat/targets').Target; at: Vector3 };

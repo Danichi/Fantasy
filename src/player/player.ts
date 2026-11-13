@@ -6,6 +6,9 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { Character } from './character';
 import { RigLayer, blendPose, overlayPose, type ProcPose, type HandPose } from './rigLayer';
 import { Animator } from './animator';
+import { PoseFrames } from './poseFrames';
+import { actionPhase, actionMobility } from '../combat/phases';
+import { familyOf } from '../items/weapons';
 import { ThirdPersonCamera } from './camera';
 import { Input } from '../core/input';
 import { afflictions } from '../combat/afflictions';
@@ -42,10 +45,10 @@ const CAPSULE_R = 0.32;
 const CENTER_Y = CAPSULE_HALF + CAPSULE_R;
 const GRAVITY = 22;
 const JUMP_V = 5.8;
-const BUFFER_TIME = 0.35;
+const BUFFER_TIME = 0.32;
 export const SIM_STEP = 1 / 60;
 
-type Buffered = 'attack' | 'offhand' | 'dodge' | 'parry' | 'cast' | 'originAbility' | 'kick';
+type Buffered = 'attack' | 'offhand' | 'dodge' | 'parry' | 'cast' | 'originAbility' | 'kick' | 'roll';
 
 // ---- combat rework: timing (seconds of action time) ----
 /** hold the button this long into a string's next cut for its heavy branch */
@@ -84,7 +87,7 @@ interface ActiveAction {
   landed: boolean;
   /** skill damage multiplier on this action's blade hits */
   mult: number;
-  /** action time of the last frame hits were checked on */
+  /** action time of the last simulation sample checked for hits */
   hitCheckedAt?: number;
   /** index of the next entry in def.events */
   ev: number;
@@ -251,7 +254,10 @@ export class Player {
   readonly moveIntent = new THREE.Vector3();
   private push = new THREE.Vector3();
   private bladePrev: Record<'main' | 'off', [THREE.Vector3, THREE.Vector3] | null> = { main: null, off: null };
-  private lastPresentT = -1;
+  private poses!: PoseFrames;
+  private gameTime = 0;
+  inputLatency = 0;
+  flightLean = 0;
   private lastPhase = 0;
   private idleClock = 0;
 
@@ -349,6 +355,9 @@ export class Player {
     this.kcc = physics.createCharacterController(0.02);
     this.pos.copy(spawn);
     this.prevPos.copy(spawn);
+    this.poses = new PoseFrames(this.char);
+    this.advancePose(0);
+    this.poses.capture(true);
   }
 
   /** Rebuild the hero's body for a new look (origins: the character creator), keeping gear, place and state. */
@@ -373,6 +382,9 @@ export class Player {
     for (const b of ['Head', 'Spine2', 'RightArm', 'LeftArm', 'RightForeArm', 'LeftForeArm', 'RightHand', 'LeftHand', 'RightUpLeg', 'LeftUpLeg', 'RightLeg', 'LeftLeg', 'RightFoot', 'LeftFoot']) this.equip.limb(b);
     this.lastPose = {};
     this.poseFrom = null;
+    this.poses = new PoseFrames(char);
+    this.advancePose(0);
+    this.poses.capture(true);
   }
 
   private buildMountVisual() {
@@ -505,6 +517,8 @@ export class Player {
   // Simulation (fixed step)
   // ==========================================================================
   update(dt: number, input: Input, cam: ThirdPersonCamera) {
+    this.gameTime += dt;
+    this.poses?.restore();
     this.prevPos.copy(this.pos);
     this.prevStepOffset = this.stepOffset;
     this.prevYaw = this.yaw;
@@ -512,10 +526,12 @@ export class Player {
     this.blockHitT += dt;
 
     if (this.dead) {
+      this.flightLean = 0;
       this.deadT += dt;
+      this.sampleCombatPose(dt);
       return;
     }
-    if (!input.uiMode) this.readInput(input, cam);
+    if (!input.uiMode) this.readInput(input, cam, dt);
     else {this.moveIntent.set(0,0,0);if(this.swimming){this.diveHeld=false;this.riseHeld=false;this.sprinting=false;}}
     // In a boat: the boat moves you (world/boats.ts); no walking or fighting.
     if (this.vehicle) {
@@ -530,6 +546,7 @@ export class Player {
       this.swimming = false;
       this.act = null;
       this.sprinting = input.held('sprint') && this.moveIntent.lengthSq() > 0;
+      this.sampleCombatPose(dt);
       return;
     }
     if (this.bound > 0) {
@@ -547,6 +564,7 @@ export class Player {
         this.vel.set(0, 0, 0);
         this.grounded = false;
         this.airTime = 0.4;
+        this.sampleCombatPose(dt);
         return;
       }
     } else this.boundAt = null;
@@ -554,9 +572,10 @@ export class Player {
     this.updateAction(dt, input);
     this.updateLock(cam);
     this.move(dt);
+    this.sampleCombatPose(dt);
   }
 
-  private readInput(input: Input, cam: ThirdPersonCamera) {
+  private readInput(input: Input, cam: ThirdPersonCamera, dt: number) {
     const f = cam.forward(), r = cam.right();
     this.moveIntent.set(0, 0, 0);
     if (input.held('forward')) this.moveIntent.add(f);
@@ -577,10 +596,14 @@ export class Player {
       return;
     }
     this.riseHeld = false;
-    const now = performance.now() / 1000;
-    const buf = (a: Buffered) => (this.buffer = { a, t: now, actT: this.act?.t ?? -1, actId: this.act?.def.id ?? null });
+    const now = this.gameTime;
+    const priority: Record<Buffered, number> = { attack: 0, offhand: 0, cast: 1, originAbility: 1, kick: 2, parry: 3, dodge: 4, roll: 4 };
+    const buf = (a: Buffered) => {
+      if (this.buffer?.t === now && priority[this.buffer.a] > priority[a]) return;
+      this.buffer = { a, t: now, actT: this.act?.t ?? -1, actId: this.act?.def.id ?? null };
+    };
+    this.attackHeldFor = input.held('attack') ? (this.attackHeld ? this.attackHeldFor + dt : dt) : 0;
     this.attackHeld = input.held('attack');
-    this.attackHeldFor = this.attackHeld ? input.heldFor('attack') : 0;
     if (input.wasPressed('kick') && !this.aiming) buf('kick');
     // Locked on: the wheel moves the lock to the next enemy left or right.
     if (this.lock && input.wheel !== 0) this.switchLock(cam, Math.sign(input.wheel));
@@ -590,7 +613,7 @@ export class Player {
     if (input.wasPressed('attack') && !this.aiming) buf('attack');
     if (input.wasPressed('offhand') && this.equip.dualWield) buf('offhand');
     if (input.wasPressed('parry')) buf('parry');
-    if (input.wasPressed('dodge')) buf('dodge');
+    if (input.wasPressed('dodge')) buf(input.held('sprint') ? 'roll' : 'dodge');
     if (input.wasPressed('cast')) buf('cast');
     if (input.wasPressed('originAbility')) buf('originAbility');
     // Raising the shield (or a weapon that can guard) also cuts short the tail end of an attack (once it can be cancelled).
@@ -636,7 +659,7 @@ export class Player {
     const sb = STRING_BRANCH[id];
     if (sb && def.combo) def = { ...def, combo: { ...def.combo, heavy: def.combo.heavy ?? sb.heavy, delayed: def.combo.delayed ?? sb.delayed } };
     // Rolls by armour weight: light gear rolls far and long, heavy gear short and costly.
-    if (def.roll && !def.roll.back) def = this.weighRoll(def);
+    if (def.roll && !def.roll.back && !def.roll.step) def = this.weighRoll(def);
     const m = this.mods;
     const stam = def.stamina * m.staminaCost * (def.roll ? m.dodgeCost * this.paths.rollCost : 1);
     // A dodge needs most of its cost in hand (you can't roll on an empty tank);
@@ -646,14 +669,13 @@ export class Player {
       return false;
     }
     this.stamina = Math.max(0, this.stamina - stam);
-    if (stam > 0) this.staminaDelay = def.roll ? 0.9 : 0.75;
+    if (stam > 0) this.staminaDelay = def.roll?.step ? 0.55 : def.roll ? 0.9 : 0.75;
     const w = def.hit?.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
     const speed = (def.weaponSpeed ? (w?.def.stats.speed ?? 1) * m.attackSpeed : 1) * (usingClip ? def.clipTiming?.speed ?? 1 : 1) * (id.startsWith('cast') ? m.castSpeed : 1);
     this.poseFrom = this.lastPose;
     this.poseFade = 0;
     this.act = { def, t: t0 ?? def.startAt ?? 0, speed, hitSet: new Set(), charge: 0, charging: false, fired: false, usingClip, landed: false, mult: 1, ev: 0, connected: false, tier: 0, fullAt: 0, perfect: false, released: false };
     this.bladePrev.main = this.bladePrev.off = null;
-    this.lastPresentT = -1;
     // Reactions and guards snap in; a cut out of another cut takes a beat longer to flow into.
     const snap = !!def.parry || id === 'stagger' || id === 'guardBreak';
     this.act.blendIn = snap ? 0.07 : this.anim.fullWeight > 0.25 ? 0.2 : 0.13;
@@ -661,7 +683,7 @@ export class Player {
     if (def.roll) {
       // Rolling tears you most of the way out of webbing.
       this.webbed *= 0.25;
-      const dir = def.roll.back ? this.forward.negate() : this.moveIntent.lengthSq() > 0 ? this.moveIntent.clone() : this.forward;
+      const dir = def.roll.back || (def.roll.step && this.moveIntent.lengthSq() === 0) ? this.forward.negate() : this.moveIntent.lengthSq() > 0 ? this.moveIntent.clone() : this.forward;
       this.act.rollDir = dir;
     }
     if (def.hit) events.emit('swing', { heavy: HYPER.has(id) });
@@ -736,7 +758,7 @@ export class Player {
   private consumeBuffer() {
     const b = this.buffer;
     if (!b) return;
-    if (performance.now() / 1000 - b.t > BUFFER_TIME) {
+    if (this.gameTime - b.t > BUFFER_TIME) {
       this.buffer = null;
       return;
     }
@@ -754,11 +776,10 @@ export class Player {
       if (b.a === 'attack' && (eq.mainWeapon || this.canFightUnarmed?.())) next = !this.grounded ? 'airAttack' : this.sprinting ? 'sprintAttack' : this.opener();
       else if (b.a === 'offhand' && eq.dualWield) next = 'offslash1';
       else if (b.a === 'kick') next = shove();
-      // A dodge is always a roll: the way you push, or the way you face (no little backstep on its own).
-      else if (b.a === 'dodge') next = this.grounded ? 'roll' : null;
+      else if (b.a === 'dodge' || b.a === 'roll') next = this.grounded ? b.a === 'dodge' && this.lock ? 'quickstep' : 'roll' : null;
       else if (b.a === 'parry') next = parry();
       else if (b.a === 'cast') next = this.spellAction();
-      if (next === null && b.a === 'dodge' && !this.grounded) return; // keep it for landing
+      if (next === null && (b.a === 'dodge' || b.a === 'roll') && !this.grounded) return; // keep it for landing
     } else {
       const d = a.def;
       const comboOpen = d.combo && a.t >= d.combo.from;
@@ -777,23 +798,18 @@ export class Player {
         else next = c.next;
       } else if (b.a === 'offhand' && eq.dualWield && comboOpen) next = d.id.startsWith('offslash') && d.combo ? d.combo.next : 'offslash1';
       else if (b.a === 'kick' && a.t >= cancelAt) next = shove();
-      else if (b.a === 'dodge' && a.t >= cancelAt && this.grounded) next = 'roll';
+      else if ((b.a === 'dodge' || b.a === 'roll') && a.t >= cancelAt && this.grounded) next = b.a === 'dodge' && this.lock ? 'quickstep' : 'roll';
       else if (b.a === 'parry' && a.t >= cancelAt) next = parry();
       else return; // keep buffering
     }
     this.buffer = null;
-    if (next) this.startAction(next);
+    if (next) { this.inputLatency = Math.max(0, this.gameTime - b.t); this.startAction(next); }
   }
 
   private spellAction(): string | null {
     const sp = this.equip.get(this.equip.activeSpell);
     if (!sp) return null;
     const offensive = sp.def.id === 'fireball';
-    // Offensive spells need a lock-on target.
-    if (offensive && !this.lock?.alive) {
-      events.emit('needTarget', {});
-      return null;
-    }
     const cost = Math.max(0, Math.round(sp.def.stats.manaCost ?? 0));
     if (this.mana < cost) {
       events.emit('notEnough', { stat: 'mana' });
@@ -811,7 +827,7 @@ export class Player {
     const d = a.def;
 
     // A light attack held long enough turns into a charged heavy.
-    if (d.id === 'slash1' && d.hit && a.t < d.hit.from && input.held('attack') && input.heldFor('attack') > 0.28) {
+    if (d.id === 'slash1' && d.hit && a.t < d.hit.from && input.held('attack') && this.attackHeldFor > 0.28) {
       const hv = this.actionFor?.('heavy') ?? ACTIONS.heavy;
       const heavy = resolveAction(hv, !!hv.clip && this.char.has(hv.clip));
       this.startAction('heavy', heavy.chargeAt !== undefined ? heavy.chargeAt * heavy.dur * 0.6 : 0.3);
@@ -872,7 +888,7 @@ export class Player {
       if (main) main.localToWorld(from.set(0, main.userData.bladeTip ?? 0.5, 0));
       else from.copy(this.center).addScaledVector(this.forward, 0.6).setY(this.pos.y + 1.4);
       const target = this.lock?.alive ? this.lock : null;
-      const dir = target ? target.center.clone().sub(from).normalize() : this.forward;
+      const dir = target ? target.center.clone().sub(from).normalize() : this.aimDir.lengthSq() > 0.01 ? this.aimDir.clone().normalize() : this.forward;
       this.onSpell?.('fireball', from, dir, target);
     } else {
       const sp = this.equip.get(this.equip.activeSpell);
@@ -1007,6 +1023,12 @@ export class Player {
 
   private baseTravelAt(a: ActiveAction, t: number): number {
     const def = a.def;
+    if (def.roll) {
+      const end = def.dur * (def.roll.back ? 0.6 : 0.7);
+      const u = clamp((t - 0.02) / (end - 0.02), 0, 1);
+      return (1 - Math.pow(1 - u, 3)) * def.roll.dist;
+    }
+    if (def.move) return smoothstep(def.move.from, def.move.to, t) * def.move.dist;
     const info = a.usingClip ? this.char.clipInfo.get(def.clip!) : undefined;
     if (info?.rootCurve && info.rootCurve.length > 1) {
       const f = clamp(t, 0, (info.rootCurve.length - 1) / 30) * 30;
@@ -1014,13 +1036,6 @@ export class Player {
       const c = info.rootCurve;
       return c[i] + ((c[Math.min(i + 1, c.length - 1)] ?? c[i]) - c[i]) * u;
     }
-    if (def.roll) {
-      // Rolls: fast start, long glide out (ease-out cubic).
-      const t1 = def.dur * (def.roll.back ? 0.6 : 0.7);
-      const u = clamp((t - 0.02) / (t1 - 0.02), 0, 1);
-      return (1 - Math.pow(1 - u, 3)) * def.roll.dist;
-    }
-    if (def.move) return smoothstep(def.move.from, def.move.to, t) * def.move.dist;
     return 0;
   }
 
@@ -1062,7 +1077,7 @@ export class Player {
     const a = this.act;
     const intent = this.moveIntent;
     let targetSpeed = 0;
-    if (!a && intent.lengthSq() > 0) {
+    if (intent.lengthSq() > 0) {
       const ms = this.mountStats ?? { canter: 11.5, gallop: 15, accel: 8 };
       targetSpeed = this.mounted ? (this.sprinting && this.mountCanGallop ? ms.gallop : this.lock ? 6.2 : ms.canter) : (this.blocking || this.aiming ? 1.6 : this.sprinting ? 8.4 : this.walking ? WALK_SPEED : this.lock ? 3.2 : 4.2) * this.mods.moveSpeed;
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
@@ -1142,8 +1157,15 @@ export class Player {
       // carries its momentum into the first beat of the move.
       const keep = a.t < 0.22 * a.speed ? Math.exp(-10 * dt) : 0;
       hv.multiplyScalar(keep).addScaledVector(dir, v * (1 - keep));
+      const mobility = actionMobility(a.def, a.t);
+      if (mobility > 0 && this.grounded) {
+        const control = intent.clone();
+        if (a.def.hit && a.t <= a.def.hit.to) control.addScaledVector(dir, -control.dot(dir));
+        hv.addScaledVector(control, targetSpeed * mobility * (1 - keep));
+      }
     } else if (a) {
-      hv.multiplyScalar(Math.exp(-12 * dt));
+      const k = Math.exp(-12 * dt);
+      hv.multiplyScalar(k).addScaledVector(intent, targetSpeed * actionMobility(a.def, a.t) * (1 - k));
     } else if (!this.flying) {
       const onFoot = this.grounded && !this.mounted && !this.swimming;
       if (onFoot && !this.strafeMove) {
@@ -1173,10 +1195,12 @@ export class Player {
     if (steered) {
       // (steer() has turned the body already)
     } else if (a) {
-      if (a.def.roll && !a.def.roll.back) {
+      if (a.def.roll?.step) {
+        if (toLock !== null) this.turnToward(toLock, dt, 300);
+      } else if (a.def.roll && !a.def.roll.back) {
         this.turnToward(Math.atan2(a.rollDir!.x, a.rollDir!.z), dt, 500, 22);
-      } else if (a.t < a.def.track) {
-        const soft = a.def.hit ? this.aimTarget(4) : null;
+      } else if (a.t < Math.min(a.def.track, a.def.hit ? Math.max(0, a.def.hit.from - 0.08) : a.def.track) || (a.def.hit && a.t > a.def.hit.to && !a.def.air)) {
+        const soft = a.def.hit ? this.aimTarget(this.combatReach + 1.5) : null;
         const toSoft = soft ? Math.atan2(soft.position.x - this.pos.x, soft.position.z - this.pos.z) : null;
         const want = toLock ?? toSoft ?? (intent.lengthSq() > 0 ? Math.atan2(intent.x, intent.z) : this.yaw);
         this.turnToward(want, dt, 220);
@@ -1323,6 +1347,8 @@ export class Player {
     this.grounded = true;
     this.airTime = 0;
     this.landT = 1;
+    if (this.poses) { this.advancePose(0); this.poses.capture(true); }
+    this.bladePrev.main = this.bladePrev.off = null;
     this.onTeleport?.(p);
   }
   /** Moved by what you stand on (a ship's deck): keeps your velocity, unlike teleport. */
@@ -1340,9 +1366,29 @@ export class Player {
   onTeleport?: (p: THREE.Vector3) => void;
 
   // ==========================================================================
-  // Presentation (once per rendered frame)
+  // Fixed poses and interpolated presentation
   // ==========================================================================
-  present(alpha: number, dt: number) {
+  get combatReach() {
+    return familyOf(this.equip?.mainWeapon?.def)?.reach ?? 1.8;
+  }
+  get combatPhase() {
+    return this.act ? actionPhase(this.act.def, this.act.t, this.act.charging) : null;
+  }
+
+  present(alpha: number, _dt: number) {
+    this.poses?.draw(alpha);
+  }
+
+  private sampleCombatPose(dt: number) {
+    this.poses.restore();
+    this.advancePose(dt);
+    const a = this.act;
+    if (a?.def.hit) this.detectHits(a, a.t);
+    this.poses.capture();
+  }
+  /** Animation, IK and collision are evaluated once per fixed gameplay step. */
+  private advancePose(dt: number) {
+    const alpha = 1;
     const root = this.char.root;
     root.position.lerpVectors(this.prevPos, this.pos, alpha);
     // In the saddle: the rider sits on the horse's back.
@@ -1374,16 +1420,17 @@ export class Player {
 
     // Action time at this exact frame.
     const a = this.act;
-    const at = a ? Math.min(a.def.dur, a.t + (a.charging ? 0 : alpha * SIM_STEP * a.speed)) : 0;
+    const at = a ? Math.min(a.def.dur, a.t) : 0;
 
     // Local velocity for directional locomotion.
     const c = Math.cos(-yawR), s = Math.sin(-yawR);
     const local = { x: this.vel.x * c + this.vel.z * s, z: -this.vel.x * s + this.vel.z * c };
-    if (a || this.mounted || this.vehicle || this.flying || this.swimming) local.x = local.z = 0;
+    if ((a && actionMobility(a.def, a.t) < 0.15) || this.mounted || this.vehicle || this.flying || this.swimming) local.x = local.z = 0;
 
     // ---- clip layers ------------------------------------------------------
     const anim = this.anim;
-    const rolling = a?.def.roll && !a.def.roll.back;
+    anim.mobility = damp(anim.mobility, a?.def.hit ? Math.min(0.85, actionMobility(a.def, a.t) * 0.85) : 0, 20, dt);
+    const rolling = a?.def.roll && !a.def.roll.back && !a.def.roll.step;
     if (this.dead && anim.has('death')) anim.setFull('death', this.deadT, 0.15);
     else if (a?.usingClip) anim.setFull(a.def.clip!, at, a.blendIn ?? 0.12, 0.2);
     else if (rolling && anim.has('jump_air')) anim.setFull('jump_air', 0.42, 0.06, 0.18); // tucked ball for the roll
@@ -1530,6 +1577,7 @@ export class Player {
       vis.rotation.x = 0.95 * swim;
       vis.position.y = 0.7 * swim + Math.sin(this.idleClock * 3) * 0.025;
     }
+    vis.rotation.x += this.flightLean;
     vis.rotation.z += this.bank;
     if (fl) {
       vis.rotation.y += fl.spin;
@@ -1547,7 +1595,7 @@ export class Player {
     const plant = this.grounded && !this.dead && !rolling && !this.mounted && !this.vehicle && !this.swimming && !this.flying && !a?.def.air;
     this.footW = damp(this.footW, plant ? 1 : 0, plant ? 10 : 20, dt);
     // Pinned feet through attacks and casts, and while turning on the spot.
-    const lockWant = plant && ((a && !a.def.roll) || (!a && speed < 0.4)) ? 1 : 0;
+    const lockWant = plant && a && !a.def.roll ? 1 - actionMobility(a.def, a.t) : plant && !a && speed < 0.4 ? 1 : 0;
     this.footLock = damp(this.footLock, lockWant, lockWant ? 30 : 12, dt);
     if (this.footW > 0.01) {
       const reachDrop = (anim.stride - 1) * 0.12 + 0.1 * pivot;
@@ -1555,9 +1603,6 @@ export class Player {
     }
     if ((this.mounted && this.mountStats) || (this.vehicle && !this.vehicle.stand) || this.dismountFrom) this.ridePose(this.vehicle ? 1 : rideW);
 
-    // Blade hit detection against the pose we just drew.
-    if (a && at !== this.lastPresentT) this.detectHits(a, at);
-    this.lastPresentT = at;
   }
 
   /** Sit astride: thighs forward and apart, knees bent, feet in the stirrups. */
@@ -1640,6 +1685,7 @@ export class Player {
     const sweep = a.def.sweep ?? (fists ? { reach: 1.7, arc: 0.35 } : undefined);
     const fin = a.def.id === 'finisher';
     const seg = sweep ? null : this.bladeSegment(h.hand);
+    const bladeReach = seg ? Math.max(seg[0].distanceTo(this.center), seg[1].distanceTo(this.center)) : this.combatReach;
     const prev = this.bladePrev[h.hand];
     this.bladePrev[h.hand] = seg;
     // Hits are checked against the drawn pose. A slow frame can jump right over a fast blade's
@@ -1655,7 +1701,7 @@ export class Player {
     for (const tg of targets) {
       if (!tg.alive || a.hitSet.has(tg.id)) continue;
       if (fin && tg !== this.finTarget) continue;
-      if (tg.center.distanceTo(this.center) > (sweep ? sweep.reach + tg.radius + 0.5 : 3.6)) continue;
+      if (tg.center.distanceTo(this.center) > (sweep ? sweep.reach + tg.radius + 0.5 : Math.max(bladeReach, prev ? prev[1].distanceTo(this.center) : 0) + tg.radius + 0.18)) continue;
       if (!this.reachable(tg)) continue; // the blade stops at the wall
       let swept = false;
       if (fin) swept = true; // a finisher always lands on the one it's for
@@ -1749,7 +1795,7 @@ export class Player {
       // Perfect dodge: the blow meets the very start of the roll. Time slows and
       // the next blow is a counter.
       const a = this.act;
-      if (a?.def.iframes && !att.projectile && a !== this.perfectDodgeAct && a.t - a.def.iframes[0] <= PERFECT_DODGE * a.speed) {
+      if (a?.def.iframes && !att.projectile && a !== this.perfectDodgeAct && a.t - a.def.iframes[0] <= (a.def.roll?.step ? 0.07 : PERFECT_DODGE) * a.speed) {
         this.perfectDodgeAct = a;
         this.counterT = COUNTER_WINDOW;
         events.emit('perfectDodge', { at: this.center });
@@ -1885,6 +1931,14 @@ export class Player {
   }
 
   respawn(at: THREE.Vector3) {
+    this.buffer = null;
+    this.attackHeld = false;
+    this.attackHeldFor = 0;
+    this.inputLatency = 0;
+    this.poseFrom = null;
+    this.poseFade = 1;
+    this.lastPose = {};
+    this.flightLean = 0;
     this.dead = false;
     this.anim.stopAll();
     this.hp = this.maxHp;
@@ -1966,7 +2020,7 @@ export class Player {
     const it = this.equip.get(ref);
     if (!it || it.def.kind !== 'spell' || this.dead) return;
     this.equip.activeSpell = ref;
-    this.buffer = { a: 'cast', t: performance.now() / 1000, actT: this.act?.t ?? -1, actId: this.act?.def.id ?? null };
+    this.buffer = { a: 'cast', t: this.gameTime, actT: this.act?.t ?? -1, actId: this.act?.def.id ?? null };
   }
 
 
@@ -2026,7 +2080,8 @@ export class Player {
     this.poseFade = 1;
     this.prevPos.copy(this.pos);
     this.prevYaw = this.yaw;
-    for (let i = 0; i < 12; i++) this.present(1, 1 / 30); // let fades settle
+    for (let i = 0; i < 12; i++) this.advancePose(1 / 30); // debug sampling never deals damage
+    this.poses.capture(true);
   }
 }
 

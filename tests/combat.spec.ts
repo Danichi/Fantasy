@@ -184,7 +184,7 @@ test('strings: hold into the next cut for a branch, press late for the delayed c
   const res = await page.evaluate(async () => {
     const g = (window as any).__game, P = g.player;
     if (!P.equip.mainWeapon) P.equip.equip(P.equip.add('longsword').uid, 'main');
-    const now = () => performance.now() / 1000;
+    const now = () => P['gameTime'];
     const branchFrom = (id: string, held: number, late = false) => {
       P.act = null;
       P.stamina = P.maxStamina;
@@ -229,6 +229,7 @@ test('a bandit fights with the brain: it holds its distance, shows its tells and
     const { heightAt } = await import('/src/world/terrain.ts');
     const x = P.pos.x + 5, z = P.pos.z + 5;
     const b = new Bandit('sword', new T.Vector3(x, heightAt(x, z) + 0.3, z), g.r.scene, new Bolts(g.r.scene));
+    await b.ready;
     b.alerted = true;
     const tells: string[] = [];
     const off = (e: any) => e.target === b && tells.push(e.kind);

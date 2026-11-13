@@ -70,13 +70,14 @@ test('Sandbox is a maxed combat session with isolated saves, working targets and
   await page.locator('[data-setting="targetHp"]').dispatchEvent('change');
   await page.locator('[data-setting="scenario"]').selectOption('melee');
   await page.getByRole('button', { name: 'Resume · F6 / Esc' }).click();
-  const fight = await page.evaluate(() => {
+  const fight = await page.evaluate(async () => {
     const g = (window as any).__game,
-      s = g.sandbox,
-      T = g.THREE;
+      s = g.sandbox;
+    const { strike } = await import('/src/combat/core.ts' as string);
     const enemy = s.actors[0];
+    await enemy.ready;
     const hp = enemy.hp;
-    enemy.takeHit({ damage: 500, poise: 100, dir: new T.Vector3(0, 0, -1), at: enemy.center.clone(), crit: false, source: 'melee' });
+    strike(enemy, { base: 500, poise: 100, type: 'blunt', from: g.player.pos.clone(), at: enemy.center.clone(), source: 'melee', noCrit: true });
     g.stepSim(120);
     return {
       hp,

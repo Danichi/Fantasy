@@ -36,7 +36,7 @@ export interface ActionDef {
   track: number; // may turn toward target/input until this time
   iframes?: [number, number];
   parry?: [number, number];
-  roll?: { dist: number; back?: boolean };
+  roll?: { dist: number; back?: boolean; step?: boolean };
   event?: { at: number; name: string };
   /** further timed events (skills: each hit of a multi-hit technique, a projectile release...) */
   events?: { at: number; name: string }[];
@@ -231,35 +231,35 @@ export const ACTIONS: Record<string, ActionDef> = {
     id: 'slash1', dur: 0.95, stamina: 14, clip: 'attack_light_1', proc: slash1,
     hit: { from: 0.36, to: 0.52, dmg: 1, poise: 20, hand: 'main' },
     combo: { next: 'slash2', from: 0.5 }, cancel: 0.62,
-    move: { dist: 0.55, from: 0.28, to: 0.5 }, track: 0.32, weaponSpeed: true,
-    clipTiming: { dur: 1.5, hit: { from: 0.5, to: 0.72, dmg: 1, poise: 20, hand: 'main' }, combo: { next: 'slash2', from: 0.7 }, cancel: 0.82, track: 0.45, speed: 1.15 },
+    move: { dist: 0.95, from: 0.18, to: 0.5 }, track: 0.32, weaponSpeed: true,
+    clipTiming: { dur: 1.5, hit: { from: 0.5, to: 0.72, dmg: 1, poise: 20, hand: 'main' }, combo: { next: 'slash2', from: 0.7 }, cancel: 0.82, track: 0.42, speed: 1.3, move: { dist: 0.95, from: 0.2, to: 0.62 } },
   },
   slash2: {
     id: 'slash2', dur: 0.95, stamina: 14, clip: 'attack_light_2', proc: slash2,
     hit: { from: 0.36, to: 0.54, dmg: 1.05, poise: 20, hand: 'main' },
     combo: { next: 'slash3', from: 0.52 }, cancel: 0.64,
-    move: { dist: 0.5, from: 0.26, to: 0.5 }, track: 0.32, weaponSpeed: true,
-    clipTiming: { dur: 1.0, hit: { from: 0.34, to: 0.54, dmg: 1.05, poise: 20, hand: 'main' }, combo: { next: 'slash3', from: 0.55 }, cancel: 0.62, track: 0.3, speed: 1.1 },
+    move: { dist: 0.85, from: 0.12, to: 0.5 }, track: 0.32, weaponSpeed: true,
+    clipTiming: { dur: 1.0, hit: { from: 0.34, to: 0.54, dmg: 1.05, poise: 20, hand: 'main' }, combo: { next: 'slash3', from: 0.55 }, cancel: 0.62, track: 0.27, speed: 1.22, move: { dist: 0.85, from: 0.1, to: 0.46 } },
   },
   slash3: {
     id: 'slash3', dur: 1.15, stamina: 18, clip: 'attack_light_3', proc: slash3,
     hit: { from: 0.5, to: 0.66, dmg: 1.35, poise: 35, hand: 'main' },
     combo: { next: 'slash1', from: 0.78 }, cancel: 0.8,
-    move: { dist: 0.8, from: 0.4, to: 0.64 }, track: 0.42, weaponSpeed: true,
-    clipTiming: { dur: 1.54, hit: { from: 0.72, to: 0.95, dmg: 1.35, poise: 35, hand: 'main' }, combo: { next: 'slash1', from: 1.02 }, cancel: 1.08, track: 0.6, speed: 1.1 },
+    move: { dist: 1.2, from: 0.3, to: 0.64 }, track: 0.42, weaponSpeed: true,
+    clipTiming: { dur: 1.54, hit: { from: 0.72, to: 0.95, dmg: 1.35, poise: 35, hand: 'main' }, combo: { next: 'slash1', from: 1.02 }, cancel: 1.08, track: 0.6, speed: 1.22, move: { dist: 1.2, from: 0.35, to: 0.86 } },
   },
   heavy: {
     id: 'heavy', dur: 1.55, stamina: 28, clip: 'attack_heavy', proc: heavy,
     hit: { from: 0.94, to: 1.1, dmg: 2.3, poise: 70, hand: 'main' },
     cancel: 1.2, chargeAt: 0.5,
-    move: { dist: 1.1, from: 0.82, to: 1.05 }, track: 0.9, weaponSpeed: true,
-    clipTiming: { dur: 1.71, hit: { from: 0.55, to: 0.95, dmg: 2.3, poise: 70, hand: 'main' }, chargeAt: 0.26, cancel: 1.25, track: 0.5 },
+    move: { dist: 1.45, from: 0.72, to: 1.05 }, track: 0.9, weaponSpeed: true,
+    clipTiming: { dur: 1.71, hit: { from: 0.55, to: 0.95, dmg: 2.3, poise: 70, hand: 'main' }, chargeAt: 0.26, cancel: 1.15, track: 0.45, move: { dist: 1.45, from: 0.28, to: 0.8 } },
   },
   sprintAttack: {
     id: 'sprintAttack', dur: 1.15, stamina: 20, clip: 'attack_sprint', proc: slash3,
     hit: { from: 0.5, to: 0.66, dmg: 1.5, poise: 45, hand: 'main' },
-    cancel: 0.85, move: { dist: 2.4, from: 0.05, to: 0.6 }, track: 0.25, weaponSpeed: true,
-    clipTiming: { dur: 1.29, hit: { from: 0.45, to: 0.75, dmg: 1.5, poise: 45, hand: 'main' }, cancel: 0.95, track: 0.25 },
+    cancel: 0.85, move: { dist: 3.2, from: 0.05, to: 0.6 }, track: 0.25, weaponSpeed: true,
+    clipTiming: { dur: 1.29, hit: { from: 0.45, to: 0.75, dmg: 1.5, poise: 45, hand: 'main' }, cancel: 0.88, track: 0.25, move: { dist: 3.2, from: 0.08, to: 0.68 } },
   },
   airAttack: {
     id: 'airAttack', dur: 1.55, stamina: 16, clip: 'attack_plunge', proc: heavy, air: true, startAt: 0.75,
@@ -308,6 +308,11 @@ export const ACTIONS: Record<string, ActionDef> = {
     // press. Times here are clip seconds; you can act from 1.55 s, before
     // the get-up finishes.
     clipTiming: { dur: 2.33, speed: 1.9, startAt: 0.22, iframes: [0.26, 1.25], cancel: 1.55, track: 0.3 },
+  },
+  quickstep: {
+    id: 'quickstep', dur: 0.38, stamina: 18,
+    iframes: [0.045, 0.17], roll: { dist: 1.65, step: true }, cancel: 0.27, track: 0,
+    proc: (t) => ({ hipsDrop: Math.sin(t * Math.PI) * 0.1, spinePitch: -Math.sin(t * Math.PI) * 0.08 }),
   },
   backstep: {
     id: 'backstep', dur: 0.5, stamina: 22, clip: 'backstep',

@@ -412,12 +412,12 @@ export function buildOverlays(onStart: (origin: Origin | null) => void, initialO
   const controls = `
     <div class="controls">
       <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</span><span><kbd>Mouse</kbd> Look</span>
-      <span><kbd>Shift</kbd> Sprint · attack while sprinting to lunge</span><span><kbd>Z</kbd> Walk / run</span><span><kbd>Space</kbd> Dodge roll</span>
+      <span><kbd>Shift</kbd> Sprint · attack while sprinting to lunge</span><span><kbd>Z</kbd> Walk / run</span><span><kbd>Space</kbd> Quickstep when locked on · <kbd>Shift</kbd>+<kbd>Space</kbd> roll</span>
       <span><kbd>LMB</kbd> Attack · hold to charge a heavy (let go as it fills)</span><span><kbd>RMB</kbd> Block / off-hand attack · LMB while blocking: counter</span>
       <span>Hold <kbd>LMB</kbd> into a string's next cut to branch it · locked on, push a direction as you strike</span>
       <span><kbd>F</kbd> Parry (the last instant is a perfect parry)</span><span><kbd>G</kbd> Kick / shield bash: breaks guards</span>
       <span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on · wheel switches target</span><span>A broken or downed enemy: attack for a finisher</span>
-      <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell (needs lock-on)</span><span><kbd>V</kbd> Origin ability</span>
+      <span><kbd>C</kbd> Jump · attack in the air to plunge</span><span><kbd>R</kbd> Cast attuned spell · aim with the camera or lock on</span><span><kbd>V</kbd> Origin ability</span>
       <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to moves 1–6</span><span><kbd>I</kbd> Inventory · <kbd>K</kbd> Skills</span>
       <span><kbd>E</kbd> Interact (doors, chests, gates)</span><span><kbd>M</kbd> World map · draw the map in dungeons</span>
       <span><kbd>N</kbd> Seamanship · <kbd>B</kbd> hold for the spyglass</span><span>At a ship's helm: <kbd>A</kbd>/<kbd>D</kbd> steer · <kbd>W</kbd>/<kbd>S</kbd> sail · <kbd>L</kbd> lash the wheel</span>
