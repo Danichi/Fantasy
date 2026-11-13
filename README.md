@@ -147,3 +147,15 @@ Rest at the surface to recover stamina and breath. Use **E** at a boat or harbou
 ladder to climb out. Larger ships have walkable captain’s cabins. Voyage saves
 resume your helm, deck, boarding encounter or swim. See the
 [seafaring rebuild](docs/design/seafaring-rework.md) for the full systems and checks.
+
+## Combat Sandbox
+
+Choose **Enter Sandbox** from the pause menu to open a plain combat arena with
+its own saved character. Every combat class is level 50; select a style and magic
+school, bind moves, grant equipment, and configure stationary targets or attacking
+opponents. **F6** opens Sandbox controls, **F7** resets the fight, and **F9** shows
+combat hitboxes. Damage, DPS and perfect defence counters appear while practicing.
+
+Sandbox equipment, progression and rules save separately from your adventure.
+**Save Sandbox & return to adventure** resumes the adventure where you left it.
+See [Sandbox combat lab](docs/design/sandbox.md) for controls and save details.

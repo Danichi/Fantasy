@@ -147,6 +147,19 @@ export class Spells {
     };
   }
 
+  /** Cancel live practice shots without exploding them onto fresh targets. */
+  clearProjectiles() {
+    for (const b of this.balls) {
+      this.scene.remove(b.group);
+      this.lights.release(b.light);
+      b.group.traverse((o) => {
+        if (o instanceof THREE.Mesh) o.geometry.dispose();
+        if (o instanceof THREE.Sprite && o.material !== this.glowMat) o.material.dispose();
+      });
+    }
+    this.balls = [];
+  }
+
   castFireball(from: THREE.Vector3, dir: THREE.Vector3, target: Target | null, damage?: number, scale = 1, splash = 2.6, hooks?: FireballHooks) {
     const group = new THREE.Group();
     const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 3), this.fireMat);

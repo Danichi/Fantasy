@@ -1,3 +1,7 @@
+import { SANDBOX_MODE, RETURNING_FROM_SANDBOX, travelToSandbox } from './sandbox/mode';
+import { SandboxArena } from './sandbox/arena';
+import { sandboxBuild, starterSandboxGear } from './sandbox/hero';
+import { readSandboxSettings } from './sandbox/settings';
 import { PortLife } from './world/port/life';
 import { migrateAurelle } from './world/port/migration';
 import { PORT_REVISION } from './world/portCity';
@@ -267,6 +271,7 @@ async function boot() {
   mark('terrain');
 
   const player = new Player();
+  let sandbox: SandboxArena | null = null;
   // ---- Origins (feat/origins): build the saved hero's look from the start ----
   prepareHero(player, TEST_MODE && !location.search.includes('save') ? null : loadSave());
   const spawn = new THREE.Vector3(0, heightAt(0, 10), 10);
@@ -289,6 +294,12 @@ async function boot() {
     player.hp = player.maxHp;
     player.stamina = player.maxStamina;
     player.mana = player.maxMana;
+  }
+
+  if (SANDBOX_MODE) {
+    const config = readSandboxSettings();
+    starterSandboxGear(player);
+    sandboxBuild(player, config.combat, config.magic, !!saveData);
   }
 
   const fx = new FX(r.scene, heightAt);
@@ -1475,6 +1486,7 @@ async function boot() {
     for (const u of sanctum.adds) u.update(dt, player, sanctum.adds);
   };
   realm.onInterior = (it) => {
+    if (it.kind === 'sandbox') return [];
     const extras: Interactable[] = [];
     portLife.interior(it,extras);
     if(it.kind==='cabin') {
@@ -2444,7 +2456,7 @@ async function boot() {
   };
   // A new save isn't written until its hero is made, so leaving the title for
   // another slot doesn't leave this one holding a hero nobody created.
-  let heroMade = !!saveData || TEST_MODE;
+  let heroMade = !!saveData || TEST_MODE || SANDBOX_MODE;
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
     if (!heroMade) return;
@@ -2461,7 +2473,7 @@ async function boot() {
   realm.onSave = save;
   microDiscoveries.onSave = save;
   // A new game starts the story (after save exists: starting a quest autosaves).
-  mainQuest.begin();
+  if (!SANDBOX_MODE) mainQuest.begin();
   town.guild.onSave = save;
   town.guild.onToggle = (open) => {
     input.uiMode = open || inv.open || mapUI.open || dialogue.open;
@@ -2478,7 +2490,7 @@ async function boot() {
     else input.requestLock();
   };
   inv.onQuickDrop = (slot, uid) => hud.onSlotDrop?.('items', slot, uid);
-  let started = TEST_MODE;
+  let started = TEST_MODE || SANDBOX_MODE;
   // Paused only when the player releases the mouse with Esc; the pause
   // overlay is always visible while paused, so the game never freezes silently.
   let pausedByUser = false;
@@ -2500,7 +2512,7 @@ async function boot() {
     started = true;
     heroMade = true;
     // (A new game always begins in the wheat: the story starts there.)
-    if (!arrived && saveData && !TEST_MODE && loadInto() === 'ghagrabba' && realm.mode === 'overworld' && !realm.interior) {
+    if (!arrived && !RETURNING_FROM_SANDBOX && saveData && !TEST_MODE && loadInto() === 'ghagrabba' && realm.mode === 'overworld' && !realm.interior) {
       const [gx, gz] = EAST_GATE;
       const at = new THREE.Vector3(gx + 6, heightAt(gx + 6, gz) + 0.5, gz);
       if (player.mounted) horses.dismount();
@@ -2526,7 +2538,21 @@ async function boot() {
     },
   });
   input.onLockFailed = () => hud.toast('Mouse not captured: click the game to capture it');
-  if (TEST_MODE) overlays.start.classList.add('hidden');
+  if (TEST_MODE || SANDBOX_MODE) overlays.start.classList.add('hidden');
+  if (SANDBOX_MODE) overlays.lockOrigin();
+  overlays.addPauseAction(SANDBOX_MODE ? 'Sandbox controls' : 'Enter Sandbox', () => {
+    if (SANDBOX_MODE) sandbox?.openControls();
+    else {
+      save();
+      travelToSandbox(true);
+    }
+  });
+  if (SANDBOX_MODE)
+    overlays.addPauseAction('Save Sandbox & return to adventure', () => {
+      save();
+      travelToSandbox(false);
+    });
+
   {
     const row = overlays.start.querySelector('.desk-row');
     const b = document.createElement('button');
@@ -2594,10 +2620,10 @@ async function boot() {
     if (!open) save();
   };
   const pause = () => {
-    if (!started || TEST_MODE || inv.open || skills.open) return;
+    if (!started || (TEST_MODE && !SANDBOX_MODE) || inv.open || skills.open) return;
     pausedByUser = true;
     const day = time.label.split(', ');
-    overlays.showPaused(true, `<span><b>REGION</b>${regionName}</span><span><b>${day[0] ?? 'DAY'}</b>${day[1] ?? ''}</span><span><b>LEVEL</b>${player.prog.level}</span><span><b>GOLD</b>${player.prog.gold.toLocaleString()}</span>`);
+    overlays.showPaused(true, `<span><b>REGION</b>${SANDBOX_MODE ? 'Sandbox' : regionName}</span><span><b>${day[0] ?? 'DAY'}</b>${day[1] ?? ''}</span><span><b>LEVEL</b>${player.prog.level}</span><span><b>GOLD</b>${player.prog.gold.toLocaleString()}</span>`);
   };
   // The save as it was at boot: a fresh game autosaves while booting (the main
   // quest begins), and that must not hide the character creator.
@@ -2607,7 +2633,7 @@ async function boot() {
     cta.textContent = 'CLICK TO CONTINUE';
   }
   // Save slots: pick whose game this is, name a save, or start a new one.
-  if (!TEST_MODE) {
+  if (!TEST_MODE && !SANDBOX_MODE) {
     const picker = buildSavePicker(overlays.start.querySelector('.title-card')!);
     overlays.start.querySelector('.cta')!.after(picker.el);
   }
@@ -2658,6 +2684,7 @@ async function boot() {
   };
 
   events.on('playerDied', () => {
+    if (SANDBOX_MODE) return;
     story.playerFell(); // a story fight you fell in waits for you to come back
     setTimeout(async () => {
       // Dying in the Sanctum Below puts you back up the stair.
@@ -2708,6 +2735,7 @@ async function boot() {
   /** One fixed simulation step (tests can also drive it directly: __game.stepSim). */
   const simStep = () => {
     simSteps++;
+    sandbox?.update(STEP);
     if (input.wasPressed('inventory')) inv.toggle();
     if (input.wasPressed('skills')) skills.toggle();
     if (input.pressedKey('KeyN')) seaPanel.toggle();
@@ -2796,6 +2824,44 @@ async function boot() {
     physics.step(STEP);
     input.endStep();
   };
+  if (SANDBOX_MODE) {
+    const door: Door = {
+      pos: new THREE.Vector3(0, 0, 10),
+      yaw: Math.PI,
+      kind: 'sandbox',
+      name: 'Sandbox',
+      spec: { w: 52, d: 52, floors: 1, roof: 'tile', seed: 5301 },
+    };
+    await realm.enterInterior(door, 'sandbox', world.mats);
+    cam.distance = 5.5;
+    cam.snapTo(player.pos);
+    sandbox = new SandboxArena(r.scene, player, skillRt, realm.interior!, cam, input, {
+      clearEffects: () => {
+        skillRt.clearPracticeEffects();
+        spells.clearProjectiles();
+        arms.ranged.clear();
+        specials.allies.clear();
+      },
+      save,
+      debug: () => combatDebug.toggle(),
+      leave: () => {
+        save();
+        travelToSandbox(false);
+      },
+      toggle: (open) => {
+        paused = open;
+        input.uiMode = open || inv.open || skills.open || dialogue.open;
+        if (open) {
+          pausedByUser = false;
+          overlays.start.classList.add('hidden');
+          input.exitLock();
+        } else input.requestLock();
+      },
+    });
+    hud.setMode('moves');
+  }
+  if (RETURNING_FROM_SANDBOX && saveData) overlays.start.click();
+
   const perf = { sim: 0, render: 0, frame: 0 };
   let wasInGhagrabba = false;
   const frame = (now: number) => {
@@ -2816,7 +2882,7 @@ async function boot() {
     music.setZone(realm.mode === 'dungeon' || gravewood.trapped ? 'crypt' : 'village');
     music.update(dt);
     // Pause the world while the title/pause overlay is up (never in tests).
-    const overlayUp = !TEST_MODE && (!started || pausedByUser);
+    const overlayUp = (!TEST_MODE || SANDBOX_MODE) && (!started || pausedByUser);
     // Hit-stop is a brief slow-motion rather than a hard freeze.
     const timeScale = hitStop > 0 ? 0.1 : slowT > 0 ? slowScale : 1;
     hitStop = Math.max(0, hitStop - dt);
@@ -2866,7 +2932,7 @@ async function boot() {
     // Sea simulation advances on the fixed step; rendering reads the same clock.
     ocean.update(dt, r.camera.position);
     // Time of day and weather drive the sky, light, water, grass and sound.
-    const worldRunning = !(paused || overlayUp || mapUI.open || worldMap.open || questUI.open);
+    const worldRunning = !SANDBOX_MODE && !(paused || overlayUp || mapUI.open || worldMap.open || questUI.open);
     if (worldRunning) time.update(dt);
     const here = realm.mode === 'dungeon' ? 'cresha' : realm.interior ? regionAt(realm.interior.door.pos.x, realm.interior.door.pos.z) : regionAt(player.pos.x, player.pos.z);
     weather.update(worldRunning ? dt : 0, here === 'ocean' ? 'portAurelle' : here);
@@ -3094,7 +3160,7 @@ async function boot() {
       THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
-      yard, combatDebug, // combat rework: the drill yard and the F9 overlay
+      sandbox, overlays, yard, combatDebug, // combat rework: the drill yard and the F9 overlay
       bestiary, bestiaryUI, reagentDrops, // the Wardens' Bestiary; kill loot on the ground
       lanterns, festivals, almanac, folkServices, // the Lost Lanterns; the calendar's festivals; the Almanac; townsfolk's services
       ghLife, outcast, ghSide, scrapTowns,

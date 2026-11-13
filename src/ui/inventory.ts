@@ -488,8 +488,23 @@ export function buildOverlays(onStart: (origin: Origin | null) => void, initialO
     creator: undefined as ((begin: () => void) => void) | undefined,
     start,
     help,
+    addPauseAction(label: string, run: () => void) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.dataset.pauseAction = '';
+      b.hidden = true;
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        run();
+      });
+      row.append(b);
+      return b;
+    },
+
     showPaused(show: boolean, status = '') {
       start.classList.toggle('paused', show);
+      row.querySelectorAll<HTMLButtonElement>('[data-pause-action]').forEach((b) => (b.hidden = !show));
       start.querySelector('.pause-status')!.innerHTML = status;
       const title = start.querySelector('h1')!;
       const sub = start.querySelector('.sub')!;

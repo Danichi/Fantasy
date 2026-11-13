@@ -1,3 +1,4 @@
+import { SANDBOX_MODE, SANDBOX_SAVE_KEY } from './sandbox/mode';
 import type { Player } from './player/player';
 import type { Slot } from './items/itemDefs';
 import { ITEMS } from './items/itemDefs';
@@ -15,8 +16,8 @@ import type { PathsSave } from './paths/paths';
 // the whole game state lives here: progression, inventory, loadout, dungeon
 // progress and every map you've drawn.
 
-const KEY = 'fantasy-rpg-save-v6';
-const LEGACY_KEYS = ['fantasy-rpg-save-v5', 'fantasy-rpg-save-v4', 'fantasy-rpg-save-v3', 'fantasy-rpg-save-v2', 'fantasy-rpg-save-v1'];
+const KEY = SANDBOX_MODE ? SANDBOX_SAVE_KEY : 'fantasy-rpg-save-v6';
+const LEGACY_KEYS = SANDBOX_MODE ? [] : ['fantasy-rpg-save-v5', 'fantasy-rpg-save-v4', 'fantasy-rpg-save-v3', 'fantasy-rpg-save-v2', 'fantasy-rpg-save-v1'];
 
 /** World state (v6): exploration, flags and time; later phases add horses, ships, factions. */
 export interface WorldSave {
@@ -118,7 +119,7 @@ function writeIndex(ix: SlotIndex) {
 }
 
 /** The slot this boot loaded. Saves always go here, even after another slot is picked for the next boot. */
-const CURRENT = readIndex().active;
+const CURRENT = SANDBOX_MODE ? '1' : readIndex().active;
 
 export function currentSlot() {
   return CURRENT;
@@ -267,6 +268,7 @@ export function writeSave(player: Player, seed: number, maps: Record<string, Map
   try {
     localStorage.setItem(keyOf(CURRENT), JSON.stringify(data));
   } catch {}
+  if (SANDBOX_MODE) return;
   // The slot list shows when each hero was last played (a minute is close enough).
   const ix = readIndex();
   const s = ix.slots.find((x) => x.id === CURRENT);

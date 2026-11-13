@@ -199,7 +199,10 @@ export class Interior {
     const sm = sharedMats();
     this.cloth = sm.cloth;
     this.windowMat = sm.window;
-    if (kind === 'sanctum') {
+    if (kind === 'sandbox') {
+      this.sandboxFloor();
+      this.spawn = this.at(0, 8);
+    } else if (kind === 'sanctum') {
       this.sanctum();
       this.spawn = this.at(0, this.D / 2 - 2.5);
     } else if (kind === 'palace') {
@@ -220,7 +223,7 @@ export class Interior {
       this.spawn = this.at(0, this.D / 2 - 1.1);
       this.furnish();
     }
-    this.lightUp();
+    if (kind !== 'sandbox') this.lightUp();
     // The way out is always first so doorway interactions remain reliable even when
     // a furnished room has nearby inspection hotspots.
     const exit = kind === 'undercity' ? this.at(0, this.D / 2 - 4.2) : this.at(0, this.D / 2 - 0.5);
@@ -261,6 +264,33 @@ export class Interior {
     this.group.add(mesh);
     if (collide) this.colliders.push(physics.addCylinder(this.at(x, z, y), h / 2, r));
     return mesh;
+  }
+
+  /** A plain combat laboratory: flat dark ground, a grid and low boundary walls. */
+  private sandboxFloor() {
+    const black = new THREE.MeshStandardMaterial({ color: 0x101317, roughness: 1 }),
+      edge = new THREE.MeshStandardMaterial({ color: 0x303a45, roughness: 1 });
+    this.box(black, this.W, 0.3, this.D, 0, -0.15, 0, 0, true);
+    for (const side of [-1, 1]) {
+      this.box(edge, 0.4, 2, this.D, (side * this.W) / 2, 1, 0, 0, true);
+      this.box(edge, this.W, 2, 0.4, 0, 1, (side * this.D) / 2, 0, true);
+    }
+    const points: THREE.Vector3[] = [];
+    for (let k = -24; k <= 24; k += 4) {
+      points.push(
+        new THREE.Vector3(k, 0.012, -24),
+        new THREE.Vector3(k, 0.012, 24),
+        new THREE.Vector3(-24, 0.012, k),
+        new THREE.Vector3(24, 0.012, k),
+      );
+    }
+    this.group.add(
+      new THREE.LineSegments(
+        new THREE.BufferGeometry().setFromPoints(points),
+        new THREE.LineBasicMaterial({ color: 0x39434e, transparent: true, opacity: 0.5 }),
+      ),
+      new THREE.HemisphereLight(0xcfe4ff, 0x343434, 2.5),
+    );
   }
 
   private shell() {

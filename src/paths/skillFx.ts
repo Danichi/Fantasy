@@ -657,6 +657,32 @@ export class SkillFx {
     return out;
   }
 
+  /** Remove practice effects without running impact or zone callbacks. */
+  clear() {
+    for (const p of this.projs) {
+      this.scene.remove(p.mesh);
+      p.mesh.traverse((o) => {
+        const m = (o as THREE.Mesh).material;
+        if (m && !Array.isArray(m)) m.dispose();
+      });
+      const paint = p.mesh.userData.paint as THREE.Mesh | undefined;
+      if (paint) {
+        this.scene.remove(paint);
+        if (!Array.isArray(paint.material)) paint.material.dispose();
+      }
+    }
+    for (const t of this.timed) {
+      this.scene.remove(t.obj);
+      t.obj.traverse((o) => {
+        const m = (o as THREE.Mesh).material;
+        if (m && !Array.isArray(m)) m.dispose();
+      });
+    }
+    this.projs = [];
+    this.timed = [];
+    this.zones = [];
+  }
+
   update(dt: number) {
     this.circles.update(dt);
     this.decals.update(dt);

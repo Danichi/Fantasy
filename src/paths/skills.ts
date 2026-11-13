@@ -204,6 +204,19 @@ export class SkillRuntime {
     this.recompute();
   }
 
+  /** Cancel practice effects and pending attacks before starting a new fight. */
+  clearPracticeEffects() {
+    this.timers = [];
+    this.pending = null;
+    this.vfx.clear();
+    this.reset();
+  }
+  /** Keep buffs and active moves while refreshing their cooldowns. */
+  clearCooldowns() {
+    this.cds.clear();
+    this.uses.clear();
+  }
+
   // ---- lookups -----------------------------------------------------------------------
   get paths() {
     return this.player.paths;
