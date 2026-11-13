@@ -12,6 +12,8 @@ import { setGroundOverride, heightAt } from '../world/terrain';
 import { Q } from '../core/settings';
 import { emptyMap, type DungeonMapUI, type MapData } from '../ui/dungeonMap';
 import { ITEMS } from '../items/itemDefs';
+import { PLAN_DUNGEONS, DELVER_NOTES } from '../items/mapItems';
+import { planLayer, findsFor, type PlanSource } from './plans';
 import type { Renderer } from '../render/renderer';
 import type { Player } from '../player/player';
 import type { ThirdPersonCamera } from '../player/camera';
@@ -80,6 +82,113 @@ export class Realm {
   readonly overworldInteractables: Interactable[] = [];
   onSave?: () => void;
 
+  // ---- plans and delvers' notes (dungeon/plans.ts; main wires these) ----
+  /** you've read this plan piece (discovery.pieces) */
+  planRead: (id: string) => boolean = () => false;
+  /** where a find was picked up ('mapKey|i|j'), or undefined if it's still lying there */
+  findTaken: (id: string) => string | undefined = () => undefined;
+  onFindTaken: (id: string, spot: string) => void = () => {};
+  /** things lying about on this floor: plan pieces and delvers' notes */
+  private finds: Interactable[] = [];
+  private findGroup = new THREE.Group();
+  private findMat = new THREE.MeshStandardMaterial({ color: 0xe6d6b0, roughness: 0.9, emissive: 0x6a4a18, emissiveIntensity: 0.35, side: THREE.DoubleSide });
+  private findGeo = new THREE.PlaneGeometry(0.5, 0.38);
+  /** the map key of the floor you're on */
+  private curKey = '';
+
+  /** The plan pieces you've read, over this floor's map. */
+  refreshPlan() {
+    const d = this.active;
+    const info = d ? PLAN_DUNGEONS[d] : undefined;
+    this.mapUI.eye = !!this.perks.automap;
+    if (!d || !info) return this.mapUI.setPlan(null);
+    let src: PlanSource | null = null;
+    const guild = this.planRead('guildPlan_' + d);
+    if (d === 'mine') src = this.mineInstance?.planSource() ?? null;
+    else src = this.instance?.planSource(guild) ?? null;
+    if (!src) return this.mapUI.setPlan(null);
+    this.mapUI.setPlan(planLayer(src, info.pieces, (n) => this.planRead(`floorPlan_${d}_${n}`), guild, `${d}:${this.floor}`));
+  }
+
+  private clearFinds() {
+    this.finds = [];
+    for (const c of [...this.findGroup.children]) this.findGroup.remove(c);
+    this.findGroup.removeFromParent();
+  }
+
+  /** Lay this floor's plan pieces and notes where they were dropped. */
+  private placeFinds() {
+    this.clearFinds();
+    const d = this.active;
+    const info = d ? PLAN_DUNGEONS[d] : undefined;
+    if (!d || !info) return;
+    const notes = DELVER_NOTES.map((n, k) => (n.dungeon === d ? k : -1)).filter((k) => k >= 0);
+    const floors = d === 'mine' ? 1 : (this.kit?.plans.length ?? 1);
+    const ids = findsFor(d, floors, this.floor, info.pieces, notes);
+    if (!ids.length) return;
+    let spots: { pos: THREE.Vector3; cell: [number, number] }[] = [];
+    if (d === 'mine' && this.mineInstance) {
+      const mi = this.mineInstance;
+      spots = mi.findSpots().map((p) => ({ pos: p, cell: mi.cellAt(p) }));
+    } else if (this.instance) {
+      const inst = this.instance;
+      spots = inst.findCells(ids.length, `${d}:${this.floor}`).map(([i, j]) => {
+        const p = inst.cellCenter(i, j);
+        p.y = inst.groundAt(p.x, p.z) ?? p.y;
+        return { pos: p, cell: [i, j] as [number, number] };
+      });
+    }
+    ids.forEach((id, k) => {
+      const s = spots[k];
+      if (!s || this.findTaken(id) || !ITEMS[id]) return;
+      const m = new THREE.Mesh(this.findGeo, this.findMat);
+      m.rotation.x = -Math.PI / 2;
+      m.rotation.z = k * 1.3;
+      m.position.copy(s.pos).add(new THREE.Vector3(0.4, 0.04, 0.3));
+      this.findGroup.add(m);
+      const it: Interactable = {
+        pos: m.position.clone(),
+        radius: 1.8,
+        label: () => (id.startsWith('delverNote_') ? 'Pick up the grimy page' : 'Pick up the torn plan'),
+        enabled: () => !this.findTaken(id),
+        action: () => {
+          this.player.equip.add(id);
+          this.hud.markHotbarDirty();
+          this.onFindTaken(id, `${this.curKey}|${s.cell[0]}|${s.cell[1]}`);
+          this.findGroup.remove(m);
+          this.finds = this.finds.filter((f) => f !== it);
+          this.hud.toast(`Found: ${ITEMS[id].name}. Read it from your bags.`);
+          this.onSave?.();
+        },
+      };
+      this.finds.push(it);
+    });
+    if (this.findGroup.children.length) this.r.scene.add(this.findGroup);
+  }
+
+  /** A plan piece or a delver's note was read from the bags. */
+  readMapItem(id: string) {
+    if (id.startsWith('delverNote_')) {
+      const text = DELVER_NOTES[Number(id.slice('delverNote_'.length))]?.text ?? '';
+      const spot = this.findTaken(id);
+      if (spot) {
+        const [key, i, j] = spot.split('|');
+        const map = this.maps[key];
+        if (map && !map.notes.some((n) => n.i === +i && n.j === +j)) {
+          const short = text.length > 46 ? text.slice(0, 44).replace(/\s+\S*$/, '') + '…' : text;
+          map.notes.push({ i: +i, j: +j, t: short });
+        }
+      }
+      this.hud.toast(spot ? `“${text}” You pin it on your map where you found it.` : `“${text}”`);
+    } else {
+      this.refreshPlan();
+      const d = id.startsWith('guildPlan_') ? id.slice('guildPlan_'.length) : id.split('_')[1];
+      const here = this.mode === 'dungeon' && this.active === d;
+      this.hud.toast(here ? 'You lay the plan over your map. Brown ink: the builders\' lines. Trust them, mostly.' : `You'll see it over your map of ${PLAN_DUNGEONS[d]?.name ?? 'that place'} when you're there.`);
+    }
+    this.onSave?.();
+  }
+
   constructor(
     private r: Renderer,
     private player: Player,
@@ -110,8 +219,8 @@ export class Realm {
 
   get interactables() {
     if (this.mode === 'interior' && this.interior) return [...this.interior.interactables, ...this.interiorExtras];
-    if (this.mode === 'dungeon' && this.active === 'mine' && this.mineInstance) return this.mineInstance.interactables;
-    if (this.mode === 'dungeon' && this.instance) return this.instance.interactables;
+    if (this.mode === 'dungeon' && this.active === 'mine' && this.mineInstance) return this.finds.length ? [...this.mineInstance.interactables, ...this.finds] : this.mineInstance.interactables;
+    if (this.mode === 'dungeon' && this.instance) return this.finds.length ? [...this.instance.interactables, ...this.finds] : this.instance.interactables;
     return this.overworldInteractables;
   }
 
@@ -222,6 +331,9 @@ export class Realm {
     this.maps[key] ??= emptyMap(fg.w, fg.h);
     this.mapUI.setFloor(this.maps[key], fg.plan.name);
     this.mapUI.setAuto(null);
+    this.curKey = key;
+    this.refreshPlan();
+    this.placeFinds();
     this.autoT = 0;
     const p = at === 'stairs' ? this.instance.stairsPoint : this.instance.spawnPoint;
     this.player.teleport(p.clone().setY(p.y + 0.3));
@@ -373,6 +485,10 @@ export class Realm {
     await this.mineInstance.ready;
     this.maps['mine:1'] ??= this.mineInstance.map;
     this.mapUI.setFloor(this.maps['mine:1'], "KING'S ROAD MINE");
+    this.floor = 1;
+    this.curKey = 'mine:1';
+    this.refreshPlan();
+    this.placeFinds();
     this.player.teleport(this.mineInstance.spawnPoint.clone());
     this.player.yaw = this.mineInstance.entranceYaw;
     this.player.lock = null;
@@ -401,6 +517,8 @@ export class Realm {
     this.active = null;
     this.kit = null;
     this.mapUI.setAuto(null);
+    this.mapUI.setPlan(null);
+    this.clearFinds();
     this.mapUI.setFloor(null);
     this.overworld.hide(false);
     this.overworld.enemiesEnabled(true);

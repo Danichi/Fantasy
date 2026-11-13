@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { MAP_ICON_ALIAS } from '../items/mapItems';
 import { ITEMS, buildItemModel, type ItemDef } from '../items/itemDefs';
 import { isWeaponKind } from '../items/weapons/kinds';
 import { artFor } from './art/registry';
@@ -502,6 +503,12 @@ export async function loadBakedIcons() {
     for (const id of m.square) {
       baked.square.add(id);
       cache.set(id, `${BAKED_DIR}${id}.${ext}?v=${m.v}`);
+    }
+    // Items that share one painting (a region's map pieces, the treasure maps).
+    for (const [id, file] of Object.entries(MAP_ICON_ALIAS)) {
+      if (!baked.square.has(file)) continue;
+      baked.square.add(id);
+      cache.set(id, `${BAKED_DIR}${file}.${ext}?v=${m.v}`);
     }
     for (const id of m.wide) {
       baked.wide.add(id);

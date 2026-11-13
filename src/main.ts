@@ -148,6 +148,7 @@ import { NpcManager } from './npc/npcManager';
 import { elderGlenFolk } from './npc/elderGlenFolk';
 import { REGIONS } from './world/regionDefinitions';
 import { Discovery } from './world/discovery';
+import { Cartography } from './world/cartography';
 import { WorldMapUI } from './ui/worldMap';
 import { PerfOverlay } from './ui/perfOverlay';
 import { regionAt, reliefAt, RELIEF } from './world/worldMap';
@@ -359,6 +360,8 @@ async function boot() {
   const stylizedNature = new StylizedNature(r.scene, r.renderer, world.village);
   // Sites (world/sites/): the points of interest across Cresha, placed clear of everything above.
   let lanternSpots: LanternSpot[] = [];
+  /** where map caches and treasure must not go (world/cartography.ts) */
+  let cartoAvoid: [number, number, number][] = [];
   let almanac: Almanac | null = null;
   const fairAt = new THREE.Vector3();
   const sites = new Sites({
@@ -406,6 +409,7 @@ async function boot() {
     // The Lost Lanterns (world/lostLanterns.ts): placed clear of the same things, and of the sites themselves.
     const t0 = performance.now();
     lanternSpots = placeLanterns({ avoid: [...avoid, ...sites.clearings], sites: sites.sites });
+    cartoAvoid = [...avoid, ...sites.clearings, ...lanternSpots.map((l) => [l.x, l.z, 4] as [number, number, number])];
     // The Harvest Fair's ground: the nearest open, level field at the Glen's edge.
     {
       const keep = [...avoid, ...sites.clearings, ...lanternSpots.map((l) => [l.x, l.z, 3] as [number, number, number])];
@@ -1172,15 +1176,21 @@ async function boot() {
     ...mentorOptions(player.paths, { id: 'archmage' }, (t) => show(t, [{ label: 'Go on.', run: back }]), (m) => hud.toast(m), trials),
   ]);
   folkServices.set('cartographer', (show) => [{
-    label: 'Buy a map of the Crown lands \u2014 40g',
+    label: 'Look at her maps and charts',
     run: () => {
-      if (player.prog.gold < 40) return show('Forty gold, I\u2019m afraid. Surveyors don\u2019t walk for free.', [{ label: 'Farewell.', run: () => dialogue.close() }]);
-      player.prog.addGold(-40);
-      for (const id of ['royalCapital', 'cresha', 'elderGlen']) discovery.revealRegion(id);
-      worldMap.markFogDirty();
-      save();
-      show('There: the Crown lands, from the Kingsbridge to the coast. Mind the parts marked \u201chere be wolves\u201d. They mean it.', [{ label: 'Thank you.', run: () => dialogue.close() }]);
+      town.showShop('Ysolde Penwright', 'Royal Cartographer', 'One piece of every region\'s map I hold myself; the rest are out there, in satchels and cairns and the hoards of things best left alone. Old charts for those who don\'t mind a little history. Survey sheets for those who walk.', carto.shopStock());
     },
+  }, {
+    label: 'Show her your Full Charts',
+    run: () => {
+      const r = carto.showCharts();
+      if (!r.n) return show('A Full Chart is every piece of a region, put together. Bring me one and I\'ll copy it for the Crown, and pay you for the loan. Three hundred a chart.', [{ label: 'I\'ll find them.', run: () => dialogue.close() }]);
+      save();
+      show(`She spreads them out, measures, copies, and counts out ${r.paid} gold. "${r.n > 1 ? 'Beautiful work, all of it.' : 'Beautiful work.'} The Crown thanks you."`, [{ label: 'Thank you.', run: () => dialogue.close() }]);
+    },
+  }, {
+    label: 'Ask about map pieces',
+    run: () => show('"Every region\'s map was torn up and scattered after the Fall: surveyors died with them in their satchels, and the beasts took the rest. I keep one piece of each. Read a piece and its land goes onto your map in ink; walk somewhere without one and all you\'ll have is your own pencil sketch. Climb high, and you\'ll sketch further. The guild halls keep rumour maps, too, but they won\'t put anything on yours: copy it yourself, or pay their clerk."', [{ label: 'Thank you.', run: () => dialogue.close() }]),
   }]);
   folkServices.set('ferrywoman', (show, back) => [...sailing.ferryOptions(show, back), ...sailing.tradeOptions('crownQuay', show, back), ...sailing.harbourOptions(show, back, 'crownQuay').filter((o) => /Guild|Deliver/.test(o.label)), {
     label: 'Buy a fishing rod \u2014 25g',
@@ -1633,7 +1643,10 @@ async function boot() {
     const m = ids.find((id) => DISC[id]?.fam === 'magic' && player.paths.learned(id));
     return m ? DISC[m].name : null;
   };
-  town.guild.huntMarks = () => bosses.markers();
+  town.guild.huntMarks = () => carto.huntMarks();
+  town.guild.openWall = (hall, name) => { town.guild.close(); carto.openWall(hall, name); };
+  town.guild.reportFinds = () => carto.reportFinds();
+  town.guild.unreported = () => carto.unreported();
   town.guild.onTrophies = (ids) => world.guildHall.setTrophies(ids);
   world.guildHall.setTrophies(town.guild.trophyIds);
   shopUI.discount = () => town.guild.discount;
@@ -1787,7 +1800,8 @@ async function boot() {
   }
   // Exploration: fog of war, regions and places (saved), the world map and minimap.
   const discovery = new Discovery();
-  if (saveData) discovery.fromJSON(saveData.world?.discovery);
+  if (saveData?.world?.discovery) discovery.fromJSON(saveData.world.discovery);
+  else discovery.startFresh();
   const worldMap = new WorldMapUI(discovery);
   worldMap.bossMarkers = () => bosses.markers();
   worldMap.siteMarkers = () => sites.markers();
@@ -1813,6 +1827,26 @@ async function boot() {
     return quests.markers().filter((m) => m.quest === tracked).map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label, tracked: true }));
   };
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
+  // ---- Cartography (world/cartography.ts): map pieces, charts, rumour walls, treasure ----
+  const carto = new Cartography({
+    discovery, map: worldMap, scene: r.scene, flags: worldFlags,
+    give: (id, n = 1) => giveItem(id, n),
+    has: (id) => countItem(id) > 0,
+    take: (id, n = 1) => { if (countItem(id) < n) return false; takeItem(id, n); return true; },
+    gold: () => player.prog.gold,
+    addGold: (n) => player.prog.addGold(n),
+    toast: (m) => hud.toast(m),
+    card: (t, sub) => hud.regionCard(t, sub ?? '', true),
+    xp: (n) => player.prog.addXp(n),
+    day: () => time.day,
+    save: () => save(),
+    bosses: () => BOSS_DEFS.map((d) => {
+      const st = bosses.st(d.id);
+      return { id: d.id, name: d.name, title: d.title, x: d.home.x, z: d.home.z, found: !!st.found, slain: !bosses.available(d.id), heard: !!st.heard };
+    }),
+  });
+  carto.place(cartoAvoid, BOSS_DEFS.map((d) => ({ id: d.id, x: d.home.x, z: d.home.z })));
+  realm.overworldInteractables.push(carto.interactable);
   worldFlags['pa:revision']=PORT_REVISION;
   mentorMemory.flags = worldFlags; // which mentors you've asked about their other classes
   // Kaela Voss's drill yard (combat rework): a drill for each part of the fighting.
@@ -2202,6 +2236,16 @@ async function boot() {
       prevCatch?.(c);
       festivals.onCatch(c);
     };
+    // Now and then a bottle comes up with a treasure map rolled inside.
+    const prevCatch2 = fishing.onCatch;
+    fishing.onCatch = (c) => {
+      prevCatch2?.(c);
+      if (Math.random() > (c.id === 'oldBoot' ? 0.5 : 0.04)) return;
+      const loose = carto.looseTreasure().filter((id) => countItem(id) === 0 && !discovery.pieces.has(id));
+      if (!loose.length) return;
+      giveItem(loose[Math.floor(Math.random() * loose.length)], 1);
+      hud.toast('Tangled in the line: a stoppered bottle, with a map rolled up inside.');
+    };
     lanternFestival.on = () => festivals.isOn('lanterns');
   }
   // Lost Lanterns a fence sold you word of: marked on the map until lit.
@@ -2357,7 +2401,16 @@ async function boot() {
   player.onConsume = (def) => {
     prevConsume?.(def);
     gearRt.consume(def);
+    if (['map', 'survey', 'treasure'].includes(def.use?.kind ?? '')) carto.read(def);
+    if (def.use?.kind === 'plan' || def.use?.kind === 'note') {
+      if (def.use.kind === 'plan') discovery.pieces.add(def.id);
+      realm.readMapItem(def.id);
+    }
   };
+  // Dungeon plans and delvers' notes (dungeon/plans.ts): what you've read, where you found what.
+  realm.planRead = (id) => discovery.pieces.has(id);
+  realm.findTaken = (id) => (worldFlags['pf:' + id] as string | undefined) || undefined;
+  realm.onFindTaken = (id, spot) => { worldFlags['pf:' + id] = spot; };
   // Mastery: gear that speeds it, and the Grandmaster pieces at rank 10.
   const baseGain = mastery.gain.bind(mastery);
   mastery.gain = (id, n) => baseGain(id, n * (1 + (gearRt.fx.masteryGain ?? 0)));
@@ -2396,6 +2449,7 @@ async function boot() {
     })
     : null;
   worldMap.onToggle = (open) => {
+    if (!open) carto.mapClosed();
     input.uiMode = open || inv.open || mapUI.open || dialogue.open;
     if (open) input.exitLock();
     else if (!inv.open && !mapUI.open && !dialogue.open) input.requestLock();
@@ -2726,6 +2780,7 @@ async function boot() {
       // (Indoors the overworld is hidden anyway: leave it be until you're back out.)
       if (realm.mode === 'overworld' && !realm.interior) darkRealm.update(STEP, story.darkness, player);
       lanterns.update(STEP, player.pos, player.center, realm.mode === 'overworld' && !realm.interior && !player.dead);
+      carto.update(STEP, player.pos, realm.mode === 'overworld' && !realm.interior && !player.dead);
       festivals.update(STEP);
       crownRoad.update(STEP, player, time.state.night);
       roadLife.step(STEP, player);
@@ -3112,6 +3167,7 @@ async function boot() {
       wilds, roadLife, herbalism, riches, gwKey, sanctum, lessons,
       origins, creator, // ---- Origins (feat/origins) ----
       dungeons, // Dungeons Reborn (feat/dungeons)
+      carto, // Cartography (docs/design/mapping.md)
       perf,
       pause: (p: boolean) => (paused = p),
       get steps() {

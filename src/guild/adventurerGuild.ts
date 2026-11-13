@@ -94,8 +94,12 @@ export interface BountyTemplate {
 export interface HuntMark {
   x: number;
   z: number;
-  kind: 'boss' | 'bossRumour' | 'bossSlain' | 'contract' | 'bounty' | 'hall';
+  kind: 'boss' | 'bossRumour' | 'bossSlain' | 'contract' | 'bounty' | 'hall' | 'rumour' | 'sighting' | 'lair' | 'place' | 'note';
   label: string;
+  /** rumours and sightings: how sure the guild is (metres) */
+  r?: number;
+  /** a mark-kit glyph */
+  glyph?: string;
 }
 
 const HALL_POS: Record<HallId, [number, number]> = { glen: [25, -18], port: [2746, 256], capital: [-3625, -1036] };
@@ -146,6 +150,12 @@ export class AdventurerGuild {
   bounties?: () => BountyTemplate[];
   /** Named beasts for the Hunt Map: found, rumoured and slain (set by main). */
   huntMarks?: () => HuntMark[];
+  /** Lay your own map beside the Hunt Wall to copy from it (set by main). */
+  openWall?: (hall: HallId, hallName: string) => void;
+  /** Report finds to the Registrar: how many were paid for (set by main). */
+  reportFinds?: () => number;
+  /** Finds not yet reported (set by main). */
+  unreported?: () => number;
   /** the world's day (set by main) */
   day: () => number = () => 0;
   /** you were promoted (main: the ceremony, the HUD badge) */
@@ -466,6 +476,8 @@ export class AdventurerGuild {
   quartermasterStock(): { id: string; marks: number; rank: GuildRank }[] {
     const list: [string, number, GuildRank][] = [
       ['healthPotion', 3, 'D'], ['manaPotion', 3, 'D'], ['lockpicks', 4, 'D'], ['arrowIron', 2, 'D'], ['minersLantern', 6, 'D'],
+      // the guild's own plans of the dungeons it has cleared (dungeon/plans.ts)
+      ['guildPlan_mine', 6, 'D'], ['guildPlan_crypt', 8, 'D'], ['guildPlan_hollowRidge', 12, 'C'], ['guildPlan_drownedShrine', 12, 'C'],
       ['greaterHealthPotion', 8, 'C'], ['greaterManaPotion', 8, 'C'],
       ['knightSword', 30, 'B'], ['kiteShield', 26, 'B'],
       ['claymore', 45, 'A'], ['towerShield', 36, 'A'], ['ringSage', 40, 'A'], ['watchBanner', 40, 'A'],
@@ -533,19 +545,31 @@ export class AdventurerGuild {
     this.boardEl.querySelectorAll<HTMLButtonElement>('[data-abandon]').forEach((b) => b.addEventListener('click', () => this.abandon(b.dataset.abandon!)));
   }
 
-  /** The Hunt Map: the land, every named beast you know of, the bounties and your contracts. */
+  /** The Hunt Wall: the guild's own map, with every rumour, sighting and lair it knows of. None of it is on YOUR map until you copy it. */
   private renderMap() {
     const marks: HuntMark[] = [...(this.huntMarks?.() ?? [])];
     for (const q of this.active) if (q.target) marks.push({ x: q.target[0], z: q.target[1], kind: q.templateId.startsWith('bounty:') ? 'bounty' : 'contract', label: q.targetName ?? q.title });
     for (const [h, [x, z]] of Object.entries(HALL_POS)) marks.push({ x, z, kind: 'hall', label: HALLS[h as HallId].name });
     const px = (x: number) => ((x - WORLD_X0) / WORLD_W) * 100, pz = (z: number) => ((z - WORLD_Z0) / WORLD_H) * 100;
-    const pins = marks.map((m) => '<i class="hm-pin hm-' + m.kind + '" style="left:' + px(m.x).toFixed(2) + '%;top:' + pz(m.z).toFixed(2) + '%" title="' + esc(m.label) + '"><span>' + esc(m.label) + '</span></i>').join('');
-    const known = marks.filter((m) => m.kind === 'boss' || m.kind === 'bossRumour');
-    const slain = marks.filter((m) => m.kind === 'bossSlain');
-    this.mapEl.innerHTML = '<div class="hm-wrap"><div class="hm-map">' + pins + '</div><aside class="hm-side"><h2>THE HUNT</h2><p>Every named beast the guild knows of, pinned where it was last seen. Rumours are marked with a question; kills are struck through.</p>' +
-      '<h3>At large</h3>' + (known.length ? '<ul>' + known.map((m) => '<li class="' + m.kind + '">' + esc(m.label) + '</li>').join('') + '</ul>' : '<p class="guild-empty">Nothing known yet. Listen in taverns, and take bounties.</p>') +
-      (slain.length ? '<h3>Brought down</h3><ul>' + slain.map((m) => '<li class="slain">' + esc(m.label) + '</li>').join('') + '</ul>' : '') +
+    const circles = marks.filter((m) => m.r).map((m) => '<i class="hm-ring hm-' + m.kind + '" style="left:' + px(m.x).toFixed(2) + '%;top:' + pz(m.z).toFixed(2) + '%;width:' + ((2 * m.r!) / WORLD_W * 100).toFixed(2) + '%;height:' + ((2 * m.r!) / WORLD_H * 100).toFixed(2) + '%"></i>').join('');
+    const pins = marks.map((m) => m.glyph
+      ? '<i class="hm-glyph" style="left:' + px(m.x).toFixed(2) + '%;top:' + pz(m.z).toFixed(2) + '%" title="' + esc(m.label) + '"><img src="/assets/icons/mapglyph/' + m.glyph + '.webp" alt=""><span>' + esc(m.label) + '</span></i>'
+      : '<i class="hm-pin hm-' + m.kind + '" style="left:' + px(m.x).toFixed(2) + '%;top:' + pz(m.z).toFixed(2) + '%" title="' + esc(m.label) + '"><span>' + esc(m.label) + '</span></i>').join('');
+    const beasts = marks.filter((m) => m.kind === 'rumour' || m.kind === 'sighting' || m.kind === 'lair');
+    const places = marks.filter((m) => m.kind === 'place');
+    const unrep = this.unreported?.() ?? 0;
+    this.mapEl.innerHTML = '<div class="hm-wrap"><div class="hm-map">' + circles + pins + '</div><aside class="hm-side"><h2>THE HUNT WALL</h2><p>What the guild has heard, pinned where it was heard of. Red circles are rumours: the beast is somewhere inside, and rumours drift. None of this is on <em>your</em> map until you copy it.</p>' +
+      '<button class="hm-copy" data-wall>Lay your map beside it and copy</button>' +
+      (unrep ? '<button class="hm-copy hm-report" data-report>Report your finds to the Registrar (' + unrep + ')</button>' : '') +
+      '<h3>Beasts</h3>' + (beasts.length ? '<ul>' + beasts.map((m) => '<li class="' + m.kind + '">' + esc(m.label) + '</li>').join('') + '</ul>' : '<p class="guild-empty">Nothing on the wall yet.</p>') +
+      (places.length ? '<h3>Unmapped places</h3><ul>' + places.slice(0, 8).map((m) => '<li class="place">' + esc(m.label) + '</li>').join('') + (places.length > 8 ? '<li class="place">and ' + (places.length - 8) + ' more</li>' : '') + '</ul>' : '') +
       '<h3>Your trophies</h3><p>' + (this.trophies.length ? this.trophies.length + ' on the rack outside the Glen hall' : 'None yet') + '</p></aside></div>';
+    this.mapEl.querySelector<HTMLButtonElement>('[data-wall]')?.addEventListener('click', () => this.openWall?.(this.hall, HALLS[this.hall].name));
+    this.mapEl.querySelector<HTMLButtonElement>('[data-report]')?.addEventListener('click', () => {
+      const n = this.reportFinds?.() ?? 0;
+      if (n) { this.toast?.(`The Registrar pays out for ${n} find${n > 1 ? 's' : ''}: ${80 * n} gold.`); this.addRep(15 * n); }
+      this.renderMap();
+    });
   }
 
   /** The Rank Ladder: every rank, what it gives, and where you stand. */

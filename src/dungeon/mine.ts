@@ -6,6 +6,7 @@ import { physics } from '../physics/physics';
 import { Slime } from '../enemies/slime';
 import { LivingArmour } from '../enemies/livingArmour';
 import { emptyMap, type MapData } from '../ui/dungeonMap';
+import type { Dir, PlanSource } from './plans';
 import { pbr } from '../world/props';
 
 export const MINE_ORIGIN = new THREE.Vector3(5000, 0, 0);
@@ -97,6 +98,24 @@ export class MineInstance {
     action: () => void;
   }> = [];
   readonly map: MapData = emptyMap(MINE_MAP_W, MINE_MAP_H);
+  /** every walkable floor, rooms and tunnels, in mine-local metres (for plans) */
+  private floorRects: Rect[] = [];
+
+  /** The mine as a plan draws it (dungeon/plans.ts): floor wherever a room or tunnel is. */
+  planSource(): PlanSource {
+    const open = (i: number, j: number) => {
+      if (i < 0 || j < 0 || i >= MINE_MAP_W || j >= MINE_MAP_H) return false;
+      const x = (i + 0.5 - MINE_MAP_W / 2) * MINE_CELL, z = (j + 0.5 - MINE_MAP_H / 2) * MINE_CELL;
+      return this.floorRects.some((r) => Math.abs(x - r.x) <= r.w / 2 && Math.abs(z - r.z) <= r.d / 2);
+    };
+    const step: Record<Dir, [number, number]> = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
+    return { w: MINE_MAP_W, h: MINE_MAP_H, open, wall: (i, j, d) => !open(i + step[d][0], j + step[d][1]) };
+  }
+
+  /** Where things lie about in the mine: the camp, the store, the altar, the ruins. */
+  findSpots(): THREE.Vector3[] {
+    return [[-8, -24], [21, -50], [-19, -70], [6, -106], [-2, -44]].map(([x, z]) => new THREE.Vector3(MINE_ORIGIN.x + x, MINE_ORIGIN.y, MINE_ORIGIN.z + z));
+  }
 
   readonly groundAt = (x: number, z: number): number | null => {
     if (
@@ -193,6 +212,7 @@ export class MineInstance {
     m: ReturnType<typeof makeMaterials>,
     openings: Openings = {},
   ) {
+    this.floorRects.push(r);
     const floor = meshBox(
       this.group,
       new THREE.Vector3(MINE_ORIGIN.x + r.x, -0.175, MINE_ORIGIN.z + r.z),
@@ -257,6 +277,7 @@ export class MineInstance {
       const zS = a.z - a.d / 2, zN = b.z + b.d / 2; // a's north wall, b's south wall
       const x0 = Math.min(a.x, b.x) - half, x1 = Math.max(a.x, b.x) + half;
       const cx = (x0 + x1) / 2, cz = (zS + zN) / 2, len = zS - zN;
+      this.floorRects.push({ x: cx, z: cz, w: x1 - x0, d: len });
       const floor = meshBox(this.group, new THREE.Vector3(O.x + cx, -0.175, O.z + cz), new THREE.Vector3(x1 - x0, 0.35, len + 1.3), m.stone);
       this.box(floor.position.clone(), new THREE.Vector3((x1 - x0) / 2, 0.175, (len + 1.3) / 2));
       this.wall(O.x + x0 - t / 2, O.z + cz, t, h, len, m.stoneDark);
@@ -266,6 +287,7 @@ export class MineInstance {
       const xW = a.x + a.w / 2, xE = b.x - b.w / 2; // a's east wall, b's west wall
       const z0 = Math.min(a.z, b.z) - half, z1 = Math.max(a.z, b.z) + half;
       const cx = (xW + xE) / 2, cz = (z0 + z1) / 2, len = xE - xW;
+      this.floorRects.push({ x: cx, z: cz, w: len, d: z1 - z0 });
       const floor = meshBox(this.group, new THREE.Vector3(O.x + cx, -0.175, O.z + cz), new THREE.Vector3(len + 1.3, 0.35, z1 - z0), m.stone);
       this.box(floor.position.clone(), new THREE.Vector3((len + 1.3) / 2, 0.175, (z1 - z0) / 2));
       this.wall(O.x + cx, O.z + z0 - t / 2, len, h, t, m.stoneDark);

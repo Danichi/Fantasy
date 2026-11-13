@@ -6,6 +6,7 @@ import { HERB_ITEMS, HERB_MODELS } from './herbs';
 import { FISH_ITEMS } from '../world/fishing';
 import { DESERT_ITEMS } from './desertItems';
 import { ARMS_ITEMS } from './armsItems';
+import { MAP_ITEMS } from './mapItems';
 import { isWeaponKind } from './weapons/kinds';
 import { WILDS_ITEMS } from './wildsLoot';
 import { ROAD_LIFE_ITEMS } from '../world/roadLife/roadItems';
@@ -542,6 +543,7 @@ export const ITEMS: Record<string, ItemDef> = {
   ...FISH_ITEMS,
   ...DESERT_ITEMS,
   ...ARMS_ITEMS,
+  ...MAP_ITEMS,
   ...WILDS_ITEMS,
   ...ROAD_LIFE_ITEMS,
   ...GRAVEWOOD_KEY_ITEMS,

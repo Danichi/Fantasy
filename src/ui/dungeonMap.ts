@@ -6,6 +6,8 @@
 //   editor   : M opens the whole floor for drawing (the game pauses)
 // ---------------------------------------------------------------------------
 
+import type { PlanLayer } from '../dungeon/plans';
+
 export const ICONS = ['door', 'chest', 'stairs', 'trap', 'enemy', 'key', 'gate'] as const;
 export type Icon = (typeof ICONS)[number];
 const ICON_LABEL: Record<Icon, string> = { door: 'Door', chest: 'Chest', stairs: 'Stairs', trap: 'Trap', enemy: 'Danger', key: 'Key', gate: 'Gate' };
@@ -109,7 +111,7 @@ function drawIcon(g: CanvasRenderingContext2D, icon: Icon, x: number, y: number,
 }
 
 /** Paint a region of a map onto a canvas. `view` = cells visible; `ox, oy` = top-left cell (fractional ok). */
-function paint(g: CanvasRenderingContext2D, d: MapData, cs: number, ox: number, oy: number, cols: number, rows: number, player?: { x: number; y: number; yaw: number }, auto?: AutoLayer | null) {
+function paint(g: CanvasRenderingContext2D, d: MapData, cs: number, ox: number, oy: number, cols: number, rows: number, player?: { x: number; y: number; yaw: number }, auto?: AutoLayer | null, plan?: PlanLayer | null, eye: AutoLayer | null = null) {
   const W = cols * cs, H = rows * cs;
   g.fillStyle = PAPER;
   g.fillRect(0, 0, W, H);
@@ -135,6 +137,49 @@ function paint(g: CanvasRenderingContext2D, d: MapData, cs: number, ox: number, 
     g.lineTo(X(d.w), Y(j));
   }
   g.stroke();
+  // A builders' or guild plan: brown, dashed, under everything you drew.
+  if (plan && plan.fill.length === d.w * d.h) {
+    g.fillStyle = 'rgba(150, 100, 50, 0.10)';
+    for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) if (plan.fill[j * d.w + i]) g.fillRect(X(i), Y(j), cs, cs);
+    g.save();
+    g.strokeStyle = 'rgba(128, 74, 30, 0.85)';
+    g.lineWidth = Math.max(1, cs * 0.07);
+    g.setLineDash([Math.max(2, cs * 0.22), Math.max(1.5, cs * 0.12)]);
+    g.beginPath();
+    for (let j = 0; j <= d.h; j++) for (let i = 0; i < d.w; i++) if (plan.hw[j * d.w + i]) {
+      g.moveTo(X(i), Y(j));
+      g.lineTo(X(i + 1), Y(j));
+    }
+    for (let j = 0; j < d.h; j++) for (let i = 0; i <= d.w; i++) if (plan.vw[j * (d.w + 1) + i]) {
+      g.moveTo(X(i), Y(j));
+      g.lineTo(X(i), Y(j + 1));
+    }
+    g.stroke();
+    g.restore();
+    // Cartographer's Eye: where the plan is wrong about a room you've seen, a red cross.
+    if (eye && eye.fill.length === d.w * d.h) {
+      const seen = (i: number, j: number) => i >= 0 && j >= 0 && i < d.w && j < d.h && !!eye.fill[j * d.w + i];
+      const cross = (x: number, y: number) => {
+        const r = cs * 0.16;
+        g.moveTo(x - r, y - r);
+        g.lineTo(x + r, y + r);
+        g.moveTo(x + r, y - r);
+        g.lineTo(x - r, y + r);
+      };
+      g.strokeStyle = '#b3241c';
+      g.lineWidth = Math.max(1.5, cs * 0.08);
+      g.beginPath();
+      for (const idx of plan.wrongH) {
+        const i = idx % d.w, j = Math.floor(idx / d.w);
+        if (seen(i, j) || seen(i, j - 1)) cross(X(i + 0.5), Y(j));
+      }
+      for (const idx of plan.wrongV) {
+        const i = idx % (d.w + 1), j = Math.floor(idx / (d.w + 1));
+        if (seen(i, j) || seen(i - 1, j)) cross(X(i), Y(j + 0.5));
+      }
+      g.stroke();
+    }
+  }
   // The automap's faint blue wash and lines, under your own ink.
   if (auto && auto.fill.length === d.w * d.h) {
     g.fillStyle = 'rgba(70, 100, 140, 0.16)';
@@ -247,7 +292,7 @@ export class DungeonMapUI {
     this.editor.className = 'dmap-editor hidden';
     const tools: [Tool, string][] = [['wall', 'Wall'], ['floor', 'Floor'], ['erase', 'Erase'], ['note', 'Note'], ...ICONS.map((i) => [i, ICON_LABEL[i]] as [Tool, string])];
     this.editor.innerHTML = `
-      <div class="dmap-head"><h2>MAP</h2><span class="floor"></span><span class="tip">Draw what you find. The game only shows where you are.</span></div>
+      <div class="dmap-head"><h2>MAP</h2><span class="floor"></span><span class="tip">Draw what you find. The game only shows where you are. Plans you've read show in brown, and plans can be wrong.</span></div>
       <div class="dmap-body">
         <div class="tools">${tools.map(([t, l]) => `<button data-t="${t}">${l}</button>`).join('')}</div>
         <div class="sheet"><canvas></canvas></div>
@@ -294,6 +339,14 @@ export class DungeonMapUI {
   }
 
   private autoBtn: HTMLButtonElement | null = null;
+  /** the plan pieces you've read for this floor, in brown (dungeon/plans.ts) */
+  plan: PlanLayer | null = null;
+  /** Cartographer's Eye: wrong walls on a plan are crossed out where you've seen the room */
+  eye = false;
+  setPlan(p: PlanLayer | null) {
+    this.plan = p;
+    if (this.open) this.drawEditor();
+  }
   /** Hand the map this floor's automap (null hides it). */
   setAuto(layer: AutoLayer | null) {
     this.auto = layer;
@@ -345,7 +398,7 @@ export class DungeonMapUI {
     const cs = this.cellSize();
     this.canvas.width = (d.w + 1) * cs;
     this.canvas.height = (d.h + 1) * cs;
-    paint(this.canvas.getContext('2d')!, d, cs, -0.5, -0.5, d.w + 1, d.h + 1, this.player, this.autoShown);
+    paint(this.canvas.getContext('2d')!, d, cs, -0.5, -0.5, d.w + 1, d.h + 1, this.player, this.autoShown, this.plan, this.eye ? this.auto : null);
     this.editor.querySelector('.floor')!.textContent = this.floorName;
     if (this.autoBtn) {
       this.autoBtn.style.display = this.auto ? '' : 'none';
@@ -407,7 +460,7 @@ export class DungeonMapUI {
     const cs = 24, cols = 9;
     const ox = this.player.x - cols / 2, oy = this.player.y - cols / 2;
     const g = this.miniCanvas.getContext('2d')!;
-    paint(g, d, cs, ox, oy, cols, cols, this.player, this.autoShown);
+    paint(g, d, cs, ox, oy, cols, cols, this.player, this.autoShown, this.plan, this.eye ? this.auto : null);
     this.miniLabel.textContent = this.floorName;
     if (this.open) this.drawEditor();
   }

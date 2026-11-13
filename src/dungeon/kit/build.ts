@@ -1,4 +1,5 @@
 import { wildlifeScale } from '../../combat/tiers';
+import { hash01, type PlanSource } from '../plans';
 import type { Target } from '../../combat/targets';
 import * as THREE from 'three';
 import type RAPIER from '@dimforge/rapier3d-compat';
@@ -1204,6 +1205,35 @@ export class KitInstance {
       const dx = Math.max(x0 - pp.x, 0, pp.x - x1), dz = Math.max(z0 - pp.z, 0, pp.z - z1);
       g.visible = dx * dx + dz * dz < 44 * 44;
     }
+  }
+
+  /**
+   * The floor as a plan draws it (dungeon/plans.ts). The builders left gaps for
+   * their secret doors; the guild's plan (delvers' work) shows them as walls
+   * until you've found them yourself.
+   */
+  planSource(guild: boolean): PlanSource {
+    const fg = this.fg;
+    const secret = new Set<string>();
+    if (guild) for (const d of fg.doors) if (d.kind === 'secret' && !this.progress.secrets.includes(d.id)) secret.add(`${d.cell},${d.dir}`);
+    return {
+      w: fg.w,
+      h: fg.h,
+      open: (i, j) => fg.roomAt[j * fg.w + i] >= 0,
+      wall: (i, j, dir) => {
+        if (this.grid.wall(i, j, dir)) return true;
+        if (!secret.size) return false;
+        const [dx, dy] = DV[dir];
+        return secret.has(`${i},${j},${dir}`) || secret.has(`${i + dx},${j + dy},${OPP[dir]}`);
+      },
+    };
+  }
+
+  /** Cells for things lying about on this floor: the middle of rooms off the main way, never the boss's. */
+  findCells(n: number, key: string): [number, number][] {
+    const rooms = this.fg.rooms.filter((r) => r.role !== 'boss' && r.role !== 'entry' && r.rect.w * r.rect.h >= 2);
+    rooms.sort((a, b) => hash01(`${key}:${a.id}`) - hash01(`${key}:${b.id}`));
+    return rooms.slice(0, n).map((r) => [r.rect.x + Math.floor(r.rect.w / 2), r.rect.y + Math.floor(r.rect.h / 2)] as [number, number]);
   }
 
   /** The automap: rooms seen (and chests, with Treasure Nose), in the map's cells. */
