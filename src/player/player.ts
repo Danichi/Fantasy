@@ -1956,6 +1956,8 @@ export class Player {
     }
     this.onConsume?.(it.def);
     this.equip.consume(uid);
+    // Maps and plans are read, not drunk.
+    if (['map', 'survey', 'treasure', 'plan', 'note'].includes(it.def.use?.kind ?? '')) return;
     this.onSpell?.(st.heal ? 'potionHeal' : 'potionMana', this.center, this.forward, null);
   }
 

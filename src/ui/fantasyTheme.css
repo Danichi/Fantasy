@@ -752,8 +752,17 @@ body.book-open #ui .lesson-panel, #ui .lesson-panel.corner { top: auto; bottom: 
 #ui .quest-client { display: block; color: #6a4a24; font: italic 400 13px/1.2 var(--fell); margin: 2px 0 4px; }
 #ui .guild-section.wanted h2 { color: #7a1408; }
 #ui .guild-hunt { display: none; }
-#ui .hm-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; align-items: start; }
+#ui .hm-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; align-items: start; padding: 5.5% 7% 6% 9%; background: #2a170a url('/assets/ui/map/guildwall.webp') center / cover no-repeat; border-radius: 6px; box-shadow: inset 0 0 40px rgba(0,0,0,.7); }
+#ui .hm-side { background: rgba(30, 18, 8, .86); padding: 12px 14px; border: 1px solid #8a6431; border-radius: 6px; color: #f1e3be; }
 #ui .hm-map { position: relative; width: 100%; aspect-ratio: 1536 / 1024; background: #d6bd87 url('/assets/world/map.webp') center / 100% 100% no-repeat; box-shadow: 0 0 0 6px #2a170a, 0 0 0 8px #8a6431, 0 14px 30px rgba(0, 0, 0, .55); filter: sepia(.35) saturate(.85); overflow: hidden; }
+#ui .hm-ring { position: absolute; transform: translate(-50%, -50%); border: 2px dashed #a31c14; border-radius: 50%; background: rgba(163, 28, 20, .1); pointer-events: none; }
+#ui .hm-ring.hm-sighting { border-color: #d9531e; border-style: solid; }
+#ui .hm-glyph { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; }
+#ui .hm-glyph img { width: 26px; height: 26px; display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+#ui .hm-glyph span { position: absolute; left: 28px; top: 6px; white-space: nowrap; color: #2a170a; font: 700 11px/1 var(--serif); text-shadow: 0 0 3px #f1e3be, 0 0 3px #f1e3be; pointer-events: none; display: none; }
+#ui .hm-glyph:hover span { display: block; }
+#ui .hm-copy { display: block; width: 100%; margin: 10px 0 4px; padding: 9px; font: 700 12px/1.2 var(--serif); letter-spacing: .06em; color: #fff4d8; background: linear-gradient(180deg, #8a2a1c, #5a170e); border: 1px solid #c9694a; border-radius: 6px; cursor: pointer; }
+#ui .hm-copy.hm-report { background: linear-gradient(180deg, #3a5a2a, #22381a); border-color: #7aa25a; }
 #ui .hm-pin { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; border: 2px solid #2a170a; background: #b8402e; box-shadow: 0 2px 4px rgba(0, 0, 0, .5); }
 #ui .hm-pin span { position: absolute; left: 16px; top: -4px; white-space: nowrap; color: #2a170a; font: 700 11px/1 var(--serif); text-shadow: 0 0 3px #f1e3be, 0 0 3px #f1e3be; pointer-events: none; }
 #ui .hm-pin.hm-bossRumour { background: #e8c766; }

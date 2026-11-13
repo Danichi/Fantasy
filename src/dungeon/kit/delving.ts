@@ -24,7 +24,7 @@ import { treeOf, type Paths } from '../../paths/paths';
 export const DUNGEONEERING_PASSIVES: Record<string, NodeEffect> = {
   'dungeoneering:Torchbearer': { text: 'Your light reaches 50% further underground, and each new room flares into view as you enter it', x: { torchbearer: 1 } },
   'dungeoneering:Sure Step': { text: 'Traps deal 25% less damage to you', x: { trapDmg: -0.25 } },
-  "dungeoneering:Cartographer's Eye": { text: 'Automap: rooms you have seen ink themselves onto your dungeon map (switch it off on the map)', x: { automap: 1 } },
+  "dungeoneering:Cartographer's Eye": { text: 'Automap: rooms you have seen ink themselves onto your dungeon map (switch it off on the map), and where a plan you hold is wrong about them, a red cross', x: { automap: 1 } },
   'dungeoneering:Deep Lungs': { text: 'Gas and bad air hurt you half as much', x: { gasDmg: -0.5 } },
   "dungeoneering:Delver's Sense": { text: 'False walls and hidden levers shimmer within 10 m', x: { delverSense: 1 } },
   'dungeoneering:Crawlspace': { text: 'Secrets you find count double towards Dungeoneering mastery', x: { secretMastery: 1 } },
