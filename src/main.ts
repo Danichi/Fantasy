@@ -46,6 +46,7 @@ import { BeastSpawner } from './enemies/beastSpawner';
 import { Spells } from './magic/spells';
 import { buildIcons, pumpIcons, setOnIconsReady, loadBakedIcons, exportAllIcons } from './ui/icons';
 import { HUD, writeDamageNumbers } from './ui/hud';
+import { regionArt } from './ui/art/portraits';
 import { InventoryUI, buildOverlays } from './ui/inventory';
 import { Music } from './audio/music';
 import { Ambient } from './world/ambient';
@@ -1838,7 +1839,7 @@ async function boot() {
     gold: () => player.prog.gold,
     addGold: (n) => player.prog.addGold(n),
     toast: (m) => hud.toast(m),
-    card: (t, sub) => hud.regionCard(t, sub ?? '', true),
+    card: (t, sub, region) => hud.regionCard(t, sub ?? '', true, region ? regionArt(region) : null),
     xp: (n) => player.prog.addXp(n),
     day: () => time.day,
     save: () => save(),
@@ -2428,9 +2429,9 @@ async function boot() {
   // ---- Origins (feat/origins): passives, Renown, legendary abilities, flight, NPC reactions ----
   const origins = wireOrigins({ player, skillRt, fx, scene: r.scene, input, cam, hud, dialogue, shopUI, quests, realm, time, weather, gravewood, foraging });
   events.on('mapRevealed', () => worldMap.markFogDirty());
-  events.on('regionEntered', ({ name, subtitle, first }) => {
+  events.on('regionEntered', ({ id, name, subtitle, first }) => {
     regionName = name;
-    if (started) hud.regionCard(name, subtitle, first);
+    if (started) hud.regionCard(name, subtitle, first, regionArt(id));
     if (first) save();
   });
   events.on('placeDiscovered', ({ name }) => {
@@ -2512,6 +2513,7 @@ async function boot() {
   const overlays = buildOverlays((origin) => {
     if (origin) player.prog.origin = origin;
     started = true;
+    overlays.start.classList.remove('title-screen'); // the painting is for the first screen only; pause shows the world
     heroMade = true;
     // (A new game always begins in the wheat: the story starts there.)
     if (!arrived && !RETURNING_FROM_SANDBOX && saveData && !TEST_MODE && loadInto() === 'ghagrabba' && realm.mode === 'overworld' && !realm.interior) {

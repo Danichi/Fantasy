@@ -4,6 +4,8 @@
 // replies only appear once the speaker has had their whole say. While the
 // text is still typing, a click or key only finishes the sentence.
 
+import { portraitFor } from './art/portraits';
+
 /** The tone of a reply (shown as a little chip before it). */
 export type Tone = 'kind' | 'neutral' | 'rude' | 'threat' | 'persuade' | 'bribe' | 'gift';
 const TONE_NAME: Record<Tone, string> = { kind: 'Kind', neutral: 'Neutral', rude: 'Rude', threat: 'Threaten', persuade: 'Persuade', bribe: 'Bribe', gift: 'Gift' };
@@ -58,6 +60,7 @@ const nudgeFor = (page: string, k: number) => {
 export class DialogueUI {
   private el: HTMLDivElement;
   private nameEl: HTMLDivElement;
+  private portraitEl: HTMLImageElement;
   private textEl: HTMLDivElement;
   private optsEl: HTMLDivElement;
   private pageEl: HTMLDivElement;
@@ -77,9 +80,10 @@ export class DialogueUI {
     const root = document.getElementById('ui')!;
     this.el = document.createElement('div');
     this.el.className = 'dialogue hidden';
-    this.el.innerHTML = '<div class="who"></div><div class="say"></div><div class="more">click to continue</div><div class="page"></div><div class="opts"></div>';
+    this.el.innerHTML = '<img class="portrait" alt="" draggable="false"><div class="who"></div><div class="say"></div><div class="more">click to continue</div><div class="page"></div><div class="opts"></div>';
     root.appendChild(this.el);
     this.nameEl = this.el.querySelector('.who')!;
+    this.portraitEl = this.el.querySelector('.portrait')!;
     this.textEl = this.el.querySelector('.say')!;
     this.optsEl = this.el.querySelector('.opts')!;
     this.pageEl = this.el.querySelector('.page')!;
@@ -115,6 +119,11 @@ export class DialogueUI {
   show(name: string, title: string, text: string, options: DialogueOption[]) {
     this.speaker = name;
     const m = this.mood?.speaker === name ? this.mood : null;
+    const face = portraitFor(name, title);
+    if (face) {
+      if (this.portraitEl.getAttribute('src') !== face) this.portraitEl.src = face;
+      this.el.classList.add('has-portrait');
+    } else this.el.classList.remove('has-portrait');
     this.nameEl.innerHTML = `${name}<small>${title}</small>${m ? `<span class="mood mood-${m.cls}">${m.label}</span>` : ''}`;
     this.pages = this.paging ? paginate(text) : [text];
     this.page = 0;

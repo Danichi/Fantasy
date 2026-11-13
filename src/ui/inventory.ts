@@ -423,7 +423,7 @@ export function buildOverlays(onStart: (origin: Origin | null) => void, initialO
       <span><kbd>N</kbd> Seamanship · <kbd>B</kbd> hold for the spyglass</span><span>At a ship's helm: <kbd>A</kbd>/<kbd>D</kbd> steer · <kbd>W</kbd>/<kbd>S</kbd> sail · <kbd>L</kbd> lash the wheel</span>
     </div>`;
   const start = document.createElement('div');
-  start.className = 'overlay';
+  start.className = 'overlay title-screen';
   start.innerHTML = `<div class="title-card"><div class="pause-banner">THE WORLD WAITS</div><h1>ELDERGLEN TOWN</h1><div class="pause-status"></div><p class="sub">A thriving frontier town. Choose your origin, shape your Heroic Legacy, take Guild contracts, and explore beyond the walls.</p>
   <div class="origin-picker creator-launch"><span>Six peoples · your face, build and colours · a name: the character creator opens when you begin.</span></div>
   <span class="cta">CLICK TO BEGIN</span><p class="mobile-note">Best played with a keyboard and mouse on a larger screen.</p></div>`;
