@@ -1,3 +1,5 @@
+import { shipMotion, restoreMotion } from './shipState';
+import { seaRandom } from './runtime';
 import { AURELLE, LIGHTHOUSE } from '../portCity';
 import * as THREE from 'three';
 import { events } from '../../core/events';
@@ -152,7 +154,7 @@ export class Regatta {
     const rel = Math.atan2(Math.sin(want - into), Math.cos(want - into));
     if (Math.abs(rel) < 0.85) {
       // Beat: hold a close-hauled tack, going about now and then.
-      if (Math.random() < dt / 25) r.rivalTack *= -1;
+      if (seaRandom() < dt / 25) r.rivalTack *= -1;
       want = into + r.rivalTack * 0.9;
     }
     const err = Math.atan2(Math.sin(want - rival.yaw), Math.cos(want - rival.yaw));
@@ -223,6 +225,8 @@ export class Regatta {
     return out;
   }
 
+  snapshot(){const r=this.race;if(!r)return undefined;const ship=(s:Ship)=>({pos:s.pos.toArray() as [number,number,number],yaw:s.yaw,motion:shipMotion(s),sections:[...s.sections],sails:s.sailHp});return {course:r.course.id,mine:ship(r.mine),rival:ship(r.rival),next:r.next,rivalNext:r.rivalNext,t:r.t,countdown:r.countdown,rivalTack:r.rivalTack};}
+  restore(saved:NonNullable<ReturnType<Regatta['snapshot']>>){this.start(saved.course);const r=this.race!;for(const k of ['mine','rival'] as const){const s=r[k],v=saved[k];s.pos.fromArray(v.pos);s.yaw=v.yaw;s.sections=[...v.sections];s.sailHp=v.sails;restoreMotion(s,v.motion);}for(const k of ['next','rivalNext','t','countdown','rivalTack'] as const)r[k]=saved[k];}
   toJSON() {
     return [...this.wins];
   }

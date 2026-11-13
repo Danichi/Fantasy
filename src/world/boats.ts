@@ -12,7 +12,7 @@ import type { FishingSpot } from './fishing';
 // (WASD, Shift to pull harder), fish from it anywhere the water is deep, and
 // step ashore wherever land is close. Real sailing ships come with the ocean.
 
-function rowboat() {
+export function rowboat() {
   const g = new THREE.Group();
   const wood = new THREE.MeshStandardMaterial({ color: 0x9a6a3e, roughness: 0.8 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.85 });
@@ -74,6 +74,7 @@ export class Boats {
   readonly interactables: Interactable[];
   /** a fishing spot under the boat (for Fishing.start) */
   readonly spot: FishingSpot = { pos: new THREE.Vector3(), water: new THREE.Vector3(), kind: 'sea', name: 'From the boat' };
+  onLaunch?: (at: THREE.Vector3, yaw: number) => void;
   onFish?: (spot: FishingSpot) => void;
 
   constructor(scene: THREE.Scene, private player: Player) {
@@ -83,14 +84,14 @@ export class Boats {
     this.interactables = [
       {
         pos: this.state.pos, radius: 3,
-        label: () => (self.player.vehicle && self.landing ? 'Step ashore' : ''),
-        enabled: () => !!self.player.vehicle && !!self.landing,
+        label: () => (self.active && self.landing ? 'Step ashore' : ''),
+        enabled: () => !!self.active && !!self.landing,
         action: () => self.ashore(),
       },
       {
         pos: this.state.pos, radius: 3,
-        label: () => (self.player.vehicle && !self.landing && self.deep() ? 'Fish from the boat' : ''),
-        enabled: () => !!self.player.vehicle && !self.landing && self.deep() && self.player.equip.items.some((i) => i.def.id === 'fishingRod'),
+        label: () => (self.active && !self.landing && self.deep() ? 'Fish from the boat' : ''),
+        enabled: () => !!self.active && !self.landing && self.deep() && self.player.equip.items.some((i) => i.def.id === 'fishingRod'),
         action: () => {
           const s = self.state;
           self.spot.pos.copy(s.pos);
@@ -103,12 +104,12 @@ export class Boats {
       },
     ];
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyX' && this.player.vehicle && this.landing) this.ashore();
+      if (e.code === 'KeyE' && this.active && this.landing) this.ashore();
     });
   }
 
   get active() {
-    return !!this.player.vehicle;
+    return this.player.vehicle === this.state;
   }
 
   private deep() {
@@ -119,6 +120,7 @@ export class Boats {
 
   /** Launch the boat at a spot on the water and sit the player in it. */
   launch(at: THREE.Vector3, yaw: number) {
+    if (this.onLaunch) return this.onLaunch(at, yaw);
     const s = this.state;
     s.pos.set(at.x, (waterSurfaceAt(at.x, at.z) ?? SEA_LEVEL) + 0.1, at.z);
     s.yaw = yaw;
@@ -153,7 +155,7 @@ export class Boats {
     const s = this.state;
     const g = this.boat.group;
     this.t += dt;
-    if (!this.player.vehicle) {
+    if (!this.active) {
       // An empty boat bobs where it was left.
       if (g.visible) g.position.y = s.pos.y + Math.sin(this.t * 1.3) * 0.05;
       return;

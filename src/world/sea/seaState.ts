@@ -1,3 +1,4 @@
+import { seaRandom } from './runtime';
 import * as THREE from 'three';
 import { regionAt, SEA_LEVEL } from '../worldMap';
 import { PORT_AURELLE } from '../terrainHeight';
@@ -169,17 +170,17 @@ export function updateSea(dt: number, camera: THREE.Vector3, weather: { wind: nu
   SEA.t += dt;
   SEA.wind += (weather.wind - SEA.wind) * Math.min(1, dt * 0.2);
   // The prevailing wind wanders slowly (westerlies, mostly).
-  const wa = Math.atan2(SEA.windDir.y, SEA.windDir.x) + Math.sin(SEA.t * 0.003) * 0.0004;
+  const wa = Math.atan2(SEA.windDir.y, SEA.windDir.x) + Math.sin(SEA.t * 0.003) * 0.0004 * dt;
   SEA.windDir.set(Math.cos(wa), Math.sin(wa));
   const danger = dangerAt(camera.x, camera.z);
   SEA.danger += (danger - SEA.danger) * Math.min(1, dt * 0.5);
   // Storm cells: in wild water they form every few minutes ahead of the wind.
   stormClock -= dt;
   if (stormClock <= 0) {
-    stormClock = 60 + Math.random() * 120;
-    if (danger >= 2.5 && STORMS.length < 3 && Math.random() < 0.25 + (danger - 2.5) * 0.25) {
-      const a = Math.random() * Math.PI * 2, d = 700 + Math.random() * 900;
-      STORMS.push({ x: camera.x + Math.cos(a) * d, z: camera.z + Math.sin(a) * d, r: 280 + Math.random() * 320, vx: SEA.windDir.x * 6, vz: SEA.windDir.y * 6, power: 0.6 + Math.random() * 0.4, life: 240 + Math.random() * 300 });
+    stormClock = 60 + seaRandom() * 120;
+    if (danger >= 2.5 && STORMS.length < 3 && seaRandom() < 0.25 + (danger - 2.5) * 0.25) {
+      const a = seaRandom() * Math.PI * 2, d = 700 + seaRandom() * 900;
+      STORMS.push({ x: camera.x + Math.cos(a) * d, z: camera.z + Math.sin(a) * d, r: 280 + seaRandom() * 320, vx: SEA.windDir.x * 6, vz: SEA.windDir.y * 6, power: 0.6 + seaRandom() * 0.4, life: 240 + seaRandom() * 300 });
     }
   }
   for (const c of STORMS) {
@@ -238,3 +239,7 @@ export function currentAt(x: number, z: number) {
   }
   return out;
 }
+
+export interface SeaWeatherSave { time:number; wind:number; direction:[number,number]; amp:number; storm:number; danger:number; cells:StormCell[]; nextStorm:number; }
+export function saveSeaWeather():SeaWeatherSave { return {time:SEA.t,wind:SEA.wind,direction:SEA.windDir.toArray() as [number,number],amp:SEA.amp,storm:SEA.storm,danger:SEA.danger,cells:structuredClone(STORMS),nextStorm:stormClock}; }
+export function restoreSeaWeather(s?:SeaWeatherSave){SEA.t=s?.time??0;SEA.wind=s?.wind??.4;SEA.windDir.fromArray(s?.direction??[1,.3]).normalize();SEA.amp=s?.amp??1;SEA.storm=s?.storm??0;SEA.danger=s?.danger??0;STORMS.splice(0,STORMS.length,...(s?.cells??[]));stormClock=s?.nextStorm??60;}

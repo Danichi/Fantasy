@@ -417,6 +417,7 @@ export class Player {
   breath = 1;
   breathTime = 25;
   private diveHeld = false;
+  private riseHeld = false;
   private breathT = 0;
   /** swimming, from the Seamanship Diver branch: speed, stamina drain, armour drag, can't drown while stamina lasts */
   swimSpeedMul = 1;
@@ -515,7 +516,7 @@ export class Player {
       return;
     }
     if (!input.uiMode) this.readInput(input, cam);
-    else this.moveIntent.set(0, 0, 0);
+    else {this.moveIntent.set(0,0,0);if(this.swimming){this.diveHeld=false;this.riseHeld=false;this.sprinting=false;}}
     // In a boat: the boat moves you (world/boats.ts); no walking or fighting.
     if (this.vehicle) {
       const v = this.vehicle;
@@ -564,6 +565,18 @@ export class Player {
     if (input.held('left')) this.moveIntent.sub(r);
     if (this.moveIntent.lengthSq() > 0) this.moveIntent.normalize();
 
+    if (this.vehicle || this.swimming) {
+      this.diveHeld = input.held('swimDown');
+      this.riseHeld = input.held('swimUp');
+      this.attackHeld=false;this.attackHeldFor=0;this.stillForDomain=false;this.parryHeldT=0;
+      this.sprinting = this.swimming && input.held('sprint') && this.moveIntent.lengthSq() > 0 && this.stamina > 1;
+      this.buffer = null;
+      this.act = null;
+      this.blocking = false;
+      this.lock = null;
+      return;
+    }
+    this.riseHeld = false;
     const now = performance.now() / 1000;
     const buf = (a: Buffered) => (this.buffer = { a, t: now, actT: this.act?.t ?? -1, actId: this.act?.def.id ?? null });
     this.attackHeld = input.held('attack');
@@ -1069,9 +1082,11 @@ export class Player {
     this.swimming = !this.dead && depth > 1.35 && inWater && !(this.waterWalk > 0 && !this.diveHeld);
     if (this.swimming) {
       // Armour drags you down: every point of it makes swimming harder (unless you've learned to carry it).
-      const drag = this.armourDrag ? 1 + (this.equip?.armorValue ?? 0) / 18 : 1;
-      if (!this.buoyed) this.stamina = Math.max(0, this.stamina - (this.sprinting ? 7 : 2.2) * dt * this.swimStaminaMul * drag);
-      this.staminaDelay = 0.6;
+      const drag = this.armourDrag ? Math.min(2.2, 1 + (this.equip?.armorValue ?? 0) / 45) : 1;
+      const effort = this.moveIntent.lengthSq() > 0.01 || this.diveHeld || this.underwater;
+      if (!this.buoyed && effort) this.stamina = Math.max(0, this.stamina - (this.sprinting ? 7 : 1.8) * dt * this.swimStaminaMul * drag);
+      this.staminaDelay = effort ? 0.6 : 0;
+      if (!effort && !this.underwater) this.stamina = Math.min(this.maxStamina, this.stamina + 4 * dt);
       if (this.stamina <= 0 && !this.buoyed) {
         this.drownT += dt;
         if (this.drownT > 1) {
@@ -1080,10 +1095,10 @@ export class Player {
         }
       }
     } else this.drownT = 0;
-    // Diving: hold jump to go under, let go to rise; breath runs out down there.
+    // Diving has separate descend/rise controls; releasing them gently surfaces.
     if (this.swimming) {
       const room = Math.max(0, depth - 2.2);
-      this.diveDepth = Math.max(0, Math.min(room, this.diveDepth + (this.diveHeld ? 2.4 : -3.2) * dt));
+      this.diveDepth = Math.max(0, Math.min(room, this.diveDepth + (this.diveHeld ? 2.4 : this.riseHeld ? -4.2 : -0.9) * dt));
     } else this.diveDepth = 0;
     this.waterBreathT = Math.max(0, this.waterBreathT - dt);
     if (this.underwater) {
@@ -1364,7 +1379,7 @@ export class Player {
     // Local velocity for directional locomotion.
     const c = Math.cos(-yawR), s = Math.sin(-yawR);
     const local = { x: this.vel.x * c + this.vel.z * s, z: -this.vel.x * s + this.vel.z * c };
-    if (a || this.mounted || this.vehicle || this.flying) local.x = local.z = 0;
+    if (a || this.mounted || this.vehicle || this.flying || this.swimming) local.x = local.z = 0;
 
     // ---- clip layers ------------------------------------------------------
     const anim = this.anim;
@@ -1375,7 +1390,7 @@ export class Player {
     // Airborne for the clip only on a real jump or a real fall: a body that is a
     // hair off the ground (spawning, a teleport, a bump in the road) stays standing.
     // (It used to spawn frozen in the jump pose behind the title screen.)
-    else if (!a && !this.flying && ((!this.grounded && (this.vel.y > 0.5 || this.airTime > 0.15)) || this.landT < 0.34) && anim.has('jump_air')) {
+    else if (!a && !this.flying && !this.swimming && ((!this.grounded && (this.vel.y > 0.5 || this.airTime > 0.15)) || this.landT < 0.34) && anim.has('jump_air')) {
       // Jump clip time follows the physical arc: rise, apex, fall, land.
       const vy = this.vel.y;
       const t = !this.grounded ? (vy > 0 ? 0.27 + (1 - vy / JUMP_V) * 0.2 : 0.47 + Math.min(1, -vy / JUMP_V) * 0.15) : 0.62 + this.landT;
@@ -1438,7 +1453,7 @@ export class Player {
     } else if (rolling && !anim.has('jump_air')) {
       pose = { ...base, legTuck: smoothstep(0.02, 0.2, at) * (1 - smoothstep(0.5, 0.7, at)), spinePitch: 0.8 * smoothstep(0.02, 0.15, at) * (1 - smoothstep(0.5, 0.72, at)) };
     } else if (a?.usingClip) pose = {};
-    if (!this.grounded && !a && !this.flying && !anim.has('jump_air')) pose = { ...pose, legTuck: 0.35 };
+    if (!this.grounded && !a && !this.flying && !this.swimming && !anim.has('jump_air')) pose = { ...pose, legTuck: 0.35 };
     // On the wing (dragonkin flight): legs long, arms out wide to hover and swept
     // back along the body at speed, the head up to look where you're going.
     if (this.flying && !a) {
@@ -1455,6 +1470,15 @@ export class Player {
         pole: [x * 0.6, 1.0, -0.4],
       });
       pose = { spinePitch: -0.05, headPitch: -0.35 - 0.25 * k, legTuck: 0, right: arm(-1), left: arm(1) };
+    }
+    if (this.swimming && !this.dead) {
+      const stroke = this.idleClock * (this.sprinting ? 6.5 : 4.2);
+      const reach = this.moveIntent.lengthSq() > 0.01 ? 1 : 0.25;
+      const arm = (side: number, phase: number): HandPose => ({
+        grip: [side * (0.38 + Math.sin(phase) * 0.12), 1.1 + Math.cos(phase) * 0.28, 0.15 + Math.sin(phase) * 0.55 * reach],
+        dir: [0, -1, 0], normal: [0, 0, 1], pole: [side * 0.6, 1.2, -0.1], w: 1,
+      });
+      pose = { spinePitch: 0.08, headPitch: -0.2 * reach, legTuck: 0.1 + Math.sin(stroke * 2) * 0.06, right: arm(-1, stroke), left: arm(1, stroke + Math.PI) };
     }
     // Skill flourishes over the clip: leans and crouches go into the pose, spins,
     // hops and banks turn and lift the whole body (below).
@@ -1480,7 +1504,7 @@ export class Player {
 
     // The weapon family's holds go in before the blend, so leaving an attack
     // eases back into the guard (applied after, the hold snapped in at once).
-    if (this.poseHook && !this.dead) pose = this.poseHook(pose, a, at);
+    if (this.poseHook && !this.dead && !this.swimming) pose = this.poseHook(pose, a, at);
     if (this.poseFrom && this.poseFade < 1) {
       this.poseFade = Math.min(1, this.poseFade + dt / 0.2);
       pose = blendPose(this.poseFrom, pose, smoothstep(0, 1, this.poseFade));
@@ -1500,6 +1524,11 @@ export class Player {
       vis.rotation.x = ang;
       vis.position.set(0, pivot - Math.cos(ang) * pivot, -Math.sin(ang) * pivot);
       vis.position.y -= Math.sin(k * Math.PI) * 0.3;
+    }
+    if (this.swimming && !this.dead) {
+      const swim = this.moveIntent.lengthSq() > 0.01 ? 1 : 0;
+      vis.rotation.x = 0.95 * swim;
+      vis.position.y = 0.7 * swim + Math.sin(this.idleClock * 3) * 0.025;
     }
     vis.rotation.z += this.bank;
     if (fl) {

@@ -2,7 +2,7 @@
 // skiff to a galleon, each with its own feel, and upgrades in eight slots
 // bought at the Aurelle Shipwrights. Pure data.
 
-export type HullId = 'skiff' | 'sloop' | 'cutter' | 'brigantine' | 'galleon';
+export type HullId = 'rowboat' | 'skiff' | 'sloop' | 'cutter' | 'brigantine' | 'galleon';
 export type ModelKind = 'skiff' | 'fishing' | 'sloop' | 'merchant' | 'naval' | 'galleon';
 
 export interface HullDef {
@@ -44,6 +44,11 @@ export interface HullDef {
 }
 
 export const HULLS: Record<HullId, HullDef> = {
+  rowboat: {
+    id: 'rowboat', name: 'Rowboat', model: 'skiff', desc: 'An oared harbour boat. Precise, simple and made for sheltered water.',
+    level: 1, price: 60, rent: 5, deposit: 0, speed: 3.4, accel: 3, turn: 1.05, hull: 65, sails: 1, seaworthy: 1.2,
+    crewMin: 0, crewMax: 1, cargo: 2, draft: 0.3, guns: 0, harpoons: 0, length: 3.4, beam: 1.5, deckY: 0.2, helmZ: -0.3, capsize: 1.15,
+  },
   skiff: {
     id: 'skiff', name: 'Skiff', model: 'skiff', desc: 'A one-sail dinghy: quick, twitchy, and honest. Tips if you’re careless.',
     level: 1, price: 180, rent: 25, deposit: 60, speed: 6, accel: 1.4, turn: 0.75, hull: 60, sails: 40, seaworthy: 1.1,

@@ -1218,7 +1218,7 @@ export class Interior {
 
   /** Authored Aurelle rooms share building blocks, but have distinct plans and purposes. */
   private portRoom() {
-    if (this.door.pos.x < 2690 || this.door.pos.x > 3000) return false;
+    if (this.kind !== 'cabin' && (this.door.pos.x < 2690 || this.door.pos.x > 3000)) return false;
     const name = this.door.name ?? '',
       m = this.m,
       sm = sharedMats(),
@@ -1250,6 +1250,21 @@ export class Interior {
           6,
         );
     };
+    if (this.kind === 'cabin') {
+      chart(-1, -2);
+      this.bed(left + 1.3, back + 2.2, 0);
+      this.shelf(right - 0.4, back + 2.5, -Math.PI / 2, 3, 'books');
+      this.table(right - 1.5, 1.5, 2.2, 1.5);
+      this.box(m.timber, 1.5, 0.7, 0.8, left + 1, 0.35, 1.2, 0, true);
+      this.spots.cabinChart = {pos:this.at(-1,-.4),yaw:0,seated:false};
+      this.spots.cabinBunk = {pos:this.at(left+2.3,back+2.2),yaw:0,seated:false};
+      this.spots.cabinChest = {pos:this.at(left+2,1.2),yaw:0,seated:false};
+      this.inspectProp(right-1.4,1.5,'Inspect the captain’s desk','A compass, a tide glass and space for the records of your voyages. The crew know to bring important news here.');
+      const trophies=this.door.shipTrophies??[];this.shelf(right-.4,back+4.2,-Math.PI/2,2,'books');
+      trophies.forEach((name,i)=>{this.cyl(sm.iron,.15,.4,right-.7,.75,back+3.5+i*.32,false,8);});
+      this.inspectProp(right-1,back+4.2,'Inspect the trophy shelf',trophies.length?'Trophies of your voyages: '+trophies.join(', ')+'.':'An empty shelf, waiting for the trophies of your voyages.');
+      return true;
+    }
     if (this.kind === 'lighthouse') {
       // A two-level signal house with stairs, a machinery well and a working gallery.
       this.cyl(m.stone, 0.85, 5.2, 0, 2.6, -0.6, true, 14);

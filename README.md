@@ -134,3 +134,16 @@ npm test             # Playwright; starts Vite if it isn't running
 - HDRI and props come from Poly Haven (CC0).
 - Characters: Quaternius character kits (CC0); animations from Mixamo.
 - Swords, shields, armour, slimes, houses and trees are generated in code.
+
+## Sailing and swimming
+
+Every boat now has a sailing HUD. **W/S** set sail or rowing speed, **A/D** steer,
+**E** boards or docks, and **P** opens ship orders, charts, coastal work, provisions
+and control settings. Speed defaults to km/h; knots and detailed instruments are
+optional. Mira offers the free Sea Legs course and short coastal jobs.
+
+In water, **WASD** swims, **Shift** swims faster, **C** dives and **Space** rises.
+Rest at the surface to recover stamina and breath. Use **E** at a boat or harbour
+ladder to climb out. Larger ships have walkable captain’s cabins. Voyage saves
+resume your helm, deck, boarding encounter or swim. See the
+[seafaring rebuild](docs/design/seafaring-rework.md) for the full systems and checks.
