@@ -1,0 +1,121 @@
+/* The title screen (titleScreen.ts). Full-bleed moving painting, menu down the left, panels on the right. */
+
+#ui .ts-root {
+  position: fixed; inset: 0; z-index: 400; overflow: hidden; background: #07060a; color: #f3e6c4;
+  font-family: var(--sans, system-ui, sans-serif); user-select: none; cursor: default;
+  --ts-gold: #e8c77a; --ts-gold-dim: rgba(232, 199, 122, .55); --ts-ink: #f3e6c4;
+}
+
+/* ---- background ---------------------------------------------------------- */
+#ui .ts-bg { position: absolute; inset: -3%; transform: scale(1.06); will-change: transform; }
+#ui .ts-bg img, #ui .ts-bg video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#ui .ts-video { opacity: 0; transition: opacity 1.6s ease; }
+#ui .ts-root.ts-moving .ts-video { opacity: 1; }
+#ui .ts-root .ts-bg { animation: tsBreathe 38s ease-in-out infinite alternate; }
+@keyframes tsBreathe { from { filter: saturate(1) brightness(1); } to { filter: saturate(1.08) brightness(1.04); } }
+
+/* mist bands drifting over the valley */
+#ui .ts-mist { position: absolute; left: -50%; width: 200%; pointer-events: none; mix-blend-mode: screen; opacity: .22;
+  background: radial-gradient(ellipse 30% 60% at 20% 50%, rgba(200, 190, 230, .55), transparent 70%),
+              radial-gradient(ellipse 25% 50% at 60% 50%, rgba(220, 200, 240, .45), transparent 70%),
+              radial-gradient(ellipse 35% 55% at 90% 50%, rgba(190, 180, 220, .5), transparent 70%); }
+#ui .ts-mist.m1 { top: 52%; height: 26%; animation: tsMist 70s linear infinite; }
+#ui .ts-mist.m2 { top: 66%; height: 30%; opacity: .16; animation: tsMist 110s linear infinite reverse; }
+@keyframes tsMist { from { transform: translateX(0); } to { transform: translateX(25%); } }
+#ui .ts-motes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* the dark side the menu sits on, and a vignette */
+#ui .ts-shade { position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(5, 4, 10, .92) 0%, rgba(5, 4, 10, .78) 24%, rgba(5, 4, 10, .25) 46%, transparent 62%),
+    radial-gradient(ellipse 120% 90% at 60% 45%, transparent 55%, rgba(0, 0, 0, .55) 100%),
+    linear-gradient(0deg, rgba(0, 0, 0, .55), transparent 22%); }
+
+/* ---- left column: crest, name, menu ------------------------------------- */
+#ui .ts-side { position: absolute; left: clamp(28px, 5vw, 96px); top: 0; bottom: 0; width: clamp(300px, 30vw, 440px);
+  display: flex; flex-direction: column; justify-content: center; gap: clamp(18px, 4vh, 44px); }
+#ui .ts-brand { text-align: center; }
+#ui .ts-crest { width: clamp(84px, 12vh, 132px); height: auto; filter: drop-shadow(0 0 18px rgba(240, 180, 80, .35)) drop-shadow(0 6px 10px rgba(0, 0, 0, .8));
+  animation: tsCrest 6s ease-in-out infinite; }
+@keyframes tsCrest { 50% { filter: drop-shadow(0 0 28px rgba(255, 200, 100, .55)) drop-shadow(0 6px 10px rgba(0, 0, 0, .8)); } }
+#ui .ts-brand h1 { margin: 6px 0 0; font: 700 clamp(38px, 6.4vh, 64px)/1 var(--serif); letter-spacing: .16em; padding-left: .16em;
+  background: linear-gradient(180deg, #fff3cf 0%, #f2cf7c 45%, #b9802f 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(40, 20, 0, .9)) drop-shadow(0 0 22px rgba(240, 170, 60, .3)); }
+#ui .ts-rule { display: block; width: 82%; max-height: 34px; object-fit: contain; margin: 6px auto 4px; opacity: .9; }
+#ui .ts-brand p { margin: 0; font: italic 400 clamp(13px, 1.9vh, 17px)/1.3 var(--serif); letter-spacing: .14em; color: rgba(243, 230, 196, .72); text-transform: uppercase; }
+
+#ui .ts-menu { display: flex; flex-direction: column; gap: 4px; }
+#ui .ts-item { position: relative; display: flex; align-items: center; gap: 14px; width: 100%; padding: 8px 14px 8px 10px; border: 0; border-radius: 4px;
+  background: transparent; color: var(--ts-ink); text-align: left; cursor: pointer; font: inherit;
+  opacity: 0; transform: translateX(-16px); animation: tsIn .6s cubic-bezier(.2, .7, .2, 1) forwards; animation-delay: var(--d, .5s);
+  transition: background .25s, transform .25s; }
+@keyframes tsIn { to { opacity: 1; transform: none; } }
+#ui .ts-item::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; transform: scaleX(0); transform-origin: left;
+  background: linear-gradient(90deg, var(--ts-gold), transparent); transition: transform .35s ease; }
+#ui .ts-item::after { content: ''; position: absolute; left: -30px; top: 50%; width: 26px; height: 26px; margin-top: -13px; transform: scale(0);
+  background: url('/assets/art/title/gem.webp') center / contain no-repeat; filter: drop-shadow(0 0 8px rgba(255, 170, 60, .9)); transition: transform .25s cubic-bezier(.3, 1.6, .5, 1); }
+#ui .ts-item.sel { background: linear-gradient(90deg, rgba(232, 199, 122, .14), rgba(232, 199, 122, 0) 85%); }
+#ui .ts-item.sel::before { transform: scaleX(1); }
+#ui .ts-item.sel::after { transform: scale(1); animation: tsGem 2.4s ease-in-out infinite; }
+@keyframes tsGem { 50% { filter: drop-shadow(0 0 14px rgba(255, 190, 80, 1)); } }
+#ui .ts-icon { flex: none; width: 46px; height: 46px; display: grid; place-items: center; }
+#ui .ts-icon img { width: 46px; height: 46px; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .9)) saturate(.8) brightness(.85); transition: transform .3s, filter .3s; }
+#ui .ts-item.sel .ts-icon img { transform: scale(1.12) rotate(-4deg); filter: drop-shadow(0 0 10px rgba(255, 190, 90, .55)) drop-shadow(0 2px 3px rgba(0, 0, 0, .9)); }
+#ui .ts-label { display: flex; flex-direction: column; font: 600 clamp(17px, 2.5vh, 22px)/1.15 var(--serif); letter-spacing: .1em; text-transform: uppercase;
+  color: rgba(243, 230, 196, .82); transition: color .25s, letter-spacing .3s; text-shadow: 0 2px 4px rgba(0, 0, 0, .9); }
+#ui .ts-item.sel .ts-label { color: #fff4d6; letter-spacing: .13em; }
+#ui .ts-label small { margin-top: 3px; font: 400 12px/1.25 var(--sans, sans-serif); letter-spacing: .04em; text-transform: none; color: rgba(243, 230, 196, .55); }
+#ui .ts-item.sel .ts-label small { color: rgba(243, 230, 196, .8); }
+#ui .ts-item[data-i="0"] .ts-label { font-size: clamp(20px, 3vh, 26px); }
+
+/* ---- right panel (Load Game, Settings) ---------------------------------- */
+#ui .ts-panel { position: absolute; right: clamp(24px, 5vw, 90px); top: 50%; transform: translateY(-50%); width: min(460px, 40vw);
+  padding: 26px 28px 24px; border-radius: 6px; color: var(--ts-ink);
+  background: linear-gradient(180deg, rgba(24, 18, 12, .9), rgba(12, 9, 6, .92)); backdrop-filter: blur(8px);
+  box-shadow: 0 0 0 1px rgba(232, 199, 122, .45), 0 0 0 5px rgba(0, 0, 0, .35), 0 0 0 6px rgba(232, 199, 122, .2), 0 24px 60px rgba(0, 0, 0, .7);
+  animation: tsPanel .35s cubic-bezier(.2, .7, .2, 1); }
+#ui .ts-panel[hidden] { display: none; }
+#ui .ts-panel::before, #ui .ts-panel::after { content: ''; position: absolute; width: 64px; height: 64px; pointer-events: none;
+  background: url('/assets/art/title/corner.webp') center / contain no-repeat; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .8)); }
+#ui .ts-panel::before { left: -10px; top: -10px; }
+#ui .ts-panel::after { right: -10px; bottom: -10px; transform: rotate(180deg); }
+@keyframes tsPanel { from { opacity: 0; transform: translate(24px, -50%); } }
+#ui .ts-panel-body { max-height: 70vh; overflow: auto; padding-right: 4px; }
+#ui .ts-panel h2 { margin: 0 0 6px; font: 700 22px/1 var(--serif); letter-spacing: .16em; text-transform: uppercase; color: var(--ts-gold); }
+#ui .ts-note { margin: 0 0 14px; font-size: 13px; color: rgba(243, 230, 196, .6); }
+#ui .ts-close { position: absolute; right: 12px; top: 10px; border: 0; background: none; color: rgba(243, 230, 196, .6); font-size: 16px; cursor: pointer; }
+#ui .ts-close:hover { color: #fff; }
+#ui .ts-settings { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+#ui .ts-toggle { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 14px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(232, 199, 122, .25); background: rgba(255, 255, 255, .03); color: var(--ts-ink); font: 500 14px/1.2 var(--sans, sans-serif); text-align: left; }
+#ui .ts-toggle:hover { border-color: rgba(232, 199, 122, .6); background: rgba(232, 199, 122, .08); }
+#ui .ts-toggle b { font: 700 12px/1 var(--serif); letter-spacing: .12em; text-transform: uppercase; color: var(--ts-gold); white-space: nowrap; }
+/* the save list, restyled for the dark panel */
+#ui .ts-panel .save-slots { margin: 0; padding: 0; background: none; border: 0; box-shadow: none; color: var(--ts-ink); }
+#ui .ts-panel .save-slots .ss-head { display: none; }
+#ui .ts-panel .save-slots .ss-row { background: rgba(255, 255, 255, .04); border: 1px solid rgba(232, 199, 122, .22); color: var(--ts-ink); }
+#ui .ts-panel .save-slots .ss-row[data-load]:hover { border-color: rgba(232, 199, 122, .65); background: rgba(232, 199, 122, .1); }
+#ui .ts-panel .save-slots .ss-row.current { border-color: rgba(232, 199, 122, .7); }
+#ui .ts-panel .save-slots b { color: #fff1cf; }
+#ui .ts-panel .save-slots small, #ui .ts-panel .save-slots em { color: rgba(243, 230, 196, .6); }
+#ui .ts-panel .save-slots button { color: var(--ts-ink); background: rgba(255, 255, 255, .05); border-color: rgba(232, 199, 122, .35); }
+#ui .ts-panel .save-slots input { background: rgba(0, 0, 0, .4); color: #fff; border-color: rgba(232, 199, 122, .4); }
+
+/* ---- footer, intro and leaving ----------------------------------------- */
+#ui .ts-foot { position: absolute; right: 22px; bottom: 14px; display: flex; gap: 18px; font: 500 11px/1 var(--sans, sans-serif); letter-spacing: .14em;
+  text-transform: uppercase; color: rgba(243, 230, 196, .4); }
+#ui .ts-fade { position: absolute; inset: 0; background: #000; pointer-events: none; opacity: 0; transition: opacity .5s ease; }
+#ui .ts-root.ts-intro .ts-fade { opacity: 1; transition: none; }
+#ui .ts-root .ts-brand { animation: tsBrand 1.4s cubic-bezier(.2, .7, .2, 1) both; animation-delay: .15s; }
+@keyframes tsBrand { from { opacity: 0; transform: translateY(14px) scale(.97); filter: blur(4px); } }
+#ui .ts-root.ts-leaving .ts-fade { opacity: 1; }
+#ui .ts-root.ts-leaving { pointer-events: none; }
+
+@media (max-width: 760px) {
+  #ui .ts-side { left: 18px; right: 18px; width: auto; }
+  #ui .ts-panel { left: 12px; right: 12px; width: auto; }
+  #ui .ts-shade { background: rgba(5, 4, 10, .7); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #ui .ts-mist, #ui .ts-bg, #ui .ts-crest { animation: none; }
+}

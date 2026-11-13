@@ -227,6 +227,7 @@ import { loadArmourKit } from './enemies/armourKit';
 import { MINE_CLEARING } from './world/mineEntrance';
 import { loadSave, writeSave, buildSave, applySave } from './save';
 import { buildSavePicker } from './ui/savePicker';
+import { createTitleScreen, type TitleToggle } from './ui/titleScreen';
 import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 import { afflictions } from './combat/afflictions';
@@ -2511,7 +2512,6 @@ async function boot() {
   const overlays = buildOverlays((origin) => {
     if (origin) player.prog.origin = origin;
     started = true;
-    overlays.start.classList.remove('title-screen'); // the painting is for the first screen only; pause shows the world
     heroMade = true;
     // (A new game always begins in the wheat: the story starts there.)
     if (!arrived && !RETURNING_FROM_SANDBOX && saveData && !TEST_MODE && loadInto() === 'ghagrabba' && realm.mode === 'overworld' && !realm.interior) {
@@ -2638,6 +2638,48 @@ async function boot() {
   if (!TEST_MODE && !SANDBOX_MODE) {
     const picker = buildSavePicker(overlays.start.querySelector('.title-card')!);
     overlays.start.querySelector('.cta')!.after(picker.el);
+  }
+  // The title screen (ui/titleScreen.ts): the first thing you see. The old start card stays as the pause screen.
+  if (!TEST_MODE && !SANDBOX_MODE && !RETURNING_FROM_SANDBOX) {
+    overlays.start.classList.add('hidden');
+    const desk = (window as any).desktop as { quit(): void; toggleFullscreen(): void } | undefined;
+    const settings: TitleToggle[] = [
+      { label: 'Music', value: () => (music.muted ? 'Off' : 'On'), next: () => (music.setMuted(!music.muted), music.muted ? 'Off' : 'On') },
+      {
+        label: 'Damage numbers',
+        value: () => (hud.damageNumbers ? 'On' : 'Off'),
+        next: () => {
+          hud.damageNumbers = !hud.damageNumbers;
+          writeDamageNumbers(hud.damageNumbers);
+          return hud.damageNumbers ? 'On' : 'Off';
+        },
+      },
+    ];
+    if (saveData)
+      settings.push({
+        label: 'Continue at',
+        value: () => (loadInto() === 'ghagrabba' ? 'Gate of Ghagrabba' : 'Where you left off'),
+        next: () => {
+          try {
+            localStorage.setItem(LOAD_KEY, loadInto() === 'ghagrabba' ? 'saved' : 'ghagrabba');
+          } catch { /* (no storage) */ }
+          return loadInto() === 'ghagrabba' ? 'Gate of Ghagrabba' : 'Where you left off';
+        },
+      });
+    if (desk) settings.push({ label: 'Fullscreen', value: () => 'F11', next: () => (desk.toggleFullscreen(), 'F11') });
+    createTitleScreen({
+      begin: () => overlays.start.click(),
+      sandbox: () => {
+        save();
+        travelToSandbox(true);
+      },
+      controls: () => {
+        overlays.help.style.zIndex = '500';
+        overlays.help.classList.remove('hidden');
+      },
+      settings,
+      quit: desk ? () => desk.quit() : undefined,
+    });
   }
   document.addEventListener('pointerlockchange', () => {
     if (input.locked) hadLock = true;

@@ -833,11 +833,3 @@ body.book-open #ui .lesson-panel, #ui .lesson-panel.corner { top: auto; bottom: 
 @keyframes portraitIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (max-height: 640px) { #ui .dialogue .portrait { width: 120px; height: 120px; } }
 
-/* The first screen: the title painting (public/assets/art/title.webp) behind the card. */
-#ui .overlay.title-screen {
-  background:
-    radial-gradient(ellipse 60% 70% at 50% 55%, rgba(8, 5, 2, .15), rgba(8, 5, 2, .7) 100%),
-    #120b05 url('/assets/art/title.webp') center / cover no-repeat;
-  backdrop-filter: none;
-}
-#ui .overlay.title-screen .title-card { background-color: rgba(243, 230, 196, .94); }

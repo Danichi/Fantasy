@@ -14,3 +14,13 @@ Higgsfield `gpt_image_2_6` (medium quality, 2k) as sheets, then cut up here.
 Where it shows: `src/ui/bestiaryUI.ts` (plates), `src/ui/dialogue.ts` + `src/ui/art/portraits.ts` (portraits:
 named people first, then a stock type picked from their name and title), `src/ui/hud.ts` `regionCard`
 (first entry into a region, and a Full Chart), and the first screen (`.overlay.title-screen`).
+
+## Title screen (`public/assets/art/title/`)
+
+- `bg.webp`: the key art (gpt_image_2_6, 16:9, 2k), painted with the left third dark for the menu.
+- `loop.mp4`: Seedance 2.0 (720p, 10 s, start and end frame = the key art), then made seamless in the
+  Higgsfield sandbox by crossfading the last 1.2 s into the start (ffmpeg xfade), H.264 CRF 25, about 1 MB.
+- `icon-*.webp`, `crest.webp`, `divider.webp`, `corner.webp`, `gem.webp`: cut by `title.py` from a 3x3 icon
+  sheet and a 2x2 ornament sheet. The crest and corner had a white haze, removed by dropping pale, unsaturated pixels.
+- The screen itself: `src/ui/titleScreen.ts` and `.css`. The game's name and tagline are `GAME_NAME` and
+  `GAME_TAGLINE` at the top of that file.

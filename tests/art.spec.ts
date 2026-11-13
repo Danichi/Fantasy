@@ -11,7 +11,7 @@ test('every bestiary entry has a plate, every region a vista, and the files are 
     const ok = async (u: string) => (await fetch(u, { method: 'HEAD' })).ok;
     const missingPlates = ALL_ENTRIES.filter((id: string) => !ART.beast.includes(id));
     const missingRegions = Object.keys(REGION_NAMES).filter((id) => !ART.region.includes(id));
-    const files = await Promise.all([`/assets/art/beast/${ART.beast[0]}.webp`, `/assets/art/region/${ART.region[0]}.webp`, '/assets/art/title.webp'].map(ok));
+    const files = await Promise.all([`/assets/art/beast/${ART.beast[0]}.webp`, `/assets/art/region/${ART.region[0]}.webp`, '/assets/art/title/bg.webp'].map(ok));
     return { missingPlates, missingRegions, files };
   });
   expect(res.missingPlates).toEqual([]);
