@@ -74,5 +74,3 @@ Inventory icons, skill emblems and class crests are painted with Higgsfield
 - `emblem-manifest.py emblem-keys.json` lists the painted emblems in `manifest.json` (key `emblems`,
   emblem key to file) and bumps the version. `ui/icons.ts` uses them in place of the procedural
   medallions for skill nodes, the hotbar and class medallions (`class:<id>`).
-- `icon-sheets-pending.txt` holds finished sheets that are generated but not yet sliced into the repo
-  (sheet name, job id, image URL).
