@@ -1,3 +1,4 @@
+import './art/hudkit.css';
 import { DISCIPLINES } from '../paths/data';
 import * as THREE from 'three';
 import { peekCombat } from '../combat/core';
