@@ -83,3 +83,12 @@ Skip button ends just the film; tests and fast mode never play them.
   bar comes up (`hud.onBossShown`), holding the world still; the name and title come up over it.
 - `film/death.mp4` + `art/death/death.webp`: the death screen, a sword in a hill at dusk, looped (the same frame
   as start and end image so it loops cleanly), under "You Have Fallen" and a line from the Dawn (`hud.ts`).
+
+## Reward moments (`public/assets/art/reward/`, `src/ui/reward.ts`)
+
+- `burst.webp`: a painted burst of the Dawn's light (gpt_image_2_6, transparent), drawn twice behind the item,
+  turning slowly; tinted per rarity with hue-rotate (fine and key items gold, rare blue, epic violet, legendary
+  orange). `ribbon.webp`: the crimson and gold banner the item's name goes on.
+- Plays (world held still, a short synthesised fanfare, `sfx.itemGet`) the first time you hold a kind of item:
+  weapons from fine up, armour, shields and trinkets from rare up, key items, spells; and when you learn a new
+  discipline. Nothing from the starting kit or a loaded save. Waits while a film or story scene is up.

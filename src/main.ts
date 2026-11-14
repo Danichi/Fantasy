@@ -43,7 +43,9 @@ import { setupLoadout } from './items/loadout';
 import { FX } from './fx/particles';
 import { BeastSpawner } from './enemies/beastSpawner';
 import { Spells } from './magic/spells';
-import { buildIcons, pumpIcons, setOnIconsReady, loadBakedIcons, exportAllIcons } from './ui/icons';
+import { buildIcons, pumpIcons, setOnIconsReady, loadBakedIcons, exportAllIcons, iconFor, classEmblemIcon } from './ui/icons';
+import { RewardUI, rewardCaption, rewardPlaying } from './ui/reward';
+import { ICONS as CLASS_SIGILS, HEX as CLASS_HEX } from './ui/skillTree';
 import { HUD, writeDamageNumbers } from './ui/hud';
 import { regionArt } from './ui/art/portraits';
 import { InventoryUI, buildOverlays } from './ui/inventory';
@@ -2495,6 +2497,7 @@ async function boot() {
   };
   inv.onQuickDrop = (slot, uid) => hud.onSlotDrop?.('items', slot, uid);
   let started = TEST_MODE || SANDBOX_MODE;
+  let rewardsFrom = Infinity; // reward moments start a little after the game does (nothing from the starting kit or a loaded save)
   // Paused only when the player releases the mouse with Esc; the pause
   // overlay is always visible while paused, so the game never freezes silently.
   let pausedByUser = false;
@@ -2514,6 +2517,7 @@ async function boot() {
   const overlays = buildOverlays((origin) => {
     if (origin) player.prog.origin = origin;
     started = true;
+    rewardsFrom = performance.now() + 4000;
     heroMade = true;
     // (A new game always begins in the wheat: the story starts there.)
     if (!arrived && !RETURNING_FROM_SANDBOX && saveData && !TEST_MODE && loadInto() === 'ghagrabba' && realm.mode === 'overworld' && !realm.interior) {
@@ -2758,6 +2762,30 @@ async function boot() {
     }
   };
 
+  // The reward moment: a new weapon, good armour, a key item or a new discipline gets its own little scene.
+  const rewardUI = new RewardUI();
+  rewardUI.blocked = () => filmPlaying() || !!story.director.active || player.hp <= 0;
+  rewardUI.onOpen = () => {
+    input.uiMode = true;
+    input.exitLock();
+  };
+  rewardUI.onClose = () => {
+    input.uiMode = dialogue.open || inv.open || skills.open || mapUI.open || shopUI.open || questUI.open || repPanel.open;
+    if (!input.uiMode) input.requestLock();
+  };
+  const firstLine = (t: string) => (t.match(/^[^.!?]*[.!?]/)?.[0] ?? t).trim();
+  player.equip.onGain = (inst) => {
+    if (TEST_MODE || SANDBOX_MODE || performance.now() < rewardsFrom) return;
+    const caption = rewardCaption(inst.def);
+    if (!caption) return;
+    rewardUI.show({ caption, name: inst.def.name, sub: firstLine(inst.def.desc ?? ''), icon: () => iconFor(inst.def.id), rarity: inst.def.kind === 'key' ? 'key' : inst.def.rarity });
+  };
+  events.on('disciplineLearned', ({ id }) => {
+    const d = DISC[id];
+    if (!d || TEST_MODE || SANDBOX_MODE || performance.now() < rewardsFrom) return;
+    rewardUI.show({ caption: 'New discipline', name: d.name, sub: firstLine(d.flavour), icon: classEmblemIcon(d.id, CLASS_HEX[d.color] ?? '#d9b15a', CLASS_SIGILS[d.id] ?? CLASS_SIGILS.runecraft, d.fam), rarity: 'class' });
+  });
+
   // Boss intros: the first time a boss's bar comes up, its painted film plays and the world holds still.
   hud.onBossShown = (name) => {
     if (TEST_MODE || SANDBOX_MODE || filmPlaying() || story.director.active) return;
@@ -2978,7 +3006,7 @@ async function boot() {
     const simDt = dt * timeScale;
     acc += simDt;
     let steps = 0;
-    if (paused || overlayUp || mapUI.open || worldMap.open || story.director.holdWorld || filmPlaying()) acc = 0;
+    if (paused || overlayUp || mapUI.open || worldMap.open || story.director.holdWorld || filmPlaying() || rewardPlaying()) acc = 0;
     while (acc >= STEP && steps < MAX_STEPS) {
       acc -= STEP;
       steps++;

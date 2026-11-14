@@ -93,10 +93,13 @@ export class Equipment implements LimbFit {
   }
 
   // ---- inventory ----------------------------------------------------------
+  /** a kind of item you didn't have has just been added (main plays the reward moment for the good ones) */
+  onGain?: (inst: ItemInstance) => void;
   add(id: string, qty = 1, q?: number, rune?: string) {
     const base = ITEMS[id];
     if (!base) throw new Error('unknown item ' + id);
     const def = qualityDef(base, q, rune);
+    const isNew = !this.items.some((i) => i.def.id === id);
     if (def.stack) {
       const ex = this.items.find((i) => i.def.id === id && i.q === q && i.rune === rune);
       if (ex) {
@@ -108,6 +111,7 @@ export class Equipment implements LimbFit {
     if (q !== undefined) inst.q = q;
     if (rune) inst.rune = rune;
     this.items.push(inst);
+    if (isNew) this.onGain?.(inst);
     return inst;
   }
 
