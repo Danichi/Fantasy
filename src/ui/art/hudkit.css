@@ -1,0 +1,131 @@
+/* The hands and the hotbar, dressed in the painted UI kit (public/assets/art/ui/, tools/art/README.md):
+   gold filigree frames, a crimson plate for the hand's name tab, a parchment name plate, a leather
+   belt behind the hotbar and gold-rimmed gem badges for the keys. */
+
+/* ---------- the hands ---------- */
+#ui .loadout-wrap { gap: 22px; bottom: 26px; }
+#ui .hands { gap: 18px; }
+#ui .hand {
+  width: 200px; height: 112px; border: 0; background: none; box-shadow: none;
+  --tone: none; --well: rgba(120, 22, 18, 0.55);
+}
+#ui .hand.off { width: 178px; --tone: saturate(0.18) brightness(1.12); --well: rgba(70, 86, 110, 0.5); }
+/* the frame (its own layer, so the off hand can be silvered without greying the weapon) */
+#ui .hand::before {
+  content: ''; position: absolute; inset: 0; left: 0; top: 0; width: auto; height: auto; transform: none;
+  background: none; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.55);
+  border: 22px solid transparent; border-image: url('/assets/art/ui/slot.webp') 36 fill / 22px / 0 stretch;
+  filter: var(--tone);
+}
+/* the lit well behind the weapon */
+#ui .hand::after {
+  content: ''; position: absolute; inset: 16px 14px 20px; width: auto; height: auto; left: 14px; right: 14px; bottom: 20px; top: 16px;
+  transform: none; box-shadow: none;
+  background: radial-gradient(ellipse at 50% 55%, var(--well) 0%, rgba(10, 6, 6, 0.0) 70%),
+    radial-gradient(ellipse at 50% 120%, rgba(255, 214, 140, 0.18), transparent 60%);
+  pointer-events: none;
+}
+#ui .hand.main::before { box-shadow: 0 8px 18px rgba(0, 0, 0, 0.55), 0 0 18px rgba(240, 196, 110, 0.22); }
+#ui .hand .art { inset: 14px 18px 26px; z-index: 1; }
+#ui .hand .art img {
+  max-width: 108%; max-height: 108%;
+  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 10px rgba(255, 220, 150, 0.18));
+  transition: transform 0.25s ease;
+}
+#ui .hand.empty .art::after {
+  content: ''; width: 46px; height: 46px; opacity: 0.25;
+  background: radial-gradient(circle, transparent 54%, #d8c08a 56%, #d8c08a 60%, transparent 62%);
+}
+/* the name tab: a crimson plate over the top edge */
+#ui .hand .cap {
+  z-index: 2; top: -11px; left: 50%; transform: translateX(-50%); padding: 0; white-space: nowrap;
+  background: none; border: 9px solid transparent; border-image: url('/assets/art/ui/btn-red.webp') 40 110 fill / 9px 22px / 0 stretch;
+  font: 700 9px/1 'Cinzel', var(--serif); letter-spacing: 0.24em; color: #fbe6b8; text-shadow: 0 1px 1px #3a0806;
+}
+#ui .hand.off .cap { border-image-source: url('/assets/art/ui/btn-iron.webp'); color: #e3e7ee; text-shadow: 0 1px 1px #000; }
+/* the key: a small gold-rimmed gem in the corner */
+#ui .hand .keyhint {
+  z-index: 2; top: auto; bottom: 22px; right: 12px; padding: 3px 7px 2px; border-radius: 9px;
+  background: rgba(10, 8, 6, 0.78); border: 1px solid rgba(214, 178, 104, 0.7);
+  font: 700 8px/1 var(--sans); letter-spacing: 0.08em; color: #ead8ae; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+#ui .hand .keyhint:empty { display: none; }
+/* the weapon's name on a parchment plate across the bottom edge */
+#ui .hand .nm {
+  z-index: 2; left: 50%; right: auto; bottom: -9px; transform: translateX(-50%); max-width: calc(100% - 10px);
+  border: 9px solid transparent; border-image: url('/assets/art/ui/btn-parch.webp') 40 110 fill / 9px 20px / 0 stretch;
+  padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box;
+  font: 700 11px/1 'Cinzel', var(--serif); letter-spacing: 0.04em; color: #3a2610; text-shadow: 0 1px 0 rgba(255, 244, 214, 0.6);
+}
+#ui .hand.empty .nm { color: #7a6448; }
+#ui .hand .nm:empty { display: none; }
+
+/* ---------- the hotbar ---------- */
+#ui .quickside { gap: 4px; }
+/* ITEMS / MOVES as two little plates, the open one in crimson */
+#ui .bar-title { gap: 4px; margin-left: 6px; }
+#ui .bar-title span {
+  border: 8px solid transparent; border-image: url('/assets/art/ui/btn-leather.webp') 40 110 fill / 8px 18px / 0 stretch;
+  font: 700 9px/1 'Cinzel', var(--serif); letter-spacing: 0.22em; color: rgba(236, 220, 186, 0.55); padding: 0 2px;
+}
+#ui .bar-title span.on { border-image-source: url('/assets/art/ui/btn-red.webp'); color: #fbe6b8; text-shadow: 0 1px 1px #3a0806; }
+#ui .bar-title kbd {
+  margin-left: 4px; padding: 3px 6px 2px; border-radius: 3px; border: 1px solid rgba(214, 178, 104, 0.6); border-bottom-width: 2px;
+  background: rgba(10, 8, 6, 0.7); color: #ead8ae;
+}
+/* a leather belt behind the slots */
+#ui .hotbar {
+  gap: 4px; padding: 3px 10px;
+  border: 11px solid transparent; border-image: url('/assets/art/ui/btn-leather.webp') 40 110 fill / 11px 26px / 0 stretch;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55));
+}
+#ui .slot {
+  width: 60px; height: 60px; border: 0; background: none; box-shadow: none; --well: rgba(90, 20, 16, 0.6);
+}
+#ui .slot.move { --well: rgba(24, 40, 82, 0.7); }
+#ui .slot::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  border: 13px solid transparent; border-image: url('/assets/art/ui/slot.webp') 36 / 13px / 0 stretch;
+}
+#ui .slot::after {
+  content: ''; position: absolute; inset: 7px; z-index: -1; border-radius: 2px;
+  background: radial-gradient(circle at 50% 42%, var(--well), rgba(8, 6, 6, 0.92) 78%);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.9);
+}
+#ui .slot.move::before { filter: saturate(0.35) brightness(1.08); }
+#ui .slot img { inset: 8px; width: calc(100% - 16px); height: calc(100% - 16px); z-index: 1; }
+#ui .slot.skill svg { inset: 7px; width: calc(100% - 14px); height: calc(100% - 14px); z-index: 1; }
+#ui .slot .cd { inset: 7px; border-radius: 2px; z-index: 3; }
+/* the key number: a dark gem with a gold rim, over the top-left corner */
+#ui .slot .key {
+  z-index: 4; left: -4px; top: -4px; width: 17px; height: 17px; display: grid; place-items: center;
+  background: url('/assets/art/ui/btn-round.webp') center / 100% 100% no-repeat;
+  font: 700 9px/1 var(--sans); color: #f3e3bb; text-shadow: 0 1px 1px #000;
+}
+#ui .slot .qty {
+  z-index: 4; right: 6px; bottom: 5px; font: 700 11px/1 var(--sans); color: #fff6e0;
+  text-shadow: 0 1px 2px #000, 0 0 4px #000;
+}
+/* cost: a little pill on the bottom edge (blue for mana, gold for stamina and flow) */
+#ui .slot .cost {
+  z-index: 4; left: 50%; bottom: -5px; transform: translateX(-50%); padding: 2px 5px 1px; border-radius: 7px;
+  background: linear-gradient(#24407a, #132650); border: 1px solid #8fb6ff;
+  font: 700 8px/1 var(--sans); color: #e2ecff; text-shadow: none; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+#ui .slot.skill.dim svg { opacity: 0.5; filter: grayscale(0.3); }
+#ui .slot.spell::before { filter: hue-rotate(185deg) saturate(1.4); }
+#ui .slot.spell { box-shadow: 0 0 12px rgba(111, 168, 255, 0.45); }
+#ui .slot.interactive:hover::before { filter: brightness(1.25); }
+#ui .slot.move.interactive:hover::before { filter: saturate(0.35) brightness(1.35); }
+#ui .slot.dragover { outline: 2px solid var(--gold-bright); outline-offset: -4px; }
+
+@media (max-width: 900px) {
+  #ui .slot { width: 46px; height: 46px; }
+  #ui .hand { width: 156px; height: 90px; }
+  #ui .hand.off { width: 140px; }
+}
+@media (max-width: 600px) {
+  #ui .slot { width: 40px !important; height: 40px !important; }
+  #ui .hand { width: 128px; height: 74px; }
+  #ui .hand.off { width: 116px; }
+}

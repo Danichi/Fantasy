@@ -1,3 +1,4 @@
+import { showScene } from './art/scene';
 import { ITEMS, traitLines } from '../items/itemDefs';
 import './craft.css';
 import { iconFor } from './icons';
@@ -131,6 +132,8 @@ export class CraftUI {
     this.tried.clear();
     this.open = true;
     this.el.classList.remove('hidden');
+    this.el.dataset.station = station;
+    showScene(station);
     this.render(true);
     this.onToggle?.(true);
   }
@@ -139,6 +142,7 @@ export class CraftUI {
     if (!this.open) return;
     this.stopTiming();
     this.open = false;
+    showScene(null);
     this.el.classList.add('hidden');
     this.onToggle?.(false);
   }

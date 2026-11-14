@@ -53,7 +53,8 @@ export class Music {
   update(dt: number) {
     for (const z of Object.keys(this.tracks) as MusicZone[]) {
       const a = this.tracks[z];
-      const target = this.started && !this.muted && z === this.zone ? VOLUME : 0;
+      const duck = document.body.classList.contains('film-on') ? 0.25 : 1;
+      const target = this.started && !this.muted && z === this.zone ? VOLUME * duck : 0;
       const step = (VOLUME / FADE) * dt;
       const v = a.volume < target ? Math.min(target, a.volume + step) : Math.max(target, a.volume - step);
       if (v !== a.volume) a.volume = v;

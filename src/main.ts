@@ -44,7 +44,9 @@ import { setupLoadout } from './items/loadout';
 import { FX } from './fx/particles';
 import { BeastSpawner } from './enemies/beastSpawner';
 import { Spells } from './magic/spells';
-import { buildIcons, pumpIcons, setOnIconsReady, loadBakedIcons, exportAllIcons } from './ui/icons';
+import { buildIcons, pumpIcons, setOnIconsReady, loadBakedIcons, exportAllIcons, iconFor, classEmblemIcon } from './ui/icons';
+import { RewardUI, rewardCaption, rewardPlaying } from './ui/reward';
+import { ICONS as CLASS_SIGILS, HEX as CLASS_HEX } from './ui/skillTree';
 import { HUD, writeDamageNumbers } from './ui/hud';
 import { regionArt } from './ui/art/portraits';
 import { InventoryUI, buildOverlays } from './ui/inventory';
@@ -228,6 +230,8 @@ import { loadArmourKit } from './enemies/armourKit';
 import { MINE_CLEARING } from './world/mineEntrance';
 import { loadSave, writeSave, buildSave, applySave } from './save';
 import { buildSavePicker } from './ui/savePicker';
+import { createTitleScreen, type TitleToggle } from './ui/titleScreen';
+import { createPauseScreen } from './ui/pauseScreen';
 import { MicroDiscoveries } from './world/microDiscoveries';
 import { Gravewood } from './world/gravewood';
 import { afflictions } from './combat/afflictions';
@@ -245,6 +249,7 @@ import { mulberry32 } from './core/math';
 import { CATALOG_ITEMS, SOURCES as CATALOG_SOURCES } from './items/catalog';
 import { priceOf } from './items/catalog/sources';
 import { CHAPEL } from './world/kingsRoad';
+import { bossFilmFor, filmPlaying, filmSeen, playFilm } from './story/film';
 
 const STEP = 1 / 60;
 
@@ -2494,6 +2499,7 @@ async function boot() {
   };
   inv.onQuickDrop = (slot, uid) => hud.onSlotDrop?.('items', slot, uid);
   let started = TEST_MODE || SANDBOX_MODE;
+  let rewardsFrom = Infinity; // reward moments start a little after the game does (nothing from the starting kit or a loaded save)
   // Paused only when the player releases the mouse with Esc; the pause
   // overlay is always visible while paused, so the game never freezes silently.
   let pausedByUser = false;
@@ -2513,7 +2519,7 @@ async function boot() {
   const overlays = buildOverlays((origin) => {
     if (origin) player.prog.origin = origin;
     started = true;
-    overlays.start.classList.remove('title-screen'); // the painting is for the first screen only; pause shows the world
+    rewardsFrom = performance.now() + 4000;
     heroMade = true;
     // (A new game always begins in the wheat: the story starts there.)
     if (!arrived && !RETURNING_FROM_SANDBOX && saveData && !TEST_MODE && loadInto() === 'ghagrabba' && realm.mode === 'overworld' && !realm.interior) {
@@ -2623,11 +2629,67 @@ async function boot() {
     else if (!inv.open) input.requestLock();
     if (!open) save();
   };
+  // Settings shared by the title and pause screens (ui/titleScreen.ts, ui/pauseScreen.ts).
+  const desk = (window as any).desktop as { quit(): void; toggleFullscreen(): void } | undefined;
+  const menuSettings = (withLoadInto: boolean): TitleToggle[] => {
+    const out: TitleToggle[] = [
+      { label: 'Music', value: () => (music.muted ? 'Off' : 'On'), next: () => (music.setMuted(!music.muted), music.muted ? 'Off' : 'On') },
+      {
+        label: 'Damage numbers',
+        value: () => (hud.damageNumbers ? 'On' : 'Off'),
+        next: () => {
+          hud.damageNumbers = !hud.damageNumbers;
+          writeDamageNumbers(hud.damageNumbers);
+          return hud.damageNumbers ? 'On' : 'Off';
+        },
+      },
+    ];
+    if (withLoadInto)
+      out.push({
+        label: 'Continue at',
+        value: () => (loadInto() === 'ghagrabba' ? 'Gate of Ghagrabba' : 'Where you left off'),
+        next: () => {
+          try {
+            localStorage.setItem(LOAD_KEY, loadInto() === 'ghagrabba' ? 'saved' : 'ghagrabba');
+          } catch { /* (no storage) */ }
+          return loadInto() === 'ghagrabba' ? 'Gate of Ghagrabba' : 'Where you left off';
+        },
+      });
+    if (desk) out.push({ label: 'Fullscreen', value: () => 'F11', next: () => (desk.toggleFullscreen(), 'F11') });
+    return out;
+  };
+  const showControls = () => {
+    overlays.help.style.zIndex = '500';
+    overlays.help.classList.remove('hidden');
+  };
+  const pauseScreen = createPauseScreen({
+    resume: () => overlays.start.click(),
+    save: () => {
+      save();
+      hud.toast('Game saved');
+    },
+    settings: menuSettings(false),
+    controls: showControls,
+    extra: () =>
+      SANDBOX_MODE
+        ? [
+            { label: 'Sandbox controls', icon: 'sandbox', run: () => (pauseScreen.hide(), overlays.start.click(), sandbox?.openControls()) },
+            { label: 'Return to your adventure', sub: 'Saves the Sandbox first', icon: 'continue', run: () => (save(), travelToSandbox(false)) },
+          ]
+        : [{ label: 'Combat Sandbox', sub: 'Every build at full power', icon: 'sandbox', run: () => (save(), travelToSandbox(true)) }],
+    toTitle: () => location.reload(),
+    quit: desk ? () => desk.quit() : undefined,
+  });
   const pause = () => {
-    if (!started || (TEST_MODE && !SANDBOX_MODE) || inv.open || skills.open) return;
+    if (!started || (TEST_MODE && !SANDBOX_MODE) || inv.open || skills.open || pauseScreen.open) return;
     pausedByUser = true;
-    const day = time.label.split(', ');
-    overlays.showPaused(true, `<span><b>REGION</b>${SANDBOX_MODE ? 'Sandbox' : regionName}</span><span><b>${day[0] ?? 'DAY'}</b>${day[1] ?? ''}</span><span><b>LEVEL</b>${player.prog.level}</span><span><b>GOLD</b>${player.prog.gold.toLocaleString()}</span>`);
+    const [d0, d1] = time.label.split(', ');
+    pauseScreen.show((player.prog.look as { name?: string } | undefined)?.name || 'The world waits', [
+      { label: 'Region', value: SANDBOX_MODE ? 'Sandbox' : regionName },
+      { label: d0 ?? 'Day', value: d1 ?? '' },
+      { label: 'Level', value: String(player.prog.level) },
+      { label: 'Gold', value: player.prog.gold.toLocaleString() },
+    ]);
   };
   // The save as it was at boot: a fresh game autosaves while booting (the main
   // quest begins), and that must not hide the character creator.
@@ -2640,6 +2702,21 @@ async function boot() {
   if (!TEST_MODE && !SANDBOX_MODE) {
     const picker = buildSavePicker(overlays.start.querySelector('.title-card')!);
     overlays.start.querySelector('.cta')!.after(picker.el);
+  }
+  // The title screen (ui/titleScreen.ts): the first thing you see. The old start card stays as the pause screen.
+  if (!TEST_MODE && !SANDBOX_MODE && !RETURNING_FROM_SANDBOX) {
+    overlays.start.classList.add('hidden');
+    const settings = menuSettings(!!saveData);
+    createTitleScreen({
+      begin: () => overlays.start.click(),
+      sandbox: () => {
+        save();
+        travelToSandbox(true);
+      },
+      controls: showControls,
+      settings,
+      quit: desk ? () => desk.quit() : undefined,
+    });
   }
   document.addEventListener('pointerlockchange', () => {
     if (input.locked) hadLock = true;
@@ -2687,6 +2764,43 @@ async function boot() {
     }
   };
 
+  // The reward moment: a new weapon, good armour, a key item or a new discipline gets its own little scene.
+  const rewardUI = new RewardUI();
+  rewardUI.blocked = () => filmPlaying() || !!story.director.active || player.hp <= 0;
+  rewardUI.onOpen = () => {
+    input.uiMode = true;
+    input.exitLock();
+  };
+  rewardUI.onClose = () => {
+    input.uiMode = dialogue.open || inv.open || skills.open || mapUI.open || shopUI.open || questUI.open || repPanel.open;
+    if (!input.uiMode) input.requestLock();
+  };
+  const firstLine = (t: string) => (t.match(/^[^.!?]*[.!?]/)?.[0] ?? t).trim();
+  player.equip.onGain = (inst) => {
+    if (TEST_MODE || SANDBOX_MODE || performance.now() < rewardsFrom) return;
+    const caption = rewardCaption(inst.def);
+    if (!caption) return;
+    rewardUI.show({ caption, name: inst.def.name, sub: firstLine(inst.def.desc ?? ''), icon: () => iconFor(inst.def.id), rarity: inst.def.kind === 'key' ? 'key' : inst.def.rarity });
+  };
+  events.on('disciplineLearned', ({ id }) => {
+    const d = DISC[id];
+    if (!d || TEST_MODE || SANDBOX_MODE || performance.now() < rewardsFrom) return;
+    rewardUI.show({ caption: 'New discipline', name: d.name, sub: firstLine(d.flavour), icon: classEmblemIcon(d.id, CLASS_HEX[d.color] ?? '#d9b15a', CLASS_SIGILS[d.id] ?? CLASS_SIGILS.runecraft, d.fam), rarity: 'class' });
+  });
+
+  // Boss intros: the first time a boss's bar comes up, its painted film plays and the world holds still.
+  hud.onBossShown = (name) => {
+    if (TEST_MODE || SANDBOX_MODE || filmPlaying() || story.director.active) return;
+    const id = bossFilmFor(name);
+    if (!id || filmSeen(id)) return;
+    input.uiMode = true;
+    input.exitLock();
+    void playFilm(id).done.then(() => {
+      input.uiMode = dialogue.open || inv.open || skills.open || mapUI.open || shopUI.open || questUI.open || repPanel.open;
+      if (!input.uiMode) input.requestLock();
+    });
+  };
+
   events.on('playerDied', () => {
     if (SANDBOX_MODE) return;
     story.playerFell(); // a story fight you fell in waits for you to come back
@@ -2697,7 +2811,7 @@ async function boot() {
       const at = gravewood.respawnPoint ?? (realm.mode === 'overworld' && !realm.interior ? story.wheel.respawn : null) ?? realm.respawnPoint;
       player.respawn(at);
       cam.snapTo(at);
-    }, 4200);
+    }, TEST_MODE ? 4200 : 6500); // (long enough to take in the death screen)
   });
 
   // Nudge the player when they can afford their active class's next level.
@@ -2894,7 +3008,7 @@ async function boot() {
     const simDt = dt * timeScale;
     acc += simDt;
     let steps = 0;
-    if (paused || overlayUp || mapUI.open || worldMap.open || story.director.holdWorld) acc = 0;
+    if (paused || overlayUp || mapUI.open || worldMap.open || story.director.holdWorld || filmPlaying() || rewardPlaying()) acc = 0;
     while (acc >= STEP && steps < MAX_STEPS) {
       acc -= STEP;
       steps++;

@@ -119,6 +119,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
   const readIndex = () => {
     void story.play('archive', async (s) => {
       s.bars(true);
+      await s.film('academy');
       await s.say('Archivist Mell', 'Four names, each in a different hand, twenty years apart. The Temple sings of them as the Dawn\'s knights: heroes who came out of nowhere with the Sunwheel on them. I call them the dead.');
       await s.say('Archivist Mell', 'Elin. Eighty years ago. She wrote a journal, and walked into the wilds, and her grave was never found.');
       await s.say('Archivist Mell', 'Ser Oswald Marr. Sixty years ago. Buried somewhere under Hollow Ridge, the chronicle says, with a spoke of gold in his hands.');
@@ -226,6 +227,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
     const at = feastAt();
     void story.play('feast', async (s) => {
       s.bars(true);
+      await s.film('feast');
       await s.card('Act II', 'The Feast of the Dawn', '', 2.6);
       const varro = await s.actor(CHAMPIONS.varro.look, at.clone().add(new THREE.Vector3(3, 0, 2)), 0);
       varro.face(player.pos);
@@ -313,6 +315,7 @@ export function setupAct2(c: ActCtx & { lookOf: (id: string) => unknown }) {
     const at = plazaAt().clone().add(new THREE.Vector3(0, 0, -8));
     void story.play('duel', async (s) => {
       s.bars(true);
+      await s.film('duel');
       const m = await s.actor(CHAMPIONS.malric.look, at, 0);
       m.face(player.pos);
       await s.cam(at.clone().add(new THREE.Vector3(5, 2.4, 6)), at.clone().setY(at.y + 1.6), 0);

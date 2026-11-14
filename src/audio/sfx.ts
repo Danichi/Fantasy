@@ -51,6 +51,31 @@ function env(g: GainNode, t0: number, peak: number, attack: number, hold: number
 
 export const sfx = {
   enabled: true,
+  /** The reward fanfare: a bright rising arpeggio that blooms into a held chord (grand: a fuller, longer one). */
+  itemGet(grand = false, volume = 0.16) {
+    if (!this.enabled) return;
+    const { c, out } = audio();
+    const t = c.currentTime + 0.02;
+    // A little shimmer bus: a feedback delay so the notes ring on.
+    const dl = c.createDelay(), fb = c.createGain(), wet = c.createGain();
+    dl.delayTime.value = 0.19; fb.gain.value = 0.32; wet.gain.value = 0.35;
+    dl.connect(fb).connect(dl); dl.connect(wet).connect(out);
+    const note = (f: number, at: number, dur: number, v: number, type: OscillatorType = 'triangle') => {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = type; o.frequency.value = f;
+      env(g, t + at, v, 0.012, dur * 0.25, dur);
+      o.connect(g); g.connect(out); g.connect(dl);
+      o.start(t + at); o.stop(t + at + dur + 0.6);
+    };
+    // E5 G#5 B5 E6, then the chord with a high sparkle.
+    const run = grand ? [659.3, 830.6, 987.8, 1174.7, 1318.5] : [659.3, 830.6, 987.8, 1318.5];
+    run.forEach((f, i) => note(f, i * 0.085, 0.28, volume * 0.8));
+    const at = run.length * 0.085 + 0.04;
+    const chord = grand ? [329.6, 415.3, 493.9, 659.3, 987.8] : [415.3, 493.9, 659.3];
+    chord.forEach((f) => note(f, at, grand ? 2.2 : 1.5, volume * 0.55, 'sine'));
+    note(chord[chord.length - 1] * 2, at + 0.05, grand ? 1.8 : 1.2, volume * 0.35, 'sine');
+    [2637, 3136, 3951].forEach((f, i) => note(f, at + 0.1 + i * 0.07, 0.5, volume * 0.12, 'sine'));
+  },
   /** Aurelle's bronze bell: a low fundamental and gently dissonant partials. */
   harbourBell(volume=.2){
     if(!this.enabled)return;

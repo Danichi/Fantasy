@@ -1,3 +1,4 @@
+import './art/hudkit.css';
 import { DISCIPLINES } from '../paths/data';
 import * as THREE from 'three';
 import { ATTACK_CUE } from '../combat/readability';
@@ -10,6 +11,16 @@ import { targets } from '../combat/targets';
 import { events } from '../core/events';
 import { iconFor, wideIconFor } from './icons';
 import { ArmourBar } from './armourBar';
+
+/** What the Dawn says over the death screen. */
+const DEATH_LINES = [
+  'Not yet, Fifth. Get up.',
+  'My fourth fell here too. Do better than him.',
+  'The Dark felt that. Get up before it comes looking.',
+  'Again. Slower this time. Watch what it does.',
+  'You are not done. I have not finished with you.',
+  'Breathe. Then go back and finish it.',
+];
 
 // Heads-up display: vitals (top right); bottom left, the two big hand frames
 // (main / off hand) beside a bar that Tab flips between quick items (keys 1-4)
@@ -144,7 +155,7 @@ export class HUD {
     this.reticle = el('div', 'reticle', this.root);
     this.toastEl = el('div', 'toast', this.root);
     this.banner = el('div', 'banner', this.root);
-    this.death = el('div', 'death', this.root, '<h1>YOU DIED</h1>');
+    this.death = el('div', 'death', this.root, `<video muted loop playsinline preload="none"></video><div class="death-shade"></div><div class="death-card"><small>The Dawn's light gutters</small><h1>You Have Fallen</h1><div class="death-rule"></div><p class="death-line"></p><span class="death-rise">Rising again at the Sunwheel</span></div>`);
     this.promptEl = el('div', 'prompt', this.root);
     // The boss bar sits at the top centre, under the compass: a brass-framed
     // bar under a parchment name plate, with notches where its phases turn.
@@ -188,9 +199,12 @@ export class HUD {
       this.vignette.classList.add('hurt');
       requestAnimationFrame(() => requestAnimationFrame(() => this.vignette.classList.remove('hurt')));
     });
-    events.on('playerDied', () => this.death.classList.add('show'));
+    events.on('playerDied', () => this.showDeath());
     events.on('originAbility', ({ ability }) => this.showBanner(ability.toUpperCase()));
-    events.on('playerRespawned', () => this.death.classList.remove('show'));
+    events.on('playerRespawned', () => {
+      this.death.classList.remove('show');
+      setTimeout(() => (this.death.querySelector('video') as HTMLVideoElement).pause(), 1300);
+    });
   }
 
   /** Interaction prompt ("E  Open chest"); null hides it. */
@@ -209,7 +223,10 @@ export class HUD {
    * health fractions where the fight turns, marked as notches on the bar.
    */
   bossBar(t: { hp: number; maxHp: number; alive: boolean } | null, name = 'Grukk, the Orc Warlord', phases: number[] = []) {
-    if (t && !this.boss) this.bossTrail = t.hp / t.maxHp;
+    if (t && !this.boss) {
+      this.bossTrail = t.hp / t.maxHp;
+      this.onBossShown?.(name);
+    }
     this.boss = t;
     this.bossEl.classList.toggle('show', !!t);
     // Other top-of-screen pieces (the region card, the waypoint) make room while it shows.
@@ -227,6 +244,20 @@ export class HUD {
       notches.innerHTML = phases.map((f) => `<u style="left:${(f * 100).toFixed(1)}%"></u>`).join('');
     }
   }
+  /** The death screen: the painted field (a slow loop), the title, and a word from the Dawn. */
+  private showDeath() {
+    const v = this.death.querySelector('video') as HTMLVideoElement;
+    if (!v.src) {
+      v.poster = `${import.meta.env.BASE_URL}assets/art/death/death.webp`;
+      v.src = `${import.meta.env.BASE_URL}assets/film/death.mp4`;
+    }
+    v.currentTime = 0;
+    void v.play().catch(() => {});
+    this.death.querySelector('.death-line')!.textContent = DEATH_LINES[Math.floor(Math.random() * DEATH_LINES.length)];
+    this.death.classList.add('show');
+  }
+  /** a boss bar has just come up (main plays the boss's intro film, the first time) */
+  onBossShown?: (name: string) => void;
   private bossWp: HTMLElement | null = null;
   private bossOverlapT = 0;
   /** Dim the quest waypoint while it sits under the boss bar (checked a few times a second). */

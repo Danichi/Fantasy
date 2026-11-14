@@ -1,0 +1,101 @@
+/* ---------------------------------------------------------------------------
+   The painted UI kit (Higgsfield, public/assets/art/ui/): a carved walnut and
+   gold frame round the book, gilded plates for its tabs, and the same plates
+   for buttons everywhere. Every plate stretches to any width (nine-slice:
+   the gold corners stay put, the face between them stretches).
+   - btn-red: the thing you most likely want (Equip, Buy, Make, the open sub-tab)
+   - btn-iron: other buttons on dark pages
+   - btn-leather: other buttons on parchment pages, and closed tabs
+   - btn-parch: the open tab
+   - btn-round: close buttons. slot: equipment and quick slots.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --ui-red: url('/assets/art/ui/btn-red.webp');
+  --ui-iron: url('/assets/art/ui/btn-iron.webp');
+  --ui-leather: url('/assets/art/ui/btn-leather.webp');
+  --ui-parch: url('/assets/art/ui/btn-parch.webp');
+}
+
+/* ---- the frame round the book -------------------------------------------- */
+#ui .bk-ornate {
+  position: absolute; top: 14px; bottom: 14px; left: var(--bk-x); right: var(--bk-x); z-index: 27; pointer-events: none;
+  border: 26px solid transparent; margin: -12px;
+  border-image: url('/assets/art/ui/frame.webp') 176 / 64px / 0 stretch;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .6));
+}
+#ui .bk-ornate::after {
+  content: ''; position: absolute; left: 50%; top: -20px; width: 44px; height: 72px; transform: translateX(-50%);
+  background: url('/assets/art/ui/frame-crest.webp') center top / contain no-repeat;
+}
+#ui .bk-ornate.hidden { display: none; }
+/* the old flat rim is replaced by the carved one */
+#ui .book-frame::after { box-shadow: none; }
+
+/* ---- plates: the shared look ------------------------------------------- */
+/* (border-image: slice the painted plate 40px top and bottom, 110px at the ends, and draw it 13px / 36px) */
+#ui .bk-tabs button, #ui .bk-subs button,
+#ui .inv2 .detail .dact button, #ui .inv2 .inv-view button,
+#ui .shop2 nav button, #ui .shop2 .sc-chips button, #ui .shop2 .sc-buy button, #ui .shop2 footer button,
+#ui .sk-btn, #ui .journal .jq-btn {
+  border-style: solid !important; border-color: transparent !important; border-radius: 0 !important;
+  border-width: 11px 30px !important;
+  border-image: var(--ui-iron) 40 110 fill / 11px 30px / 0 stretch !important;
+  background: none !important; box-shadow: none !important;
+  padding: 1px 4px !important; min-height: 34px; min-width: 64px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font: 700 12px/1 var(--serif) !important; letter-spacing: .14em !important; text-transform: uppercase;
+  color: #f3e3b8 !important; text-shadow: 0 1px 2px rgba(0, 0, 0, .9) !important;
+  transition: filter .15s, transform .15s;
+  cursor: pointer;
+}
+#ui .bk-tabs button:hover, #ui .bk-subs button:hover,
+#ui .inv2 .detail .dact button:hover, #ui .inv2 .inv-view button:hover,
+#ui .shop2 nav button:hover, #ui .shop2 .sc-chips button:hover, #ui .shop2 .sc-buy button:hover, #ui .shop2 footer button:hover,
+#ui .sk-btn:hover, #ui .journal .jq-btn:hover { filter: brightness(1.18) drop-shadow(0 0 6px rgba(255, 200, 110, .35)); transform: translateY(-1px); }
+#ui .bk-tabs button:active, #ui .bk-subs button:active, #ui .sk-btn:active, #ui .shop2 .sc-buy button:active { transform: translateY(1px); filter: brightness(.95); }
+
+/* the thing you most likely want: red */
+#ui .inv2 .detail .dact button:not(.small), #ui .shop2 .sc-buy button, #ui .sk-btn.primary, #ui .journal .jq-btn.primary,
+#ui .bk-subs button.on, #ui .shop2 nav button.on, #ui .shop2 .sc-chips button.on, #ui .inv2 .inv-view button.on {
+  border-image-source: var(--ui-red) !important; color: #fff1d0 !important;
+}
+#ui .shop2 .sc-buy button.poor { filter: grayscale(.7) brightness(.8); opacity: .7; }
+
+/* on parchment pages, the quiet buttons are leather */
+#ui .shop2 nav button:not(.on), #ui .shop2 .sc-chips button:not(.on), #ui .shop2 footer button, #ui .journal .jq-btn:not(.primary) { border-image-source: var(--ui-leather) !important; }
+
+/* ---- the book's tabs: leather, the open one parchment ----------------- */
+#ui .book-frame .bk-tabs { gap: 6px; align-items: flex-end; }
+#ui .book-frame .bk-tabs button { border-image-source: var(--ui-leather) !important; border-width: 13px 34px !important; border-image-width: 13px 34px !important;
+  min-height: 42px; padding: 0 6px !important; font-size: 13px !important; letter-spacing: .2em !important; color: rgba(243, 227, 184, .78) !important; }
+#ui .book-frame .bk-tabs button.on { border-image-source: var(--ui-parch) !important; color: #4a1a0c !important; text-shadow: 0 1px 0 rgba(255, 245, 215, .7) !important; transform: translateY(2px); }
+#ui .book-frame .bk-tabs button kbd { border-color: rgba(240, 210, 138, .35); color: rgba(240, 210, 138, .75); background: rgba(0, 0, 0, .35); }
+#ui .book-frame .bk-tabs button.on kbd { color: #7a1f12; border-color: rgba(122, 31, 18, .45); background: rgba(255, 240, 200, .5); }
+#ui .book-frame .bk-subs { gap: 4px; padding-top: 6px; padding-bottom: 6px; }
+#ui .book-frame .bk-subs button { min-height: 30px; min-width: 0; font-size: 11px !important; letter-spacing: .12em !important; border-width: 9px 26px !important; border-image-width: 9px 26px !important; }
+#ui .book-frame .bk-subs button kbd { background: rgba(0, 0, 0, .3); color: rgba(240, 210, 138, .75); border-color: rgba(240, 210, 138, .3); }
+
+/* ---- close buttons: a gold-ringed iron disc ---------------------------- */
+#ui .book-frame .bk-close, #ui .shop2 header button, #ui .journal header button {
+  width: 40px !important; height: 40px !important; padding: 0 !important; border: 0 !important; border-radius: 50% !important;
+  background: url('/assets/art/ui/btn-round.webp') center / contain no-repeat !important; box-shadow: none !important;
+  color: #f0d28a !important; font: 700 15px/1 var(--serif) !important; text-shadow: 0 1px 2px #000;
+  transition: transform .2s, filter .2s;
+}
+#ui .book-frame .bk-close:hover, #ui .shop2 header button:hover, #ui .journal header button:hover { transform: rotate(90deg); filter: brightness(1.2) drop-shadow(0 0 6px rgba(255, 190, 90, .5)); }
+
+/* ---- equipment and quick slots: gilded frames -------------------------- */
+#ui .inv2 .eqslot .ic, #ui .inv2 .qslot {
+  background: url('/assets/art/ui/slot.webp') center / 100% 100% no-repeat !important; border: 0 !important; box-shadow: none !important; border-radius: 0 !important;
+}
+#ui .inv2 .eqslot .ic img, #ui .inv2 .qslot img { transform: scale(.78); }
+
+/* ---- shop, workshop and brewing windows: the same carved frame ---------- */
+#ui .shop2, #ui .bw:not(.bk-page) .bw-book {
+  border: 20px solid transparent !important; border-radius: 0 !important;
+  border-image: url('/assets/art/ui/frame.webp') 176 / 52px / 12px stretch !important;
+  background-clip: padding-box !important; background-origin: padding-box !important;
+}
+#ui .shop2.craft::before, #ui .shop2:not(.craft)::before { left: 0; right: 0; top: 0; border-radius: 0; }
+#ui .shop2 footer button * { color: #ffd88a !important; }

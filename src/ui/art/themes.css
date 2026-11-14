@@ -1,0 +1,88 @@
+/* ---------------------------------------------------------------------------
+   Painted surfaces for the menus (Higgsfield, public/assets/art/theme/ and
+   art/scene/). Each page gets the look of what it is:
+   - Gear & Bag, Stats: tooled leather from an adventurer's satchel
+   - Skills (Disciplines, Attributes, Mastery, Loadout, Class Atlas): a star chart
+   - Seamanship: a dark sea chart
+   - Journal (Quests, People, Bestiary, Almanac): an explorer's journal page
+   - Herbal and the brewing bench: a botanist's folio
+   - Workshops and shops: the room itself painted behind the window (scene.ts)
+   A dark wash over each keeps the writing on top readable.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --theme-leather: url('/assets/art/theme/leather.webp');
+  --theme-leather-plain: url('/assets/art/theme/leather-plain.webp');
+  --theme-stars: url('/assets/art/theme/starchart.webp');
+  --theme-sea: url('/assets/art/theme/seachart.webp');
+  --theme-journal: url('/assets/art/theme/journal.webp');
+  --theme-herbal: url('/assets/art/theme/herbal.webp');
+}
+
+/* ---- Gear & Bag, Stats: leather ---------------------------------------- */
+/* the bag: the whole tooled panel, border and rivets */
+#ui .inv2 > section:not(.inv-char) {
+  background: linear-gradient(180deg, rgba(14, 9, 5, .35), rgba(8, 5, 3, .55)), var(--theme-leather) center / 100% 100%, #1c120a;
+  border-color: rgba(214, 170, 92, .45);
+}
+/* the cards round the character: plain leather */
+#ui .inv2 .inv-char > header, #ui .inv2 .inv-char .summary, #ui .inv2 .inv-char .inv-quick, #ui .inv2 .inv-char .slots, #ui .inv2 .inv-char .weapons {
+  background: linear-gradient(180deg, rgba(14, 9, 5, .35), rgba(8, 5, 3, .55)), var(--theme-leather-plain) center / cover, #1c120a;
+  border-color: rgba(214, 170, 92, .45);
+}
+#ui .inv2 .item, #ui .inv2 .slot { background-color: rgba(0, 0, 0, .34); }
+
+/* ---- Skills: a star chart ---------------------------------------------- */
+#ui .sk.sk:not(.sea) {
+  background: radial-gradient(ellipse 90% 80% at 50% 45%, rgba(6, 8, 18, .2), rgba(4, 5, 12, .5)), var(--theme-stars) center / cover, #070914;
+}
+/* ---- Seamanship: a sea chart -------------------------------------------- */
+#ui .sk.sk.sea {
+  background: radial-gradient(ellipse 90% 80% at 50% 45%, rgba(4, 10, 16, .15), rgba(3, 6, 10, .45)), var(--theme-sea) center / cover, #050b12;
+}
+
+/* ---- Journal pages: an explorer's journal -------------------------------- */
+#ui .journal.journal {
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(255, 248, 228, .25), rgba(255, 248, 228, 0) 70%),
+    var(--theme-journal) center / cover,
+    linear-gradient(180deg, var(--parch-hi), var(--parch-lo));
+}
+
+/* ---- Herbal and the brewing bench: a botanist's folio -------------------- */
+#ui .bw-book.bw-book {
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(255, 250, 232, .25), rgba(255, 250, 232, 0) 70%),
+    var(--theme-herbal) center / cover,
+    linear-gradient(180deg, var(--parch-hi), var(--parch-lo));
+}
+/* the bench itself (not the codex in the book): the alchemist's room behind it */
+#ui .bw:not(.bk-page) {
+  background: radial-gradient(ellipse at center, rgba(20, 12, 6, .35), rgba(6, 4, 2, .82) 78%), url('/assets/art/scene/alchemy.webp') center / cover;
+}
+
+/* ---- Workshops and shops: the room behind the window (scene.ts) -------- */
+#ui .ui-scene {
+  position: absolute; inset: 0; z-index: 20; pointer-events: none; opacity: 0; transition: opacity .35s ease;
+  background: #0c0806 center / cover no-repeat;
+}
+#ui .ui-scene::after {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(ellipse 70% 75% at 50% 50%, rgba(8, 5, 3, .3), rgba(5, 3, 2, .62) 100%);
+}
+#ui .ui-scene.on { opacity: 1; animation: sceneDrift 40s ease-in-out infinite alternate; }
+@keyframes sceneDrift { from { background-position: 48% 50%; } to { background-position: 52% 48%; } }
+body.scene-open .vitals, body.scene-open .wmini, body.scene-open .quest-tracker, body.scene-open .loadout-wrap, body.scene-open .hint,
+body.scene-open .book-button { visibility: hidden; }
+
+/* a workshop's card wears its trade: a thin painted strip of the room across its top */
+#ui .shop2.craft::before, #ui .shop2:not(.craft)::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 6px; border-radius: 4px 4px 0 0; pointer-events: none;
+  background: linear-gradient(90deg, rgba(122, 31, 18, .9), rgba(214, 160, 70, .95), rgba(122, 31, 18, .9));
+}
+#ui .shop2.craft[data-station='forge']::before { background: linear-gradient(90deg, #5a1a08, #f08a2a, #5a1a08); }
+#ui .shop2.craft[data-station='kitchen']::before { background: linear-gradient(90deg, #5a3208, #e8b04a, #5a3208); }
+#ui .shop2.craft[data-station='loom']::before { background: linear-gradient(90deg, #3a1840, #c47ad0, #3a1840); }
+#ui .shop2.craft[data-station='workbench']::before { background: linear-gradient(90deg, #3a260f, #c9935a, #3a260f); }
+#ui .shop2.craft[data-station='runestone']::before { background: linear-gradient(90deg, #0d2a3a, #6ad0ff, #0d2a3a); }
+#ui .shop2.craft[data-station='alchemy']::before { background: linear-gradient(90deg, #143a1a, #7ee08a, #143a1a); }
