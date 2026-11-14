@@ -73,3 +73,13 @@ Skip button ends just the film; tests and fast mode never play them.
   1280x720, 24 fps, faststart).
 - The prologue: `film_build.py fall "f1:9.0,f4:9.0,f5:7.2,f6:14.2,f7:12.2,f2:5.8,f3:5.1" prologue.wav 1.5`; the
   others are one 8 s shot each (`bells` 10 s). `wheelshield` plays mid-scene, after Ysra steps in.
+
+## Boss intros and the death screen
+
+- `public/assets/film/boss-<id>.mp4`: a 6 s intro for twelve bosses (Grukk, Edric, the Rust Knight, the Hollow
+  Thane, the Mother Ooze, Varga, the Delver, the Wraith of the Wrong Circle, Greymane, Thornhorn, the Kraken, the
+  Storm Wyrm). Key frames gpt_image_2_6 written to match each bestiary plate; clips seedance_2_0_mini 720p.
+  `BOSS_FILMS` in `src/story/film.ts` matches a boss bar's name to its film; main plays it the first time that
+  bar comes up (`hud.onBossShown`), holding the world still; the name and title come up over it.
+- `film/death.mp4` + `art/death/death.webp`: the death screen, a sword in a hill at dusk, looped (the same frame
+  as start and end image so it loops cleanly), under "You Have Fallen" and a line from the Dawn (`hud.ts`).

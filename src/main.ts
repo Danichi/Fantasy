@@ -246,6 +246,7 @@ import { mulberry32 } from './core/math';
 import { CATALOG_ITEMS, SOURCES as CATALOG_SOURCES } from './items/catalog';
 import { priceOf } from './items/catalog/sources';
 import { CHAPEL } from './world/kingsRoad';
+import { bossFilmFor, filmPlaying, filmSeen, playFilm } from './story/film';
 
 const STEP = 1 / 60;
 
@@ -2757,6 +2758,19 @@ async function boot() {
     }
   };
 
+  // Boss intros: the first time a boss's bar comes up, its painted film plays and the world holds still.
+  hud.onBossShown = (name) => {
+    if (TEST_MODE || SANDBOX_MODE || filmPlaying() || story.director.active) return;
+    const id = bossFilmFor(name);
+    if (!id || filmSeen(id)) return;
+    input.uiMode = true;
+    input.exitLock();
+    void playFilm(id).done.then(() => {
+      input.uiMode = dialogue.open || inv.open || skills.open || mapUI.open || shopUI.open || questUI.open || repPanel.open;
+      if (!input.uiMode) input.requestLock();
+    });
+  };
+
   events.on('playerDied', () => {
     if (SANDBOX_MODE) return;
     story.playerFell(); // a story fight you fell in waits for you to come back
@@ -2767,7 +2781,7 @@ async function boot() {
       const at = gravewood.respawnPoint ?? (realm.mode === 'overworld' && !realm.interior ? story.wheel.respawn : null) ?? realm.respawnPoint;
       player.respawn(at);
       cam.snapTo(at);
-    }, 4200);
+    }, TEST_MODE ? 4200 : 6500); // (long enough to take in the death screen)
   });
 
   // Nudge the player when they can afford their active class's next level.
@@ -2964,7 +2978,7 @@ async function boot() {
     const simDt = dt * timeScale;
     acc += simDt;
     let steps = 0;
-    if (paused || overlayUp || mapUI.open || worldMap.open || story.director.holdWorld) acc = 0;
+    if (paused || overlayUp || mapUI.open || worldMap.open || story.director.holdWorld || filmPlaying()) acc = 0;
     while (acc >= STEP && steps < MAX_STEPS) {
       acc -= STEP;
       steps++;
