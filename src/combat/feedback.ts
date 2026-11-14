@@ -51,6 +51,11 @@ export function combatFeedback(fx: FX, player: Player, banner: (text: string) =>
     sfx.sting(kind, (kind === 'normal' ? 0.12 : 0.32) * v);
   });
 
+  events.on('attackReleased', ({ target, kind }) => {
+    const volume = near(target.center);
+    if (volume > 0) sfx.whoosh(kind === 'normal' ? 0.25 : 0.7, 0.22 * volume);
+  });
+
   // ---- the player's blows ----
   events.on('swing', ({ heavy }) => {
     const kind = player.equip?.mainWeapon?.def.kind ?? '';

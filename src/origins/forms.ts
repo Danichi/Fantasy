@@ -168,6 +168,10 @@ export class Forms {
   }
 
   update(dt: number, m: CombatMods) {
+    const root = this.p.char.root;
+    const s = root.scale.x + (this.scale - root.scale.x) * Math.min(1, dt * 5);
+    root.scale.setScalar(Math.abs(s - this.scale) < 0.01 ? this.scale : s);
+
     for (const [f, v] of this.left) {
       if (v - dt <= 0) this.end(f);
       else this.left.set(f, v - dt);
@@ -189,10 +193,7 @@ export class Forms {
     }
   }
 
-  frame(dt: number) {
-    const root = this.p.char.root;
-    const s = root.scale.x + (this.scale - root.scale.x) * Math.min(1, dt * 5);
-    root.scale.setScalar(Math.abs(s - this.scale) < 0.01 ? this.scale : s);
+  frame(_dt: number) {
     if (this.on('rage')) this.weaponsVisible(false);
   }
 

@@ -20,12 +20,17 @@ export class SandboxTarget implements Target {
   position: THREE.Vector3;
   readonly group = new THREE.Group();
   private broken = 0;
+  private clock = 0;
+  private home: THREE.Vector3;
   constructor(
     private scene: THREE.Scene,
     at: THREE.Vector3,
     hp: number,
     private immortal: () => boolean,
+    private moving = false,
   ) {
+    this.home = at.clone();
+    if (moving) this.label = 'Moving range target';
     this.position = at.clone();
     this.center = at.clone().add(new THREE.Vector3(0, 1.1, 0));
     this.hp = this.maxHp = hp;
@@ -55,6 +60,12 @@ export class SandboxTarget implements Target {
     this.stunned = true;
   }
   update(dt: number) {
+    this.clock += dt;
+    if (this.moving) {
+      this.position.x = this.home.x + Math.sin(this.clock * 0.8) * 3;
+      this.group.position.copy(this.position);
+      this.center.copy(this.position).y += 1.1;
+    }
     this.broken = Math.max(0, this.broken - dt);
     this.stunned = this.broken > 0;
     this.group.rotation.z = this.stunned ? 0.1 : 0;

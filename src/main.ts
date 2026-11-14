@@ -18,6 +18,7 @@ import { NAMED_KINDS, RANKS, rankIndex } from './guild/ranks';
 import type { HallId } from './guild/contracts';
 import type { StationKind } from './crafting/recipes';
 import { Mastery, wireMastery } from './paths/mastery';
+import { CombatTelegraphs } from './combat/telegraphs';
 import { CombatDebug } from './combat/debugOverlay';
 import { WeaponTrail } from './fx/weaponTrail';
 import './render/stylize';
@@ -574,6 +575,7 @@ async function boot() {
   const hud = new HUD(player, r.camera);
   // Combat rework: tells, impacts, parries, breaks and finishers seen and heard (combat/feedback.ts).
   combatFeedback(fx, player, (t) => hud.showBanner(t));
+  const telegraphs = new CombatTelegraphs(r.scene, player);
   const combatDebug = new CombatDebug(r.scene, player); // F9
   const trail = new WeaponTrail(r.scene, player);
   // Where a raised shield covers, and a crosshair to aim it.
@@ -3000,7 +3002,7 @@ async function boot() {
     // Pause the world while the title/pause overlay is up (never in tests).
     const overlayUp = (!TEST_MODE || SANDBOX_MODE) && (!started || pausedByUser);
     // Hit-stop is a brief slow-motion rather than a hard freeze.
-    const timeScale = hitStop > 0 ? 0.1 : slowT > 0 ? slowScale : 1;
+    const timeScale = (hitStop > 0 ? 0.1 : slowT > 0 ? slowScale : 1) * (sandbox?.settings.speed ?? 1);
     hitStop = Math.max(0, hitStop - dt);
     slowT = Math.max(0, slowT - dt);
     const simDt = dt * timeScale;
@@ -3039,6 +3041,9 @@ async function boot() {
     tickUndeadHair(dt);
     guardArc.update(dt);
     combatDebug.update();
+    telegraphs.enabled = sandbox?.settings.footprints ?? false;
+    telegraphs.update();
+    sandbox?.frame();
     trail.update(dt);
     updateSnare(player);
     r.camera.getWorldDirection(player.aimDir);
@@ -3276,7 +3281,7 @@ async function boot() {
       THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
-      sandbox, overlays, yard, combatDebug, // combat rework: the drill yard and the F9 overlay
+      sandbox, overlays, yard, combatDebug, telegraphs, // combat rework: the drill yard and the F9 overlay
       bestiary, bestiaryUI, reagentDrops, // the Wardens' Bestiary; kill loot on the ground
       lanterns, festivals, almanac, folkServices, // the Lost Lanterns; the calendar's festivals; the Almanac; townsfolk's services
       ghLife, outcast, ghSide, scrapTowns,

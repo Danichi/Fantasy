@@ -15,6 +15,7 @@ export class ThirdPersonCamera {
   seafaring = false;
   motion = 0.35;
   private armLen = 4.8;
+  private combatRoom = 0;
   private shoulder = 0.48;
   private pivot = new THREE.Vector3();
   private trauma = 0;
@@ -83,7 +84,9 @@ export class ThirdPersonCamera {
     const shoulder = this.shoulder * (1 + this.aim * 0.9);
     const origin = this.pivot.clone().addScaledVector(right, shoulder * 0.5);
     const back = fwd.clone().negate();
-    const want = origin.clone().addScaledVector(right, shoulder * 0.5).addScaledVector(back, (this.distance + this.extra) * (1 - this.aim) + 2.1 * this.aim);
+    const room = this.lockTarget ? Math.min(1.8, Math.max(0, this.lockTarget.distanceTo(focus) - 2) * 0.22) : 0;
+    this.combatRoom = damp(this.combatRoom, room, 4, dt);
+    const want = origin.clone().addScaledVector(right, shoulder * 0.5).addScaledVector(back, (this.distance + this.extra + this.combatRoom) * (1 - this.aim) + 2.1 * this.aim);
 
     // Spring arm: a bundle of rays (centre plus a 0.25 m ring) approximates a
     // sphere sweep, so the camera never ends up hugging a wall face.

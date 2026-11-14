@@ -1,5 +1,5 @@
 import { roadTier } from '../combat/tiers';
-import { reactOf } from '../combat/core';
+import { combat, reactOf } from '../combat/core';
 import * as THREE from 'three';
 import { ignoresPlayer } from '../origins/stealth';
 import RAPIER from '@dimforge/rapier3d-compat';
@@ -19,7 +19,7 @@ import { HumanoidBrain, ARCHETYPES, UAL_MOVES } from '../combat/ai';
 
 export type BanditRole = 'sword' | 'crossbow' | 'chief';
 
-const CLIPS = ['sword_idle', 'sword_attack', 'hit', 'death', 'jog', 'walk', 'bow_aim', 'bow_shoot', 'idle'];
+const CLIPS = ['sword_idle', 'sword_attack', 'sword_combo', 'hit', 'death', 'jog', 'walk', 'bow_aim', 'bow_shoot', 'idle'];
 const GRAV = 20;
 
 const LOOKS: Look[] = [
@@ -99,7 +99,9 @@ export class Bandit implements Target {
   halfHeight = 0.55;
   position = new THREE.Vector3();
   stunned = false;
-  lockable = true;
+  lockable = false;
+  /** The enemy cannot attack until its body and move clips are visible. */
+  readonly ready: Promise<void>;
   hp: number;
   maxHp: number;
   name: string;
@@ -119,7 +121,8 @@ export class Bandit implements Target {
   grounded = false;
   /** swordsmen fight with the shared brain (combat/ai.ts): grunts close in, skirmishers circle for your back */
   readonly brain: HumanoidBrain;
-  private hitDone = false;
+  private shotsFired = 0;
+  private shotAim = new THREE.Vector3();
   private rb: RAPIER.RigidBody;
   private col: RAPIER.Collider;
   private kcc: RAPIER.KinematicCharacterController;
@@ -175,8 +178,8 @@ export class Bandit implements Target {
     targets.add(this);
     this.sync();
     const lk = look ?? LOOKS[(this.id * 7) % LOOKS.length];
-    void buildCharacter(role === 'chief' ? { ...lk, pauldron: true, cloth: 0x2a1a1a, height: 1.9 } : lk, CLIPS).then((b) => {
-      if (!this.alive && this.dead) return;
+    this.ready = buildCharacter(role === 'chief' ? { ...lk, pauldron: true, cloth: 0x2a1a1a, height: 1.9 } : lk, CLIPS).then((b) => {
+      if (!this.alive) return;
       this.built = b;
       const acts = (b.mixer as unknown as { _actions: THREE.AnimationAction[] })._actions;
       for (const a of acts) this.actions[a.getClip().name] = a;
@@ -192,6 +195,7 @@ export class Bandit implements Target {
       }
       b.root.traverse((o) => (o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true));
       this.group.add(b.root);
+      this.lockable = true;
       this.play(role === 'sword' ? 'sword_idle' : 'idle');
     });
   }
@@ -222,6 +226,8 @@ export class Bandit implements Target {
     events.emit('enemyHit', { at: this.center.clone(), amount: h.damage, crit: h.crit, enemyId: this.id });
     if (this.hp <= 0) {
       this.alive = false;
+      this.brain.interrupt();
+      combat.cancel(this);
       this.state = 'dying';
       this.st = 0;
       this.play('death', true);
@@ -234,6 +240,7 @@ export class Bandit implements Target {
     // Staggered only when the blow got through its poise (combat/core.ts).
     const react = reactOf(h, 30);
     if (react !== 'none') {
+      combat.cancel(this);
       this.state = 'hurt';
       this.st = 0;
       const k = react === 'knockdown' ? 4.5 : 3;
@@ -263,6 +270,7 @@ export class Bandit implements Target {
       }
       return;
     }
+    if (!this.built) return;
     const to = player.pos.clone().sub(this.position);
     const dist = Math.hypot(to.x, to.z);
     const aware = !player.dead && !ignoresPlayer(this) && (dist < (this.alerted ? 34 : 18));
@@ -328,21 +336,59 @@ export class Bandit implements Target {
           if (this.cooldown <= 0 && this.st > 0.9) {
             this.state = 'attack';
             this.st = 0;
-            this.hitDone = false;
-            this.play('bow_shoot', true);
+            this.shotsFired = 0;
+            this.shotAim.copy(player.center);
+            this.play('bow_aim');
+            combat.windup(this, 0.65, 'normal', 0, { managed: true, name: this.role === 'chief' ? 'Twin bolts' : 'Crossbow shot', range: 22, arc: 0.99, shape: 'line', blows: this.role === 'chief' ? 2 : 1 });
           }
         }
         break;
       case 'attack':
         if (ranged) {
-          if (!this.hitDone && this.st > 0.15) {
-            this.hitDone = true;
-            const from = this.center.clone().add(new THREE.Vector3(Math.sin(this.yaw) * 0.6, 0.35, Math.cos(this.yaw) * 0.6));
-            const lead = player.pos.clone().add(player.vel.clone().setY(0).multiplyScalar(dist / 32 * 0.6)).setY(player.pos.y + 1.1);
-            this.bolts.fire(from, lead, 32, this.role === 'chief' ? 26 : 16);
-            if (this.role === 'chief') setTimeout(() => this.alive && this.bolts.fire(from, player.pos.clone().setY(player.pos.y + 1.1), 32, 20), 280);
+          this.vel.x = this.vel.z = 0;
+          const shots = this.role === 'chief' ? 2 : 1;
+          const release = 0.65 + this.shotsFired * 0.45;
+          const pending = this.shotsFired < shots;
+          const last = 0.65 + (shots - 1) * 0.45;
+          const recentRelease = this.shotsFired > 0 && this.st < 0.65 + (this.shotsFired - 1) * 0.45 + 0.12;
+          if (pending && !recentRelease && this.st < release - 0.2) {
+            const aim = player.center.addScaledVector(player.vel.clone().setY(0), dist / 32 * 0.35);
+            this.yaw = dampAngle(this.yaw, Math.atan2(aim.x - this.position.x, aim.z - this.position.z), 6, dt);
+            const distance = Math.hypot(aim.x - this.position.x, aim.z - this.position.z);
+            this.shotAim.set(this.position.x + Math.sin(this.yaw) * distance, aim.y, this.position.z + Math.cos(this.yaw) * distance);
           }
-          if (this.st > 0.7) {
+          if (pending && this.shotsFired > 0 && !recentRelease) this.play('bow_aim');
+          const phase = recentRelease
+            ? 'active'
+            : !pending
+              ? 'recovery'
+              : this.st >= release
+                ? 'active'
+                : this.st >= release - 0.2
+                  ? 'commit'
+                  : 'windup';
+          combat.describe(this, {
+            name: shots > 1 ? 'Twin bolts' : 'Crossbow shot',
+            kind: 'normal',
+            phase,
+            left: Math.max(0, (recentRelease ? 0.65 + (this.shotsFired - 1) * 0.45 + 0.12 : pending ? release : last + 0.55) - this.st),
+            total: recentRelease ? 0.12 : pending ? (this.shotsFired ? 0.45 : 0.65) : 0.55,
+            range: 22,
+            arc: 0.99,
+            yaw: this.yaw,
+            shape: 'line',
+            managed: true,
+            blow: Math.min(shots, recentRelease ? this.shotsFired : this.shotsFired + 1),
+            blows: shots,
+          });
+          if (pending && this.st >= release) {
+            const from = this.center.clone().add(new THREE.Vector3(Math.sin(this.yaw) * 0.6, 0.35, Math.cos(this.yaw) * 0.6));
+            this.bolts.fire(from, this.shotAim.clone(), 32, this.hitDamage * (this.role === 'chief' ? 1.25 : 1));
+            this.shotsFired++;
+            this.play('bow_shoot', true);
+          }
+          if (this.st > last + 0.55) {
+            combat.cancel(this);
             this.cooldown = this.role === 'chief' ? 1.4 : 2.2 + Math.random();
             this.state = 'aim';
             this.st = 0;
@@ -386,6 +432,7 @@ export class Bandit implements Target {
     if (!a) return;
     if (this.clip !== name) this.play(name, true, 0);
     a.time = Math.min(t, a.getClip().duration - 0.01);
+    this.built?.mixer.update(0);
   }
 
   protected sync() {
@@ -400,6 +447,8 @@ export class Bandit implements Target {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.brain.interrupt();
+    combat.cancel(this);
     targets.delete(this);
     this.scene.remove(this.group);
     if (this.alive) physics.world.removeCollider(this.col, false);

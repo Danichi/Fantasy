@@ -27,14 +27,14 @@ URL options:
 | WASD | Move |
 | Mouse | Look (wheel zooms) |
 | Shift | Sprint (uses stamina) |
-| Space | Dodge roll. Standing still gives a backstep. Both have invulnerability frames. |
+| Space | Quickstep while locked on; roll when unlocked. Push a direction to choose your escape. |
+| Shift + Space | Full dodge roll, including while locked on. |
 | Left mouse | Light attack, which chains into a 3-hit combo. Hold for a charged heavy attack. |
 | Right mouse | Block with a shield. With two swords, it's an off-hand attack instead. |
 | F | Parry. Time it to a slime's leap to stun it, then hit it for a critical. |
-| Middle mouse / Tab | Lock on |
-| R | Cast the attuned spell (Fireball or Healing Light) |
+| R | Cast the attuned spell. Fireball follows your camera aim or lock-on target. |
 | C | Jump |
-| 1–8 | Hotbar: equip a weapon, attune a spell, drink a potion. Shift+number puts a sword in the off hand. |
+| 1–4 / 1–6 | Use quick items or equipped moves, according to the selected bar. |
 | I | Inventory and equipment. Click to equip, shift-click for off hand, drag items onto the hotbar. |
 | K | Skills: spend XP on combat classes, magic classes and callings, open their skill trees, and spend attribute points. |
 | Tab | Switch the bar between quick items (1–4) and moves (1–6) |
@@ -159,3 +159,20 @@ combat hitboxes. Damage, DPS and perfect defence counters appear while practicin
 Sandbox equipment, progression and rules save separately from your adventure.
 **Save Sandbox & return to adventure** resumes the adventure where you left it.
 See [Sandbox combat lab](docs/design/sandbox.md) for controls and save details.
+
+
+## Combat feel and practice
+
+Enemy attack cues show **Prepare → Committed → Strike → Open**, with symbols,
+colour and defence hints. A committed humanoid swing stops turning toward you;
+step out of its line, then punish the recovery. Crossbow enemies visibly prepare
+their shots. Light attacks allow controlled positioning steps and recover into
+movement; heavy strikes retain their commitment. Sword attacks advance further,
+and long weapons keep their actual swept reach.
+
+In Sandbox, **Reference duel · real costs** starts a repeatable sword duel with
+normal resource costs and damage enabled. **Read the tell** offers uninterrupted
+practice. Choose one enemy attack or a repeated cut/held-strike/lunge sequence,
+turn attack footprints on or off, and use **F8** to cycle 100%, 50% and 25% speed.
+Moving targets help compare weapon spacing. Practice damage counts each resolved
+combat strike once. See [combat feel rework](docs/design/combat-feel-rework.md).

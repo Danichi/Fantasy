@@ -77,6 +77,10 @@ export class Flight {
 
   step(dt: number, input: Input, cam: ThirdPersonCamera) {
     const p = this.p;
+    const on = this.state === 'glide' || this.state === 'fly';
+    const speed = Math.hypot(p.vel.x, p.vel.z);
+    this.lean = damp(this.lean, on ? clamp(speed / 14, 0, 1) * 0.75 : this.state === 'dive' ? 1.1 : 0, 4, dt);
+    p.flightLean = this.lean;
     if (this.toastT > 0) this.toastT -= dt;
     // On the ground (or in water, or in the saddle): wings fold, energy returns.
     if (p.grounded || p.swimming || p.vehicle || p.mounted || p.dead) {
@@ -203,8 +207,6 @@ export class Flight {
     const beat = this.climb > 0 ? 15 : this.state === 'fly' ? 8 + Math.hypot(p.vel.x, p.vel.z) * 0.2 : 0;
     this.flapPhase = beat ? this.flapPhase + beat * dt : damp(this.flapPhase, Math.round(this.flapPhase / (Math.PI * 2)) * Math.PI * 2 + 0.25, 3, dt);
     const speed = Math.hypot(p.vel.x, p.vel.z);
-    this.lean = damp(this.lean, on ? clamp(speed / 14, 0, 1) * 0.75 : this.state === 'dive' ? 1.1 : 0, 4, dt);
-    if (this.lean > 0.01) p.char.visual.rotation.x += this.lean;
     cam.extra = damp(cam.extra, on || this.state === 'dive' ? 2.4 : 0, 2.5, dt);
     if (on && speed > 9 && Math.random() < dt * 20) {
       const s = p.center.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, Math.random() * 1.5, (Math.random() - 0.5) * 3));

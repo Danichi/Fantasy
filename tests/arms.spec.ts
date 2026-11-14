@@ -207,32 +207,40 @@ test('a drawn arrow hits a target 40 m away', async ({ game }) => {
   const res = await page.evaluate(async (H) => {
     const { g, p, equip, target } = eval(H);
     await g.arms.clips;
-    equip('huntingBow');
-    p.equip.add('arrowIron', 10);
-    const s = target(40);
-    g.cam.yaw = Math.PI;
-    g.input.press('Mouse2');
-    await window.W(30);
-    // Point the camera's centre ray at the target.
-    // (The camera looks at a point ahead of the shoulder, so correct by the error of its real view.)
-    for (let k = 0; k < 6; k++) {
-      const d = new g.THREE.Vector3();
-      g.cam.camera.getWorldDirection(d);
-      const want = s.center.clone().sub(g.cam.camera.position).normalize();
-      g.cam.yaw += Math.atan2(want.x, want.z) - Math.atan2(d.x, d.z);
-      g.cam.pitch += Math.asin(-want.y) - Math.asin(-d.y);
-      await window.W(10);
+    const outside = target(40);
+    const outdoorClear = g.physics.lineOfSight(p.center, outside.center, 0.2);
+    g.slimes.clear();
+    g.pause(true);
+    try {
+      // A measured firing lane: scenery in the village must not invalidate a range check.
+      const door = { pos: p.pos.clone(), yaw: Math.PI, kind: 'sandbox', name: 'Firing lane', spec: { w: 52, d: 52, floors: 1, roof: 'tile', seed: 3801 } };
+      await g.realm.enterInterior(door, 'sandbox', g.world.mats);
+      p.teleport(g.realm.interior.at(0, 20).setY(0.1));
+      equip('huntingBow'); p.equip.add('arrowIron', 10);
+      const s = target(40);
+      p.yaw = g.cam.yaw = Math.PI; p.lock = null;
+      g.cam.frozen = true;
+      g.cam.camera.position.copy(p.pos).add(new g.THREE.Vector3(0.5, 1.6, 2));
+      g.cam.camera.lookAt(s.center); g.cam.camera.updateMatrixWorld(true);
+      g.cam.camera.getWorldDirection(p.aimDir);
+      g.cam.pitch = Math.asin(-p.aimDir.y);
+      g.input.press('Mouse2'); g.stepSim(60);
+      const draw = g.arms.ranged.draw;
+      const aim = g.arms.ranged.computeAimPoint().toArray();
+      const launch = g.arms.ranged.launchPoint().toArray();
+      const hp0 = s.hp, fired0 = g.arms.ranged.fired, n0 = g.arms.ranged.ammoCount();
+      g.input.press('Mouse0'); g.stepSim(); g.input.release('Mouse0');
+      for (let i = 0; i < 180 && s.hp === hp0; i++) g.stepSim();
+      return { dmg: hp0 - s.hp, fired: g.arms.ranged.fired - fired0, used: n0 - g.arms.ranged.ammoCount(), dist: p.pos.distanceTo(s.position), outdoorClear, draw, aim, launch, target: s.center.toArray(), swimming: p.swimming };
+    } finally {
+      g.input.releaseAll(); g.stepSim(); g.slimes.clear(); g.cam.frozen = false;
+      if (g.realm.interior) await g.realm.leaveInterior();
+      g.pause(false);
     }
-    for (let i = 0; i < 200 && g.arms.ranged.draw < 1; i++) await window.W(1);
-    const hp0 = s.hp, fired0 = g.arms.ranged.fired, n0 = g.arms.ranged.ammoCount();
-    g.input.press('Mouse0');
-    await window.W(2);
-    g.input.release('Mouse0');
-    for (let i = 0; i < 240 && s.hp === hp0; i++) await window.W(1);
-    g.input.release('Mouse2');
-    return { dmg: hp0 - s.hp, fired: g.arms.ranged.fired - fired0, used: n0 - g.arms.ranged.ammoCount(), dist: p.pos.distanceTo(s.position) };
   }, HELPERS);
+  console.log('40 m firing lane', res);
   expect(res.dist).toBeGreaterThan(39);
+  expect(res.draw).toBe(1);
   expect(res.fired).toBe(1);
   expect(res.used).toBe(1);
   expect(res.dmg).toBeGreaterThan(10);
@@ -284,47 +292,48 @@ test('a staff speeds spells, and Gale momentum speeds them further', async ({ ga
   const { page } = game;
   const res = await page.evaluate(async (H) => {
     const { g, p, equip } = eval(H);
-    p.equip.equip(p.equip.add('healingLight').uid);
-    const rt = g.skillRt;
-    const castSpeed = async (weapon: string, flow: number) => {
-      equip(weapon);
-      p.mana = p.maxMana;
-      rt.flow = flow;
-      await window.W(3);
-      g.input.press('KeyR');
-      for (let i = 0; i < 60 && !p.act; i++) await window.W(1);
-      g.input.release('KeyR');
-      const sp = p.act?.speed ?? 0;
-      for (let i = 0; i < 300 && p.act; i++) await window.W(1);
-      return sp;
-    };
-    return { sword: await castSpeed('longsword', 0), staff: await castSpeed('ashStaff', 0), staffFlow: await castSpeed('ashStaff', 5) };
+    await g.arms.clips;
+    g.pause(true);
+    try {
+      p.equip.equip(p.equip.add('healingLight').uid);
+      const rt = g.skillRt;
+      const castSpeed = (weapon: string, flow: number) => {
+        equip(weapon); p.mana = p.maxMana; rt.flow = flow; g.stepSim(3);
+        g.input.press('KeyR'); g.stepSim(); g.input.release('KeyR');
+        const sp = p.act?.speed ?? 0;
+        for (let i = 0; i < 300 && p.act; i++) g.stepSim();
+        return sp;
+      };
+      return { sword: castSpeed('longsword', 0), staff: castSpeed('ashStaff', 0), staffFlow: castSpeed('ashStaff', 5) };
+    } finally { g.input.releaseAll(); g.stepSim(); g.pause(false); }
   }, HELPERS);
+  console.log('cast speeds',res);
   expect(res.sword).toBeGreaterThan(0);
   expect(res.staff / res.sword).toBeCloseTo(1.12, 2);
-  expect(res.staffFlow / res.staff).toBeCloseTo(1.4, 1); // Flow starts to drain while it waits
+  expect(res.staffFlow / res.staff).toBeCloseTo(1.4, 1);
 });
 
 test('a crossbow fires a bolt, then must be reloaded', async ({ game }) => {
   const { page } = game;
   const res = await page.evaluate(async (H) => {
-    const { g, p, equip, target, click } = eval(H);
-    await g.arms.clips;
-    equip('lightCrossbow');
-    p.equip.add('boltIron', 5);
-    const s = target(8);
-    p.lock = s;
-    await window.W(10);
-    const hp0 = s.hp;
-    await click();
-    for (let i = 0; i < 120 && s.hp === hp0; i++) await window.W(1);
-    const hit = hp0 - s.hp, loadedAfterShot = g.arms.ranged.loaded;
-    for (let i = 0; i < 60 && p.act; i++) await window.W(1);
-    await click(); // cranks the string back
-    const reloading = p.act?.def.id;
-    for (let i = 0; i < 300 && !g.arms.ranged.loaded; i++) await window.W(1);
-    return { hit, loadedAfterShot, reloading, loaded: g.arms.ranged.loaded };
+    const { g, p, equip, target } = eval(H);
+    await g.arms.clips; g.pause(true);
+    try {
+      equip('lightCrossbow'); p.equip.add('boltIron', 5);
+      const s = target(8); p.lock = s; g.stepSim(10);
+      const click = () => { g.input.press('Mouse0'); g.stepSim(3); g.input.release('Mouse0'); };
+      const hp0 = s.hp;
+      click();
+      for (let i = 0; i < 120 && s.hp === hp0; i++) g.stepSim();
+      const hit = hp0 - s.hp, loadedAfterShot = g.arms.ranged.loaded;
+      for (let i = 0; i < 120 && p.act; i++) g.stepSim();
+      click();
+      const reloading = p.act?.def.id;
+      for (let i = 0; i < 300 && !g.arms.ranged.loaded; i++) g.stepSim();
+      return { hit, loadedAfterShot, reloading, loaded: g.arms.ranged.loaded };
+    } finally { g.input.releaseAll(); g.stepSim(); g.pause(false); }
   }, HELPERS);
+  console.log('crossbow cycle',res);
   expect(res.hit).toBeGreaterThan(20);
   expect(res.loadedAfterShot).toBe(false);
   expect(res.reloading).toBe('reload');

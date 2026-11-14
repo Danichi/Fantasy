@@ -375,7 +375,7 @@ export class Lessons {
     const p = this.h.player;
     if (p.dead) return this.stop('The lesson is over for today.');
     this.panel?.classList.toggle('corner', this.h.menuOpen());
-    const rolling = p.act?.def.id === 'roll';
+    const rolling = !!p.act?.def.roll;
     if (rolling && !this.wasRolling) this.seen.rolls++;
     this.wasRolling = rolling;
     const st = this.lesson.steps[this.step];
