@@ -713,6 +713,9 @@ export class Snaggletooth implements BossBody {
   get dead() {
     return this.boar.dead && (!this.chief || this.chief.dead);
   }
+  scaleRiderHealth(factor: number) {
+    this.chiefMax *= factor;
+  }
   get maxHp() {
     return this.boar.maxHp + this.chiefMax;
   }

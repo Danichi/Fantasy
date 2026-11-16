@@ -2,7 +2,7 @@
 
 #ui .ts-root {
   position: fixed; inset: 0; z-index: 400; overflow: hidden; background: #07060a; color: #f3e6c4;
-  font-family: var(--sans, system-ui, sans-serif); user-select: none; cursor: default;
+  font-family: var(--sans, system-ui, sans-serif); user-select: none; cursor: default; pointer-events: auto;
   --ts-gold: #e8c77a; --ts-gold-dim: rgba(232, 199, 122, .55); --ts-ink: #f3e6c4;
 }
 

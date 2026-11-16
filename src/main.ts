@@ -126,7 +126,7 @@ import { buildHerbFolk } from './world/herbs/herbFolk';
 import { buildHiddenTeachers } from './world/hiddenTeachers';
 import { RoadToRiches, MEADOW_CLEARING } from './world/roadToRiches';
 import { GravewoodKey } from './world/gravewoodKey';
-import { CorruptedBrother } from './enemies/corruptedBrother';
+import { CorruptedBrother, summonEdricDead } from './enemies/corruptedBrother';
 import { Undead } from './enemies/undead';
 import { sunspireResidents } from './world/desert/sunspireFolk';
 import { setupDesertQuests } from './quests/desertQuests';
@@ -1445,12 +1445,7 @@ async function boot() {
       sanctum.boss = boss;
       sanctum.spoke = false;
       boss.onSummon = (at) => {
-        // The dead of the Gravewood claw up through the floor to help him.
-        for (let k = 0; k < 3; k++) {
-          const a = (k / 3) * Math.PI * 2 + Math.random();
-          const p = new THREE.Vector3(at.x + Math.cos(a) * 5, it.at(0, 0).y, at.z + Math.sin(a) * 5);
-          sanctum.adds.push(new Undead('skeleton', p, a, r.scene, fx));
-        }
+        sanctum.adds.push(...summonEdricDead(at, r.scene, fx, it.at(0, 0).y));
       };
       boss.onPhase2 = () => hud.toast('Edric: "MORE. Give me MORE!"');
       boss.onDeath = () => {
@@ -2959,7 +2954,7 @@ async function boot() {
     await realm.enterInterior(door, 'sandbox', world.mats);
     cam.distance = 5.5;
     cam.snapTo(player.pos);
-    sandbox = new SandboxArena(r.scene, player, skillRt, realm.interior!, cam, input, {
+    sandbox = new SandboxArena(r.scene, player, skillRt, realm.interior!, cam, input, fx, {
       clearEffects: () => {
         skillRt.clearPracticeEffects();
         spells.clearProjectiles();
@@ -2969,6 +2964,7 @@ async function boot() {
       save,
       debug: () => combatDebug.toggle(),
       banner: (text) => hud.showBanner(text),
+      message: (text) => hud.toast(text),
       leave: () => {
         save();
         travelToSandbox(false);
@@ -2984,6 +2980,7 @@ async function boot() {
       },
     });
     hud.setMode('moves');
+    if (!TEST_MODE) sandbox.openControls();
   }
   if (RETURNING_FROM_SANDBOX && saveData) overlays.start.click();
 
@@ -3051,6 +3048,7 @@ async function boot() {
     combatDebug.update();
     telegraphs.enabled = sandbox?.settings.footprints ?? false;
     telegraphs.update();
+    sandbox?.present(alpha, paused ? 0 : simDt);
     sandbox?.frame();
     trail.update(dt);
     updateSnare(player);

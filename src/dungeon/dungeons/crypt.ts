@@ -26,7 +26,7 @@ const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
  * the chapel's side niches; at 25% the chapel roof starts to come in (stones
  * fall where a shadow gathers first) and he fights faster and harder.
  */
-const GRUKK_BOSS: BossDef = {
+export const GRUKK_BOSS: BossDef = {
   name: 'Grukk, the Orc Warlord',
   subtitle: 'Warlord of the crypt',
   kind: 'grukk',

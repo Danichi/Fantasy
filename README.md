@@ -150,14 +150,17 @@ resume your helm, deck, boarding encounter or swim. See the
 
 ## Combat Sandbox
 
-Choose **Enter Sandbox** from the pause menu to open a plain combat arena with
+Choose **Combat Sandbox** from the title or pause menu to open the Proving Grounds with
 its own saved character. Every combat class is level 50; select a style and magic
 school, bind moves, grant equipment, and configure stationary targets or attacking
-opponents. **F6** opens Sandbox controls, **F7** resets the fight, and **F9** shows
+opponents. **F6** opens the fight console, **F7** resets the fight, **F8** changes speed, and **F9** shows
 combat hitboxes. Damage, DPS and perfect defence counters appear while practicing.
 
 Sandbox equipment, progression and rules save separately from your adventure.
-**Save Sandbox & return to adventure** resumes the adventure where you left it.
+**Return to adventure** in the fight console resumes the adventure where you left it.
+The **Boss roster** offers every implemented boss and rival champion, including naval
+trials with a training ship (F2 swivel, F3 harpoon, F4 broadside). Search, choose a
+practice mode, then **Spawn & fight**.
 See [Sandbox combat lab](docs/design/sandbox.md) for controls and save details.
 
 

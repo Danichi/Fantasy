@@ -21,7 +21,7 @@ const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 const WATER = [0.12, 0.5, 0.85];
 
-const TIDE_WARDEN: BossDef = {
+export const TIDE_WARDEN: BossDef = {
   name: 'The Tide-Warden',
   subtitle: 'Guardian of the wheel-cutters\' basin',
   kind: 'tideWarden',

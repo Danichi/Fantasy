@@ -33,6 +33,7 @@ const BAND = 5;
 
 export class Varga implements BossBody {
   readonly label = 'Varga One-Eye';
+  readonly ready: Promise<void>;
   o: OrcWarlord | null = null;
   private pending = true;
   private gone = false;
@@ -49,7 +50,7 @@ export class Varga implements BossBody {
   stats = { blindHits: 0, called: 0, front: 0 };
 
   constructor(private home: THREE.Vector3, private yaw: number, private scene: THREE.Scene, private fx: FX) {
-    void OrcWarlord.create(home.clone(), yaw, scene, fx, VARGA).then((o) => {
+    this.ready = OrcWarlord.create(home.clone(), yaw, scene, fx, VARGA).then((o) => {
       this.pending = false;
       if (this.gone) return o.dispose();
       this.o = o;

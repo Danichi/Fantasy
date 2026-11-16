@@ -66,6 +66,7 @@ const DEATH_TIME = 4;
 const _v = new THREE.Vector3();
 
 export class WildBeast implements Target {
+  readonly ready: Promise<void>;
   id = newTargetId();
   kind: string;
   name: string;
@@ -182,7 +183,7 @@ export class WildBeast implements Target {
     scene.add(this.group);
     targets.add(this);
     this.center.set(at.x, at.y + spec.height * scale * 0.55, at.z);
-    void this.load();
+    this.ready = this.load();
   }
 
   // ---- model --------------------------------------------------------------------------------
