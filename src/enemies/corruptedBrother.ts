@@ -6,6 +6,7 @@ import { newTargetId, targets, type HitInfo, type Target } from '../combat/targe
 import { buildCharacter, type BuiltCharacter } from '../npc/charBuilder';
 import { buildSword } from '../items/weaponModels';
 import { sfx } from '../audio/sfx';
+import { Undead } from './undead';
 import { EDRIC_LOOK } from '../world/roadToRiches';
 import type { FX } from '../fx/particles';
 import type { Player } from '../player/player';
@@ -398,4 +399,12 @@ export class CorruptedBrother implements Target {
     for (const b of this.bolts) this.scene.remove(b.mesh);
     this.built?.mixer.stopAllAction();
   }
+}
+
+/** The same Gravewood dead answer Edric in the sanctum and in practice. */
+export function summonEdricDead(at: THREE.Vector3, scene: THREE.Scene, fx: FX, groundY = at.y): Undead[] {
+  return Array.from({ length: 3 }, (_, k) => {
+    const yaw = (k / 3) * Math.PI * 2 + Math.random();
+    return new Undead('skeleton', new THREE.Vector3(at.x + Math.cos(yaw) * 5, groundY, at.z + Math.sin(yaw) * 5), yaw, scene, fx);
+  });
 }

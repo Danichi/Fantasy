@@ -20,14 +20,14 @@ import { prepareCreature } from '../creatures/geometryStore';
 import { CHAMPIONS, Champion } from '../story/champions';
 import { OrcWarlord } from '../enemies/orc';
 import { ABOMINATION } from '../world/gravewood';
-import { CorruptedBrother } from '../enemies/corruptedBrother';
+import { CorruptedBrother, summonEdricDead } from '../enemies/corruptedBrother';
 import { LivingArmour } from '../enemies/livingArmour';
 import { SandGolem } from '../enemies/sandGolem';
 import { SandShark } from '../enemies/sandCreatures';
-import { LAIRS, type BossHandle, type LairController } from '../world/wilds/lairs';
-import { WildBeast, type WildCtx } from '../enemies/wilds/wildBeast';
+import { LAIRS, LairController, type BossHandle } from '../world/wilds/lairs';
+import type { WildCtx } from '../enemies/wilds/wildBeast';
 import { OrcMob } from '../enemies/orcMob';
-import { Boar } from '../creatures/boar/boar';
+import type { Undead } from '../enemies/undead';
 import { Telegraphs } from '../enemies/wilds/telegraph';
 import { Missiles } from '../enemies/wilds/projectiles';
 import { GRUKK_BOSS } from '../dungeon/dungeons/crypt';
@@ -219,18 +219,14 @@ async function lair(id: string, c: BossContext): Promise<BossSession> {
   const tele = new Telegraphs(c.scene),
     missiles = new Missiles(c.scene, c.fx);
   const ctx: WildCtx = { tele, missiles };
-  const adds: (PracticeBody & Target)[] = [];
+  const adds: LairController['adds'] = [];
   const def = LAIRS.find((d) => d.id === id)!;
-  const summonBeasts = (spec: ConstructorParameters<typeof WildBeast>[0], n: number, danger: number, elites: ConstructorParameters<typeof WildBeast>[5]['elites']) => {
-    const pack: WildBeast[] = [];
-    for (let i = 0; i < n; i++) {
-      const a = (i * Math.PI * 2) / n;
-      const b = new WildBeast(spec, c.at.clone().add(V(Math.cos(a) * 13, 0, Math.sin(a) * 13)), c.scene, c.fx, ctx, { danger, elites, pack, alerted: true, leash: 100 });
-      pack.push(b);
-      adds.push(b);
-    }
-  };
+  // Relocate the lair's own summon helpers to the practice ring, retaining
+  // their original species, ranks, scaling, pack behaviour and callbacks.
   const controller = {
+    def: { ...def, at: [c.at.x, c.at.z], arena: 16, leash: 100 },
+    adds,
+    hooks: { toast: c.say },
     home: () => c.at.clone(),
     openYaw: 0,
     scene: c.scene,
@@ -240,20 +236,16 @@ async function lair(id: string, c: BossContext): Promise<BossSession> {
     mats: {},
     woke: () => c.say(def.boss),
     phase: (n: number) => c.say(`Phase ${n + 1}`),
-    summonBeasts,
-    summonSounder: (n: number) => {
-      for (let i = 0; i < n; i++) adds.push(new Boar(c.at.clone().add(V(i * 2 - 2, 0, 10)), 30, c.scene, c.fx));
-    },
-    summonOrcs: (n: number) => {
-      for (let i = 0; i < n; i++) adds.push(new OrcMob(c.at.clone().add(V(i * 3 - 3, 0, 12)), c.scene, c.fx));
-    },
   } as unknown as LairController;
+  controller.summonBeasts = LairController.prototype.summonBeasts.bind(controller);
+  controller.summonSounder = LairController.prototype.summonSounder.bind(controller);
+  controller.summonOrcs = LairController.prototype.summonOrcs.bind(controller);
   const handle: BossHandle = def.make(controller);
   return {
     ready: Promise.resolve(handle.ready).then(() => (handle.target() as (Target & { ready?: Promise<void> }) | null)?.ready),
     phases: handle.phases,
     health: () => handle.target(),
-    targets: () => [...(handle.target() ? [handle.target()!] : []), ...adds],
+    targets: () => [...(handle.target() ? [handle.target()!] : []), ...adds.map((a) => a.t)],
     update(dt, p) {
       handle.update(dt, p);
       for (const a of adds) a.update(dt, p);
@@ -349,7 +341,7 @@ export const PRACTICE_BOSSES: PracticeBoss[] = [
   {
     id: 'edricHollowed',
     name: 'Edric, the Hollowed',
-    description: 'Cursed fire, shadow steps and summoned shades.',
+    description: 'Cursed fire, shadow steps and summoned Gravewood dead.',
     group: 'Story',
     art: 'circleWraith',
     async create(c) {
@@ -359,12 +351,8 @@ export const PRACTICE_BOSSES: PracticeBoss[] = [
         z0: c.at.z - 15,
         z1: c.at.z + 30,
       });
-      const adds: Bandit[] = [];
-      b.onSummon = (at) => {
-        const shade = new Bandit('sword', at, c.scene, c.bolts);
-        shade.alerted = true;
-        adds.push(shade);
-      };
+      const adds: Undead[] = [];
+      b.onSummon = (at) => adds.push(...summonEdricDead(at, c.scene, c.fx, c.at.y));
       const ready = b.ready.then(() => b.wake());
       const s = { ...simple(b, [0.5]), ready };
       return {
@@ -372,7 +360,7 @@ export const PRACTICE_BOSSES: PracticeBoss[] = [
         targets: () => [b, ...adds],
         update: (dt, p) => {
           b.update(dt, p);
-          adds.forEach((a) => a.update(dt, p));
+          adds.forEach((a) => a.update(dt, p, adds));
         },
         dispose: () => {
           b.dispose();

@@ -63,12 +63,15 @@ test('Sandbox console selects real bosses, runs every roster entry and cleans en
       for (const t of lab.targets()) if (t.ready) await t.ready;
       // Start the authentic encounter, then cross its health thresholds.
       g.stepSim(240);
+      if (['bristleback', 'gnarlbark', 'greymane', 'thornhorn'].includes(entry.id)) hp.onSummon?.(hp);
+      if (entry.id === 'edricHollowed') hp.onSummon?.(hp.position.clone());
       hp.hp = hp.maxHp * 0.2;
       g.stepSim(entry.group === 'Sea' ? 660 : 420);
       const active = lab.targets();
       const finite = active.every((t: any) => t.position.toArray().every(Number.isFinite) && t.center.toArray().every(Number.isFinite));
       const local = entry.group === 'Sea' || active.every((t: any) => Math.abs(t.position.x - g.realm.interior.at(0, 0).x) < 80 && Math.abs(t.position.z) < 80);
       const count = targets.size;
+      const addKinds = active.filter((t: any) => t !== hp).map((t: any) => t.kind);
       const phase = (hp as any).phase ?? (active[0] as any)?.phase ?? null;
       if (entry.id === 'sea:kraken') {
         lab.naval.fire('harpoon', g.player, g.player.aimDir);
@@ -79,7 +82,7 @@ test('Sandbox console selects real bosses, runs every roster entry and cleans en
       const leaked = active.filter((t: any) => targets.has(t)).length;
       const { peekCombat } = await import('/src/combat/core.ts' as string);
       const staleReads = active.filter((t: any) => !!peekCombat(t)?.read).length;
-      return { id: entry.id, finite, local, leaked, staleReads, count, phase };
+      return { id: entry.id, finite, local, leaked, staleReads, count, phase, addKinds };
     }, entry);
     console.log('boss trial', res);
     results.push(res);
@@ -88,6 +91,12 @@ test('Sandbox console selects real bosses, runs every roster entry and cleans en
     expect(res.local, 'local ' + entry.id).toBe(true);
     expect(res.leaked, 'cleanup ' + entry.id).toBe(0);
     expect(res.staleReads, 'tell cleanup ' + entry.id).toBe(0);
+    if (entry.id === 'edricHollowed') {
+      expect(res.addKinds.length).toBeGreaterThanOrEqual(3);
+      expect(res.addKinds.every((k: string) => k === 'skeleton')).toBe(true);
+      expect(res.addKinds.length % 3).toBe(0);
+    }
+    if (entry.id === 'ulgra') expect(res.addKinds).toContain('exileOrc');
   }
   expect(results.length).toBe(chosen ? chosen.length : roster.length);
   const race = await page.evaluate(async () => {
