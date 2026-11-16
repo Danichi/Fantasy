@@ -1414,7 +1414,11 @@ export class Player {
     }
     this.mountVisual.visible = this.mounted && !this.mountStats;
     root.position.y += lerp(this.prevStepOffset, this.stepOffset, alpha);
-    root.rotation.y = this.prevYaw + wrapAngle(this.yaw - this.prevYaw) * alpha;
+    // Set the whole rotation, never .y alone: PoseFrames restores the root from a
+    // quaternion each step, and three.js re-derives the Euler from it. Past 90°
+    // of yaw that comes back as (π, π - yaw, π), and writing only .y on top of it
+    // turned the hero round every other step (the body shook back and forth).
+    root.rotation.set(0, this.prevYaw + wrapAngle(this.yaw - this.prevYaw) * alpha, 0);
     const yawR = root.rotation.y;
     this.idleClock += dt;
 
