@@ -7,6 +7,32 @@ import type { Door, InteriorKind } from './doors';
 import type { Interactable } from '../dungeon/instance';
 import { sunwheelTexture } from './glenLandmarks';
 
+/** Raked sand for the Sandbox floor (a little grain and a few rake lines). */
+function sandTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#c8b28c';
+  g.fillRect(0, 0, 256, 256);
+  const rnd = mulberry32(5301);
+  for (let i = 0; i < 2600; i++) {
+    const v = 150 + Math.floor(rnd() * 80);
+    g.fillStyle = `rgba(${v},${v - 18},${v - 46},0.35)`;
+    g.fillRect(rnd() * 256, rnd() * 256, 1 + rnd() * 2, 1 + rnd() * 2);
+  }
+  g.strokeStyle = 'rgba(120,96,64,0.12)';
+  for (let y = 8; y < 256; y += 16) {
+    g.beginPath();
+    g.moveTo(0, y);
+    for (let x = 0; x <= 256; x += 16) g.lineTo(x, y + Math.sin(x * 0.05 + y) * 1.5);
+    g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 // Building interiors, built when you step through a door (world/doors.ts) and
 // thrown away when you leave. One room sized to the house outside: plank
 // floor, plastered walls with a timber frame, beams overhead, windows that
@@ -267,30 +293,72 @@ export class Interior {
   }
 
   /** A plain combat laboratory: flat dark ground, a grid and low boundary walls. */
+  /**
+   * The Sandbox's Proving Grounds (docs/design/combat-flow.md): a sand ring
+   * walled in stone, with the pieces the fluid moves need. High ground with a
+   * long slope off it (strike from above, slide down it), a free-standing slam
+   * wall (wall kicks, slams), pillars round the edge, warm light. The
+   * breakables (barrels, fence, braziers, the pool) are the arena's
+   * (sandbox/props.ts), since a reset puts them back.
+   */
   private sandboxFloor() {
-    const black = new THREE.MeshStandardMaterial({ color: 0x101317, roughness: 1 }),
-      edge = new THREE.MeshStandardMaterial({ color: 0x303a45, roughness: 1 });
-    this.box(black, this.W, 0.3, this.D, 0, -0.15, 0, 0, true);
+    const sand = new THREE.MeshStandardMaterial({ color: 0xf2e6cc, roughness: 1, map: sandTexture() });
+    const ring = new THREE.MeshStandardMaterial({ color: 0x8a7258, roughness: 1 });
+    const stone = this.m.stone;
+    const half = this.W / 2;
+    // Floor and the fighting ring.
+    this.box(sand, this.W, 0.3, this.D, 0, -0.15, 0, 0, true);
+    const circle = new THREE.Mesh(new THREE.RingGeometry(9.4, 10, 64), ring);
+    circle.rotation.x = -Math.PI / 2;
+    circle.position.set(0, 0.012, -2);
+    const inner = new THREE.Mesh(new THREE.RingGeometry(2.6, 2.9, 48), ring);
+    inner.rotation.x = -Math.PI / 2;
+    inner.position.set(0, 0.012, -2);
+    this.group.add(circle, inner);
+    // Walls and pillars.
     for (const side of [-1, 1]) {
-      this.box(edge, 0.4, 2, this.D, (side * this.W) / 2, 1, 0, 0, true);
-      this.box(edge, this.W, 2, 0.4, 0, 1, (side * this.D) / 2, 0, true);
+      this.box(stone, 0.8, 3.4, this.D, side * half, 1.7, 0, 0, true);
+      this.box(stone, this.W, 3.4, 0.8, 0, 1.7, side * half, 0, true);
+      for (let k = -half + 4; k <= half - 4; k += 8.4) {
+        this.box(stone, 1.4, 4.6, 1.4, side * (half - 0.4), 2.3, k, 0, true);
+        this.box(stone, 1.4, 4.6, 1.4, k, 2.3, side * (half - 0.4), 0, true);
+      }
     }
-    const points: THREE.Vector3[] = [];
-    for (let k = -24; k <= 24; k += 4) {
-      points.push(
-        new THREE.Vector3(k, 0.012, -24),
-        new THREE.Vector3(k, 0.012, 24),
-        new THREE.Vector3(-24, 0.012, k),
-        new THREE.Vector3(24, 0.012, k),
-      );
+    // High ground: a stone platform in the north-west corner, a long slope down from it.
+    const PX = -16, PZ = -18.5, PH = 2.0;
+    this.box(stone, 9, PH, 7, PX, PH / 2, PZ, 0, true);
+    this.box(ring, 9.2, 0.12, 7.2, PX, PH + 0.06, PZ, 0, false);
+    const run = 9.5, len = Math.hypot(run, PH), ang = Math.atan2(PH, run);
+    const z0 = PZ + 3.5, zMid = z0 + run / 2;
+    const ramp = new THREE.Mesh(worldUV(new THREE.BoxGeometry(6, 0.4, len), this.uvScale), stone);
+    ramp.position.set(PX, PH / 2 - 0.2 * Math.cos(ang), zMid);
+    ramp.rotation.x = ang;
+    ramp.castShadow = ramp.receiveShadow = true;
+    this.group.add(ramp);
+    this.colliders.push(physics.addBox(this.at(PX, zMid, ramp.position.y), new THREE.Vector3(3, 0.2, len / 2), new THREE.Quaternion().setFromEuler(new THREE.Euler(ang, 0, 0))));
+    // The slam wall: free-standing, out in the open on the east side.
+    this.box(stone, 0.9, 2.8, 8, 17, 1.4, -6, 0, true);
+    this.box(ring, 1.1, 0.25, 8.2, 17, 2.9, -6, 0, false);
+    // Light: a sky-blue fill and a warm low sun (no shadows; the braziers add their own glow).
+    const sun = new THREE.DirectionalLight(0xfff0d8, 2.4);
+    sun.position.set(-14, 22, 10);
+    sun.target.position.set(0, 0, -2);
+    this.group.add(new THREE.HemisphereLight(0xd8ecff, 0x8a7458, 2.6), sun, sun.target);
+    // Open sky over the walls: a late-afternoon gradient dome.
+    const sky = new THREE.SphereGeometry(140, 24, 12);
+    const col: number[] = [];
+    const pos = sky.attributes.position as THREE.BufferAttribute;
+    const top = new THREE.Color(0x5d8fc8), mid = new THREE.Color(0xbcd2e6), low = new THREE.Color(0xe8d2ae), c = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const h = pos.getY(i) / 140;
+      if (h > 0.08) c.copy(mid).lerp(top, Math.min(1, (h - 0.08) / 0.6));
+      else c.copy(low).lerp(mid, Math.max(0, (h + 0.1) / 0.18));
+      col.push(c.r, c.g, c.b);
     }
-    this.group.add(
-      new THREE.LineSegments(
-        new THREE.BufferGeometry().setFromPoints(points),
-        new THREE.LineBasicMaterial({ color: 0x39434e, transparent: true, opacity: 0.5 }),
-      ),
-      new THREE.HemisphereLight(0xcfe4ff, 0x343434, 2.5),
-    );
+    sky.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    const dome = new THREE.Mesh(sky, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+    dome.renderOrder = -1;
+    this.group.add(dome);
   }
 
   private shell() {

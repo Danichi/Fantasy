@@ -1,5 +1,6 @@
 import { SANDBOX_SETTINGS_KEY } from './mode';
-export type Scenario = 'dummy' | 'moving' | 'melee' | 'ranged' | 'group';
+export type Scenario = 'dummy' | 'moving' | 'shield' | 'iron' | 'world' | 'melee' | 'ranged' | 'group' | 'crowd' | 'gauntlet';
+export const SCENARIOS: Scenario[] = ['dummy', 'moving', 'shield', 'iron', 'world', 'melee', 'ranged', 'group', 'crowd', 'gauntlet'];
 export interface SandboxSettings {
   drill: string;
   speed: number;
@@ -14,6 +15,12 @@ export interface SandboxSettings {
   scenario: Scenario;
   targetHp: number;
   enemyDamage: number;
+  /** fluid moves you have pulled off here (the move list) */
+  learned: string[];
+  /** the move list beside the fight is open */
+  showMoves: boolean;
+  /** best combo and gauntlet time, kept between visits */
+  best: { combo: number; gauntlet: number };
 }
 export function readSandboxSettings(): SandboxSettings {
   const defaults: SandboxSettings = {
@@ -30,17 +37,22 @@ export function readSandboxSettings(): SandboxSettings {
     scenario: 'dummy',
     targetHp: 10000,
     enemyDamage: 100,
+    learned: [],
+    showMoves: true,
+    best: { combo: 0, gauntlet: 0 },
   };
   try {
     const s = JSON.parse(localStorage.getItem(SANDBOX_SETTINGS_KEY) ?? 'null');
     if (!s || typeof s !== 'object') return defaults;
-    for (const key of ['footprints', 'immortal', 'unlimited', 'instantCooldowns', 'enemyAI', 'autoReset'] as const)
+    for (const key of ['footprints', 'immortal', 'unlimited', 'instantCooldowns', 'enemyAI', 'autoReset', 'showMoves'] as const)
       if (typeof s[key] === 'boolean') defaults[key] = s[key];
     if (['free', 'sequence', 'cut', 'delayed', 'lunge', 'cleave', 'whirl', 'flurry'].includes(s.drill)) defaults.drill = s.drill;
     if ([0.25, 0.5, 1].includes(s.speed)) defaults.speed = s.speed;
     if (typeof s.combat === 'string') defaults.combat = s.combat;
     if (typeof s.magic === 'string') defaults.magic = s.magic;
-    if (['dummy', 'moving', 'melee', 'ranged', 'group'].includes(s.scenario)) defaults.scenario = s.scenario;
+    if (SCENARIOS.includes(s.scenario)) defaults.scenario = s.scenario;
+    if (Array.isArray(s.learned)) defaults.learned = s.learned.filter((x: unknown) => typeof x === 'string').slice(0, 80);
+    if (s.best && typeof s.best === 'object') defaults.best = { combo: Number(s.best.combo) || 0, gauntlet: Number(s.best.gauntlet) || 0 };
     if (Number.isFinite(s.targetHp)) defaults.targetHp = Math.max(100, Math.min(10000000, Math.round(s.targetHp)));
     if (Number.isFinite(s.enemyDamage)) defaults.enemyDamage = Math.max(1, Math.min(10000, Math.round(s.enemyDamage)));
   } catch {}

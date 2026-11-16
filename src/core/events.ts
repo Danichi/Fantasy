@@ -34,6 +34,15 @@ export interface GameEvents {
   /** a creature den (boar wallow, spider hollow, bat roost) was emptied */
   denCleared: { id: string; species: string };
   swing: { heavy: boolean };
+  // ---- fluid combat (combat/flow.ts) ----
+  /** a named move began (the Sandbox's move feed, the move list) */
+  combatMove: { id: string; name: string };
+  /** the world hit back: a foe slammed into a wall, a fence broke, a foe was soaked or set alight */
+  worldImpact: { kind: 'wall' | 'fence' | 'water' | 'brazier' | 'barrel' | 'ledge'; at: Vector3 };
+  /** a foe went up into the air (launcher, yank) */
+  launched: { target: import('../combat/targets').Target };
+  /** a foe about to strike from outside your view (the warning flash) */
+  threatBehind: { from: Vector3; left: number };
   // ---- combat rework (combat/core.ts) ----
   /** every blow the player lands, after the target took it */
   strike: { target: import('../combat/targets').Target; at: Vector3; damage: number; crit: boolean; reason?: import('../combat/core').CritReason; react: import('../combat/core').Reaction; broke: boolean; armour: import('../combat/core').Armour; type: import('../combat/core').DmgType; heavy: boolean; typeMult: number; killed: boolean };

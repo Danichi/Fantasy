@@ -51,6 +51,14 @@ export interface ActionDef {
   air?: boolean;
   /** procedural flourishes layered over the clip (skills): see Flair */
   flair?: Flair[];
+  /** fluid combat (combat/flow.ts): an air cut (you hang in the air while it swings; it keeps a launched foe up) */
+  aerial?: boolean;
+  /** pops a light foe this many m/s into the air */
+  launch?: number;
+  /** drives an airborne foe down into the ground */
+  spike?: boolean;
+  /** knocks the foe back this many m/s (walls, fences, braziers, water, ledges) */
+  knock?: number;
   /** timing for the real Mixamo clip (measured from the clip), replacing the procedural timing */
   clipTiming?: Partial<Omit<ActionDef, 'id' | 'clip' | 'proc' | 'clipTiming'>> & { speed?: number };
 }
@@ -458,6 +466,78 @@ export const BRANCHES: Record<string, Branch> = {
     base: 'heavy', name: 'Finisher',
     build: (d) => ({ ...retime({ ...d, chargeAt: undefined }, 0.9), id: 'finisher', stamina: 0, hit: blow(d, 4, 200), hyper: true, react: 'knockdown', iframes: [0, d.dur * 0.9], combo: undefined, track: d.dur * 0.6 }),
   },
+};
+
+// ---- fluid combat (docs/design/combat-flow.md) ----
+Object.assign(BRANCHES, {
+  // Out of a perfect dodge: a sliding cut that closes the gap (the dash is set when it starts).
+  dodgeCounter: {
+    base: 'sprintAttack', name: 'Counter Slide',
+    build: (d: ActionDef) => ({ ...retime(d, 0.78), id: 'dodgeCounter', stamina: 0, hit: blow(d, 1.7, 60), posture: 1.6, hyper: true, iframes: [0, d.hit ? d.hit.from * 0.78 : 0.3], combo: { next: 'slash2', from: d.cancel * 0.7, heavy: 'link2' } }),
+  },
+  // Out of a perfect parry: straight in, while they reel.
+  riposte: {
+    base: 'slash3', name: 'Riposte',
+    build: (d: ActionDef) => ({ ...retime(d, 0.66), id: 'riposte', stamina: 0, dtype: 'pierce', hit: blow(d, 2.2, 95), posture: 2.1, hyper: true, move: { dist: 1.1, from: 0.02, to: d.hit ? d.hit.from * 0.66 : 0.3 }, combo: { next: 'slash1', from: d.cancel * 0.6 } }),
+  },
+  // Out of a roll or step: a cut rising from the ground.
+  risingCut: {
+    base: 'slash2', name: 'Rising Cut',
+    build: (d: ActionDef) => ({ ...retime(d, 0.82), id: 'risingCut', stamina: 12, hit: blow(d, 1.2, 30), move: { dist: 0.9, from: 0.02, to: d.hit ? d.hit.to * 0.82 : 0.4 }, combo: { next: 'slash3', from: (d.combo?.from ?? d.cancel) * 0.82, heavy: 'launcher' } }),
+  },
+  // Jump during a string: the foe goes up, and you go after it.
+  launcher: {
+    base: 'slash2', name: 'Launcher',
+    build: (d: ActionDef) => ({ ...retime(d, 0.9), id: 'launcher', stamina: 16, hit: blow(d, 1.0, 55), launch: 8.2, posture: 1.3, move: { dist: 0.35, from: 0.05, to: d.hit ? d.hit.to : 0.4 }, combo: undefined, flair: [{ kind: 'crouch', from: 0, to: d.hit ? d.hit.from * 0.9 : 0.3, amt: 0.18 }] }),
+  },
+  // In the air: three cuts, then you drop (or plunge).
+  airSlash1: {
+    base: 'slash1', name: 'Air Cut',
+    build: (d: ActionDef) => ({ ...retime(d, 0.6), id: 'airSlash1', stamina: 8, hit: blow(d, 0.9, 22), aerial: true, move: { dist: 0.35, from: 0.05, to: 0.35 }, combo: { next: 'airSlash2', from: (d.combo?.from ?? d.cancel) * 0.6 }, track: d.track * 0.6 }),
+  },
+  airSlash2: {
+    base: 'slash2', name: 'Air Cut',
+    build: (d: ActionDef) => ({ ...retime(d, 0.6), id: 'airSlash2', stamina: 8, hit: blow(d, 0.95, 22), aerial: true, move: { dist: 0.35, from: 0.05, to: 0.35 }, combo: { next: 'airSlash3', from: (d.combo?.from ?? d.cancel) * 0.6 }, track: d.track * 0.6 }),
+  },
+  airSlash3: {
+    base: 'slash3', name: 'Falling Strike',
+    build: (d: ActionDef) => ({ ...retime(d, 0.62), id: 'airSlash3', stamina: 10, hit: blow(d, 1.45, 55), aerial: true, spike: true, posture: 1.4, combo: undefined, flair: [{ kind: 'spin', from: 0.02, to: d.hit ? d.hit.to * 0.62 : 0.4, amt: 1 }] }),
+  },
+  // Toward another foe a few strides away: a dash that ends in a cut (the distance is set when it starts).
+  dashStrike: {
+    base: 'sprintAttack', name: 'Dash Strike',
+    build: (d: ActionDef) => ({ ...retime(d, 0.8), id: 'dashStrike', stamina: 14, hit: blow(d, 1.3, 36), iframes: [0.02, 0.2], combo: { next: 'slash2', from: d.cancel * 0.7, heavy: 'link2' } }),
+  },
+  // Sprint and kick: a low slide that takes their legs (further down a slope).
+  slideTackle: {
+    base: 'barge', name: 'Slide Tackle',
+    build: (d: ActionDef) => ({
+      ...d, id: 'slideTackle', clip: undefined, clipTiming: undefined, dur: 0.86, stamina: 16, cancel: 0.62, track: 0.08,
+      hit: { from: 0.1, to: 0.55, dmg: 0.6, poise: 90, hand: 'main' }, react: 'knockdown', posture: 2, sweep: { reach: 1.5, arc: 0.2 },
+      move: { dist: 4.6, from: 0.02, to: 0.66 }, iframes: [0.02, 0.24], knock: 4,
+      proc: (t: number) => ({ hipsDrop: sampleF([[0, 0], [0.12, 0.5], [0.66, 0.46], [1, 0]], t), spinePitch: sampleF([[0, 0], [0.12, -0.42], [0.66, -0.38], [1, 0]], t), right: { ...GUARD_R, w: 0.6 } }),
+    }),
+  },
+  // Shield up, walking in: drive it into them.
+  shieldPush: {
+    base: 'shieldBash', name: 'Shield Drive',
+    build: (d: ActionDef) => ({ ...d, id: 'shieldPush', stamina: 14, hit: d.hit && { ...d.hit, poise: 95 }, posture: 2.9, guardBreak: true, knock: 7, move: { dist: 1.7, from: 0.04, to: d.hit ? d.hit.to : 0.4 } }),
+  },
+});
+
+/** Every move's name for the move feed (branches, and the plain moves people will see). */
+export function moveLabel(id: string): string {
+  const br = BRANCHES[id];
+  if (br) return br.name;
+  return ({ slash1: 'Cut', slash2: 'Cut', slash3: 'Cut', heavy: 'Heavy', sprintAttack: 'Charging Strike', airAttack: 'Plunge', offslash1: 'Off-hand Cut', offslash2: 'Off-hand Cut', barge: 'Kick', shieldBash: 'Shield Bash', roll: 'Roll', quickstep: 'Step', backstep: 'Backstep', vault: 'Vault', parryShield: 'Parry', parryDual: 'Parry', parryWeapon: 'Parry' } as Record<string, string>)[id] ?? id.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
+}
+
+// Over a reeling or guarding foe and down behind them.
+ACTIONS.vault = {
+  id: 'vault', dur: 0.62, stamina: 18, iframes: [0, 0.5], cancel: 0.46, track: 0,
+  move: { dist: 3.3, from: 0.02, to: 0.5 },
+  flair: [{ kind: 'hop', from: 0.02, to: 0.52, amt: 1.5 }, { kind: 'spin', from: 0.05, to: 0.55, amt: 0.5 }],
+  proc: (t) => ({ hipsDrop: sampleF([[0, 0.2], [0.15, -0.1], [0.5, 0.1], [0.8, 0.2], [1, 0]], t), spinePitch: sampleF([[0, 0], [0.2, 0.35], [0.5, 0.2], [1, 0]], t), right: GUARD_R }),
 };
 
 /** The light string's heavy and delayed branches. */

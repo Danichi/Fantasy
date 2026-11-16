@@ -77,6 +77,11 @@ export function starterSandboxGear(p: Player) {
   }
   for (const id of ['healthPotion', 'manaPotion', 'arrowIron', 'boltIron'])
     if (ITEMS[id] && !eq.items.some((i) => i.def.id === id)) eq.add(id, 99);
+  // The grappling hook on the belt (key 4): yank a light foe in, or zip to a heavy one.
+  if (ITEMS.grapplingHook && !eq.items.some((i) => i.def.id === 'grapplingHook')) {
+    const hook = eq.add('grapplingHook');
+    if (eq.quick[3] === null) eq.quick[3] = hook.uid;
+  }
   if (!eq.mainWeapon) {
     const sword = eq.items.find((i) => i.def.id === 'longsword') ?? eq.items.find((i) => i.def.kind === 'sword');
     if (sword) eq.equip(sword.uid, 'main');

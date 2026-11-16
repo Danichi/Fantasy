@@ -373,6 +373,24 @@ export class Realm {
     };
   }
 
+  /** The Sandbox's Proving Grounds are open to the sky: daylight, a long view, a pale haze (restored on leaving like any interior). */
+  private openAir() {
+    const r = this.r, s = r.scene;
+    const u = r.post?.finalMat.uniforms;
+    s.background = new THREE.Color(0xbcd2e6);
+    s.fog = new THREE.Fog(0xd9d2c4, 70, 190);
+    s.environmentIntensity = 0.6;
+    r.hemi.intensity = 0.7;
+    r.hemi.color.set(0xd8ecff);
+    r.hemi.groundColor.set(0x8a7458);
+    r.camera.far = 220;
+    r.camera.updateProjectionMatrix();
+    if (u) {
+      u.uHaze.value = 0.0015;
+      (u.uHazeColor.value as THREE.Color).setRGB(0.75, 0.78, 0.82);
+    }
+  }
+
   private atmosphere(dungeon: boolean, indoors = false, mine = false, kit?: Theme) {
     const r = this.r, s = r.scene;
     const u = r.post?.finalMat.uniforms;
@@ -545,6 +563,7 @@ export class Realm {
     this.overworld.enemiesEnabled(false);
     this.overworld.hide(true);
     this.atmosphere(true, true);
+    if (kind === 'sandbox') this.openAir();
     this.mode = 'interior';
     const it = new Interior(door, kind, this.r.scene, mats, () => void this.leaveInterior(), lights, onInspect);
     this.interior = it;

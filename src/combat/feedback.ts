@@ -103,6 +103,30 @@ export function combatFeedback(fx: FX, player: Player, banner: (text: string) =>
     banner('PERFECT DODGE');
   });
   events.on('unblockable', ({ kind }) => banner(kind === 'grab' ? 'GRABBED' : 'UNBLOCKABLE'));
+
+  // ---- fluid combat: the world hits back (combat/impacts.ts) ----
+  events.on('worldImpact', ({ kind, at }) => {
+    const v = Math.max(0.25, near(at));
+    if (kind === 'wall' || kind === 'ledge') {
+      fx.add.spawn({ pos: at, spread: 3.2, count: 22, life: [0.25, 0.6], size: [0.14, 0.03], color: 0xd8c8a8, color2: 0x5a4a38, gravity: 10, upBias: 0.4 });
+      sfx.impact('stone', true, 0.6 * v);
+      if (kind === 'wall') banner('SLAMMED');
+    } else if (kind === 'fence' || kind === 'barrel') {
+      fx.add.spawn({ pos: at, spread: 4, count: 26, life: [0.3, 0.8], size: [0.12, 0.04], color: 0xb08850, color2: 0x4a3018, gravity: 11, upBias: 0.6 });
+      sfx.impact('wood', true, 0.6 * v);
+      sfx.breakCrash(0.25 * v);
+    } else if (kind === 'brazier') {
+      fx.add.spawn({ pos: at, spread: 2.6, count: 30, life: [0.3, 0.8], size: [0.3, 0.05], color: 0xffd060, color2: 0xff3010, gravity: -2, drag: 2 });
+      sfx.whoosh(0.8, 0.3 * v);
+    } else if (kind === 'water') {
+      fx.alpha.spawn({ pos: at, spread: 3, count: 20, life: [0.3, 0.7], size: [0.3, 0.8], color: 0xbfe0ff, alpha: 0.5, drag: 2 });
+      sfx.slip(0.4 * v);
+    }
+  });
+  events.on('launched', ({ target }) => {
+    fx.add.spawn({ pos: target.position.clone(), spread: 2.2, count: 14, life: [0.2, 0.45], size: [0.22, 0.04], color: 0xe8e0c8, color2: 0x8a826e, gravity: 6 });
+    sfx.whoosh(0.7, 0.26);
+  });
   events.on('chargeTier', ({ tier, perfect }) => {
     const at = player.center.clone().addScaledVector(player.forward, 0.4);
     at.y += 0.5;

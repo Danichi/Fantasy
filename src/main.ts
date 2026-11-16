@@ -199,6 +199,9 @@ import { tickUndeadHair } from './creatures/undeadHumanoid/visual';
 import { registerSpecies } from './creatures/species';
 import { creatureView } from './creatures/view';
 import { GuardArc } from './ui/guardArc';
+import { ThreatWarn } from './ui/threatWarn';
+import { stepImpacts } from './combat/impacts';
+import { scanThreats } from './combat/flow';
 import { Raids } from './raid/raids';
 import { FieldBosses } from './bosses/fieldBosses';
 import { GRASS_MASKS } from './world/groundWindow';
@@ -580,6 +583,7 @@ async function boot() {
   const trail = new WeaponTrail(r.scene, player);
   // Where a raised shield covers, and a crosshair to aim it.
   const guardArc = new GuardArc(r.scene, player);
+  const threatWarn = new ThreatWarn(() => cam.forward(), () => player.pos);
   hud.resource = () => skillRt.resources();
   skillRt.notify = (m) => hud.toast(m);
   hud.skillSlot = (ref) => {
@@ -2874,6 +2878,8 @@ async function boot() {
     if (realm.mode === 'overworld') { updateSea(STEP,sailing.current?.pos??player.pos,weather.p); sailing.preStep(STEP); }
     player.update(STEP, input, cam);
     combat.tick(STEP); // posture, poise and wind-ups of everything that fights (combat/core.ts)
+    stepImpacts(STEP); // knocked foes meeting walls, fences, braziers, water; rolling barrels (combat/impacts.ts)
+    if (!player.dead) scanThreats(STEP, player.pos, cam.forward()); // the warning flash for blows from behind
     director.tick(STEP, player); // attack turns (combat/ai.ts)
     skillRt.update(STEP);
     gearRt.update(STEP); // the item catalog's gear effects (items/catalog)
@@ -2962,6 +2968,7 @@ async function boot() {
       },
       save,
       debug: () => combatDebug.toggle(),
+      banner: (text) => hud.showBanner(text),
       leave: () => {
         save();
         travelToSandbox(false);
@@ -3040,6 +3047,7 @@ async function boot() {
     tickDelverFur(dt);
     tickUndeadHair(dt);
     guardArc.update(dt);
+    threatWarn.update(dt);
     combatDebug.update();
     telegraphs.enabled = sandbox?.settings.footprints ?? false;
     telegraphs.update();

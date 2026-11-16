@@ -16,7 +16,7 @@ import { physics, groups, G_PLAYER, STATIC_ONLY } from '../physics/physics';
 import { clamp, damp, lerp, stepAngle, wrapAngle, segmentSegmentDistance, smoothstep } from '../core/math';
 import { events } from '../core/events';
 import { Equipment } from '../items/equipment';
-import { ACTIONS, BRANCHES, STRING_BRANCH, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, resolveAction, flairAt, type ActionDef } from '../combat/actions';
+import { ACTIONS, BRANCHES, STRING_BRANCH, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY_L, OFFHAND_GUARD_L, resolveAction, flairAt, moveLabel, type ActionDef } from '../combat/actions';
 import { strike, combat, combatOf, finisherOpen, isBoss, FAMILY_DMG, type DmgType } from '../combat/core';
 import { targets, hurtSegment, type Target, type IncomingAttack, type DefenceResult } from '../combat/targets';
 import { surfaceAt, heightAt as heightAtGround } from '../world/terrain';
@@ -28,6 +28,8 @@ import { Progression } from '../progression/progression';
 import { Paths } from '../paths/paths';
 import { baseMods, type CombatMods } from '../combat/mods';
 import { ARMOUR, armourBlow, armourCut, maxArmourOf } from './armour';
+import { launch, juggle, spike, knock, kickBarrels, barrelHit, airborne } from '../combat/impacts';
+import { dashCandidate, vaultTarget } from '../combat/flow';
 
 /** The enemy a blow most likely came from (attacks that don't name their attacker). */
 function nearestAttacker(from: THREE.Vector3): Target | undefined {
@@ -72,6 +74,12 @@ const TIER_DMG = [1, 1.2, 1.45, 1.75];
 /** blows the player can't be staggered out of */
 const HYPER = new Set(['heavy', 'airAttack', 'link3', 'finisher', 'guardCounter']);
 /** hit-stop per weapon family (heavier weapons bite longer) */
+/** knockback (m/s) for moves that don't set their own: kicks and charges drive a foe into the world */
+const KNOCK: Record<string, number> = { barge: 5.5, shieldBash: 5, sprintAttack: 3.5, heavy: 0, link3: 3, finisher: 0, dashStrike: 2.5, guardCounter: 3.5 };
+/** moves that roll a barrel they meet */
+const KICKS = new Set(['barge', 'shieldBash', 'shieldPush', 'slideTackle']);
+/** striking down from 0.9 m or more above */
+const HIGH_GROUND = 1.2;
 const WEIGHT_STOP: Record<string, number> = { dagger: 0.045, sword: 0.065, spear: 0.065, staff: 0.06, axe: 0.08, mace: 0.09, greatsword: 0.105 };
 
 interface ActiveAction {
@@ -101,6 +109,12 @@ interface ActiveAction {
   released: boolean;
   /** seconds its clip takes to blend in (longer out of another clip: a combo's link) */
   blendIn?: number;
+  /** a dash strike or counter slide: the foe it closes on */
+  dashTarget?: Target | null;
+  /** a launcher that connected has sent you up after the foe */
+  leapt?: boolean;
+  /** a kick has already met any barrels in its way */
+  kicked?: boolean;
 }
 
 /**
@@ -221,6 +235,16 @@ export class Player {
   private attackHeldFor = 0;
   /** seconds left of the counter window a perfect dodge opens */
   counterT = 0;
+  /** after a perfect parry: the next attack is a riposte */
+  riposteT = 0;
+  /** a dodge out of a string keeps your place in it for a moment (the dodge offset) */
+  private flowOffset: { next: string; until: number } | null = null;
+  /** seconds since a roll or step ended (an attack right out of one rises from the ground) */
+  private sinceRoll = 9;
+  /** seconds of slow fall the air string still has (a launcher gives the most) */
+  airHang = 0;
+  /** wall kicks left in this jump */
+  private wallKicks = 2;
   /** can't be staggered again until this runs out */
   private staggerCd = 0;
   private perfectDodgeAct: ActiveAction | null = null;
@@ -624,11 +648,18 @@ export class Player {
     this.blocking = wantBlock && (!this.act || guardAct(this.act.def.id));
     this.blockT = this.blocking ? this.blockT + SIM_STEP : 0;
     this.diveHeld = input.held('jump');
-    if (input.wasPressed('jump') && this.grounded && !this.act) {
+    const jumpAct = this.act;
+    if (input.wasPressed('jump') && this.grounded && jumpAct?.def.hit && !jumpAct.def.roll && !jumpAct.def.air && !jumpAct.def.aerial && jumpAct.def.id !== 'launcher' && jumpAct.t >= Math.min(jumpAct.def.hit.from, 0.12) && (this.equip.mainWeapon || this.canFightUnarmed?.())) {
+      // Jump during a string: the launcher (the foe goes up, and you after it).
+      this.startAction('launcher');
+    } else if (input.wasPressed('jump') && !this.grounded && !this.swimming && !this.flying && this.wallKicks > 0 && this.tryWallKick()) {
+      // (kicked off a wall)
+    } else if (input.wasPressed('jump') && this.grounded && !this.act) {
       this.vel.y = JUMP_V;
       this.grounded = false;
       this.airTime = 0;
       this.airJumps = 0;
+      this.wallKicks = 2;
     } else if (input.wasPressed('jump') && !this.grounded && !this.swimming && !this.act && this.airJumps < (this.fieldAirJumps?.() ?? 0)) {
       // Gale Style's field ability: a step off the wind itself.
       this.airJumps++;
@@ -686,8 +717,78 @@ export class Player {
       const dir = def.roll.back || (def.roll.step && this.moveIntent.lengthSq() === 0) ? this.forward.negate() : this.moveIntent.lengthSq() > 0 ? this.moveIntent.clone() : this.forward;
       this.act.rollDir = dir;
     }
+    // Dash strike and counter slide close the gap to their foe, however far it is.
+    if (id === 'dashStrike' || id === 'dodgeCounter') {
+      const tg = id === 'dashStrike' ? this.dashPick : this.counterFoe();
+      this.dashPick = null;
+      if (tg) {
+        const to = tg.position.clone().sub(this.pos).setY(0);
+        const gap = Math.max(0, to.length() - tg.radius - 0.95);
+        const hitAt = def.hit ? def.hit.from : def.dur * 0.4;
+        this.act.def = def = { ...def, boost: undefined, move: { dist: clamp(gap, 0.3, 6.5), from: 0.0, to: Math.max(0.08, hitAt * 0.95) } };
+        this.act.dashTarget = tg;
+        if (to.lengthSq() > 1e-4) this.act.rollDir = to.normalize();
+        this.yaw = Math.atan2(to.x, to.z);
+      }
+    }
+    // A slide tackle down a slope goes a long way further.
+    if (id === 'slideTackle') {
+      const f = this.forward;
+      const h0 = this.probeGround(this.pos.x, this.pos.z), h1 = this.probeGround(this.pos.x + f.x * 2.5, this.pos.z + f.z * 2.5);
+      if (h0 !== null && h1 !== null && h0 - h1 > 0.35 && def.move) this.act.def = def = { ...def, move: { ...def.move, dist: def.move.dist * 1.5, to: def.move.to * 1.2 }, dur: def.dur * 1.15 };
+    }
+    if (id === 'vault') {
+      const v = this.vaultPick;
+      this.vaultPick = null;
+      const to = v ? v.position.clone().sub(this.pos).setY(0) : this.forward;
+      this.act.rollDir = to.lengthSq() > 1e-4 ? to.normalize() : this.forward;
+      this.yaw = Math.atan2(this.act.rollDir.x, this.act.rollDir.z);
+      this.vel.y = Math.max(this.vel.y, 2.2);
+    }
+    // An air cut buys a little hang (a launcher bought more already).
+    if (def.aerial && !this.grounded) {
+      this.airHang = Math.max(this.airHang, 0.32);
+      this.vel.y = Math.max(this.vel.y, 0.6);
+    }
+    if (def.roll) this.sinceRoll = 0;
     if (def.hit) events.emit('swing', { heavy: HYPER.has(id) });
+    events.emit('combatMove', { id, name: moveLabel(id) });
     return true;
+  }
+
+  /** the foe a dash strike was aimed at when it was chosen */
+  private dashPick: Target | null = null;
+  private vaultPick: Target | null = null;
+
+  /** Whoever you just dodged: the lock, or the nearest foe within 7 m. */
+  private counterFoe(): Target | null {
+    if (this.lock?.alive) return this.lock;
+    let best: Target | null = null, bd = 7;
+    for (const t of targets) {
+      if (!t.alive || !t.lockable) continue;
+      const d = t.position.distanceTo(this.pos);
+      if (d < bd) (bd = d), (best = t);
+    }
+    return best;
+  }
+
+  /** Jump in the air against a wall: push off it, up and away. */
+  private tryWallKick(): boolean {
+    const dir = this.moveIntent.lengthSq() > 0.1 ? this.moveIntent.clone() : this.forward;
+    for (const d of [dir, this.forward]) {
+      const hit = physics.castRay(this.center, d, CAPSULE_R + 0.7);
+      if (hit === null) continue;
+      this.wallKicks--;
+      const away = d.clone().setY(0).normalize().negate();
+      this.vel.set(away.x * 6.2, JUMP_V * 1.05, away.z * 6.2);
+      this.yaw = Math.atan2(away.x, away.z);
+      this.airTime = 0;
+      this.fallSpeed = 0;
+      events.emit('combatMove', { id: 'wallKick', name: 'Wall Kick' });
+      this.onShake?.(0.08);
+      return true;
+    }
+    return false;
   }
 
   /** How heavy the armour is: light (< 10), medium, heavy (> 20). */
@@ -711,9 +812,11 @@ export class Player {
 
   /** A broken or downed enemy close in front: the one a finisher is for. */
   finisherTarget(): Target | null {
+    // No finishers in the air, or on someone still flying (the air string keeps cutting).
+    if (!this.grounded) return null;
     const f = this.forward;
     const ok = (t: Target, reach: number) => {
-      if (!finisherOpen(t)) return false;
+      if (!finisherOpen(t) || airborne(t)) return false;
       const to = t.position.clone().sub(this.pos).setY(0);
       const d = to.length() - t.radius;
       return d < reach && (d < 0.5 || to.normalize().dot(f) > 0.2) && Math.abs(t.center.y - this.center.y) < 1.8;
@@ -735,10 +838,44 @@ export class Player {
       this.finTarget = fin;
       return 'finisher';
     }
-    // From behind a raised guard: a counter right after it took a blow, else the first cut (the bash is on G).
+    // Right out of a perfect dodge: the counter slide. Out of a perfect parry: the riposte.
+    if (this.counterT > 0 && this.counterFoe()) return 'dodgeCounter';
+    if (this.riposteT > 0) {
+      this.riposteT = 0;
+      return 'riposte';
+    }
+    // From behind a raised guard: a counter right after it took a blow; walking in, a shield drive.
     if (this.blocking && this.blockHitT < 0.7) return 'guardCounter';
-    const lk = this.lock;
-    if (lk?.alive && this.moveIntent.lengthSq() > 0.25) {
+    if (this.blocking && this.equip.hasShield && this.moveIntent.dot(this.forward) > 0.5) return 'shieldPush';
+    return this.flowNext() ?? this.shapedOpener();
+  }
+
+  /** A string you dodged out of picks up where it left off (the dodge offset). */
+  private flowNext(): string | null {
+    const f = this.flowOffset;
+    this.flowOffset = null;
+    if (!f || this.gameTime >= f.until) return null;
+    events.emit('combatMove', { id: 'dodgeOffset', name: 'Dodge Offset' });
+    return f.next;
+  }
+
+  /**
+   * The first cut, shaped by how you move: at a foe a few strides off, a dash
+   * strike; toward the one in front, a lunge; away, a retreating cut; across
+   * it, a sweep; just out of a roll, a rising cut.
+   */
+  private shapedOpener(): string {
+    const moving = this.moveIntent.lengthSq() > 0.25;
+    if (moving) {
+      const dash = dashCandidate(this.pos, this.moveIntent);
+      if (dash) {
+        this.dashPick = dash;
+        return 'dashStrike';
+      }
+    }
+    if (this.sinceRoll < 0.4) return 'risingCut';
+    const lk = this.lock?.alive ? this.lock : moving ? this.aimTarget(4.5) : null;
+    if (lk && moving) {
       const to = lk.position.clone().sub(this.pos).setY(0).normalize();
       const d = this.moveIntent.dot(to);
       if (d > 0.6) return 'thrust';
@@ -746,6 +883,12 @@ export class Player {
       return 'sideSweep';
     }
     return 'slash1';
+  }
+
+  /** What an attack out of a roll or step becomes. */
+  private evadeAttack(): string {
+    if (this.counterT > 0 && this.counterFoe()) return 'dodgeCounter';
+    return this.flowNext() ?? 'risingCut';
   }
 
   private endAction() {
@@ -773,10 +916,10 @@ export class Player {
         this.useOriginAbility();
         return;
       }
-      if (b.a === 'attack' && (eq.mainWeapon || this.canFightUnarmed?.())) next = !this.grounded ? 'airAttack' : this.sprinting ? 'sprintAttack' : this.opener();
+      if (b.a === 'attack' && (eq.mainWeapon || this.canFightUnarmed?.())) next = !this.grounded ? this.airOpener() : this.sprinting && !(this.counterT > 0) ? 'sprintAttack' : this.opener();
       else if (b.a === 'offhand' && eq.dualWield) next = 'offslash1';
-      else if (b.a === 'kick') next = shove();
-      else if (b.a === 'dodge' || b.a === 'roll') next = this.grounded ? b.a === 'dodge' && this.lock ? 'quickstep' : 'roll' : null;
+      else if (b.a === 'kick') next = !this.grounded ? (eq.mainWeapon || this.canFightUnarmed?.() ? 'airAttack' : null) : this.sprinting && !this.mounted ? 'slideTackle' : shove();
+      else if (b.a === 'dodge' || b.a === 'roll') next = this.grounded ? this.vaultOrDodge(b.a) : null;
       else if (b.a === 'parry') next = parry();
       else if (b.a === 'cast') next = this.spellAction();
       if (next === null && (b.a === 'dodge' || b.a === 'roll') && !this.grounded) return; // keep it for landing
@@ -785,7 +928,30 @@ export class Player {
       const comboOpen = d.combo && a.t >= d.combo.from;
       // Hit-confirm: a blow that connected can be cancelled sooner; a whiff leaves you open longer.
       const cancelAt = d.cancel + (a.connected ? -HIT_CONFIRM : d.hit ? WHIFF_LAG : 0);
-      if (b.a === 'attack' && (eq.mainWeapon || this.canFightUnarmed?.()) && comboOpen) {
+      // Costed cancels: a dodge can cut a swing short before the blow (a feint) or
+      // once it is past (a recovery cancel), for extra stamina. Not in the blow itself.
+      const evade = b.a === 'dodge' || b.a === 'roll';
+      const cancelable = d.hit && !d.roll && d.id !== 'stagger' && d.id !== 'guardBreak' && !d.air && d.id !== 'finisher';
+      const feint = evade && cancelable && a.t < d.hit!.from - 0.02;
+      const recover = evade && cancelable && a.t > d.hit!.to && a.t < cancelAt;
+      if (b.a === 'attack' && d.roll && (eq.mainWeapon || this.canFightUnarmed?.())) {
+        // Out of a roll or step: a counter slide after a perfect dodge (at once), else a rising cut as it ends.
+        if (this.counterT > 0 && a.t >= 0.08) next = this.evadeAttack();
+        else if (a.t >= d.cancel * 0.85) next = this.evadeAttack();
+        else return;
+      } else if (b.a === 'attack' && d.parry && this.riposteT > 0 && (eq.mainWeapon || this.canFightUnarmed?.())) {
+        // A perfect parry cuts straight into the riposte.
+        this.riposteT = 0;
+        next = 'riposte';
+      } else if (b.a === 'kick' && d.aerial && !this.grounded) next = 'airAttack';
+      else if ((feint || recover) && this.grounded) {
+        const extra = feint ? 8 : a.connected ? 6 : 12;
+        if (this.stamina < extra + 6) return;
+        this.spendStamina(extra);
+        if (d.combo) this.flowOffset = { next: d.combo.next, until: this.gameTime + 0.9 };
+        events.emit('combatMove', feint ? { id: 'feint', name: 'Feint' } : { id: 'recoverCancel', name: 'Cancel' });
+        next = this.vaultOrDodge(b.a as 'dodge' | 'roll');
+      } else if (b.a === 'attack' && (eq.mainWeapon || this.canFightUnarmed?.()) && comboOpen) {
         const c = d.combo!;
         // A broken enemy in reach: the string ends in a finisher.
         const fin = this.finisherTarget();
@@ -798,12 +964,33 @@ export class Player {
         else next = c.next;
       } else if (b.a === 'offhand' && eq.dualWield && comboOpen) next = d.id.startsWith('offslash') && d.combo ? d.combo.next : 'offslash1';
       else if (b.a === 'kick' && a.t >= cancelAt) next = shove();
-      else if ((b.a === 'dodge' || b.a === 'roll') && a.t >= cancelAt && this.grounded) next = b.a === 'dodge' && this.lock ? 'quickstep' : 'roll';
+      else if ((b.a === 'dodge' || b.a === 'roll') && a.t >= cancelAt && this.grounded) {
+        if (d.combo && d.hit) this.flowOffset = { next: d.combo.next, until: this.gameTime + 0.9 };
+        next = this.vaultOrDodge(b.a);
+      }
       else if (b.a === 'parry' && a.t >= cancelAt) next = parry();
       else return; // keep buffering
     }
     this.buffer = null;
     if (next) { this.inputLatency = Math.max(0, this.gameTime - b.t); this.startAction(next); }
+  }
+
+  /** A dodge toward a reeling or guarding foe close in front vaults it; otherwise a step or a roll. */
+  private vaultOrDodge(kind: 'dodge' | 'roll'): string {
+    const dir = this.moveIntent.lengthSq() > 0.1 ? this.moveIntent : null;
+    const v = dir && !this.mounted ? vaultTarget(this.pos, dir) : null;
+    if (v) {
+      this.vaultPick = v;
+      return 'vault';
+    }
+    return kind === 'dodge' && this.lock ? 'quickstep' : 'roll';
+  }
+
+  /** An attack in the air: the air string if there is someone up here to cut (or a launcher bought the time), else the plunge. */
+  private airOpener(): string {
+    if (this.airHang > 0) return 'airSlash1';
+    for (const t of targets) if (airborne(t) && t.alive && t.center.distanceTo(this.center) < 3.5) return 'airSlash1';
+    return 'airAttack';
   }
 
   private spellAction(): string | null {
@@ -866,6 +1053,20 @@ export class Player {
     }
 
     a.t += dt * a.speed;
+    // A launcher that sent someone up: you go after it, with time to cut in the air.
+    if (d.launch && d.hit && !a.leapt && a.t >= d.hit.to && a.connected) {
+      a.leapt = true;
+      let up = false;
+      for (const id of a.hitSet) for (const t of targets) if (t.id === id && airborne(t)) up = true;
+      if (up && this.grounded) {
+        this.vel.y = 7.4;
+        this.grounded = false;
+        this.airTime = 0;
+        this.airHang = 1.4;
+        this.endAction();
+        return;
+      }
+    }
     if (d.event && !a.fired && a.t >= d.event.at) {
       a.fired = true;
       this.fireEvent(d.event.name);
@@ -1151,7 +1352,8 @@ export class Player {
       const dir = a.rollDir ?? this.forward;
       let d = this.travelAt(a, a.t + (a.charging ? 0 : dt * a.speed)) - this.travelAt(a, a.t);
       // Don't lunge through an enemy we're already touching.
-      if (!a.def.roll && this.lock && this.lock.center.distanceTo(this.center) < 1.4) d *= 0.2;
+      if (!a.def.roll && a.def.id !== 'vault' && this.lock && this.lock.center.distanceTo(this.center) < 1.4) d *= 0.2;
+      if (a.dashTarget?.alive && a.dashTarget.position.distanceTo(this.pos) < a.dashTarget.radius + 1.0) d *= 0.15;
       const v = d / dt;
       // Blend in so the transition from running isn't a hard stop: the body
       // carries its momentum into the first beat of the move.
@@ -1202,7 +1404,9 @@ export class Player {
       } else if (a.t < Math.min(a.def.track, a.def.hit ? Math.max(0, a.def.hit.from - 0.08) : a.def.track) || (a.def.hit && a.t > a.def.hit.to && !a.def.air)) {
         const soft = a.def.hit ? this.aimTarget(this.combatReach + 1.5) : null;
         const toSoft = soft ? Math.atan2(soft.position.x - this.pos.x, soft.position.z - this.pos.z) : null;
-        const want = toLock ?? toSoft ?? (intent.lengthSq() > 0 ? Math.atan2(intent.x, intent.z) : this.yaw);
+        const dt2 = a.dashTarget?.alive ? a.dashTarget : null;
+        const toDash = dt2 ? Math.atan2(dt2.position.x - this.pos.x, dt2.position.z - this.pos.z) : null;
+        const want = toDash ?? toLock ?? toSoft ?? (intent.lengthSq() > 0 ? Math.atan2(intent.x, intent.z) : this.yaw);
         this.turnToward(want, dt, 220);
       } else this.yawVel *= Math.exp(-20 * dt);
     } else if (this.aiming) {
@@ -1229,6 +1433,10 @@ export class Player {
     } else if (this.swimming && surface !== null) {
       // Buoyancy: ease toward treading water at the surface.
       this.vel.y = (surface - 1.25 - this.diveDepth - this.pos.y) * 5;
+    } else if (!this.flying && a?.def.aerial && !this.grounded && this.airHang > 0) {
+      // The air string: you hang while you cut (on a budget; a launcher gives the most).
+      this.airHang = Math.max(0, this.airHang - dt);
+      this.vel.y = damp(this.vel.y, -0.5, 9, dt);
     } else if (!this.flying) {
       this.vel.y -= GRAVITY * dt;
       if (this.grounded && this.vel.y < 0) this.vel.y = 0;
@@ -1245,6 +1453,7 @@ export class Player {
       const dx = this.pos.x - t.position.x, dz = this.pos.z - t.position.z;
       const d = Math.hypot(dx, dz);
       const min = CAPSULE_R + t.radius * 0.85;
+      if (a?.def.id === 'vault') break; // over them, not into them
       if (d < min && d > 1e-4 && Math.abs(t.center.y - this.center.y) < 1.4) {
         this.push.x += (dx / d) * (min - d) * 0.6;
         this.push.z += (dz / d) * (min - d) * 0.6;
@@ -1307,6 +1516,8 @@ export class Player {
 
   private onLand() {
     this.airJumps = 0;
+    this.wallKicks = 2;
+    this.airHang = 0;
     const a = this.act;
     if (this.fallSpeed > 8) this.onShake?.(Math.min(0.35, this.fallSpeed * 0.02));
     if (this.airTime > 0.15) this.landT = 0;
@@ -1700,6 +1911,12 @@ export class Player {
     const from = prev ?? seg;
     const weapon = h.hand === 'off' ? this.equip.offItem : this.equip.mainWeapon;
     const base = weapon?.def.stats.damage ?? this.fistDamage?.() ?? 10;
+    // Kicks, shoves and slides send any barrel in the way rolling.
+    if (!a.kicked && KICKS.has(a.def.id)) {
+      a.kicked = true;
+      barrelHit.base = base;
+      kickBarrels(this.pos, this.forward, (a.def.sweep?.reach ?? 1.4) + 0.3);
+    }
     const b = new THREE.Vector3(), t = new THREE.Vector3();
     const fwd = this.forward;
     for (const tg of targets) {
@@ -1745,7 +1962,9 @@ export class Player {
       const counter = this.counterT > 0;
       const heavy = HYPER.has(a.def.id) || a.tier >= 2;
       const poise = h.poise * (1 + a.tier * 0.25) * (a.perfect ? 1.5 : 1) * this.paths.poisePower * this.mods.poise * (ws.stagger ?? 1);
-      const dmg0 = base * h.dmg * tierK * bonus;
+      // From above (a ledge, a step, the air) blows land harder.
+      const high = this.pos.y - tg.position.y > 0.9 ? HIGH_GROUND : 1;
+      const dmg0 = base * h.dmg * tierK * bonus * high;
       // Through the combat core (combat/core.ts): type, play-made crits, posture, reactions.
       const r = strike(tg, {
         base: fin ? dmg0 + tg.maxHp * (isBoss(tg) ? 0.07 : 0.22) : dmg0,
@@ -1765,6 +1984,14 @@ export class Player {
       });
       const amount = r.damage, crit = r.crit;
       if (counter) this.counterT = 0;
+      // Fluid combat: up, held up, driven down, or thrown back into the world.
+      if (tg.alive) {
+        if (a.def.launch && this.grounded) launch(tg, a.def.launch);
+        else if (a.def.spike) spike(tg);
+        else if (a.def.aerial) juggle(tg, this.pos, this.pos.y);
+        const ks = a.def.knock ?? KNOCK[a.def.id] ?? (a.tier >= 3 ? 4.5 : 0);
+        if (ks > 0) knock(tg, dir, ks, dmg0);
+      }
       if (fin) {
         // The break is spent: the enemy gets up (if it can).
         const st = combatOf(tg);
@@ -1824,6 +2051,7 @@ export class Player {
         const perfect = a.t - p0 <= PERFECT_PARRY * this.mods.parryWindow;
         combat.parried(att.attacker, perfect);
         if (perfect) {
+          this.riposteT = 1.0;
           att.onParried?.();
           events.emit('perfectParry', { at });
           events.emit('parrySuccess', { at, perfect: true });
@@ -1960,6 +2188,8 @@ export class Player {
 
   private updateStats(dt: number) {
     this.counterT = Math.max(0, this.counterT - dt);
+    this.riposteT = Math.max(0, this.riposteT - dt);
+    if (!this.act?.def.roll) this.sinceRoll += dt;
     this.staggerCd = Math.max(0, this.staggerCd - dt);
     if (this.staminaDelay > 0) this.staminaDelay -= dt;
     else if (!this.sprinting) this.stamina = Math.min(this.maxStamina, this.stamina + (this.blocking ? 12 : 34) * (1 + this.equip.bonus('staminaRegen') + this.paths.staminaRegen + this.mods.staminaRegen) * dt);
@@ -2041,15 +2271,30 @@ export class Player {
   startSkill(id: string, mult = 1, needGround = true): boolean {
     if (this.dead || (needGround && !this.grounded)) return false;
     const a = this.act;
-    if (a && a.t < a.def.cancel) return false;
+    if (a && a.t < a.def.cancel && !this.weaveOpen(a)) return false;
+    const woven = !!a && a.t < a.def.cancel;
     if (!this.startAction(id)) return false;
+    if (woven) events.emit('combatMove', { id: 'skillWeave', name: 'Skill Weave' });
     this.act!.mult = mult;
     return true;
   }
 
+  /** Arrive cutting (the hook's zip): a dash strike at `t`. */
+  strikeAt(t: Target) {
+    if (this.dead || !(this.equip.mainWeapon || this.canFightUnarmed?.())) return;
+    this.act = null;
+    this.dashPick = t;
+    this.startAction('dashStrike');
+  }
+
   /** Is the player free to start a skill right now? */
   get canAct() {
-    return !this.dead && (!this.act || this.act.t >= this.act.def.cancel);
+    return !this.dead && (!this.act || this.act.t >= this.act.def.cancel || this.weaveOpen(this.act));
+  }
+
+  /** Skill weaving: a blow that landed can flow straight into a skill once it is past. */
+  private weaveOpen(a: ActiveAction) {
+    return !!a.def.hit && a.connected && a.t > a.def.hit.to && !a.def.roll && a.def.id !== 'stagger' && a.def.id !== 'guardBreak';
   }
 
   /** Pay stamina for a skill; regen pauses like it does after an attack. */

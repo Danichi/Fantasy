@@ -9,6 +9,7 @@ import { stealth } from '../../origins/stealth';
 import { DISC } from '../../paths/data';
 import { treeOf } from '../../paths/paths';
 import { Allies } from './allies';
+import { throwable, knock } from '../../combat/impacts';
 
 // The catalog's one-of-a-kind items, worked as they should be: the
 // grappling hook hauls you up a cliff; tripwires and caltrops wait on the
@@ -47,7 +48,7 @@ interface Trap {
 export class Specials {
   readonly allies: Allies;
   /** a pull on the grappling rope in progress */
-  pull: { from: THREE.Vector3; to: THREE.Vector3; hook: THREE.Vector3; t: number; dur: number } | null = null;
+  pull: { from: THREE.Vector3; to: THREE.Vector3; hook: THREE.Vector3; t: number; dur: number; strike?: Target } | null = null;
   private rope: THREE.Line | null = null;
   /** why the last throw failed (tests) */
   lastFail = '';
@@ -83,6 +84,9 @@ export class Specials {
     d.camera.getWorldDirection(dir);
     const camGap = origin.distanceTo(p.center);
     const dist = d.castRay(origin, dir, range + camGap);
+    // A foe on the line: a light one is yanked to you, a heavy one pulls you in to a strike.
+    const foe = this.foeOnLine(origin, dir, Math.min(dist ?? range + camGap, 22 + camGap), camGap);
+    if (foe) return this.hookFoe(foe);
     if (dist === null || dist < camGap * 0.6) {
       d.toast('The hook falls back: nothing to bite within 30 m.');
       this.lastFail = 'nothing';
@@ -125,6 +129,58 @@ export class Specials {
     this.stats.grapples++;
     return true;
   }
+  /** The nearest live foe whose body the aim line passes within a metre of. */
+  private foeOnLine(origin: THREE.Vector3, dir: THREE.Vector3, max: number, minD: number): Target | null {
+    let best: Target | null = null, bd = Infinity;
+    for (const t of targets) {
+      if (!t.alive || !t.lockable) continue;
+      const rel = t.center.clone().sub(origin);
+      const along = rel.dot(dir);
+      if (along < minD || along > max) continue;
+      const off = rel.addScaledVector(dir, -along).length();
+      if (off > t.radius + 0.9) continue;
+      if (along < bd) (bd = along), (best = t);
+    }
+    return best;
+  }
+
+  private hookFoe(t: Target): boolean {
+    const p = this.d.player;
+    this.stats.grapples++;
+    this.flashRope(t.center);
+    if (throwable(t)) {
+      // Yank: off its feet and across to you.
+      const to = p.pos.clone().sub(t.position).setY(0);
+      const dist = to.length();
+      knock(t, to, Math.min(15, 4 + dist * 1.6), 10);
+      const b = t as Target & { vel?: THREE.Vector3 };
+      if (b.vel) b.vel.y = Math.max(b.vel.y, 3.2);
+      t.stunned = true;
+      t.onBreak?.(1.1);
+      events.emit('combatMove', { id: 'hookYank', name: 'Hook Yank' });
+      return true;
+    }
+    // Zip: too heavy to move, so the rope moves you, and you arrive cutting.
+    const to = t.position.clone().sub(p.pos).setY(0);
+    const len = to.length();
+    const end = p.pos.clone().addScaledVector(to.normalize(), Math.max(0, len - t.radius - 1.3));
+    end.y = Math.max(p.pos.y, t.position.y);
+    this.pull = { from: p.pos.clone(), to: end, hook: t.center.clone(), t: 0, dur: Math.max(0.3, Math.min(0.9, len / 24)), strike: t };
+    events.emit('combatMove', { id: 'hookZip', name: 'Hook Zip' });
+    return true;
+  }
+
+  /** A rope that snaps out to `at` and fades (the yank). */
+  private flashRope(at: THREE.Vector3) {
+    const p = this.d.player;
+    const geo = new THREE.BufferGeometry().setFromPoints([p.center.clone(), at.clone()]);
+    const mat = new THREE.LineBasicMaterial({ color: 0x6a5032, transparent: true });
+    const line = new THREE.Line(geo, mat);
+    this.d.scene.add(line);
+    this.flashes.push({ line, left: 0.3 });
+  }
+  private flashes: { line: THREE.Line; left: number }[] = [];
+
   private endPull() {
     this.pull = null;
     if (this.rope) {
@@ -268,9 +324,21 @@ export class Specials {
       }
       if (k >= 1) {
         p.teleport(pl.to);
+        const foe = pl.strike;
         this.endPull();
+        if (foe?.alive) p.strikeAt(foe);
       }
     }
+    for (const f of this.flashes) {
+      f.left -= dt;
+      (f.line.material as THREE.LineBasicMaterial).opacity = Math.max(0, f.left / 0.3);
+      if (f.left <= 0) {
+        this.d.scene.remove(f.line);
+        f.line.geometry.dispose();
+        (f.line.material as THREE.Material).dispose();
+      }
+    }
+    this.flashes = this.flashes.filter((f) => f.left > 0);
     // Traps wait for whoever comes.
     for (const t of this.traps) {
       t.left -= dt;
