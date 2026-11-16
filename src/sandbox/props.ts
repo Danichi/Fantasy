@@ -28,12 +28,14 @@ export class ArenaProps {
   }
 
   /** Everything back where it started. */
-  reset() {
+  reset(training = true) {
     clearProps();
     resetImpacts();
-    for (const c of [...this.root.children]) this.root.remove(c);
+    this.root.traverse(o=>{if((o as THREE.Mesh).isMesh)(o as THREE.Mesh).geometry.dispose();});
+    this.root.clear();
     this.flames.length = 0;
-    this.build();
+    if(training) this.build();
+    else {this.brazier(-21,8);this.brazier(21,8);}
   }
 
   update(dt: number) {

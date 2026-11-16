@@ -23,6 +23,7 @@ interface Ring { at: THREE.Vector3; r: number; speed: number; mesh: THREE.Mesh; 
 interface Bolt { mesh: THREE.Mesh; vel: THREE.Vector3; life: number }
 
 export class CorruptedBrother implements Target {
+  readonly ready: Promise<void>;
   id = newTargetId();
   kind = 'edricHollowed';
   name = 'Edric, the Hollowed';
@@ -38,6 +39,7 @@ export class CorruptedBrother implements Target {
   /** phase notches for the boss bar */
   readonly phases = [0.5];
   private root = new THREE.Group();
+  private disposed = false;
   private built: BuiltCharacter | null = null;
   private acts: Record<string, THREE.AnimationAction> = {};
   private clip = '';
@@ -68,7 +70,11 @@ export class CorruptedBrother implements Target {
     this.aura.position.y = 1.05;
     this.root.add(this.aura);
     const look = { ...EDRIC_LOOK, skin: 0x8a8a9a, hairColor: 0x2a2030, cloth: 0x1a1220, linen: 0x3a2a4a, pauldron: true, bracers: true, height: 1.95 };
-    void buildCharacter(look, ['sword_idle', 'sword_attack', 'sword_combo', 'hit', 'death', 'jog', 'idle', 'crouch']).then((b) => {
+    this.ready = buildCharacter(look, ['sword_idle', 'sword_attack', 'sword_combo', 'hit', 'death', 'jog', 'idle', 'crouch']).then((b) => {
+      if (this.disposed) {
+        b.mixer.stopAllAction();
+        return;
+      }
       this.built = b;
       for (const a of (b.mixer as unknown as { _actions: THREE.AnimationAction[] })._actions) this.acts[a.getClip().name] = a;
       const hand = b.bones.get('hand_r') ?? b.bones.get('Hand_R') ?? b.bones.get('RightHand');
@@ -94,7 +100,7 @@ export class CorruptedBrother implements Target {
 
   /** The fight begins (after his words). */
   wake() {
-    if (this.state !== 'waiting') return;
+    if (this.disposed || this.state !== 'waiting') return;
     this.lockable = true;
     targets.add(this);
     this.set('idle');
@@ -384,6 +390,8 @@ export class CorruptedBrother implements Target {
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     targets.delete(this);
     this.scene.remove(this.root);
     for (const r of this.rings) this.scene.remove(r.mesh);

@@ -2959,7 +2959,7 @@ async function boot() {
     await realm.enterInterior(door, 'sandbox', world.mats);
     cam.distance = 5.5;
     cam.snapTo(player.pos);
-    sandbox = new SandboxArena(r.scene, player, skillRt, realm.interior!, cam, input, {
+    sandbox = new SandboxArena(r.scene, player, skillRt, realm.interior!, cam, input, fx, {
       clearEffects: () => {
         skillRt.clearPracticeEffects();
         spells.clearProjectiles();
@@ -2969,6 +2969,7 @@ async function boot() {
       save,
       debug: () => combatDebug.toggle(),
       banner: (text) => hud.showBanner(text),
+      message: (text) => hud.toast(text),
       leave: () => {
         save();
         travelToSandbox(false);
@@ -2984,6 +2985,7 @@ async function boot() {
       },
     });
     hud.setMode('moves');
+    if (!TEST_MODE) sandbox.openControls();
   }
   if (RETURNING_FROM_SANDBOX && saveData) overlays.start.click();
 
@@ -3051,6 +3053,7 @@ async function boot() {
     combatDebug.update();
     telegraphs.enabled = sandbox?.settings.footprints ?? false;
     telegraphs.update();
+    sandbox?.present(alpha, paused ? 0 : simDt);
     sandbox?.frame();
     trail.update(dt);
     updateSnare(player);
