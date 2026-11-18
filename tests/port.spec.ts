@@ -155,7 +155,8 @@ test('the dwarven expedition sails on its day and the quest survives a reload', 
     g.player.equip.add('ironOre', 5);
     g.player.equip.add('minersLantern', 1);
     q.options('bruni', () => {}, () => {})[0].run();
-    q.options('guildmaster', () => {}, () => {})[0].run();
+    // A voucher: the Guild's seal (the guildmaster's service), Bruni's bond, or dwarf blood.
+    q.signal('expedition-vouched');
     q.update(1, g.player.pos);
     const stage = q.state['dwarf-expedition'].stage;
     const day = g.worldFlags.expeditionDay;

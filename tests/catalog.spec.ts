@@ -34,7 +34,7 @@ test('the catalog: over a thousand items, every one with a source, an icon and m
   expect(res.badOut).toEqual([]);
   expect(res.emptyBooks).toEqual([]);
   expect(res.dupNames).toEqual([]);
-  expect(res.sets).toBe(20);
+  expect(res.sets).toBe(21);
   expect(res.setPieces).toBe(true);
   expect(res.tiers).toBe(8);
   expect(errors).toEqual([]);
