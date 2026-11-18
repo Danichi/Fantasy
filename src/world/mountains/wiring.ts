@@ -82,7 +82,7 @@ export function setupMountains(d: MountainWiring) {
   const bolts = new Bolts(d.scene);
   let tomas: Bandit | null = null;
   d.quests.hooks.set('claim:brawl', () => {
-    if (tomas || d.quests.wants('claim-won') === false) return;
+    if (tomas) return;
     const at = new THREE.Vector3(mx - 14, 0, mz + 3);
     at.y = heightAt(at.x, at.z);
     tomas = new Bandit('sword', at, d.scene, bolts, at.clone(), { body: 'male', outfit: 'peasant', hair: 'buzzed', beard: true, hairColor: 0x6a4a2a, skin: 0xe0b894, linen: 0xc8b898, cloth: 0x5a4a3a, height: 1.9 });
