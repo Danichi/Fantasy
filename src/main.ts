@@ -200,6 +200,8 @@ import { registerSpecies } from './creatures/species';
 import { creatureView } from './creatures/view';
 import { GuardArc } from './ui/guardArc';
 import { ThreatWarn } from './ui/threatWarn';
+import { setupMountains } from './world/mountains/wiring';
+import { ColdMeter } from './ui/coldMeter';
 import { stepImpacts } from './combat/impacts';
 import { scanThreats } from './combat/flow';
 import { Raids } from './raid/raids';
@@ -1072,14 +1074,23 @@ async function boot() {
     {
       pos: PORT_SPOTS.berth.clone().setY(1), radius: 5,
       label: () => {
+        if (sailing.aboard || mtn.kettle.voyaging) return '';
+        // After the expedition: passage on the Kettle, any day.
+        if (quests.isDone('dwarf-expedition')) return time.hour >= 6 && time.hour < 20 ? 'Book passage on the Iron Kettle to Kettle Cove (30g)' : 'The Iron Kettle sails between 6:00 and 20:00';
         if (!quests.wants('expedition-sails')) return '';
         const d = Number(worldFlags.expeditionDay);
         return time.day === d && time.hour >= 7.5 && time.hour < 10.5 ? 'Board the Iron Kettle' : `The Iron Kettle sails on day ${d} at 8:00 (today is day ${time.day})`;
       },
-      enabled: () => quests.wants('expedition-sails') && time.day === Number(worldFlags.expeditionDay) && time.hour >= 7.5 && time.hour < 10.5,
+      enabled: () => !sailing.aboard && !mtn.kettle.voyaging && ((quests.isDone('dwarf-expedition') && time.hour >= 6 && time.hour < 20) || (quests.wants('expedition-sails') && time.day === Number(worldFlags.expeditionDay) && time.hour >= 7.5 && time.hour < 10.5)),
       action: () => {
+        if (quests.isDone('dwarf-expedition')) {
+          if (player.prog.gold < 30) return hud.toast('The Kettle\'s mate: "Thirty for passage. Coal isn\'t free."');
+          player.prog.addGold(-30);
+          mtn.sailNorth();
+          return;
+        }
         quests.signal('expedition-sails');
-        dialogue.show('Bruni Stonevein', 'Dwarven Expedition Leader', 'There you are! Stow your pack below and grab a rope. North to the White Mountains — and may the stone be kind to us.', [{ label: 'Cast off.', run: () => dialogue.close() }]);
+        dialogue.show('Bruni Stonevein', 'Dwarven Expedition Leader', 'There you are! Stow your pack below and grab a rope. North to the White Mountains, and may the stone be kind to us.', [{ label: 'Cast off.', run: () => { dialogue.close(); mtn.sailNorth(); } }]);
       },
     },
   );
@@ -1973,6 +1984,51 @@ async function boot() {
   desert.onDoors = (doors) => addDoors(doors);
   const desertQuests = setupDesertQuests(quests, r.scene, fx, (id, n) => giveItem(id, n), (m) => hud.toast(m));
   realm.overworldInteractables.push(...desertQuests.interactables);
+  // ---- The White Mountains (world/mountains): the Iron Kettle, Kettle Cove, Copperbrook, Stonegate, Frostpeak ----
+  let storyRef: { wheel: { attune(id: string): boolean } } | null = null;
+  const mtn = setupMountains({
+    scene: r.scene, mats: world.mats, fx, player, quests, sailing, realm, flags: worldFlags,
+    story: () => storyRef as never,
+    toast: (m) => hud.toast(m),
+    card: (title, sub) => hud.regionCard(title, sub, true),
+    bossBar: (t, name) => hud.bossBar(t, name),
+    talk: (name, title, text, opts) => dialogue.show(name, title, text, opts),
+    close: () => dialogue.close(),
+    save: () => save(),
+    give: (id, n) => giveItem(id, n),
+    shake: (n) => cam.shake(n),
+    storm: (on) => (weather.forced = on ? 'storm' : null),
+    gold: () => player.prog.gold,
+    addGold: (n) => player.prog.addGold(n),
+    hour: () => time.hour,
+    shop: (id, intro, stock) => shop(id, intro, stock),
+    craft: (kind, where) => arms.craft.show(kind, where, 0),
+    rest: () => {
+      time.skipTo(7);
+      player.hp = player.maxHp;
+      player.mana = player.maxMana;
+      player.stamina = player.maxStamina;
+      save();
+      hud.toast('You sleep by the Tin Lantern\'s chimney, warm through. It is seven in the morning.');
+    },
+  });
+  for (const s of mtn.mountains.settlements) npcs.addSettlement(s);
+  for (const rec of mtn.mountains.records) npcs.add(rec);
+  realm.overworldInteractables.push(...mtn.mountains.interactables);
+  stylizedNature.clearings.push(...mtn.mountains.clearings);
+  for (const [id, opts] of mtn.services) {
+    const prev = folkServices.get(id);
+    folkServices.set(id, (show, back) => [...opts(show, back), ...(prev?.(show, back) ?? [])]);
+  }
+  {
+    const gm = folkServices.get('guildmaster');
+    folkServices.set('guildmaster', (show, back) => [
+      ...(quests.wants('expedition-vouched') ? [{ label: 'Will the Guild vouch for me? Bruni Stonevein\'s expedition.', run: () => { quests.signal('expedition-vouched'); show('Stonevein? She\'s the best there is. Yes: here, the Guild\'s seal. Don\'t make us regret it.', [{ label: 'Thank you.', run: () => dialogue.close() }]); } }] : []),
+      ...(gm?.(show, back) ?? []),
+    ]);
+  }
+  { const absent = npcs.absent; npcs.absent = (id) => mtn.absent(id) ?? absent?.(id) ?? false; }
+  const coldMeter = new ColdMeter();
   // ---- Ghagrabba: its street life, The Outcast Sands, the side quests and the scrap towns ----
   const ghDeps: GhagrabbaDeps = {
     scene: r.scene, camera: r.camera, fx, player, quests, npcs, time, desert, flags: worldFlags,
@@ -2057,6 +2113,7 @@ async function boot() {
     saved: saveData?.world?.story,
   });
   const story = main.story;
+  storyRef = story;
   // ---- The Dark beyond the Gravewood's wheel: the same land, rotted; no people, no village ----
   const darkRealm = new DarkRealm({
     scene: r.scene, fx,
@@ -2399,6 +2456,9 @@ async function boot() {
   gearRt.exposure = new Exposure({
     player, arms: arms.runtime, toast: (m) => hud.toast(m), region: hereRegion, hour: () => time.hour,
     sheltered: () => realm.mode !== 'overworld' || !!realm.interior,
+    snow: () => weather.p.snow * Math.max(0.35, weather.p.wind),
+    warmSpot: () => mtn.mountains.warmAt(player.pos.x, player.pos.z),
+    warmBlood: () => /dwarf|dragon/i.test(String(player.prog.origin ?? '')),
     inTown: () => npcs.npcs.some((n: { pos: THREE.Vector3 }) => n.pos.distanceTo(player.pos) < 30),
     storm: () => desert?.storm ?? 0, fx: () => gearRt.fx, flags: worldFlags,
   });
@@ -2878,6 +2938,7 @@ async function boot() {
     if (realm.mode === 'overworld') { updateSea(STEP,sailing.current?.pos??player.pos,weather.p); sailing.preStep(STEP); }
     player.update(STEP, input, cam);
     combat.tick(STEP); // posture, poise and wind-ups of everything that fights (combat/core.ts)
+    mtn.update(STEP, realm.mode === 'overworld' && !realm.interior); // the White Mountains, and the Iron Kettle's passage
     stepImpacts(STEP); // knocked foes meeting walls, fences, braziers, water; rolling barrels (combat/impacts.ts)
     if (!player.dead) scanThreats(STEP, player.pos, cam.forward()); // the warning flash for blows from behind
     director.tick(STEP, player); // attack turns (combat/ai.ts)
@@ -3029,6 +3090,8 @@ async function boot() {
     renderPos.copy(player.char.root.position);
     if (!paused) realm.present(alpha, overlayUp || mapUI.open ? 0 : simDt);
     if (!paused && realm.mode === 'overworld') gravewood.present(alpha, overlayUp || worldMap.open ? 0 : simDt, player, r.camera);
+    if (!paused && realm.mode === 'overworld') mtn.frame(alpha, overlayUp || worldMap.open ? 0 : simDt);
+    coldMeter.update(gearRt.exposure?.cold ?? 0, gearRt.exposure?.coldRate ?? 0);
     arms.frame(dt); // Arms and Crafting (feat/arms): aim camera, reticle
     if (!paused && realm.mode === 'overworld') wilds?.present(alpha, overlayUp || worldMap.open ? 0 : simDt, player);
     if (!paused) reagentDrops.update(dt, player.pos);
@@ -3120,8 +3183,8 @@ async function boot() {
       fishing.update(dt);
       // The expedition waits a week if you miss the tide.
       if (quests.wants('expedition-sails') && (time.day > Number(worldFlags.expeditionDay) || (time.day === Number(worldFlags.expeditionDay) && time.hour >= 10.5))) {
-        worldFlags.expeditionDay = time.day + 7;
-        hud.toast('You missed the Iron Kettle. Bruni will sail again in a week.');
+        worldFlags.expeditionDay = time.day + 3;
+        hud.toast('You missed the Iron Kettle. She sails again in three days.');
       }
       if (worldRunning) roadQuests.update(dt);
       if (worldRunning) {
@@ -3286,7 +3349,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
+      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, mountains: mtn, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       sandbox, overlays, yard, combatDebug, telegraphs, // combat rework: the drill yard and the F9 overlay

@@ -84,18 +84,18 @@ export const PORT_QUESTS: QuestDef[] = [
   // ---- The dwarven expedition ----------------------------------------------------------------
   {
     id: 'dwarf-expedition', title: 'The White Mountain Expedition', giver: 'bruni', region: 'portAurelle',
-    summary: 'Bruni Stonevein\'s expedition sails for the White Mountains in three days. She needs ore samples, a miner\'s lantern, and someone the Guild will vouch for.',
-    offer: 'Three days. In three days the Iron Kettle sails north for the White Mountains, and there\'s ore up there that never reaches Cresha\'s markets. I need blades who can handle themselves underground. Bring me five good iron samples so I know you\'ve held a pick, buy yourself a proper miner\'s lantern, and get the Guild to vouch for you. Then be on the harbour at eight in the morning, sailing day.',
+    summary: 'Bruni Stonevein\'s expedition sails for the White Mountains on the Iron Kettle. She needs ore samples, a miner\'s lantern, and someone to vouch for you.',
+    offer: 'The Iron Kettle sails north for the White Mountains every third morning, and there\'s ore up there that never reaches Cresha\'s markets. I need blades who can handle themselves underground. Bring me five good iron samples so I know you\'ve held a pick, or buy them off my quartermaster. Get yourself a proper miner\'s lantern. And get someone to vouch for you: the Guild\'s seal will do, or a bond paid to me, or dwarf blood. Then be on the harbour at eight in the morning, sailing day.',
     acceptLabel: 'Count me in.',
     stages: [
-      { note: 'Prepare for the expedition before the ship sails.', objectives: [
-        { type: 'deliver', npc: 'bruni', item: 'ironOre', count: 5, text: 'Bring Bruni 5 iron ore samples', say: 'Good weight to these. You know a vein when you see one.' },
-        { type: 'collect', item: 'minersLantern', count: 1, text: 'Buy a miner\'s lantern (Dwarven Quarter)' },
-        { type: 'talk', npc: 'guildmaster', text: 'Get the Guild\'s recommendation', reply: 'Will the Guild vouch for me? Bruni Stonevein\'s expedition.', say: 'Stonevein? She\'s the best there is. Yes — here, the Guild\'s seal. Don\'t make us regret it.' },
+      { note: 'Prepare for the expedition before the ship sails.', hook: 'dwarves:sailing', anyOrder: true, objectives: [
+        { type: 'deliver', npc: 'bruni', item: 'ironOre', count: 5, text: 'Bring Bruni 5 iron ore samples (or buy them from her)', say: 'Good weight to these. You know a vein when you see one.' },
+        { type: 'collect', item: 'minersLantern', count: 1, text: 'Buy a miner\'s lantern (Bruni sells them)' },
+        { type: 'signal', id: 'expedition-vouched', text: 'Get someone to vouch for you: the Guild\'s seal, Bruni\'s bond, or dwarf blood' },
       ] },
-      { note: 'Be at the harbour on sailing day at 8:00.', hook: 'dwarves:sailing', objectives: [{ type: 'signal', id: 'expedition-sails', text: 'Board the Iron Kettle at the harbour (sailing day, 8:00)', at: [HARBOUR_BERTH.x, HARBOUR_BERTH.z] }] },
+      { note: 'Board the Iron Kettle at the harbour on sailing day, at 8:00.', hook: 'dwarves:sailing', objectives: [{ type: 'signal', id: 'expedition-sails', text: 'Board the Iron Kettle at the harbour (sailing day, 7:30 to 10:30)', at: [HARBOUR_BERTH.x, HARBOUR_BERTH.z] }] },
     ],
-    done: 'The Iron Kettle slips out of Port Aurelle on the morning tide, bound for the White Mountains. (The mountains open in a later chapter; Bruni will hold your berth.)',
+    done: 'The Iron Kettle slips out of Port Aurelle on the morning tide, bound for the White Mountains.',
     rewards: { gold: 150, xp: 400, items: [['healthPotion', 3]], guildRep: 60 },
   },
   // ---- The fish market -------------------------------------------------------------------------

@@ -114,7 +114,7 @@ export const CHAMPIONS: Record<string, ChampionDef> = {
     id: 'malric', name: 'Ser Malric Dane', epithet: 'the Wheelbreaker', age: 4, power: 'ironBelow',
     look: L({ body: 'male', beard: true, hairColor: 0x1a1414, skin: 0xc89a74, cloth: 0x23262c, pauldron: true, height: 1.97 }),
     about: 'Summoned twenty years ago, in the Fourth Age, the same night as the Dawn\'s fourth. He has spent those years hunting the Dawn\'s champions, and is good at it. He paid Grukk in black iron to dig for a Sunwheel door.',
-    clues: { malricIron: 'Grukk\'s warband was paid in black iron, cold to the touch.', malricEye: 'An anvil with an eye on his pauldron.' },
+    clues: { malricIron: 'Grukk\'s warband was paid in black iron, cold to the touch.', malricEye: 'An anvil with an eye on his pauldron.', malricVein: 'He has been buying the Cold Vein\'s black iron by the cartload, through a smuggler called Varga Coldhand.', malricWheels: 'The dwarves say every Sunwheel he breaks costs the Lamplighter King an eye.' },
     taunts: ['The Dawn sends them young now.', 'Your fourth lasted longer than this. Not much longer.', 'Every wheel I break, the Iron Below remembers.', 'Better. Not good. Better.'],
   },
   hesk: {

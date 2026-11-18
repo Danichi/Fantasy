@@ -82,6 +82,8 @@ export const FX_TEXT: Record<string, (v: number) => string> = {
   allyDmg: (v) => `+${pct(v)} damage with an ally beside you (a guard, the Watch, your crew, a summoned spirit).`,
   cannonReload: (v) => `Your ship's guns reload ${pct(v)} faster.`,
   heatImmune: () => `The desert sun can't touch you: no heat.`,
+  warm: (v) => `The mountain cold takes ${pct(Math.min(1, v))} longer to reach you.`,
+  coldImmune: () => `The mountain cold can't touch you.`,
   sandImmune: () => `Sandstorms don't slow you.`,
   thirstImmune: () => `You never go thirsty in the Expanse.`,
   sprintKnock: () => `A sprinting blow knocks a foe off its feet.`,

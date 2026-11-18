@@ -26,6 +26,11 @@ class Afflictions {
     } else this.burns.push({ t, dps, left: seconds, acc: 0 });
   }
 
+  /** Is it on fire right now? (Rock trolls can't knit their wounds while they burn.) */
+  burning(t: Target) {
+    return this.burns.some((b) => b.t === t && b.left > 0);
+  }
+
   /** Freeze: a heavy stagger, a burst of ice and a hiss of cold. */
   freeze(t: Target) {
     if (!t.alive) return;

@@ -454,6 +454,94 @@ export class Sailing {
   get skill() { return (this.level - 1) / 29; }
   get assisted() { return this.mode === 'assisted'; }
   get aboard() { return !!this.current; }
+
+  // ---- passage on someone else's ship (the Iron Kettle, world/mountains/ironKettle.ts) ----
+  /** A ship its own crew sails: you ride, it keeps its course (take the wheel and it waits; let go and it carries on). */
+  autopilot: { ship: Ship; pts: [number, number][]; i: number; cruise: number; travelled: number; total: number; onArrive: () => void; arrived: boolean } | null = null;
+
+  /** Board a chartered ship at `from` [x, z, yaw] that sails itself along `pts` at `cruise` m/s. */
+  charter(name: string, hull: HullId, from: [number, number, number], pts: [number, number][], cruise: number, onArrive: () => void) {
+    this.endCharter();
+    const def = HULLS[hull];
+    const r: ShipRecord = { id: 'charter', hull, name, fit: STOCK_FIT(), hullColor: 0x2c2a2e, trim: 0xc8743a, sections: [def.hull, def.hull, def.hull], sails: def.sails, water: 0, x: from[0], z: from[1], yaw: from[2], port: '' };
+    const ship = this.spawn(r);
+    ship.owner = 'npc';
+    this.board(ship);
+    ship.anchored = false;
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    this.autopilot = { ship, pts, i: 0, cruise, travelled: 0, total, onArrive, arrived: false };
+    return ship;
+  }
+
+  /** How far along the chartered passage, 0..1 (null when there is none). */
+  get charterProgress() {
+    const a = this.autopilot;
+    return a ? Math.min(1, a.travelled / Math.max(1, a.total)) : null;
+  }
+
+  /** Skip ahead along the passage (resting below decks): put the ship near the last leg. */
+  charterSkip() {
+    const a = this.autopilot;
+    if (!a) return;
+    const n = a.pts.length;
+    const [x0, z0] = a.pts[Math.max(0, n - 2)], [x1, z1] = a.pts[n - 1];
+    const before = a.ship.pos.clone();
+    a.ship.pos.set(x0 + (x1 - x0) * 0.4, 0, z0 + (z1 - z0) * 0.4);
+    a.ship.yaw = Math.atan2(x1 - x0, z1 - z0);
+    a.ship.place();
+    a.ship.place();
+    this.player.teleport(a.ship.toWorld(new THREE.Vector3(0, a.ship.def.deckY + 0.3, a.ship.def.helmZ + 1.6)));
+    a.i = n - 2;
+    a.travelled = a.total - Math.hypot(x1 - a.ship.pos.x, z1 - a.ship.pos.z);
+    void before;
+  }
+
+  /** The chartered ship leaves (you are ashore, or the passage is over). */
+  endCharter() {
+    const s = this.ships.get('charter');
+    if (s) {
+      if (this.current === s) {
+        if (this.atHelm) this.leaveHelm();
+        s.disableDeck();
+        this.current = null;
+        this.clearCrewActors();
+      }
+      s.dispose();
+      this.ships.delete('charter');
+    }
+    this.autopilot = null;
+  }
+
+  private steerCharter(dt: number, ship: Ship) {
+    const a = this.autopilot!;
+    if (a.arrived) {
+      ship.speed *= Math.exp(-1.5 * dt);
+      this.ctl = { ...NO_CONTROL(), anchor: true };
+      return;
+    }
+    const [tx, tz] = a.pts[Math.min(a.i + 1, a.pts.length - 1)];
+    const dx = tx - ship.pos.x, dz = tz - ship.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d < (a.i + 2 >= a.pts.length ? 40 : 60)) {
+      a.i++;
+      if (a.i >= a.pts.length - 1) {
+        a.arrived = true;
+        a.onArrive();
+        return;
+      }
+    }
+    // Steer straight for the next mark (the boiler drives her, whatever the wind).
+    const want = Math.atan2(dx, dz);
+    const err = Math.atan2(Math.sin(want - ship.yaw), Math.cos(want - ship.yaw));
+    ship.yaw += Math.max(-0.35 * dt, Math.min(0.35 * dt, err));
+    ship.yawRate = 0;
+    const slow = a.i + 2 >= a.pts.length ? Math.max(0.35, Math.min(1, d / 220)) : 1;
+    ship.speed = a.cruise * slow * (Math.abs(err) > 0.6 ? 0.6 : 1);
+    ship.anchored = false;
+    this.ctl = { ...NO_CONTROL(), sail: 1 };
+    a.travelled += ship.speed * dt;
+  }
   /** Owned ships (records) and the live ship for each. */
   ownedShips() { return this.records.map((r) => ({ r, ship: this.ships.get(r.id) })); }
 
@@ -1013,8 +1101,15 @@ export class Sailing {
   }
 
   restInCabin() {
+    // A passage (the Iron Kettle): sleep below until landfall.
+    if (this.inCabin && this.autopilot && this.current === this.autopilot.ship) {
+      this.onCharterRest?.();
+      return;
+    }
     if (this.inCabin && this.current?.anchored) this.hooks.sleep?.();
   }
+  /** what resting below decks does on a passage (the Iron Kettle skips to landfall) */
+  onCharterRest?: () => void;
 
   // ---- getting aboard and ashore -----------------------------------------------------------
 
@@ -1446,6 +1541,7 @@ export class Sailing {
       this.crewMood(ship);
       if (this.atHelm && !this.input.uiMode) this.readHelm(dt, ship);
       else if(this.atHelm)this.ctl.rudder=0;
+      else if (this.autopilot?.ship === ship) this.steerCharter(dt, ship);
       else if (this.lashed !== null) {
         // The lashed wheel: she holds the heading you left her on.
         const err = Math.atan2(Math.sin(ship.yaw - this.lashed), Math.cos(ship.yaw - this.lashed));

@@ -51,6 +51,8 @@ export interface BossSpec {
   emerge?: boolean;
   /** how close the player must come to wake it */
   wake?: number;
+  /** hide colour instead of the orcs' mottled green (the mountains' rock trolls are stone-grey) */
+  tint?: number;
 }
 export const GRUKK: BossSpec = { name: 'Grukk, the Orc Warlord', model: WARCHIEF_URL, hp: 900, scale: ORC_SCALE, kind: 'orc', bow: true, damage: 1 };
 /** Seconds to climb out of the ground (emerging bosses). */
@@ -91,14 +93,14 @@ interface Arrow {
   life: number;
 }
 
-function tintBody(char: Character) {
+function tintBody(char: Character, hide = 0x4d5838) {
   for (const m of char.meshes) {
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     for (const mat of mats as THREE.MeshStandardMaterial[]) {
       const joint = /joint/i.test(mat.name);
       mat.map = null;
       // Mottled green hide (the mannequin's "joint" parts become dark leather).
-      mat.color.set(joint ? 0x2a1d14 : 0x4d5838);
+      mat.color.set(joint ? 0x2a1d14 : hide);
       mat.roughness = joint ? 0.85 : 0.72;
       mat.metalness = 0;
       mat.needsUpdate = true;
@@ -198,7 +200,7 @@ export class OrcWarlord implements Target {
     c.root.updateMatrixWorld(true);
     this.rig = new RigLayer(c);
     this.rig.setup();
-    if (!this.skinned) tintBody(c);
+    if (!this.skinned) tintBody(c, this.spec.tint);
     for (const m of c.meshes) {
       const mats = Array.isArray(m.material) ? m.material : [m.material];
       this.bodyMats.push(...(mats as THREE.MeshStandardMaterial[]));

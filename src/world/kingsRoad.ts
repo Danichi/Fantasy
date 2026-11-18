@@ -14,7 +14,7 @@ import { sunwheelTexture } from './glenLandmarks';
 import { StaticBatch } from './cityKit';
 
 /** Ancient waystones along the road (the Sunwheel on each); attune by touch. */
-export const WAYSTONES: { id: string; name: string; pos: THREE.Vector3 }[] = [
+export const WAYSTONES: { id: string; name: string; pos: THREE.Vector3; /** covered (Frostpeak's iron hood): not to be touched until it's lifted */ hooded?: () => boolean }[] = [
   { id: 'glen', name: 'Elder Glen (East Gate)', pos: new THREE.Vector3(128, 0, -10) },
   { id: 'millbrook', name: 'Millbrook', pos: new THREE.Vector3(600, 0, 104) },
   { id: 'rest', name: "The Wayfarer's Rest", pos: new THREE.Vector3(1404, 0, 70) },

@@ -53,8 +53,18 @@ export interface Den {
 }
 
 /** Level of the wild at a point: the region's range, pushed up away from roads. */
+/** Where you arrive in the White Mountains: the danger climbs with the distance from here (the open-world plan, §6). */
+const KETTLE_COVE = { x: 4480, z: -3975 };
+
 export function zoneLevel(x: number, z: number, rand = Math.random) {
-  const reg = REGIONS[regionAt(x, z)] ?? REGIONS.cresha;
+  const rid = regionAt(x, z);
+  if (rid === 'whiteMountains') {
+    // The cove and the lower holds 6 to 18, the passes 18 to 32, Frostpeak's heights 30 to 45.
+    const d = Math.hypot(x - KETTLE_COVE.x, z - KETTLE_COVE.z);
+    const lo = d < 700 ? 6 + d / 70 : d < 1600 ? 16 + (d - 700) / 64 : 30 + Math.min(15, (d - 1600) / 120);
+    return Math.round(THREE.MathUtils.clamp(lo + (rand() - 0.3) * 3, 6, 50));
+  }
+  const reg = REGIONS[rid] ?? REGIONS.cresha;
   const [baseLo, hi] = reg.levels;
   // Inland roads lead into tougher country before the next region boundary.
   const lo = reg.id === 'cresha' ? Math.min(hi, baseLo + Math.floor(Math.max(0,x-600)/180)) : baseLo;

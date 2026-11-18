@@ -150,7 +150,7 @@ export const REGIONS: Record<string, RegionDef> = {
     id: 'whiteMountains', name: 'White Mountains', subtitle: 'Dwarven Kingdoms & Ancient Secrets', levels: [18, 50],
     weather: { clear: 3, cloudy: 3, snow: 3, blizzard: 1, fog: 1 }, ambience: 'mountain', music: 'mountain', encounters: 'whiteMountains', faction: 'dwarves',
     resources: ['iron', 'silver', 'gems', 'mithril (deep)'], exports: ['ore', 'metal', 'gemstones'], imports: ['food', 'timber', 'cloth'],
-    landmarks: [place('frostpeakCitadel', 'Frostpeak Citadel', 'castle')],
+    landmarks: [place('frostpeakCitadel', 'Frostpeak Citadel', 'castle'), place('kettleCove', 'Kettle Cove', 'port'), place('copperbrook', 'Copperbrook', 'town')],
     surface: ['foothill mining villages', 'dwarf roads and bridges'], hidden: ['abandoned mines', 'mountain passes'], deep: ['the upper glaciers and dragons'],
     coherence: {
       geography: 'The great northern range, from forested foothills to glaciers.', people: 'Dwarves and miners.', produces: 'Ore, metal, gems.', threats: 'Avalanches, trolls, wyverns, dragons.',

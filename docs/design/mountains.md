@@ -1,7 +1,7 @@
 # The White and Deep Mountains (update 5 plan)
 
-Status: plan, 2026-10-08. Nothing here is built yet beyond what "What exists"
-lists. It follows phase 10 of the World Expansion plan and the region data in
+Status: the lower holds are built (2026-11-18): see "Built so far" below. The
+upper mountains, the Deep and the bosses beyond Stonegate are still plan. It follows phase 10 of the World Expansion plan and the region data in
 `world/regionDefinitions.ts` (`whiteMountains`, `deepMountains`). Numbers are
 starting points to tune.
 
@@ -20,6 +20,87 @@ underground capital of the **Deep Hold**, the **Deep Forge** where legendary
 metals are worked, and, at the bottom, a machine the wheel-cutters left that
 is still counting. Act IV continues: what the Sunwheel counts is under the
 mountains, and it is waking.
+
+## Built so far (the open-world plan's phase 3)
+
+The White Mountains are reachable from the first time you walk into Port
+Aurelle: no Academy needed. What exists:
+
+- **The Iron Kettle** (`world/mountains/ironKettle.ts`). Bruni's expedition takes
+  any one of three vouchers (the Guild's seal, a 100-gold bond paid to Bruni, or
+  a dwarf origin), and the ore samples can be bought from her for 40 gold. The
+  Kettle sails every third morning; miss her and she goes again in three days.
+  The voyage is sailed: you board a real ship (a chartered brigantine on an
+  autopilot, `Sailing.charter`) that steams up the coast at about 80 km/h,
+  roughly six minutes. On the way: a squall, then the sea serpent (or a pirate
+  cutter, if you have already killed a sea monster), and the first sight of the
+  peaks. Take the wheel and she waits; let go and the crew carries on; rest in
+  the cabin and you wake at landfall. After the expedition, passage is 30 gold
+  at the berth any day (6:00 to 20:00), and Captain Hamm sails you home from the
+  cove. A save made mid-voyage lands you at the far end.
+- **Kettle Cove**: an island-style harbour on the bay's south shore (dwarven
+  style: stone breakwater, ore carts, a forge chimney), with a harbourmaster,
+  an ore factor, and trade (mountain ore, ironware and rough gems out; grain,
+  fish, timber, cloth, wine and herbs in). Any ship can dock there. A waystone
+  stands on the quay. Beside it, the expedition's landing camp.
+- **The Great Winch**: a cage on rails up a 38-degree incline cut into the
+  cliff, from the cove to Copperbrook, 300 m up, in about sixteen seconds. (You
+  can climb the incline on foot; it is under the climbing limit.)
+- **Copperbrook** (300 m): the mining village, half dwarf and half human. The
+  Tin Lantern (Olga: hold stew, a bed, the kitchen), Sigrun's forge (mountain
+  steel, Dwarven Expedition plate, the forge itself), Annick the furrier (the
+  Highland Furs set, the warm-stone charm), Bruni's camp, Marta Hollins and her
+  miners, and the Cold Vein's mouth in the bank to the east.
+- **Kettlehold's gate**: the lower hold's carved doors in the cliff west of the
+  village, barred for now, and Hold-Thane Brynja (Bruni's mother) in the
+  forecourt.
+- **The Dwarf Road**: graded all the way (switchbacks up the valley's rock step
+  below Stonegate, and down into Frostpeak's valley), about 2.6 km, never
+  steeper than 32 degrees. Nine cairn lanterns to light along it, three of them
+  with huts that have a hearth.
+- **Stonegate** (470 m): a fort across the valley, held by three rock trolls
+  (Gristle, Mossback and Grandmother Scree). Trolls heal 1.2% a second unless
+  they have been on fire in the last five seconds: the courtyard's braziers
+  and barrels are combat props, so knock them in. Each drops a troll hide.
+  West of the fort, the Chasm.
+- **The High Shelf** (550 to 640 m): the long road west along the plateau.
+- **Frostpeak Citadel** (410 m, a valley head under the peak): the curtain
+  wall and gatehouse, the King's Hall (open-fronted, with King Durin on his
+  dais), the Great Lift (sealed until the Under-King answers), homes, and the
+  courtyard Sunwheel the dwarves keep under an iron hood. Lift the hood and it
+  joins the Sunwheel network (fast travel); the dwarves notice.
+- **The cold** (`items/catalog/exposure.ts`): above 140 m in the mountains, a
+  meter fills (four minutes on a calm day, much faster in a blizzard, at night,
+  higher up, or wet). Past half it slows you (Chilled); full, it hurts
+  (Freezing), and it can kill. Fires, braziers, forges and hut hearths warm you
+  fast; villages and roofs slowly. Furs (Highland Furs: the full set makes you
+  immune), the warm-stone charm, hold stew, Coldward draughts and the Dwarven
+  Expedition plate slow it; a dwarf or dragonkin origin shrugs off nearly half.
+  A small COLD bar shows under the stamina bar while it has hold of you.
+- **Danger by distance**: enemy levels in the White Mountains rise with the
+  distance from Kettle Cove (6 to 18 round the cove and Copperbrook, 18 to 32 on
+  the road and the Shelf, 30 to 45 near Frostpeak). Snow wolves run the
+  snowfields day and night.
+- **The Cold Vein** (`dungeon/dungeons/coldVein.ts`): a kit dungeon under
+  Copperbrook. Smugglers, rats, and black-iron armour that walks; the boss is
+  Varga Coldhand, who wakes two suits of black iron at 60% and comes on harder
+  at 30%. Her ledger is the reward.
+
+### The quests (`quests/mountainQuests.ts`)
+
+| Quest | Giver | What happens |
+|---|---|---|
+| The White Mountain Expedition | Bruni (Port Aurelle) | Ore, a lantern, a voucher (three ways), then the Kettle |
+| The Landing | Hamm (starts on arrival) | Up the Winch to Bruni |
+| The First Claim | Bruni | Marta Hollins's crew holds the claim: share it, buy her out (250 gold), or beat Tomas Hollins in a fair fight |
+| **Cold Iron** (the Iron Below, ch. 1) | Hold-Thane Brynja | Into the Cold Vein; Varga's ledger is stamped with an anvil and an eye: Malric has been buying the black iron |
+| Troll Toll | Captain Dagny | Clear Stonegate's trolls |
+| **The King's Audience** (the Iron Below, ch. 2) | Brynja | Up the road to Frostpeak; the King's price is Stonegate; the Lorekeeper reads the ledger and names the Lamplighter King (who cut the first Sunwheel and ruled a hundred years without a night; black iron is what is left when the wheels drink a seam dry; every wheel Malric breaks costs him an eye). Then the King asks you to leave his Sunwheel hooded: keep the promise (his sigil) or wake it |
+| The Lantern Road | Tova (the Winch) | Light six cairn lanterns |
+| Furs Fit for a Troll | Annick | Two troll hides for Highland Furs |
+
+The story remembers: two new clues on Malric (the black iron, the wheels), a
+story flag `knowsLamplighter`, and a note in the journal.
 
 ## 1. Pillars
 

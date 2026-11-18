@@ -6,6 +6,7 @@ import { ROAD_POLYS, CREEK } from './roadData';
 import { cityHeight } from './portCity';
 import { capitalHeight } from './capitalCity';
 import { islandPadHeight } from './sea/islandPortsData';
+import { mountainShape } from './mountains/mountainLayout';
 
 // ---------------------------------------------------------------------------
 // Terrain heights for the whole world (pure: no rendering, no physics, so the
@@ -218,6 +219,8 @@ export function worldHeightFn(x: number, z: number) {
       h = h * (1 - w * 0.7) + smooth * w * 0.7;
     }
   }
+  // The White Mountains' lower holds: Copperbrook, Stonegate, Frostpeak, the winch incline.
+  if (x > 2200 && x < 4520 && z < -3940) h = mountainShape(x, z, h);
   // Millbrook Brook cuts a small channel (the road crosses it on a bridge).
   if (x > 1500 && x < 1700 && z > -450 && z < 450) {
     const d = polyDist(x, z, CREEK_LINES);

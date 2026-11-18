@@ -49,6 +49,8 @@ const COMMON: Record<string, Row> = {
   wisp: ['Gloam Wisp', 'Haunted woods, at night', 3, 'A light that leads travellers off the road. It burns cold, and it laughs.'],
   goblin: ['Goblin', 'Caves and the wild roads', 2, 'Small, quick and cowardly, until there are six of them.'],
   orc: ['Crypt Orc', 'The crypt, orc camps', 2, 'One of Grukk\'s band: heavy, slow, and paid in black iron.'],
+  rockTroll: ['Rock Troll', 'Stonegate, the White Mountains', 3, 'Grey hide like weathered granite. Cut one and it knits closed; burn it and it can\'t.'],
+  vargaColdhand: ['Varga Coldhand', 'The Cold Vein', 3, 'A smuggler with a black-iron hook for a hand, who sold the Cold Vein\'s ore south by the cartload.'],
   exileOrc: ['Exiled Orc', 'The Skull Grove', 3, 'An orc cast out of Gorrak\'s horde. Exiles fight as if they have nothing left to lose. They haven\'t.'],
   bandit: ['Bandit', 'The roads', 2, 'Hungry men with knives and a story about why. Most of them would rather you just paid.'],
   scavenger: ['Scavenger', 'Scrap towns of the Expanse', 4, 'Picks the dead clean and the living too, if they\'re slow about it.'],

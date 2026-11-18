@@ -142,6 +142,8 @@ const cellIndex = (x: number, z: number) => {
 /** Region id at a world position ('ocean' in open sea). */
 export function regionAt(x: number, z: number) {
   if (!cells) return 'cresha';
+  // Kettle Cove's shore and the foot of the Great Winch belong to the White Mountains (the map paints them as the woods' edge).
+  if (x > 4200 && x < 4720 && z < -3880 && z > -4200) return 'whiteMountains';
   const r = cells[cellIndex(x, z)];
   return r === 255 ? 'ocean' : REGION_IDS[r];
 }

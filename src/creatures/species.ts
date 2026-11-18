@@ -83,6 +83,8 @@ export function registerSpecies(pop: Population, scene: THREE.Scene) {
     ready: ready('wolf'),
     habitat: (h: Habitat) => {
       if (!TEMPERATE.has(h.region) && h.region !== 'whiteMountains') return 0;
+      // The White Mountains' snow wolves run the snowfields day and night.
+      if (h.region === 'whiteMountains') return h.relief === RELIEF.snow || h.relief === RELIEF.mountain ? 1.3 : 0.6;
       const ground = h.relief === RELIEF.forest ? 1.6 : h.relief === RELIEF.open ? 0.9 : h.relief === RELIEF.mountain ? 0.8 : 0.2;
       const dusk = h.hour > 18 || h.hour < 6 ? 1.6 : 0.35;
       return ground * dusk;

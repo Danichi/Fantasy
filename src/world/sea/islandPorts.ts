@@ -35,6 +35,7 @@ const STYLE: Record<PortStyle, { roof: 'slate' | 'thatch' | 'tile'; wood: number
   pirate: { roof: 'slate', wood: 0x3a2e26, flag: 0x141416, floors: [1, 2, 1, 1] },
   sunken: { roof: 'slate', wood: 0x5a5a5a, flag: 0x2a7a8a, floors: [1, 1, 1, 2] },
   demon: { roof: 'slate', wood: 0x2a1a1a, flag: 0xa02020, floors: [2, 1, 2, 1] },
+  dwarven: { roof: 'slate', wood: 0x4a3a2c, flag: 0x8a2a1e, floors: [1, 2, 1, 1] },
 };
 
 const FOLK: Record<string, { hm: [string, string, Look]; tr: [string, string, Look]; folk: Look[]; lines: { hm: string[]; tr: string[]; folk: string[] } }> = {
@@ -61,6 +62,12 @@ const FOLK: Record<string, { hm: [string, string, Look]; tr: [string, string, Lo
     tr: ['Scholar Aldous Penhallow', 'Antiquarian · Drowned Relics', { body: 'male', outfit: 'peasant', hair: 'simpleparted', beard: true, hairColor: 0xb8b4ae, skin: 0xe0b894, linen: 0xd8d0c0, cloth: 0x2a5a7a, height: 1.76 }],
     folk: [{ body: 'male', outfit: 'ranger', hair: 'buzzed', skin: 0x8a5a3a, cloth: 0x2a7a8a }, { body: 'female', outfit: 'ranger', hair: 'long', skin: 0xe0b894, cloth: 0x2a5a7a }],
     lines: { hm: ['The ruins go down further than any diver has. The carvings are the same as the ones in Elder Glen\'s crypt.', 'Dive the shallows, but mind the deep water. Something lives there.'], tr: ['Every relic the divers bring up is older than Cresha. Older than the elves, maybe.', 'The Sunwheel again. It\'s everywhere down there.'], folk: ['I held my breath for three minutes yesterday. A record!', 'There are lights in the water at night. Nobody knows why.'] },
+  },
+  kettleCove: {
+    hm: ['Harbourmaster Gunnhild Saltbeard', 'Harbourmaster of Kettle Cove · Berths and Contracts', { body: 'female', outfit: 'ranger', hood: false, hair: 'buns', hairColor: 0xb87a3a, skin: 0xe8c09a, cloth: 0x8a2a1e, pauldron: true, height: 1.34 }],
+    tr: ['Orri Copperpot', 'Ore Factor · Ore, Ironware and Rough Gems', { body: 'male', outfit: 'peasant', hair: 'buzzed', beard: true, hairColor: 0x6a3a1a, skin: 0xe0b08a, linen: 0xd8c8a8, cloth: 0x5a4a3a, height: 1.32 }],
+    folk: [{ body: 'male', outfit: 'ranger', hair: 'buzzed', beard: true, hairColor: 0x3a2a1a, skin: 0xe0b894, cloth: 0x5a4a3a, height: 1.36 }, { body: 'female', outfit: 'peasant', hair: 'long', hairColor: 0x8a5a2a, skin: 0xf0d0b0, linen: 0xd8d0c0, cloth: 0x7a3a2a, height: 1.62 }],
+    lines: { hm: ['Mind the ice on the quay, and mind your manners with the winch crew. They\'ve been hauling since before you were born.', 'The Iron Kettle comes in every third day, weather willing. The weather is rarely willing.'], tr: ['Ore by the cartload, ironware by the crate, and gems for those who ask quietly.', 'Bring me grain and salt fish. The holds eat like an army, and they are one.'], folk: ['Up the winch is Copperbrook. Up the road is trouble.', 'Cold enough for you? It\'s spring.'] },
   },
   ashenPort: {
     hm: ['Portwarden Vashka Emberhorn', 'Portwarden of Ashen Port · Berths and Contracts', { body: 'female', outfit: 'ranger', hood: false, hair: 'long', hairColor: 0x1a0a0a, skin: 0xb05040, cloth: 0xa02020, height: 1.9 }],
@@ -258,6 +265,24 @@ function buildOne(scene: THREE.Scene, m: WorldMats, def: IslandPortDef) {
       const h = 3 + rnd() * 5;
       add(new THREE.CylinderGeometry(0.8, 0.95, h, 10), stoneM, p.x, ground + h / 2 - 0.5, p.y, 0, (rnd() - 0.5) * 0.2);
     }
+  } else if (def.style === 'dwarven') {
+    // Stone: a squat breakwater wall, ore carts on a short rail, a forge chimney smoking over the sheds.
+    const stoneD = (m.bridgeStone ?? m.stone) as THREE.Material;
+    const iron = new THREE.MeshStandardMaterial({ color: 0x3a3a3e, roughness: 0.5, metalness: 0.6 });
+    for (let k = 0; k < 7; k++) {
+      const p = at(def.shore - 2 + k * 0.4, 30 + k * 4.2);
+      add(new THREE.BoxGeometry(3.4, 2.2, 4.2), stoneD, p.x, heightAt(p.x, p.y) + 0.6, p.y, yawOut + 0.3);
+    }
+    const rail = at(-2, -16);
+    for (const b of [-0.6, 0.6]) add(new THREE.BoxGeometry(0.08, 0.08, 18), iron, rail.x + s.x * b, heightAt(rail.x, rail.y) + 0.05, rail.y + s.y * b, Math.atan2(f.x, f.y));
+    for (const a of [-5, 3]) {
+      const c = at(-2 + a, -16);
+      const y = heightAt(c.x, c.y);
+      add(new THREE.BoxGeometry(1.2, 0.8, 1.6), darkWood, c.x, y + 0.6, c.y, yawOut);
+      add(new THREE.SphereGeometry(0.55, 7, 5), stoneD, c.x, y + 1.05, c.y);
+    }
+    const ch = at(-34, -6);
+    add(new THREE.BoxGeometry(1.4, 9, 1.4), stoneD, ch.x, heightAt(ch.x, ch.y) + 4.5, ch.y);
   } else if (def.style === 'demon') {
     // Braziers of red fire and obsidian spikes.
     const fire = new THREE.MeshStandardMaterial({ color: 0xff5a1a, emissive: 0xff3a0a, emissiveIntensity: 2.2 });

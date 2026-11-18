@@ -8,6 +8,8 @@
 //   lane   farm lanes and branch roads
 //   trail  footpaths and spur trails (narrow, rough)
 
+import { DWARF_ROAD } from './mountains/mountainLayout';
+
 export type RoadKind = 'kings' | 'lane' | 'trail';
 export type P2 = [number, number];
 
@@ -100,6 +102,16 @@ export const ROAD_SPECS: RoadSpec[] = [
   {
     id: 'chapel', name: 'Chapel Lane', kind: 'lane',
     pts: [[640, 99], [650, 140], [668, 176]],
+  },
+  {
+    // The White Mountains (world/mountains): from Copperbrook up the valley, past Stonegate, along the High Shelf to Frostpeak.
+    id: 'dwarfRoad', name: 'The Dwarf Road', kind: 'lane',
+    pts: DWARF_ROAD,
+  },
+  {
+    // Kettle Cove's quay round the bay to the foot of the Great Winch.
+    id: 'winchPath', name: 'The Winch Path', kind: 'trail',
+    pts: [[4452, -3966], [4390, -3988], [4340, -4022], [4324, -4034]],
   },
 ];
 

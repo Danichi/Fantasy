@@ -7,7 +7,7 @@
 // small.work.hard together, the specific ones first. Overheard exchanges
 // (CONVOS) are whole little conversations, not two lines picked at random.
 
-export type Region = 'glen' | 'road' | 'port' | 'capital' | 'isles' | 'desert' | 'scrap';
+export type Region = 'glen' | 'road' | 'port' | 'capital' | 'isles' | 'desert' | 'scrap' | 'mountains';
 
 export function regionOf(settlement: string): Region {
   if (settlement === 'elderGlen') return 'glen';
@@ -16,6 +16,7 @@ export function regionOf(settlement: string): Region {
   if (/^scraptown\d+$/.test(settlement)) return 'scrap';
   if (settlement === 'sunspire' || /^village\d+$/.test(settlement)) return 'desert';
   if (/^(azureHaven|emeraldCove|wreckersRest|sunkenSpire|ashenPort)$/.test(settlement)) return 'isles';
+  if (/^(kettleCove|copperbrook|stonegate|frostpeak|kettlehold)$/.test(settlement)) return 'mountains';
   return 'road';
 }
 
@@ -62,6 +63,13 @@ export const MORE_LINES: Record<string, Pool> = {
     'The sea gives and the sea takes, and lately it takes more.',
     'A ship comes in, we eat. A ship doesn’t, we fish. A storm comes, we pray.',
     'Nobody here was born here. Everybody here washed up.',
+  ],
+  'small.town.mountains': [
+    'Cold enough to crack a kettle. That\'s the joke. That\'s the whole joke, up here.',
+    'The ore\'s good this year. Too good, some say. Some of it comes up black.',
+    'Half of us are dwarves and half of us are fools who followed the dwarves. We get on.',
+    'Keep a fire in. Keep a lantern lit. Keep your boots dry. In that order.',
+    'The King up at Frostpeak hasn\'t sent a word down the road since the thaw.',
   ],
   'small.town.desert': [
     'Water first. Then talk.',
@@ -186,6 +194,7 @@ export const MORE_LINES: Record<string, Pool> = {
   'bark.neutral.capital': ['Make way.', 'Mind your purse.', 'Long live the King. Apparently.'],
   'bark.neutral.desert': ['Water first.', 'Storm by evening.', 'Sun keep you. Or don’t, today.'],
   'bark.neutral.scrap': ['Watch the edges, they’re sharp.', 'Don’t lean on that. It’s holding up the house.'],
+  'bark.neutral.mountains': ['Mind the ice.', 'Wind\'s turning. Smell it?', 'Stone keep you.', 'Lantern lit? Good.'],
   'bark.neutral.isles': ['Salt and sun.', 'Ship on the horizon?', 'Mind the nets.'],
   'bark.night.hard': ['Get inside. Get inside.', 'Did you hear that? No? Good.', 'Bell hasn’t rung tonight. Yet.'],
 };
@@ -195,6 +204,12 @@ export const MORE_LINES: Record<string, Pool> = {
  * first speaker, then the second, then sometimes the first again).
  */
 export const CONVOS: Record<string, string[][]> = {
+  mountains: [
+    ['Black ore again in the low drift.', 'Leave it. Don\'t touch it bare-handed.', 'Why not?', 'Because it\'s cold, and ore shouldn\'t be.'],
+    ['Pass is snowed in past Stonegate.', 'Trolls or snow?', 'Both. It\'s always both.'],
+    ['Your lad still hauling for the Hollins crew?', 'Pays better than the hold.', 'Pays better until the roof comes down.'],
+    ['Did the Kettle bring flour?', 'Flour, salt fish, and a sky-born with a sword.', 'Better than nothing. Barely.'],
+  ],
   glen: [
     ['Did you get any flour?', 'Half a sack. Oswin says that’s the last until the wheel’s fixed.', 'Half a sack. Gods.'],
     ['Your boy still coughing?', 'Worse at night. Ilyra says it’s the damp.', 'Everything’s the damp, with Ilyra.'],

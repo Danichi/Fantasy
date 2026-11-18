@@ -69,7 +69,8 @@ export function setupMainStory(d: MainStoryDeps) {
   };
   for (const w of wheels()) {
     if (w.kind === 'stone' || w.kind === 'pedestal') continue;
-    interactables.push({ pos: w.pos, radius: w.kind === 'waystone' ? 2.4 : 2.8, label: () => (story.wheelAwake ? 'Touch the Sunwheel' : story.wheel.attuned(w.id) ? 'The Sunwheel hums under your hand' : 'Touch the Sunwheel'), enabled: () => true, action: touchable(w.id) });
+    const hooded = WAYSTONES.find((x) => x.id === w.id)?.hooded;
+    interactables.push({ pos: w.pos, radius: w.kind === 'waystone' ? 2.4 : 2.8, label: () => (story.wheelAwake ? 'Touch the Sunwheel' : story.wheel.attuned(w.id) ? 'The Sunwheel hums under your hand' : 'Touch the Sunwheel'), enabled: () => !hooded?.(), action: touchable(w.id) });
   }
   // The Gravewood pedestal joins once the curse is broken.
   interactables.push({
