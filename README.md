@@ -71,6 +71,19 @@ resume safely at Westgate; owned ships keep their cargo and receive new berths.
 See [the Port Aurelle guide](docs/design/port-aurelle.md) for districts,
 activities, progression and implementation details.
 
+## The island expeditions
+
+Explore all 43 islands across the Azure, Emerald, Shattered and Sunken
+archipelagos: shore landings, inland trails, outposts, pirate camps, sanctuary
+puzzles and underwater finds. Eighteen quests lead to four regional bosses and
+new crafted keepsakes, with level 24–41 island encounters. Ashen Port also gains
+its harbour bridgehead and an exile story.
+
+Ask Tallow in Port Aurelle about **The Four Winds**, or sail your own ship.
+Island harbourmasters offer passages, quests and local trail charts. Outposts
+provide guides, trade, food, rest and workbenches. See the
+[island expedition guide](docs/design/islands.md) for progression and details.
+
 ## The crypt (first dungeon)
 
 The crypt entrance is at the end of the north road, in the hills. Inside:

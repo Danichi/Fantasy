@@ -54,6 +54,8 @@ export class Rootwarden implements Target {
   alive = true;
   lockable = false;
   stunned = false;
+  /** Authored encounter scaling; the Elder Glade keeps its original damage. */
+  damageScale = 1;
   maxHp = 1500;
   hp = 1500;
   radius = 1.3;
@@ -274,7 +276,7 @@ export class Rootwarden implements Target {
     if (player.dead || this.hitDone) return;
     if (Math.hypot(player.pos.x - at.x, player.pos.z - at.z) < radius && Math.abs(player.pos.y - at.y) < 3) {
       this.hitDone = true;
-      const res = player.receiveAttack({ damage: Math.round(damage * (this.enraged ? 1.15 : 1)), from: this.position.clone(), at: player.center.clone(), parryable: false, poise });
+      const res = player.receiveAttack({ damage: Math.round(damage * this.damageScale * (this.enraged ? 1.15 : 1)), from: this.position.clone(), at: player.center.clone(), parryable: false, poise });
       if (res === 'hit' && knock) player.vel.addScaledVector(player.pos.clone().sub(this.position).setY(0).normalize(), knock);
     }
   }
@@ -292,7 +294,7 @@ export class Rootwarden implements Target {
       this.spike(p, 1.6 + Math.random() * 1.2, d * 0.025);
       if (!hit && Math.hypot(player.pos.x - p.x, player.pos.z - p.z) < 1.25 && !player.dead) {
         hit = true;
-        player.receiveAttack({ damage: Math.round(30 * (this.enraged ? 1.15 : 1)), from: p.clone().addScaledVector(dir, -2), parryable: false, poise: 100 });
+        player.receiveAttack({ damage: Math.round(30 * this.damageScale * (this.enraged ? 1.15 : 1)), from: p.clone().addScaledVector(dir, -2), parryable: false, poise: 100 });
         player.vel.y += 5;
       }
     }
@@ -439,7 +441,7 @@ export class Rootwarden implements Target {
           const from = this.position.clone().setY(g + 5.2);
           const aim = player.center.clone().sub(from).normalize();
           const n = this.enraged ? 7 : 5;
-          for (let k = 0; k < n; k++) this.missiles.shoot('thorn', from, aim.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), (k - (n - 1) / 2) * 0.13), 22, 22);
+          for (let k = 0; k < n; k++) this.missiles.shoot('thorn', from, aim.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), (k - (n - 1) / 2) * 0.13), 22, 22 * this.damageScale);
           this.fx.add.spawn({ pos: from, spread: 3, count: 20, life: [0.3, 0.7], size: [0.18, 0.03], color: LEAF, color2: 0x101808, gravity: 5 });
         }
         if (this.st > 1.6) this.recover(0.9);

@@ -132,6 +132,11 @@ export class BrineMaw extends Creature implements BossBody {
     sfx.chitter(this.volume() + 0.2);
   }
 
+  /** Explicit challenges wake it without requiring a free opening hit. */
+  rouse() {
+    if (this.alive) this.wake();
+  }
+
   private wake() {
     this.foeOn = true;
     if (this.mode === 'bask' || this.mode === 'home') this.setMode('notice', 1);

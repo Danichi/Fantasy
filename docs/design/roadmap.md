@@ -34,10 +34,11 @@ waiting.
 
 ## After these five
 
-- **The Islands (phase 12)**: the five harbours exist from the boating update;
-  next comes their inland content (the Azure Isles' lagoons and treasure, the
-  Emerald Isles' forests, the Shattered Isles' pirate haven as a quest hub for
-  the Black Tide, the Sunken Isles' drowned ruins and underwater lighting).
+- **The Islands (phase 12), first expansion built**: all 43 archipelago islands
+  now have landings and exploration content, with 122 sites, eighteen quests,
+  four regional bosses, island outposts, daily materials and charter passages.
+  See [islands.md](islands.md). Further authored settlements, dungeon interiors
+  and the Black Tide's longer campaign can build on these expedition loops.
 - **The South and West (phase 13)**: the Wildlands, Southern Marches, Frosted
   Peaks, the Deep Wilderness and Valoria, coordinated with Daniel's Golden
   Expanse.

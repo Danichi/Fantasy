@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { heightAt } from '../terrainHeight';
+import { surveyHeightAt } from '../terrainHeight';
 import { SEA_LEVEL } from '../worldMap';
 import { currentAt, cellStormAt } from './seaState';
 export interface SeaRoute {
@@ -14,7 +14,7 @@ export function chartRoute(from: THREE.Vector3, to: THREE.Vector3, draft: number
     const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 55));
     for (let i = 1; i <= n; i++) {
       const t = i / n;
-      if (SEA_LEVEL - heightAt(ax + (bx - ax) * t, az + (bz - az) * t) < draft + 0.25) return false;
+      if (SEA_LEVEL - surveyHeightAt(ax + (bx - ax) * t, az + (bz - az) * t) < draft + 0.25) return false;
     }
     return true;
   };

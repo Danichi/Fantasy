@@ -6,6 +6,7 @@ import { ROAD_POLYS, CREEK } from './roadData';
 import { cityHeight } from './portCity';
 import { capitalHeight } from './capitalCity';
 import { islandPadHeight } from './sea/islandPortsData';
+import { shapeIslands } from './islands/layout';
 import { mountainShape } from './mountains/mountainLayout';
 
 // ---------------------------------------------------------------------------
@@ -210,6 +211,7 @@ export function worldHeightFn(x: number, z: number) {
   // The island harbours stand on small level pads (and their quays).
   const isl = x > 3500 ? islandPadHeight(x, z) : null;
   if (isl) return h * (1 - isl[1]) + isl[0] * isl[1];
+  if (x > 2800) h = shapeIslands(x, z, h);
   // Roads keep a gentle grade outside town too.
   if (r > LOCAL_R0 * 0.8) {
     const rd = roadDist(x, z);
@@ -299,6 +301,19 @@ export function heightAt(x: number, z: number) {
     return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
   }
   return tileHeightAt(x, z);
+}
+
+/** Sparse overworld surveys (sea charts) must not generate a 129² tile per
+ * sample. Interpolate the same four float32 grid heights as a full tile. */
+export function surveyHeightAt(x: number, z: number) {
+  const override = groundOverride?.(x, z);
+  if (override !== null && override !== undefined) return override;
+  if (hasTile(Math.floor(x / TILE), Math.floor(z / TILE)) || (heights && Math.abs(x) < WORLD_SIZE / 2 - 1 && Math.abs(z) < WORLD_SIZE / 2 - 1)) return heightAt(x, z);
+  const ax = Math.floor(x / TILE_STEP) * TILE_STEP, az = Math.floor(z / TILE_STEP) * TILE_STEP;
+  const u = (x - ax) / TILE_STEP, v = (z - az) / TILE_STEP;
+  const a = Math.fround(worldHeightFn(ax, az)), b = Math.fround(worldHeightFn(ax + TILE_STEP, az));
+  const c = Math.fround(worldHeightFn(ax, az + TILE_STEP)), d = Math.fround(worldHeightFn(ax + TILE_STEP, az + TILE_STEP));
+  return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
 }
 
 // ---- height tiles (the rest of the world) -------------------------------------

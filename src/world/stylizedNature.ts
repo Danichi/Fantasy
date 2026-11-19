@@ -594,6 +594,12 @@ export class StylizedNature {
     const rel = reliefAt(x, z);
     const region = regionAt(x, z);
     const grove = fbm(x * 0.009 + 3.1, z * 0.009 - 7.3, 3);
+    // Island silhouettes follow their climate instead of inheriting the
+    // continent's latitude-based pine rule.
+    if (region === 'azureIsles') return [rel === RELIEF.forest ? 0.2 + grove * 0.15 : 0.015, 'tree', 0.85];
+    if (region === 'emeraldIsles') return [rel === RELIEF.beach ? 0.04 : 0.32 + grove * 0.28, 'tree', 1.1];
+    if (region === 'shatteredIsles') return [rel === RELIEF.forest ? 0.09 : 0.015, 'pine', 0.8];
+    if (region === 'sunkenIsles') return [rel === RELIEF.forest ? 0.1 : 0.015, 'tree', 0.85];
     const alpine = region === 'whiteMountains' || region === 'deepMountains' || region === 'frostedPeaks';
     // Ancient forests grow taller the further north into the elven woods.
     const giant = region === 'verdantElves' ? 1.2 + smoothstep(-2200, -3600, z) * 0.9 : region === 'deepWilderness' ? 1.35 : 1;

@@ -82,6 +82,7 @@ export class WhiteMountains {
   private rnd = mulberry32(5300);
   private flames: THREE.Mesh[] = [];
   private t = 0;
+  private barShown = false;
   // the Great Winch
   private cage = new THREE.Group();
   private ride: { t: number; up: boolean } | null = null;
@@ -741,7 +742,15 @@ export class WhiteMountains {
       }
       if (t.awake && t.position.distanceTo(p) < 40) boss = t;
     }
-    this.h.bossBar(boss ? { hp: boss.hp, maxHp: boss.maxHp, alive: boss.alive } : null, boss?.name);
+    // Own only the Stonegate bar; an idle mountain must not hide another
+    // region's encounter or restart its entrance animation every step.
+    if (boss) {
+      this.h.bossBar(boss, boss.name);
+      this.barShown = true;
+    } else if (this.barShown) {
+      this.h.bossBar(null);
+      this.barShown = false;
+    }
     if (this.h.flags.stonegateClear && this.h.flags.stonegateClear !== 'signalled') {
       this.h.flags.stonegateClear = 'signalled';
       this.h.signal('stonegate-clear');
