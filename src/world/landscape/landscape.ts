@@ -1,6 +1,6 @@
 import { waveNormalTexture } from '../water';
 import * as THREE from 'three';
-import { BANK_EXITS, CROSSINGS, LANDFORMS, PONDS, TRAILS, WATERCOURSES, landscapeWaterAt, landscapeTrailDistance, trailProfile, type Point } from './layout';
+import { BANK_EXITS, CROSSINGS, LANDFORMS, PONDS, TRAILS, WATERCOURSES, bankExitProfile, landscapeWaterAt, landscapeTrailDistance, trailProfile, type Point } from './layout';
 import { baseWorldHeightFn, heightAt, surveyHeightAt } from '../terrainHeight';
 import { walkHeightAt } from './surfaces';
 import { waterSurfaceAt } from '../waterLevel';
@@ -132,7 +132,7 @@ export class Landscape {
             id: `water-${w.id}-${i}-${part}`,
             at: [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2],
             radius: 80,
-            build: (l) => this.waterStrip(l, from, to, w.width + w.bank),
+            build: (l) => this.waterStrip(l, from, to, w.width + w.bank, w.id),
           });
         }
       }
@@ -150,7 +150,7 @@ export class Landscape {
           for (let r = 0; r <= rings; r++)
             for (let j = 0; j <= sectors; j++) {
               const theta = (j / sectors) * Math.PI * 2,
-                rad = ((p.radius + 20) * r) / rings,
+                rad = ((p.radius * 1.25 + 20) * r) / rings,
                 x = p.at[0] + Math.cos(theta) * rad,
                 z = p.at[1] + Math.sin(theta) * rad;
               pos.push(x, p.level + 0.025, z);
@@ -165,10 +165,11 @@ export class Landscape {
               ])
                 idx.push(...tri);
             }
-          this.waterMesh(l, pos, idx, this.water);
+          this.waterMesh(l, pos, idx, this.water, p.id);
         },
       });
-    for (const e of BANK_EXITS)
+    for (const e of BANK_EXITS) {
+      bankExitProfile(e, baseWorldHeightFn);
       this.features.push({
         id: e.id,
         at: e.at,
@@ -185,6 +186,7 @@ export class Landscape {
           b.build(l.root);
         },
       });
+    }
     for (const t of TRAILS) {
       const profile = trailProfile(t, baseWorldHeightFn);
       for (let i = 1; i < profile.length; i += 8) {
@@ -235,14 +237,17 @@ export class Landscape {
     world.dispose();
   }
   /** Clip mixed shore triangles instead of dropping a whole wet cell. */
-  private waterMesh(l: Live, pos: number[], triangles: number[], mat: THREE.Material) {
+  private waterMesh(l: Live, pos: number[], triangles: number[], mat: THREE.Material, owner: string) {
     const depths: number[] = [];
     for (let i = 0; i < pos.length; i += 3) {
       const x = pos[i],
         z = pos[i + 2],
         level = pos[i + 1] - 0.025,
-        w = landscapeWaterAt(x, z);
-      depths.push(w && Math.abs(w.level - level) < 0.3 ? level - surveyHeightAt(x, z) : -0.01);
+        w = landscapeWaterAt(x, z, false, owner),
+        other = landscapeWaterAt(x, z, false, undefined, owner);
+      // A 2 m overlap covers the different stream and polar-lake tessellations.
+      const margin = w && other ? other.distance - other.half - (w.distance - w.half) : Infinity;
+      depths.push(w && Math.abs(w.level - level) < 0.3 ? Math.min(level - surveyHeightAt(x, z), margin + 2) : -0.01);
     }
     const indices: number[] = [];
     for (let t = 0; t < triangles.length; t += 3) {
@@ -275,11 +280,12 @@ export class Landscape {
     g.setIndex(indices);
     g.computeVertexNormals();
     const m = new THREE.Mesh(g, mat);
+    if (mat === this.water || mat === this.foam) m.name = 'landscape-water';
     m.receiveShadow = true;
     l.root.add(m);
     return m;
   }
-  private waterStrip(l: Live, a: number[], b: number[], half: number) {
+  private waterStrip(l: Live, a: number[], b: number[], half: number, owner: string) {
     const dx = b[0] - a[0],
       dz = b[1] - a[1],
       length = Math.hypot(dx, dz),
@@ -305,7 +311,7 @@ export class Landscape {
         ])
           indices.push(...tri);
       }
-    this.waterMesh(l, pos, indices, Math.abs(a[2] - b[2]) / length > 0.4 ? this.foam : this.water);
+    this.waterMesh(l, pos, indices, Math.abs(a[2] - b[2]) / length > 0.4 ? this.foam : this.water, owner);
   }
   private box(l: Live, b: StaticBatch, x: number, y: number, z: number, hx: number, hy: number, hz: number, mat: THREE.Material, solid: boolean, angle = 0) {
     const geo = new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2);

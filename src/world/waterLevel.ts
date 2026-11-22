@@ -12,7 +12,11 @@ import { CANAL, QUAY_X } from './portCity';
 export function waterSurfaceAt(x: number, z: number): number | null {
   const ground = heightAt(x, z);
   const local = landscapeWaterAt(x, z);
-  if (local && ground < local.level && local.distance < local.half + local.bank) return local.level;
+  if (local && ground < local.level && local.distance < local.half + local.bank) {
+    // A falling ribbon over the coast is not a tall column of swimmable water.
+    if (local.id.startsWith('emerald-') && ground < SEA_LEVEL && macroElevAt(x,z) < SEA_LEVEL+1.4) return SEA_LEVEL;
+    return local.level;
+  }
   // The existing Millbrook ribbon follows its bed at a depth of 1.15 m.
   if(x>1490&&x<1670&&z>-445&&z<185)for(let i=1;i<CREEK.length;i++) {
     const a=CREEK[i-1],b=CREEK[i],s=segment(x,z,a,b);

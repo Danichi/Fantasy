@@ -64,6 +64,9 @@ test('authored landscape: regional relief, preserved foundations, graded trails 
       w.knots.map((p: any) => ({ id: w.id, base: T.baseWorldHeightFn(p[0], p[1]), level: p[2], surface: water.waterSurfaceAt(p[0], p[1]), depth: p[2] - T.heightAt(p[0], p[1]) }))
     );
     const bridges = L.CROSSINGS.map((c: any) => ({ id: c.id, bed: T.heightAt(...c.at), walk: S.walkHeightAt(...c.at), surface: water.waterSurfaceAt(...c.at), level: c.level }));
+    const seaAnchors = I.ISLANDS.flatMap((i: any) => [i.sea, ...(i.dive ? [i.dive] : [])])
+      .filter((p: any) => T.baseWorldHeightFn(...p) < W.SEA_LEVEL && W.macroElevAt(...p) < W.SEA_LEVEL + 1.4)
+      .map((p: any) => T.worldHeightFn(...p) - T.baseWorldHeightFn(...p));
     const islandAnchors = I.ISLANDS.map((i: any) => ({ id: i.id, delta: Math.abs(T.worldHeightFn(...i.landing) - T.baseWorldHeightFn(...i.landing)) }));
     const start = performance.now();
     for (let i = 0; i < 10000; i++) T.worldHeightFn(500 + (i % 128) * 2, -450 + Math.floor(i / 128) * 2);
@@ -114,7 +117,7 @@ test('authored landscape: regional relief, preserved foundations, graded trails 
       }
       return { id: e.id, grade, dry: water.waterSurfaceAt(...e.end) === null };
     });
-    return { relief, anchors, grades, wet, bridges, islandAnchors, roadCrossings, foundationError, roadside, exits, ms };
+    return { relief, anchors, grades, wet, bridges, islandAnchors, roadCrossings, foundationError, roadside, exits, seaAnchors, ms };
   });
   await test.info().attach('landscape-audit', { body: JSON.stringify(result, null, 2), contentType: 'application/json' });
   console.log('landscape audit', {
@@ -123,6 +126,8 @@ test('authored landscape: regional relief, preserved foundations, graded trails 
     maxTrailGrade: Math.max(...result.grades.map((t: any) => t.actual)),
     samplingMs: result.ms,
   });
+  expect(result.seaAnchors.length).toBeGreaterThan(40);
+  expect(Math.max(...result.seaAnchors)).toBeLessThan(0.001);
   expect(result.roadside.every((s: any) => s.error < 1e-5 && s.depth < 0.1)).toBe(true);
   expect(result.foundationError).toBeLessThan(1e-5);
   expect(result.anchors.every((a: any) => a.error < 1e-5)).toBe(true);

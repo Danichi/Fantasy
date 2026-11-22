@@ -10,7 +10,7 @@ import { macroElevAt, SEA_LEVEL, GW, WORLD_X0, WORLD_Z0, CELL } from '../worldMa
 export type Point = readonly [number, number];
 export type Knot = readonly [number, number, number];
 export type Height = (x: number, z: number) => number;
-export const TERRAIN_REVISION = 1;
+export const TERRAIN_REVISION = 2;
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const smooth = (a: number, b: number, n: number) => {
   const t = clamp((n - a) / (b - a));
@@ -150,7 +150,8 @@ export const WATERCOURSES: Watercourse[] = [
       [3800, -4300, 646],
       [3840, -4430, 588],
       [3870, -4490, 542],
-      [3930, -4600, 525],
+      [3930, -4510, 449],
+      [3930, -4600, 449],
     ],
     width: 5,
     depth: 2,
@@ -212,7 +213,7 @@ export interface Pond {
 export const PONDS: Pond[] = [
   { id: 'lantern-pool', name: 'Lantern Mere', at: [940, 350], radius: 42, level: 1, depth: 3.4 },
   { id: 'crown-pool', name: 'Crownwater Basin', at: [-2280, -260], radius: 58, level: 4, depth: 4 },
-  { id: 'hanging-pool', name: 'Hanging Tarn', at: [3930, -4600], radius: 46, level: 525, depth: 3.5 },
+  { id: 'hanging-pool', name: 'Hanging Tarn', at: [3930, -4600], radius: 46, level: 449, depth: 3.5 },
   { id: 'glasswind-pool', name: 'Glasswind Oasis', at: [-5100, 1270], radius: 38, level: 20, depth: 3 },
 ];
 export interface Crossing {
@@ -470,10 +471,10 @@ const forms = new Grid<Landform>(),
   exits = new Grid<BankExit>();
 for (const f of LANDFORMS) forms.add(f, ...bounds(f.line, f.width));
 for (const line of [...ROAD_POLYS, DWARF_ROAD, [LIFT.bottom, LIFT.top]]) roads.add(line, ...bounds(line, 35));
-for (const w of WATERCOURSES) waters.add(w, ...bounds(w.knots, w.width + w.bank));
-for (const p of PONDS) ponds.add(p, ...bounds([p.at], p.radius + 20));
+for (const w of WATERCOURSES) waters.add(w, ...bounds(w.knots, w.width + w.bank + 145));
+for (const p of PONDS) ponds.add(p, ...bounds([p.at], p.radius * 1.25 + 165));
 for (const t of TRAILS) trails.add(t, ...bounds(t.points, 13));
-for (const e of BANK_EXITS) exits.add(e, ...bounds([e.at, e.end], 12));
+for (const e of BANK_EXITS) exits.add(e, ...bounds([e.at], 300));
 const anchors: [number, number, number][] = [
   [0, 0, 145],
   [0, -318, 46],
@@ -535,6 +536,7 @@ export function landscapeWeight(x: number, z: number) {
 }
 function landHeight(x: number, z: number, h: number) {
   // Existing sea lanes, tidal approaches and dive sites keep their bathymetry.
+  if (h < SEA_LEVEL && macroElevAt(x, z) < SEA_LEVEL + 1.4) return h;
   const land = smooth(SEA_LEVEL + 0.8, SEA_LEVEL + 4, Math.max(macroElevAt(x, z), h));
   if (land === 0) return h;
   let delta = 0;
@@ -556,16 +558,17 @@ export interface WaterSample {
   flowZ: number;
   id: string;
 }
-export function landscapeWaterAt(x: number, z: number): WaterSample | null {
+export function landscapeWaterAt(x: number, z: number, includeBanks = false, onlyOwner?: string, excludeOwner?: string): WaterSample | null {
   let best: WaterSample | null = null,
     score = Infinity;
-  for (const w of waters.at(x, z))
+  for (const w of waters.at(x, z)) {
+    if ((onlyOwner && w.id !== onlyOwner) || w.id === excludeOwner) continue;
     for (let i = 1; i < w.knots.length; i++) {
       const a = w.knots[i - 1],
         b = w.knots[i],
         s = segment(x, z, a, b),
         outside = s.d - w.width;
-      if (outside > w.bank || outside >= score) continue;
+      if (outside > w.bank + (includeBanks ? 140 : 0) || outside >= score) continue;
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
       score = outside;
       best = {
@@ -579,15 +582,75 @@ export function landscapeWaterAt(x: number, z: number): WaterSample | null {
         id: w.id,
       };
     }
+  }
   for (const p of ponds.at(x, z)) {
-    const d = Math.hypot(x - p.at[0], z - p.at[1]),
+    if ((onlyOwner && p.id !== onlyOwner) || p.id === excludeOwner) continue;
+    const angle = Math.atan2(z - p.at[1], x - p.at[0]);
+    const warp = 1 + 0.1 * Math.sin(angle * 3 + p.at[0] * 0.013) + 0.065 * Math.sin(angle * 5 + p.at[1] * 0.019);
+    const d = Math.hypot(x - p.at[0], z - p.at[1]) / warp,
       outside = d - p.radius;
-    if (outside > 20 || outside >= score) continue;
+    if (outside > 20 + (includeBanks ? 140 : 0) || outside >= score) continue;
     score = outside;
     best = { level: p.level, distance: d, half: p.radius, depth: p.depth, bank: 20, flowX: 0, flowZ: 0, id: p.id };
   }
   return best;
 }
+/** A closed bank meets the waterline before blending back to the landscape. */
+function waterBankHeight(x: number, z: number, h: number, original: number) {
+  const w = landscapeWaterAt(x, z, true);
+  if (!w) return h;
+  // Preserve dry buildings even when their grounds meet a new bank.
+  if (h > w.level + 0.15) for (const a of protectedSites.at(x, z)) if (Math.hypot(x - a[0], z - a[1]) < a[2]) return h;
+  const rim = w.half + w.bank,
+    crest = Math.max(h, w.level + 1.1);
+  if (w.distance <= rim) {
+    const bed = w.level - w.depth;
+    const t = smooth(w.half * 0.45, rim, w.distance);
+    const shaped = bed + (crest - bed) * t;
+    return w.id.startsWith('emerald-') && original < SEA_LEVEL ? Math.min(h, shaped) : shaped;
+  }
+  if (w.id.startsWith('emerald-') && original < SEA_LEVEL) return h;
+  const apron = Math.min(140, Math.max(30, (crest - h) * 2.5));
+  return h + (crest - h) * (1 - smooth(rim, rim + apron, w.distance));
+}
+interface ExitProfile {
+  end: Point;
+  height: number;
+}
+const exitProfiles = new Map<BankExit, ExitProfile>();
+/** Resolve onto nearby dry ground, rather than raising a long strip over a valley. */
+export function bankExitProfile(e: BankExit, base: Height): ExitProfile {
+  const cached = exitProfiles.get(e);
+  if (cached) return cached;
+  const angle = Math.atan2(e.end[1] - e.at[1], e.end[0] - e.at[0]);
+  const ground = (x: number, z: number) => {
+    const h = base(x, z);
+    return waterBankHeight(x, z, landHeight(x, z, h), h);
+  };
+  for (let run = 32; run <= 240; run += 4)
+    for (const turn of [0, Math.PI / 6, -Math.PI / 6, Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2, Math.PI]) {
+      const dx = Math.cos(angle + turn),
+        dz = Math.sin(angle + turn),
+        x = e.at[0] + dx * run,
+        z = e.at[1] + dz * run,
+        h = ground(x, z),
+        w = landscapeWaterAt(x, z);
+      if (h < e.level + 0.25 || (w && h < w.level + 0.25) || Math.abs(h - e.level - 0.45) / (run - 24) > 0.4) continue;
+      if (Math.abs(ground(x + dx * 6, z + dz * 6) - h) > 3) continue;
+      e.end = [x, z];
+      const profile = { end: e.end, height: h };
+      exitProfiles.set(e, profile);
+      return profile;
+    }
+  // The authored courses are shallow at their heads. A short shelf stays
+  // local if no broader valley-side approach fits the movement grade.
+  const end: Point = [e.at[0] + Math.cos(angle) * 32, e.at[1] + Math.sin(angle) * 32];
+  const profile = { end, height: Math.max(e.level + 0.3, ground(...end)) };
+  e.end = end;
+  exitProfiles.set(e, profile);
+  return profile;
+}
+
 const profiles = new Map<Trail, Knot[]>();
 export function trailProfile(t: Trail, base: Height): Knot[] {
   let result = profiles.get(t);
@@ -659,19 +722,14 @@ export function shapeLandscape(x: number, z: number, base: Height) {
     }
     h += (target - h) * (1 - smooth(3.8, 12, nearest));
   }
-  const water = landscapeWaterAt(x, z);
-  if (water) {
-    const core = 1 - smooth(water.half * 0.5, water.half + water.bank, water.distance);
-    const floor = water.level - water.depth + water.depth * 0.55 * smooth(0, water.half, water.distance);
-    const target = water.id.startsWith('emerald-') && original < SEA_LEVEL ? Math.min(h, floor) : floor;
-    h += (target - h) * core;
-  }
+  h = waterBankHeight(x, z, h, original);
   // Narrow, gently graded shoals are deliberate swimming exits. The rest of
   // a gorge can remain steep without trapping an ordinary adventurer in it.
   for (const e of exits.at(x, z)) {
-    const s = segment(x, z, e.at, e.end);
+    const profile = bankExitProfile(e, base);
+    const s = segment(x, z, e.at, profile.end);
     if (s.d > 10) continue;
-    const end = Math.max(e.level + 0.8, landHeight(e.end[0], e.end[1], base(e.end[0], e.end[1])));
+    const end = profile.height;
     const length = Math.hypot(e.end[0] - e.at[0], e.end[1] - e.at[1]),
       run = length * s.t;
     const target = run <= 24 ? e.level - 0.55 + run / 24 : e.level + 0.45 + ((end - e.level - 0.45) * (run - 24)) / (length - 24);
