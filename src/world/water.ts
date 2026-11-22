@@ -1,3 +1,4 @@
+import { waterDepth } from './waterLevel';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { riverX, RIVER_LEVEL, BRIDGE, WORLD_SIZE, heightTexture, heightAt } from './terrain';
@@ -8,7 +9,7 @@ import { worldUV, type WorldMats } from './buildings';
 // scrolling procedural normal maps; colour deepens with water depth (read
 // from the terrain height texture) and foam gathers along the banks.
 
-function waveNormalTexture() {
+export function waveNormalTexture() {
   const N = 256;
   const h = new Float32Array(N * N);
   // Sum of wrapped sine ripples = tileable height field.
@@ -141,9 +142,9 @@ export class River {
   }
 }
 
-/** True when a point is in the river channel (below the waterline). */
+/** Depth below the local river, pond, canal or sea surface; zero on dry land. */
 export function waterDepthAt(x: number, z: number) {
-  return Math.max(0, RIVER_LEVEL - heightAt(x, z));
+  return waterDepth(x, z);
 }
 
 /** Stone arch bridge carrying the east road over the river. */

@@ -1,3 +1,4 @@
+import { landscapeWaterAt } from '../world/landscape/layout';
 import * as THREE from 'three';
 import { blessing } from '../progression/blessings';
 import { HERO } from '../npc/cast';
@@ -20,7 +21,6 @@ import { ACTIONS, BRANCHES, STRING_BRANCH, GUARD_R, SHIELD_BLOCK_L, SHIELD_CARRY
 import { strike, combat, combatOf, finisherOpen, isBoss, FAMILY_DMG, type DmgType } from '../combat/core';
 import { targets, hurtSegment, type Target, type IncomingAttack, type DefenceResult } from '../combat/targets';
 import { surfaceAt, heightAt as heightAtGround } from '../world/terrain';
-import { waterDepthAt } from '../world/water';
 import { waterSurfaceAt } from '../world/waterLevel';
 import { SEA_LEVEL } from '../world/worldMap';
 import { waveAt } from '../world/sea/seaState';
@@ -491,6 +491,8 @@ export class Player {
   /** a class's swimming (Tidecaller): multiplies swim speed */
   fieldSwim?: () => number;
   private airJumps = 0;
+  private mantle: { start: THREE.Vector3; end: THREE.Vector3; t: number } | null = null;
+  get mantling() { return this.mantle !== null; }
   /** Height of the walkable surface (terrain, bridges, floors) under (x, z) near the player's feet. */
   private probeGround(x: number, z: number) {
     const top = this.pos.y + 1.3;
@@ -550,6 +552,7 @@ export class Player {
     this.blockHitT += dt;
 
     if (this.dead) {
+      this.mantle = null;
       this.flightLean = 0;
       this.deadT += dt;
       this.sampleCombatPose(dt);
@@ -608,6 +611,7 @@ export class Player {
     if (input.held('left')) this.moveIntent.sub(r);
     if (this.moveIntent.lengthSq() > 0) this.moveIntent.normalize();
 
+    if (this.mantle) { this.moveIntent.set(0, 0, 0); this.buffer = null; return; }
     if (this.vehicle || this.swimming) {
       this.diveHeld = input.held('swimDown');
       this.riseHeld = input.held('swimUp');
@@ -652,6 +656,8 @@ export class Player {
     if (input.wasPressed('jump') && this.grounded && jumpAct?.def.hit && !jumpAct.def.roll && !jumpAct.def.air && !jumpAct.def.aerial && jumpAct.def.id !== 'launcher' && jumpAct.t >= Math.min(jumpAct.def.hit.from, 0.12) && (this.equip.mainWeapon || this.canFightUnarmed?.())) {
       // Jump during a string: the launcher (the foe goes up, and you after it).
       this.startAction('launcher');
+    } else if (input.wasPressed('jump') && this.tryMantle()) {
+      // A low, clear ledge: rise, then move onto it with collision checks.
     } else if (input.wasPressed('jump') && !this.grounded && !this.swimming && !this.flying && this.wallKicks > 0 && this.tryWallKick()) {
       // (kicked off a wall)
     } else if (input.wasPressed('jump') && this.grounded && !this.act) {
@@ -770,6 +776,52 @@ export class Player {
       if (d < bd) (bd = d), (best = t);
     }
     return best;
+  }
+
+  /** Low ledges only; combat movement and class abilities retain their controls. */
+  private tryMantle(): boolean {
+    if (this.act || this.blocking || this.lock || this.vehicle || this.mounted || this.swimming || this.flying || this.moveIntent.lengthSq() < .1 || this.vel.y < -5) return false;
+    const dir = this.moveIntent.clone().setY(0).normalize();
+    const origin = this.pos.clone().add(new THREE.Vector3(0, .4, 0));
+    if (physics.castRay(origin, dir, 1.2) === null) return false;
+    const end = this.pos.clone().addScaledVector(dir, 1.15);
+    const top = end.clone().setY(this.pos.y + 1.65);
+    const ray = new physics.R.Ray(top, { x: 0, y: -1, z: 0 });
+    const hit = physics.world.castRayAndGetNormal(ray, 1.3, true, undefined, STATIC_ONLY);
+    if (!hit || hit.normal.y < .72) return false;
+    end.y = top.y - hit.timeOfImpact + .055;
+    if (end.y - this.pos.y < .45 || end.y - this.pos.y > 1.5) return false;
+    const shape = new physics.R.Capsule(CAPSULE_HALF, CAPSULE_R);
+    const clear = (p: THREE.Vector3) => !physics.world.intersectionWithShape(
+      { x: p.x, y: p.y + CENTER_Y + .04, z: p.z }, { x: 0, y: 0, z: 0, w: 1 }, shape,
+      physics.R.QueryFilterFlags.EXCLUDE_SENSORS, STATIC_ONLY,
+    );
+    // The whole capsule must fit at each point above the lip, including under
+    // ceilings. During execution KCC sweeps each step as the geometry changes.
+    const raised = this.pos.clone().setY(end.y + .06);
+    for (let i = 0; i <= 5; i++) if (!clear(raised.clone().lerp(end, i / 5))) return false;
+    this.mantle = { start: this.pos.clone(), end, t: 0 };
+    this.vel.set(0, 0, 0); this.grounded = false; this.sprinting = false; this.buffer = null;
+    return true;
+  }
+
+  private moveMantle(dt: number) {
+    const m = this.mantle!;
+    if (this.vehicle || this.mounted || this.dead || this.act) { this.mantle = null; return; }
+    m.t = Math.min(1, m.t + dt / .38);
+    const lift = smoothstep(0, .55, m.t), forward = smoothstep(.5, 1, m.t);
+    const target = m.start.clone().lerp(m.end, forward);
+    target.y = m.start.y + (m.end.y - m.start.y + .06) * lift;
+    const desired = target.sub(this.pos);
+    this.kcc.computeColliderMovement(this.collider, desired, physics.R.QueryFilterFlags.EXCLUDE_SENSORS, STATIC_ONLY);
+    const movement = this.kcc.computedMovement(), cur = this.body.translation();
+    const next = { x: cur.x + movement.x, y: cur.y + movement.y, z: cur.z + movement.z };
+    this.body.setNextKinematicTranslation(next); this.collider.setTranslation(next);
+    this.pos.set(next.x, next.y - CENTER_Y - .02, next.z);
+    this.airTime = 0; this.fallSpeed = 0;
+    if (m.t >= 1 || Math.hypot(movement.x - desired.x, movement.y - desired.y, movement.z - desired.z) > .12) {
+      this.mantle = null; this.vel.set(0, 0, 0);
+    }
   }
 
   /** Jump in the air against a wall: push off it, up and away. */
@@ -1275,8 +1327,10 @@ export class Player {
   }
 
   private move(dt: number) {
+    if (this.mantle) { this.moveMantle(dt); return; }
     const a = this.act;
     const intent = this.moveIntent;
+    const still = waterSurfaceAt(this.pos.x, this.pos.z);
     let targetSpeed = 0;
     if (intent.lengthSq() > 0) {
       const ms = this.mountStats ?? { canter: 11.5, gallop: 15, accel: 8 };
@@ -1284,13 +1338,12 @@ export class Player {
       if (!this.grounded) targetSpeed = Math.max(targetSpeed, 3.5);
       if (this.webbed > 0 && !this.mounted) targetSpeed = Math.min(targetSpeed, 1.3);
       // Wading slows you down; deep water means swimming.
-      const wade = waterDepthAt(this.pos.x, this.pos.z);
+      const wade = still === null ? 0 : still - this.pos.y;
       if (wade > 0.25 && !(this.waterWalk > 0)) targetSpeed *= 0.5;
       if (this.swimming) targetSpeed = (this.sprinting ? 3.6 : 2.3) * this.swimSpeedMul * (this.fieldSwim?.() ?? 1);
     }
     // Swimming: float with the chest at the waterline, tire, and drown if spent.
     // (At sea you float on the waves themselves.)
-    const still = waterSurfaceAt(this.pos.x, this.pos.z);
     const surface = still !== null && Math.abs(still - SEA_LEVEL) < 0.01 ? still + waveAt(this.pos.x, this.pos.z).y : still;
     const depth = surface === null ? 0 : surface - this.groundBelow();
     // ...but only in it: standing on a ship's deck over deep water isn't swimming.
@@ -1460,7 +1513,8 @@ export class Player {
       }
     }
 
-    const desired = { x: this.vel.x * dt + this.push.x, y: this.vel.y * dt, z: this.vel.z * dt + this.push.z };
+    const current = this.swimming ? landscapeWaterAt(this.pos.x, this.pos.z) : null;
+    const desired = { x: this.vel.x * dt + this.push.x + (current?.flowX ?? 0) * dt, y: this.vel.y * dt, z: this.vel.z * dt + this.push.z + (current?.flowZ ?? 0) * dt };
     // Ground following: on foot, the step rises and falls with the ground itself.
     // A flat step pushed into a slope lost speed going uphill, and the constant
     // downward push made you creep downhill while standing still.
@@ -1546,6 +1600,7 @@ export class Player {
   }
 
   teleport(p: THREE.Vector3) {
+    this.mantle = null;
     const c = { x: p.x, y: p.y + CENTER_Y + 0.05, z: p.z };
     this.body.setTranslation(c, true);
     this.collider.setTranslation(c);

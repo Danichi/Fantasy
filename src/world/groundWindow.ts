@@ -1,3 +1,4 @@
+import { landscapeWaterAt, landscapeTrailDistance } from './landscape/layout';
 import { roadCoverage } from './roadNetwork';
 import * as THREE from 'three';
 import { heightAt, WORLD_SIZE } from './terrainHeight';
@@ -92,6 +93,8 @@ export class GroundWindow {
           [grass, flower, tint] = blendedGround(x, z);
         }
         const h = heightAt(x, z);
+        const localWater = landscapeWaterAt(x, z);
+        if ((localWater && h < localWater.level + .3) || landscapeTrailDistance(x, z) < 1.7) { grass = 0; flower = 0; }
         // Beach sand only near the waterline: above it, the grass comes back.
         if (reliefAt(x, z) === RELIEF.beach && h > SEA_LEVEL + 1.5) {
           const up = Math.min(1, (h - SEA_LEVEL - 1.5) / 2.5);

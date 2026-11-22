@@ -22,8 +22,8 @@ export * from './terrainHeight';
 import { buildRoadTexture, buildRoadTextureWest, ROAD_RECT, ROAD_RECT_W } from './roadNetwork';
 import { CAP_CENTER, CAP_RX, CAP_RZ } from './capitalCity';
 import { CITY_BOUNDS } from './portCity';
-import { normalAt, splatAt, WORLD_SIZE, TILE, TILE_SEG, TILE_N, tileData, tileKey, hasTile, putTile, worldHeightFn, LOCAL_R1 } from './terrainHeight';
-import { macroTexture, paintedMapTexture, macroCells, macroHeight, WORLD_X0, WORLD_Z0, WORLD_W, WORLD_H, GW, GH, SEA_LEVEL } from './worldMap';
+import { normalAt, splatAt, WORLD_SIZE, TILE, TILE_SEG, TILE_N, tileData, tileKey, hasTile, putTile, worldHeightFn } from './terrainHeight';
+import { macroTexture, paintedMapTexture, macroCells, WORLD_X0, WORLD_Z0, WORLD_W, WORLD_H, GW, GH, SEA_LEVEL } from './worldMap';
 // ---- rendering ----------------------------------------------------------------
 function buildSplatTexture() {
   const N = 1024;
@@ -92,6 +92,8 @@ function terrainMaterial(renderer: THREE.WebGLRenderer, splat: THREE.DataTexture
     uWorld: { value: new THREE.Vector4(WORLD_X0, WORLD_Z0, WORLD_W, WORLD_H) },
     uGrid: { value: new THREE.Vector2(GW, GH) },
     uHole: { value: new THREE.Vector3(0, 0, 0) },
+    tTileCoverage: { value: null as THREE.Texture | null },
+    uTileRect: { value: new THREE.Vector4() },
     uWet: WET,
     tRoads: { value: roadTexture() },
     uRoadRect: { value: new THREE.Vector4(ROAD_RECT.x0, ROAD_RECT.z0, ROAD_RECT.w, ROAD_RECT.h) },
@@ -125,6 +127,8 @@ vWN = normal;`);
         uniform vec4 uWorld;
         uniform vec2 uGrid;
         uniform vec3 uHole;
+        uniform sampler2D tTileCoverage;
+        uniform vec4 uTileRect;
         uniform float uWet;
         vec3 terrainGlow = vec3(0.0);
         ${MEADOW_FIELD_GLSL}
@@ -167,7 +171,10 @@ vWN = normal;`);
       )
       .replace(
         '#include <map_fragment>',
-        `if (uHole.z > 0.0 && distance(vWPos.xz, uHole.xy) < uHole.z) discard;
+        `if (uHole.z > 0.0) {
+          vec2 tile = floor(vWPos.xz / ${TILE.toFixed(1)}) - uTileRect.xy;
+          if (all(greaterThanEqual(tile,vec2(0.0))) && all(lessThan(tile,uTileRect.zw)) && texture2D(tTileCoverage,(tile+0.5)/uTileRect.zw).r > 0.5) discard;
+        }
         float dist = length(vWPos - cameraPosition);
         vec4 patchN = texture2D(tNoise, vWPos.xz * 0.004);
         vec4 fineN = texture2D(tNoise, vWPos.xz * 0.05);
@@ -397,6 +404,12 @@ export class Terrain {
   readonly splat: THREE.DataTexture;
   private tiles = new Map<number, TerrainTile>();
   private mat: THREE.MeshStandardMaterial;
+  private coverageX = Math.floor(WORLD_X0 / TILE);
+  private coverageZ = Math.floor(WORLD_Z0 / TILE);
+  private coverageW = Math.ceil((WORLD_X0 + WORLD_W) / TILE) - this.coverageX + 1;
+  private coverageH = Math.ceil((WORLD_Z0 + WORLD_H) / TILE) - this.coverageZ + 1;
+  private coverageData = new Uint8Array(this.coverageW * this.coverageH);
+  private coverage = new THREE.DataTexture(this.coverageData, this.coverageW, this.coverageH, THREE.RedFormat);
   private farMat: THREE.MeshStandardMaterial;
   private farUniforms: ReturnType<typeof terrainMaterial>['uniforms'];
   private far: THREE.Mesh;
@@ -409,6 +422,11 @@ export class Terrain {
     const far = terrainMaterial(renderer, this.splat);
     this.farMat = far.mat;
     this.farUniforms = far.uniforms;
+    this.coverage.magFilter = this.coverage.minFilter = THREE.NearestFilter;
+    this.coverage.needsUpdate = true;
+    this.farUniforms.tTileCoverage.value = this.coverage;
+    this.farUniforms.uTileRect.value.set(this.coverageX,this.coverageZ,this.coverageW,this.coverageH);
+    this.farUniforms.uHole.value.z = 1;
     this.far = new THREE.Mesh(farGeometry(), this.farMat);
     this.far.name = 'terrain-far';
     this.far.receiveShadow = false;
@@ -482,8 +500,8 @@ export class Terrain {
         t.collider = null;
       }
     }
-    // The far mesh gives way to real tiles inside the streamed block.
-    (this.farUniforms.uHole.value as THREE.Vector3).set((ci + 0.5) * TILE, (cj + 0.5) * TILE, (RING - 0.25) * TILE);
+    // Coverage is updated only for tiles that actually exist. The far ground
+    // remains visible while worker tiles are still loading or after teleport.
   }
 
   /** Build every tile and collider around the player now (spawns, teleports, tests). */
@@ -491,6 +509,17 @@ export class Terrain {
     this.update(player, player, 1000);
   }
 
+  private setCoverage(i: number, j: number, loaded: boolean) {
+    const x = i - this.coverageX, z = j - this.coverageZ;
+    if (x < 0 || z < 0 || x >= this.coverageW || z >= this.coverageH) return;
+    this.coverageData[z * this.coverageW + x] = loaded ? 255 : 0;
+    this.coverage.needsUpdate = true;
+  }
+  /** Whether detailed geometry replaces the far ground at this point. */
+  coverageAt(x: number, z: number) {
+    const i = Math.floor(x / TILE) - this.coverageX, j = Math.floor(z / TILE) - this.coverageZ;
+    return i >= 0 && j >= 0 && i < this.coverageW && j < this.coverageH && this.coverageData[j * this.coverageW + i] > 0;
+  }
   get tileCount() {
     return this.tiles.size;
   }
@@ -505,6 +534,7 @@ export class Terrain {
     mesh.receiveShadow = true;
     mesh.name = 'terrain';
     this.group.add(mesh);
+    this.setCoverage(i, j, true);
     this.tiles.set(tileKey(i, j), { i, j, mesh, geos, lod: 3, collider: null });
   }
 
@@ -513,6 +543,7 @@ export class Terrain {
     for (const g of t.geos) g?.dispose();
     if (t.collider) physics.removeStatic(t.collider);
     this.tiles.delete(key);
+    this.setCoverage(t.i, t.j, false);
   }
 
   private buildCollider(i: number, j: number) {
@@ -529,6 +560,7 @@ export class Terrain {
     this.far.geometry.dispose();
     this.mat.dispose();
     this.farMat.dispose();
+    this.coverage.dispose();
     this.worker?.terminate();
   }
 }
@@ -555,7 +587,7 @@ function farGeometry() {
   g.computeVertexNormals();
   return g;
 }
-/** Far-mesh heights: the full world function near town, macro heights elsewhere (cheap). */
+/** Far silhouettes use the same authored landforms as the near mesh. */
 function macroOrLocal(x: number, z: number) {
-  return Math.hypot(x, z) < LOCAL_R1 ? worldHeightFn(x, z) : macroHeight(x, z);
+  return worldHeightFn(x, z);
 }

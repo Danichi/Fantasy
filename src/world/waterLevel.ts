@@ -1,3 +1,6 @@
+import { CREEK } from './roadData';
+import { segment } from './landscape/layout';
+import { landscapeWaterAt } from './landscape/layout';
 import { heightAt, riverX, RIVER_LEVEL, DROWNED_MERE } from './terrainHeight';
 import { macroElevAt, SEA_LEVEL } from './worldMap';
 import { CANAL, QUAY_X } from './portCity';
@@ -8,6 +11,13 @@ import { CANAL, QUAY_X } from './portCity';
 /** Water surface height at a point, or null if there is no water. */
 export function waterSurfaceAt(x: number, z: number): number | null {
   const ground = heightAt(x, z);
+  const local = landscapeWaterAt(x, z);
+  if (local && ground < local.level && local.distance < local.half + local.bank) return local.level;
+  // The existing Millbrook ribbon follows its bed at a depth of 1.15 m.
+  if(x>1490&&x<1670&&z>-445&&z<185)for(let i=1;i<CREEK.length;i++) {
+    const a=CREEK[i-1],b=CREEK[i],s=segment(x,z,a,b);
+    if(s.d<4.4) { const level=heightAt(a[0]+(b[0]-a[0])*s.t,a[1]+(b[1]-a[1])*s.t)+1.15; if(ground<level)return level; }
+  }
   // The river (constant level along its channel through the valley).
   if (Math.abs(x - riverX(z)) < 16 && Math.abs(z) < 440 && ground < RIVER_LEVEL) return RIVER_LEVEL;
   // The canal in Port Aurelle.

@@ -336,6 +336,13 @@ export class Interior {
     ramp.castShadow = ramp.receiveShadow = true;
     this.group.add(ramp);
     this.colliders.push(physics.addBox(this.at(PX, zMid, ramp.position.y), new THREE.Vector3(3, 0.2, len / 2), new THREE.Quaternion().setFromEuler(new THREE.Euler(ang, 0, 0))));
+    // Optional terrain practice lane along the south-west wall. The combat
+    // ring remains level; these lips exercise the same low-ledge scramble.
+    for (const [x, height] of [[-21, .65], [-18, 1.1], [-15, 1.45]]) {
+      this.box(stone, 2.4, height, 4, x, height / 2, 17, 0, true);
+      this.box(ring, 2.45, .04, 4.05, x, height + .02, 17, 0, false);
+    }
+    this.inspectProp(-20, 21, 'Terrain practice lane', 'Move toward a low ledge and press Jump to scramble up. Try each height, then drop down or use the gaps. The central ring stays clear for combat.');
     // The slam wall: free-standing, out in the open on the east side.
     this.box(stone, 0.9, 2.8, 8, 17, 1.4, -6, 0, true);
     this.box(ring, 1.1, 0.25, 8.2, 17, 2.9, -6, 0, false);

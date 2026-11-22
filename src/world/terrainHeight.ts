@@ -7,6 +7,7 @@ import { cityHeight } from './portCity';
 import { capitalHeight } from './capitalCity';
 import { islandPadHeight } from './sea/islandPortsData';
 import { shapeIslands } from './islands/layout';
+import { shapeLandscape } from './landscape/layout';
 import { mountainShape } from './mountains/mountainLayout';
 
 // ---------------------------------------------------------------------------
@@ -185,7 +186,7 @@ function localHeight(x: number, z: number) {
 }
 
 /** World height: Elder Glen's authored terrain melting into the continent. */
-export function worldHeightFn(x: number, z: number) {
+export function baseWorldHeightFn(x: number, z: number) {
   const r = Math.hypot(x, z);
   let h: number;
   if (r <= LOCAL_R0) h = localHeight(x, z);
@@ -229,6 +230,10 @@ export function worldHeightFn(x: number, z: number) {
     if (d < 13) h -= 1.5 * smoothstep(6.5, 2.5, d) + 0.8 * smoothstep(13, 6.5, d);
   }
   return h;
+}
+/** Shared authored landscape used by the local grid, streamed tiles and worker. */
+export function worldHeightFn(x: number, z: number) {
+  return shapeLandscape(x, z, baseWorldHeightFn);
 }
 /** The Sinkhole's pit and the Drowned Watchtower's mere. */
 function discoveryCuts(x: number, z: number, h: number) {
