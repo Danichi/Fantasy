@@ -79,3 +79,7 @@ Measured from the hand's frame-to-frame jump at each handover:
 ### Hit checks after a long frame
 
 Blade hits are checked against the drawn pose, sweeping from the blade's last drawn position to its current one. A slow frame can skip a large part of a swing. A straight line between the two positions then cuts inside the swing's arc and falls short of the blade tip's real reach. The sweep now also follows the arc around the body (angle, distance and height eased across), so a swing that reaches a foe still lands on a slow machine.
+
+## Low ledge scrambling
+
+Move toward a clear 0.45–1.5 m ledge and press Jump (C by default). The hero rises, then moves onto the lip over 0.38 seconds. Landing capsule checks and swept movement reject walls and low ceilings. Combat launchers keep priority; locking on, guarding, attacking, swimming, flying or riding disables scrambling. The sandbox terrain lane offers three repeatable ledge heights. See [terrain authoring](terrain-overhaul.md).

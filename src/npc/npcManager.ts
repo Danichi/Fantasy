@@ -2,7 +2,7 @@ import { LEAN_TEST } from '../core/settings';
 import * as THREE from 'three';
 import { LayeredTurn } from '../player/ik';
 import { buildCharacter, type Look, type BuiltCharacter } from './charBuilder';
-import { heightAt } from '../world/terrainHeight';
+import { walkHeightAt as heightAt } from '../world/landscape/surfaces';
 import type { WorldTime } from '../world/worldTime';
 import { damp, dampAngle } from '../core/math';
 import { isRole, knownNames, personName, rerollAlways, townName } from './names';

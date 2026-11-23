@@ -1,3 +1,5 @@
+import { Landscape, landscapeFishingSpots, migrateTerrainPosition } from './world/landscape/landscape';
+import { TERRAIN_REVISION } from './world/landscape/layout';
 import { SANDBOX_MODE, RETURNING_FROM_SANDBOX, travelToSandbox } from './sandbox/mode';
 import { SandboxArena } from './sandbox/arena';
 import { sandboxBuild, starterSandboxGear } from './sandbox/hero';
@@ -980,7 +982,7 @@ async function boot() {
     const rx = riverX(z);
     return { pos: new THREE.Vector3(rx - 9, heightAt(rx - 9, z), z), water: new THREE.Vector3(rx - 2, RIVER_LEVEL, z), kind: 'river' as const, name: 'The Elder Glen river' };
   });
-  const fishingSpots = [...port.fishingSpots, ...capital.fishingSpots, ...riverSpots];
+  const fishingSpots = [...port.fishingSpots, ...capital.fishingSpots, ...riverSpots, ...landscapeFishingSpots()];
   realm.overworldInteractables.push(...fishingSpots.map((spot) => ({
     pos: spot.pos, radius: 2.2,
     label: () => (fishing.active ? '' : countItem('fishingRod') ? `Fish here (${spot.name})` : 'A good fishing spot — you need a rod (Dockmaster Mira)'),
@@ -1791,7 +1793,11 @@ async function boot() {
   };
   // Resume where the player left off in the overworld (v6 saves).
   const resume = saveData?.world?.pos;
-  if (resume && !TEST_MODE) player.teleport(new THREE.Vector3(resume[0], Math.max(resume[1], heightAt(resume[0], resume[2])) + 0.2, resume[2]));
+  if (resume && !TEST_MODE && !sailing.aboard) {
+    const old = new THREE.Vector3(resume[0], resume[1], resume[2]);
+    player.teleport(saveData?.world?.flags?.['terrain:revision'] === TERRAIN_REVISION
+      ? old.setY(Math.max(old.y, heightAt(old.x, old.z)) + .2) : migrateTerrainPosition(old));
+  }
   dialogue.onToggle = (open) => {
     if (!open) npcs.engaged = null;
     input.uiMode = open || inv.open || skills.open || mapUI.open || shopUI.open || herbalism.isOpen;
@@ -2024,6 +2030,12 @@ async function boot() {
     ]);
   }
   { const absent = npcs.absent; npcs.absent = (id) => mtn.absent(id) ?? absent?.(id) ?? false; }
+  const landscape = new Landscape({ scene: r.scene, flags: worldFlags, toast: text => hud.toast(text), save: () => save() });
+  worldFlags['terrain:revision'] = TERRAIN_REVISION;
+  realm.overworldInteractables.push(...landscape.interactables);
+  stylizedNature.clearings.push(...landscape.clearings);
+  const warmLandscape = player.onTeleport;
+  player.onTeleport = p => { warmLandscape?.(p); if (realm.mode === 'overworld' && !realm.interior) landscape.warm(p); };
   // Island interiors stream independently of their permanent harbours.
   const archipelagos = new Archipelagos({
     scene: r.scene, mats: world.mats, fx, player, quests, sailing, ports: islands.ports.filter(p => p.def.style !== 'dwarven'),
@@ -2354,7 +2366,7 @@ async function boot() {
   const lanternHints = () => lanterns.spots.filter((s) => (worldFlags['llHint:' + s.id] && !lanterns.isLit(s.id)) || (lanterns.isLit(s.id) && !s.dark)).map((s) => lanterns.isLit(s.id)
     ? { x: s.x, z: s.z, kind: 'siteDone' as const, glyph: '✧', color: '#ffc860', label: 'A relit lantern' }
     : { x: s.x, z: s.z, kind: 'site' as const, glyph: '✦', color: s.dark ? '#b08aff' : '#ffc860', label: `A Lost Lantern (rumoured)${s.dark ? ' - in the Dark' : ''}` });
-  worldMap.siteMarkers = () => [...baseSiteMarks(), ...archipelagos.markers(), ...story.wheel.markers(), ...teachers.markers(), ...festivals.markers(), ...lanternHints()];
+  worldMap.siteMarkers = () => [...baseSiteMarks(), ...landscape.markers(), ...archipelagos.markers(), ...story.wheel.markers(), ...teachers.markers(), ...festivals.markers(), ...lanternHints()];
   almanac = new Almanac({
     day: () => time.day, hour: () => time.hour, moon: () => time.moonName,
     upcoming: () => festivals.upcoming(6),
@@ -2971,6 +2983,7 @@ async function boot() {
     player.update(STEP, input, cam);
     combat.tick(STEP); // posture, poise and wind-ups of everything that fights (combat/core.ts)
     mtn.update(STEP, realm.mode === 'overworld' && !realm.interior); // the White Mountains, and the Iron Kettle's passage
+    landscape.update(STEP, player.pos, realm.mode === 'overworld' && !realm.interior);
     archipelagos.update(STEP, realm.mode === 'overworld' && !realm.interior);
     stepImpacts(STEP); // knocked foes meeting walls, fences, braziers, water; rolling barrels (combat/impacts.ts)
     if (!player.dead) scanThreats(STEP, player.pos, cam.forward()); // the warning flash for blows from behind
@@ -3351,6 +3364,7 @@ async function boot() {
       roadLife.clear();
       sailing.reset();
       archipelagos.reset();
+      landscape.reset();
       arms.reset(); // Arms and Crafting (feat/arms)
       quests.state = {};
       quests.tracked = null;
@@ -3386,7 +3400,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, mountains: mtn, archipelagos, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
+      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, mountains: mtn, archipelagos, landscape, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       sandbox, overlays, yard, combatDebug, telegraphs, // combat rework: the drill yard and the F9 overlay

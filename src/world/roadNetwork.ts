@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { ROAD_SPECS, ROAD_HALF, COBBLE_ZONES, type P2, type RoadSpec } from './roadData';
 import { CITY_STREETS, MARKET } from './portCity';
 import { CAP_STREETS, CAP_SQUARES, CAP_CENTER } from './capitalCity';
-import { heightAt } from './terrainHeight';
+import { walkHeightAt as heightAt } from './landscape/surfaces';
 import { physics } from '../physics/physics';
 import type { Interactable } from '../dungeon/instance';
 import type { WorldMats } from './buildings';

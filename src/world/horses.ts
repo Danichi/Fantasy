@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { heightAt } from './terrainHeight';
+import { walkHeightAt as heightAt } from './landscape/surfaces';
 import { dampAngle } from '../core/math';
 import type { Player } from '../player/player';
 import type { Interactable } from '../dungeon/instance';

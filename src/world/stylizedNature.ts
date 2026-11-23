@@ -1,3 +1,4 @@
+import { landscapeWaterAt, landscapeTrailDistance } from './landscape/layout';
 import * as THREE from 'three';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import { compressedGltf } from '../core/gltf';
@@ -490,9 +491,11 @@ export class StylizedNature {
     g.translate(0, 0.5, 0);
     this.impostorGeo = g;
     this.impostorMat = new THREE.ShaderMaterial({
-      uniforms: this.impostorUniforms,
+      uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...this.impostorUniforms },
+      fog: true,
       alphaToCoverage: true,
       vertexShader: /* glsl */ `
+        #include <fog_pars_vertex>
         attribute vec4 aImp; // width, height, atlas cell, brightness
         uniform vec3 uCam; uniform float uNear, uFade;
         varying vec2 vUv; varying float vCell; varying float vFade; varying float vBright;
@@ -504,9 +507,12 @@ export class StylizedNature {
           vec3 wp = base + right * position.x * aImp.x + vec3(0.0, position.y * aImp.y, 0.0);
           vUv = uv; vCell = aImp.z; vBright = aImp.w;
           vFade = smoothstep(uNear - uFade, uNear, d);
-          gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+          vec4 mvPosition = viewMatrix * vec4(wp, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
         }`,
       fragmentShader: /* glsl */ `
+        #include <fog_pars_fragment>
         uniform sampler2D tAtlas; uniform vec2 uGrid;
         varying vec2 vUv; varying float vCell; varying float vFade; varying float vBright;
         void main() {
@@ -518,6 +524,9 @@ export class StylizedNature {
           // coverage (smooth under MSAA, no stipple); without MSAA the
           // impostor simply stays solid in the band.
           gl_FragColor = vec4(c.rgb * vBright, vFade);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          #include <fog_fragment>
         }`,
     });
   }
@@ -566,6 +575,9 @@ export class StylizedNature {
     if (this.clearGridOf !== this.clearings || this.clearGridLen !== this.clearings.length) this.indexClearings();
     const near = this.clearGrid.get(Math.floor(x / 64) * 100003 + Math.floor(z / 64));
     if (near) for (const [cx, cz, cr] of near) if ((x - cx) ** 2 + (z - cz) ** 2 < cr * cr) return false;
+    const water = landscapeWaterAt(x, z);
+    if (water && heightAt(x, z) < water.level + .4) return false;
+    if (landscapeTrailDistance(x, z) < 4) return false;
     const r = Math.hypot(x, z);
     if (r < TOWN_R + 8) return false;
     if (roadDist(x, z) < 6.5) return false;

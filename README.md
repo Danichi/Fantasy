@@ -192,3 +192,5 @@ practice. Choose one enemy attack or a repeated cut/held-strike/lunge sequence,
 turn attack footprints on or off, and use **F8** to cycle 100%, 50% and 25% speed.
 Moving targets help compare weapon spacing. Practice damage counts each resolved
 combat strike once. See [combat feel rework](docs/design/combat-feel-rework.md).
+
+Terrain authoring, traversal controls, regional changes and streaming details: [World terrain overhaul](docs/design/terrain-overhaul.md).

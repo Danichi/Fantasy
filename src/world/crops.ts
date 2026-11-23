@@ -1,3 +1,4 @@
+import { landscapeWaterAt, landscapeTrailDistance } from './landscape/layout';
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { heightAt, riverX, RIVER_LEVEL, ROAD_LINES, roadDist, TOWN_R, GRAVEWOOD, GRAVEWOOD_R } from './terrainHeight';
@@ -247,18 +248,21 @@ export function buildCrops(scene: THREE.Scene): CropsResult {
   const rnd = mulberry32(20260929);
   const jitter = () => (rnd() - 0.5);
 
+  const wet = (x:number,y:number,z:number) => { const w=landscapeWaterAt(x,z); return w!==null && y<w.level+.1; };
   /** A field of rows (w along x, d along z), `fill` places one plant. */
   const field = (cx: number, cz: number, w: number, d: number, rowGap: number, step: number, fill: (x: number, y: number, z: number) => void, bed = true) => {
     for (let z = cz - d / 2; z <= cz + d / 2; z += rowGap) {
       // Earthed-up soil ridges in 4 m pieces so they follow the ground.
       if (bed) for (let x = cx - w / 2 + 2; x < cx + w / 2; x += 4) {
         const y = heightAt(x, z);
+        if(wet(x,y,z)||landscapeTrailDistance(x,z)<2)continue;
         soil.mats.push(new THREE.Matrix4().compose(new THREE.Vector3(x, y - 0.03, z), new THREE.Quaternion(), new THREE.Vector3(4.1, 1, rowGap * 0.55)));
         soil.cols.push(new THREE.Color(1, 1, 1).multiplyScalar(0.9 + rnd() * 0.2));
       }
       for (let x = cx - w / 2; x <= cx + w / 2; x += step) {
         const px = x + jitter() * step * 0.3, pz = z + jitter() * 0.15;
-        fill(px, heightAt(px, pz), pz);
+        const py=heightAt(px,pz);
+        if(!wet(px,py,pz)&&landscapeTrailDistance(px,pz)>=2)fill(px,py,pz);
       }
     }
     clearings.push([cx, cz, Math.hypot(w, d) / 2 + 2]);
@@ -312,7 +316,7 @@ export function buildCrops(scene: THREE.Scene): CropsResult {
         for (const side of [-1, 1]) {
           const hx = x - dz * 7.8 * side, hz = z + dx * 7.8 * side;
           if (roadDist(hx, hz) < 6.8) continue; // junctions and bends
-          if (rnd() < 0.12) continue;
+          if (rnd() < 0.12 || wet(hx,heightAt(hx,hz),hz) || landscapeTrailDistance(hx,hz)<4) continue;
           hedge.add(hx, heightAt(hx, hz) - 0.15, hz, yaw + jitter() * 0.1, 0.95 + rnd() * 0.25, undefined, 0.8 + rnd() * 0.4);
         }
       }
