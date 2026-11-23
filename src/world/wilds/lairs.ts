@@ -51,6 +51,7 @@ export interface WildsHooks {
 
 /** What a lair's boss looks like to the lair (BeastBoss, the Rootwarden and an OrcWarlord all fit). */
 export interface BossHandle {
+  ready?: Promise<void>;
   target(): (Target & { name: string }) | null;
   awake(): boolean;
   alive(): boolean;
@@ -119,6 +120,7 @@ const ULGRA: BossSpec = { name: 'Ulgra Skullsplitter, the Exile', model: '/asset
 const BRIARLING: WildSpec = { ...WILD_SPECS.goblin, id: 'briarling', name: 'Briarling', tint: 0x6a8a3a, hp: 70, damage: 15, moves: ['bite', 'pounce'], drops: [['heartwoodSplinter', 0.25, 1]] };
 
 const beastHandle = (b: BeastBoss): BossHandle => ({
+  ready: b.ready,
   target: () => b,
   awake: () => b.awake,
   alive: () => b.alive,
@@ -315,7 +317,7 @@ export const LAIRS: LairDef[] = [
       let bodyKept = 0;
       let horn = 0;
       const at = c.home();
-      void OrcWarlord.create(at, c.openYaw, c.scene, c.fx, ULGRA).then((b) => {
+      const ready = OrcWarlord.create(at, c.openYaw, c.scene, c.fx, ULGRA).then((b) => {
         pending = false;
         if (gone || c.disposed) return b.dispose();
         o = b;
@@ -325,6 +327,7 @@ export const LAIRS: LairDef[] = [
         };
       });
       return {
+        ready,
         target: () => o,
         awake: () => !!o && o.awake && o.alive,
         alive: () => pending || (!!o && o.alive),

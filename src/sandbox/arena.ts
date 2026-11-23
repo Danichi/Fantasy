@@ -1,7 +1,13 @@
 import * as THREE from 'three';
+import './arena.css';
+import { dressPracticeArena } from './presentation';
+import { PRACTICE_BOSSES, practiceBoss, type BossSession } from './bossRoster';
+import { targets, type Target } from '../combat/targets';
+import type { FX } from '../fx/particles';
+import { setGroundOverride } from '../world/terrainHeight';
 import { Bandit, Bolts, type BanditRole } from '../enemies/bandit';
 import { moveName, UAL_MOVES } from '../combat/ai';
-import { peekCombat } from '../combat/core';
+import { combat, peekCombat } from '../combat/core';
 import { PHASE_LABEL } from '../combat/phases';
 import { events } from '../core/events';
 import { ITEMS } from '../items/itemDefs';
@@ -24,46 +30,59 @@ import { readSandboxSettings, saveSandboxSettings, type Scenario } from './setti
 // each fluid move the first time you pull it off.
 
 const SCENARIO_INFO: { id: Scenario; name: string; text: string }[] = [
-  { id: 'dummy', name: 'Straw dummy', text: 'Light enough to launch, juggle and throw.' },
-  { id: 'moving', name: 'Moving target', text: 'Slides side to side: lunges and dash strikes.' },
-  { id: 'shield', name: 'Shield bearer', text: 'Guards in front. Vault it, drive it, break it.' },
-  { id: 'iron', name: 'Iron dummy', text: 'Too heavy to throw: posture and the hook zip.' },
-  { id: 'world', name: 'World as a weapon', text: 'Dummies by the wall, fence, fire, pool, barrels and ledge.' },
-  { id: 'melee', name: 'Sparring partner', text: 'Attacks you: counters, ripostes, feints.' },
+  {
+    id: 'boss',
+    name: 'Boss trial',
+    text: 'Pick any boss from the roster. Phases, adds and real attacks.',
+  },
+  {
+    id: 'dummy',
+    name: 'Straw dummy',
+    text: 'Light enough to launch, juggle and throw.',
+  },
+  {
+    id: 'moving',
+    name: 'Moving target',
+    text: 'Slides side to side: lunges and dash strikes.',
+  },
+  {
+    id: 'shield',
+    name: 'Shield bearer',
+    text: 'Guards in front. Vault it, drive it, break it.',
+  },
+  {
+    id: 'iron',
+    name: 'Iron dummy',
+    text: 'Too heavy to throw: posture and the hook zip.',
+  },
+  {
+    id: 'world',
+    name: 'World as a weapon',
+    text: 'Dummies by the wall, fence, fire, pool, barrels and ledge.',
+  },
+  {
+    id: 'melee',
+    name: 'Sparring partner',
+    text: 'Attacks you: counters, ripostes, feints.',
+  },
   { id: 'ranged', name: 'Crossbow', text: 'Keeps its distance and shoots.' },
   { id: 'group', name: 'Three opponents', text: 'Take turns at you.' },
-  { id: 'crowd', name: 'The crowd', text: 'Five around you: dash between them, watch your back.' },
+  {
+    id: 'crowd',
+    name: 'The crowd',
+    text: 'Five around you: dash between them, watch your back.',
+  },
   { id: 'gauntlet', name: 'Gauntlet', text: 'Five waves, against the clock.' },
 ];
 
-const WAVES: BanditRole[][] = [['sword'], ['sword', 'sword'], ['sword', 'crossbow', 'sword'], ['sword', 'sword', 'sword', 'crossbow'], ['sword', 'sword', 'sword', 'sword', 'crossbow', 'crossbow']];
+const WAVES: BanditRole[][] = [
+  ['sword'],
+  ['sword', 'sword'],
+  ['sword', 'crossbow', 'sword'],
+  ['sword', 'sword', 'sword', 'crossbow'],
+  ['sword', 'sword', 'sword', 'sword', 'crossbow', 'crossbow'],
+];
 
-const CSS = `
-body.in-sandbox :is(.quest-tracker,.wmini,.compass,.waypoint,.region-card,.book-button){display:none!important}
-.sbx{--ink:#ece4d2;--dim:#b6ab95;--gold:#e3b868;--line:#5d5242;--bg:#16120ee8;--ok:#9fd38a;font:12px Inter,system-ui,sans-serif;color:var(--ink)}
-.sbx button{pointer-events:auto;padding:6px 11px;color:#f6e9c8;background:#3a2d1f;border:1px solid #7d6543;border-radius:4px;cursor:pointer;font:inherit}.sbx button:hover{background:#4d3b27}
-.sandbox-badge{position:fixed;left:16px;top:16px;z-index:35;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 13px;width:290px;box-shadow:0 6px 24px #0008}
-.sandbox-badge h4{margin:0;font:600 11px Inter,sans-serif;letter-spacing:.16em;color:var(--gold)}.sandbox-badge .keys{color:var(--dim);margin:4px 0 8px;line-height:1.5}
-.sandbox-badge .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:6px 0}.sandbox-badge .stats div{background:#0006;border-radius:4px;padding:5px 6px}.sandbox-badge .stats b{display:block;font-size:15px;color:#fff}.sandbox-badge .stats span{color:var(--dim);font-size:10px}
-.sandbox-badge output{display:block;white-space:pre-line;color:#c8dcb8;line-height:1.55}
-.sbx-combo{position:fixed;right:300px;top:38%;z-index:34;text-align:right;pointer-events:none;transition:opacity .25s}.sbx-combo b{display:block;font:800 54px/1 Georgia,serif;color:#fff;text-shadow:0 3px 0 #0009,0 0 18px #e3b86888}.sbx-combo span{font:700 12px Inter,sans-serif;letter-spacing:.3em;color:var(--gold)}.sbx-combo em{display:block;font:italic 600 15px Georgia,serif;color:#ffd890}
-.sbx-feed{position:fixed;right:300px;top:calc(38% + 96px);z-index:34;display:flex;flex-direction:column;align-items:flex-end;gap:4px;pointer-events:none}.sbx-feed div{background:#120e0acc;border-left:3px solid var(--gold);padding:4px 10px;border-radius:3px;font-weight:600;transition:opacity .4s,transform .2s}.sbx-feed div.new{border-color:#9fe07a;color:#dfffd0}.sbx-feed div small{color:var(--ok);margin-left:6px;font-weight:700;letter-spacing:.1em}
-.sbx-moves{position:fixed;right:16px;top:124px;bottom:96px;width:268px;z-index:35;background:var(--bg);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;box-shadow:0 6px 24px #0008}.sbx-moves.closed{bottom:auto}.sbx-moves.closed ol{display:none}
-.sbx-moves header{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-bottom:1px solid var(--line)}.sbx-moves header b{color:var(--gold);letter-spacing:.12em;font-size:11px}.sbx-moves header button{padding:2px 8px}
-.sbx-moves .bar{height:3px;background:#0008}.sbx-moves .bar i{display:block;height:100%;background:linear-gradient(90deg,#c9953e,#ffe0a0);transition:width .4s}
-.sbx-moves ol{list-style:none;margin:0;padding:6px 10px 10px;overflow:auto}.sbx-moves li.g{color:var(--gold);font-size:10px;letter-spacing:.16em;margin:9px 0 3px}.sbx-moves li.m{display:grid;grid-template-columns:16px 1fr;gap:2px 6px;padding:3px 0}.sbx-moves li.m::before{content:'○';color:#7d6f5a}.sbx-moves li.m.done::before{content:'✓';color:var(--ok);font-weight:700}.sbx-moves li.m b{font-weight:600}.sbx-moves li.m.done b{color:var(--ok)}.sbx-moves li.m small{grid-column:2;color:var(--dim);line-height:1.35}
-.sbx-moves li.m.flash{animation:sbxflash 1.2s}@keyframes sbxflash{0%{background:#9fe07a55}100%{background:transparent}}
-.sandbox-panel{position:fixed;inset:0;background:#07060599;backdrop-filter:blur(3px);z-index:110;display:grid;place-items:center;pointer-events:auto}.sandbox-panel[hidden]{display:none}
-.sandbox-panel article{width:min(980px,calc(100vw - 32px));height:min(720px,calc(100vh - 32px));display:grid;grid-template-columns:170px 1fr;background:#17130f;border:1px solid #6d5a40;border-radius:10px;overflow:hidden;box-shadow:0 20px 60px #000a}
-.sandbox-panel nav{background:#100d0a;border-right:1px solid #3d3326;padding:18px 12px;display:flex;flex-direction:column;gap:6px}.sandbox-panel nav h2{margin:0 0 10px;font:600 17px Georgia,serif;color:var(--gold)}.sandbox-panel nav a{color:var(--dim);text-decoration:none;padding:6px 8px;border-radius:4px}.sandbox-panel nav a:hover{background:#2a2219;color:var(--ink)}.sandbox-panel nav .grow{flex:1}
-.sandbox-panel .body{overflow:auto;padding:18px 22px 26px;position:relative}.sandbox-panel .sandbox-close{position:sticky;top:0;float:right;z-index:2}
-.sandbox-panel section{margin-bottom:22px}.sandbox-panel h3{font:600 15px Georgia,serif;color:var(--gold);margin:0 0 8px;padding-bottom:6px;border-bottom:1px solid #3d3326}.sandbox-panel p{color:var(--dim);line-height:1.5;margin:6px 0 10px}
-.sandbox-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}.sandbox-panel label{display:flex;gap:6px;flex-direction:column;color:var(--dim)}.sandbox-panel label:has(input[type=checkbox]){flex-direction:row;align-items:center;color:var(--ink)}.sandbox-panel input[type=checkbox]{flex:none;margin:0}
-.sandbox-panel select,.sandbox-panel input[type=number],.sandbox-panel input[type=search]{width:100%;box-sizing:border-box;padding:7px;background:#0d0b09;color:var(--ink);border:1px solid #5d5242;border-radius:4px;font:inherit}
-.sbx-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:12px}.sbx-cards button{text-align:left;padding:10px;background:#211a13;border-color:#4b3e2d;display:flex;flex-direction:column;gap:4px}.sbx-cards button b{color:var(--ink)}.sbx-cards button span{color:var(--dim);font-size:11px;line-height:1.35}.sbx-cards button.on{border-color:var(--gold);background:#3a2c1a;box-shadow:inset 0 0 0 1px var(--gold)}
-.sandbox-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.sandbox-note{min-height:18px;color:var(--ok)}
-.sbx-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px}.sbx-list div{background:#0d0b09;border:1px solid #3d3326;border-radius:4px;padding:7px 9px}.sbx-list div.done{border-color:#4e7a3e}.sbx-list b{display:block}.sbx-list div.done b::after{content:' ✓';color:var(--ok)}.sbx-list small{color:var(--dim);line-height:1.35}.sbx-list em{color:var(--gold);font-style:normal;font-size:10px;letter-spacing:.1em;display:block;margin-top:3px}
-`;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 type Actor = Bandit | SandboxTarget;
 
@@ -73,6 +92,17 @@ export class SandboxArena {
   readonly actors: Actor[] = [];
   readonly bolts: Bolts;
   readonly props: ArenaProps;
+  bossSession: BossSession | null = null;
+  bossReady: Promise<void> = Promise.resolve();
+  bossStatus = '';
+  private generation = 0;
+  private bossLoaded = false;
+  private tab = 'fight';
+  private chosenBoss = this.settings.bossId;
+  private bossFilter = '';
+  private bossSearch = '';
+  private bossOwned = new Set<Target>();
+  private bossHealthScaled = new WeakSet<object>();
   private badge: HTMLDivElement;
   private comboEl: HTMLDivElement;
   private feedEl: HTMLDivElement;
@@ -81,7 +111,15 @@ export class SandboxArena {
   private respawnTime = 0;
   private clock = 0;
   private badgeText = '';
-  metrics = { damage: 0, hits: 0, peak: 0, parries: 0, dodges: 0, combo: 0, bestCombo: 0 };
+  metrics = {
+    damage: 0,
+    hits: 0,
+    peak: 0,
+    parries: 0,
+    dodges: 0,
+    combo: 0,
+    bestCombo: 0,
+  };
   private firstHit = -1;
   private lastHit = -9;
   private feed: { el: HTMLDivElement; t: number }[] = [];
@@ -94,15 +132,21 @@ export class SandboxArena {
     private it: Interior,
     private cam: ThirdPersonCamera,
     private input: Input,
-    private hooks: { save(): void; toggle(open: boolean): void; debug(): void; clearEffects(): void; leave(): void; banner?(text: string): void },
+    private fx: FX,
+    private hooks: {
+      save(): void;
+      toggle(open: boolean): void;
+      debug(): void;
+      clearEffects(): void;
+      leave(): void;
+      banner?(text: string): void;
+      message?(text: string): void;
+    }
   ) {
     it.interactables.length = 0;
     this.bolts = new Bolts(scene);
     this.props = new ArenaProps(scene, it);
     document.body.classList.add('in-sandbox');
-    const style = document.createElement('style');
-    style.textContent = CSS;
-    document.head.append(style);
     const el = (cls: string, html = '') => {
       const d = document.createElement('div');
       d.className = 'sbx ' + cls;
@@ -112,9 +156,11 @@ export class SandboxArena {
     };
     this.badge = el(
       'sandbox-badge',
-      '<h4>THE PROVING GROUNDS</h4><div class="keys">F6 controls · F7 reset · F8 speed · F9 hitboxes<br>I equipment · K skills · 4 grappling hook</div><div class="stats"></div><output></output><button type="button">Sandbox controls</button>',
+      '<h4>THE PROVING GROUNDS</h4><div class="sbx-live-name">Combat laboratory</div><div class="keys">F6 fight console · F7 retry · F8 slow motion</div><div class="stats"></div><output></output><div class="sbx-quick"><button type="button" data-quick="console">Choose a fight</button><button type="button" data-quick="retry">↻ Retry</button><button type="button" data-quick="heal">Refill</button></div><p class="sbx-context"></p>'
     );
-    this.badge.querySelector('button')!.onclick = () => this.openControls();
+    this.badge.querySelector<HTMLButtonElement>('[data-quick=console]')!.onclick = () => this.openControls();
+    this.badge.querySelector<HTMLButtonElement>('[data-quick=retry]')!.onclick = () => this.resetFight();
+    this.badge.querySelector<HTMLButtonElement>('[data-quick=heal]')!.onclick = () => refill(this.player);
     this.comboEl = el('sbx-combo');
     this.comboEl.style.opacity = '0';
     this.feedEl = el('sbx-feed');
@@ -128,17 +174,8 @@ export class SandboxArena {
     this.panel.setAttribute('aria-modal', 'true');
     document.body.append(this.panel);
     events.on('strike', (e) => {
-      if (!this.actors.includes(e.target as Actor)) return;
-      if (this.firstHit < 0) this.firstHit = this.clock;
-      this.metrics.damage += e.damage;
-      this.metrics.hits++;
-      this.metrics.peak = Math.max(this.metrics.peak, e.damage);
-      // The combo: blows that land within two seconds of each other.
-      this.metrics.combo = this.clock - this.lastHit < 2.2 ? this.metrics.combo + 1 : 1;
-      this.lastHit = this.clock;
-      this.metrics.bestCombo = Math.max(this.metrics.bestCombo, this.metrics.combo);
-      if (this.metrics.combo > this.settings.best.combo) this.settings.best.combo = this.metrics.combo;
-      this.showCombo();
+      if (!this.actors.includes(e.target as Actor) && !this.bossOwned.has(e.target)) return;
+      this.recordHit(e.damage);
     });
     events.on('playerDamaged', ({ blocked }) => {
       if (!blocked) this.dropCombo();
@@ -155,7 +192,28 @@ export class SandboxArena {
     window.addEventListener(
       'keydown',
       (e) => {
+        if (e.code === 'Tab' && !this.panel.hidden) {
+          const items = [...this.panel.querySelectorAll<HTMLElement>('button,a[href],input,select')].filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
+          const first = items[0],
+            last = items[items.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last?.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first?.focus();
+          }
+          e.stopImmediatePropagation();
+          return;
+        }
         if (e.repeat) return;
+        if (this.bossSession?.naval && this.panel.hidden && !/INPUT|SELECT|TEXTAREA/.test((e.target as HTMLElement)?.tagName ?? '')) {
+          const kind = ({ F2: 'swivel', F3: 'harpoon', F4: 'broadside' } as const)[e.code as 'F2' | 'F3' | 'F4'];
+          if (kind) {
+            e.preventDefault();
+            this.bossSession.naval.fire(kind, this.player, this.player.aimDir);
+          }
+        }
         if (e.code === 'F6') {
           e.preventDefault();
           this.openControls(this.panel.hidden !== false);
@@ -176,10 +234,18 @@ export class SandboxArena {
           this.openControls(false);
         }
       },
-      true,
+      true
     );
     this.spawn(this.settings.scenario);
     this.renderPanel();
+    dressPracticeArena(
+      it,
+      (tab) => {
+        this.tab = tab;
+        this.openControls();
+      },
+      () => this.resetFight()
+    );
   }
 
   // ---- the move feed, the combo and the move list ----------------------------------------------
@@ -198,6 +264,18 @@ export class SandboxArena {
     this.feedEl.prepend(d);
     this.feed.unshift({ el: d, t: fresh ? 4.5 : 2.6 });
     while (this.feed.length > 6) this.feed.pop()!.el.remove();
+  }
+  private recordHit(damage: number) {
+    if (this.firstHit < 0) this.firstHit = this.clock;
+    this.metrics.damage += damage;
+    this.metrics.hits++;
+    this.metrics.peak = Math.max(this.metrics.peak, damage);
+    // The combo: blows that land within two seconds of each other.
+    this.metrics.combo = this.clock - this.lastHit < 2.2 ? this.metrics.combo + 1 : 1;
+    this.lastHit = this.clock;
+    this.metrics.bestCombo = Math.max(this.metrics.bestCombo, this.metrics.combo);
+    if (this.metrics.combo > this.settings.best.combo) this.settings.best.combo = this.metrics.combo;
+    this.showCombo();
   }
   private showCombo() {
     const n = this.metrics.combo;
@@ -231,6 +309,7 @@ export class SandboxArena {
   openControls(open = true) {
     this.panel.hidden = !open;
     this.input.releaseAll();
+    this.input.endFrame();
     if (open) {
       this.renderPanel();
       this.panel.querySelector<HTMLButtonElement>('.sandbox-close')?.focus();
@@ -250,11 +329,33 @@ export class SandboxArena {
     this.persist();
   }
   clearTargets() {
+    ++this.generation;
+    this.bossLoaded = false;
+    if (this.bossSession?.naval) {
+      this.player.teleport(this.it.spawn.clone().add(new THREE.Vector3(0, 0.3, 0)));
+      this.cam.distance = 5.5;
+      this.cam.snapTo(this.player.pos);
+    }
+    for (const t of this.bossOwned) combat.cancel(t);
+    this.bossSession?.dispose();
+    this.bossSession = null;
+    for (const t of this.bossOwned) {
+      if (targets.has(t)) {
+        (t as Target & { dispose?(): void }).dispose?.();
+        targets.delete(t);
+      }
+      t.alive = false;
+      t.lockable = false;
+    }
+    this.bossOwned.clear();
+    this.bossStatus = '';
+    setGroundOverride(this.it.groundAt);
     for (const a of this.actors) a.dispose();
     this.actors.length = 0;
     this.bolts.clear();
     this.hooks.clearEffects();
     this.player.lock = null;
+    this.cam.lockTarget = null;
     this.respawnTime = 0;
   }
 
@@ -299,7 +400,9 @@ export class SandboxArena {
     this.clearTargets();
     this.settings.scenario = scenario;
     const s = scenario;
-    if (s === 'dummy') this.dummy('straw', 0, -2);
+    if (s === 'boss') {
+      this.bossReady = this.spawnBoss(this.generation);
+    } else if (s === 'dummy') this.dummy('straw', 0, -2);
     else if (s === 'moving') this.dummy('moving', 0, -2);
     else if (s === 'shield') this.dummy('shield', 0, -2);
     else if (s === 'iron') this.dummy('iron', 0, -2);
@@ -311,7 +414,8 @@ export class SandboxArena {
       this.dummy('straw', 12.4, 12.6); // the pool (hit it south-east)
       this.dummy('straw', 6.6, -0.6); // the barrels (kick one at it from behind them)
       this.dummy('straw', -16, -16.2, 2); // the high ground (knock it off the front edge)
-    } else if (s === 'melee' || s === 'ranged') this.bandit(s === 'ranged' ? 'crossbow' : 'sword', this.it.at(0, -2), s === 'ranged' ? 'Sandbox crossbow' : 'Sandbox sparring partner');
+    } else if (s === 'melee' || s === 'ranged')
+      this.bandit(s === 'ranged' ? 'crossbow' : 'sword', this.it.at(0, -2), s === 'ranged' ? 'Sandbox crossbow' : 'Sandbox sparring partner');
     else if (s === 'group') for (let i = 0; i < 3; i++) this.bandit('sword', this.it.at((i - 1) * 4, -2), 'Sandbox sparring partner');
     else if (s === 'crowd') {
       for (let i = 0; i < 5; i++) {
@@ -323,6 +427,81 @@ export class SandboxArena {
       this.spawnWave();
     }
     this.persist();
+  }
+  private async spawnBoss(generation: number) {
+    const def = practiceBoss(this.settings.bossId);
+    this.settings.bossId = def.id;
+    this.bossStatus = 'Preparing ' + def.name + '…';
+    const before = new Set(targets);
+    let session: BossSession | null = null;
+    try {
+      session = await def.create({
+        scene: this.scene,
+        fx: this.fx,
+        bolts: this.bolts,
+        at: this.it.at(0, -7),
+        say: (text) => (this.hooks.message ?? this.hooks.banner)?.(text),
+      });
+      if (generation !== this.generation) {
+        session.dispose();
+        return;
+      }
+      this.bossSession = session;
+      this.captureBossTargets(before);
+      await session.ready;
+      if (generation !== this.generation) return;
+      this.bossLoaded = true;
+      session.scaleReserve?.(this.settings.bossHealth);
+      if (session.naval) {
+        session.naval.onDamage = (damage) => this.recordHit(damage);
+        session.naval.beast.maxHp *= this.settings.bossHealth;
+        session.naval.beast.hp *= this.settings.bossHealth;
+      }
+      this.captureBossTargets(before);
+      this.bossStatus = def.name;
+      if (session.naval) {
+        this.player.teleport(session.naval.spawn);
+        setGroundOverride((x, z) => (Math.abs(z - session!.naval!.centre.z) < 300 ? -5 : this.it.groundAt(x, z)));
+        this.cam.distance = 8;
+      } else this.cam.distance = 5.5;
+      this.cam.snapTo(this.player.pos);
+      this.hooks.banner?.(def.name);
+    } catch (error) {
+      if (generation !== this.generation) return;
+      if (this.bossSession !== session) session?.dispose();
+      this.clearTargets();
+      this.bossStatus = 'Could not load this boss. Retry or choose another fight.';
+      console.error('Sandbox boss load failed', error);
+    }
+    if (!this.panel.hidden) this.renderPanel();
+  }
+  private captureBossTargets(before: Set<Target>) {
+    for (const t of targets) if (!before.has(t)) this.bossOwned.add(t);
+    for (const t of this.bossSession?.targets() ?? []) this.bossOwned.add(t);
+    for (const t of this.bossOwned)
+      if (!this.bossHealthScaled.has(t)) {
+        this.bossHealthScaled.add(t);
+        // Composite bosses own their total health through their child targets.
+        t.maxHp *= this.settings.bossHealth;
+        t.hp *= this.settings.bossHealth;
+      }
+  }
+  private async deployBoss() {
+    this.selectBoss(this.chosenBoss);
+    const generation = this.generation;
+    this.renderPanel();
+    await this.bossReady;
+    if (generation === this.generation && this.bossSession && this.bossLoaded) this.openControls(false);
+  }
+  openTab(tab: string) {
+    this.tab = tab;
+    this.openControls();
+  }
+  selectBoss(id: string) {
+    this.settings.bossId = practiceBoss(id).id;
+    this.chosenBoss = this.settings.bossId;
+    this.settings.scenario = 'boss';
+    this.resetFight();
   }
   private spawnWave() {
     const roles = WAVES[this.gauntlet.wave];
@@ -356,12 +535,23 @@ export class SandboxArena {
     this.player.yaw = Math.PI;
     this.player.respawn(this.it.spawn.clone().setY(this.it.spawn.y + 0.3));
     this.cam.yaw = Math.PI;
+    this.cam.pitch = 0.22;
+    this.cam.distance = 5.5;
+    this.cam.lockTarget = null;
     this.cam.snapTo(this.player.pos);
     this.rt.reset();
     this.player.invulnerable = this.settings.immortal;
-    this.props.reset();
+    this.props.reset(this.settings.scenario !== 'boss');
     this.spawn();
-    this.metrics = { damage: 0, hits: 0, peak: 0, parries: 0, dodges: 0, combo: 0, bestCombo: 0 };
+    this.metrics = {
+      damage: 0,
+      hits: 0,
+      peak: 0,
+      parries: 0,
+      dodges: 0,
+      combo: 0,
+      bestCombo: 0,
+    };
     this.dropCombo();
     this.firstHit = -1;
     this.deadTime = 0;
@@ -386,16 +576,46 @@ export class SandboxArena {
       this.rt.cc.focus = this.rt.cc.focusMax;
     }
     if (this.settings.instantCooldowns) this.rt.clearCooldowns();
+    if (this.bossSession && this.bossLoaded) {
+      const before = new Set(targets);
+      this.bossSession.naval?.setImmortal(this.settings.immortal);
+      this.bossSession.naval?.setAI(this.settings.enemyAI);
+      if (this.settings.enemyAI || this.bossSession.naval) {
+        const receive = p.receiveAttack;
+        const takeDamage = p.takeDamage;
+        p.takeDamage = (damage) => takeDamage.call(p, damage * this.settings.bossDamage);
+        p.receiveAttack = (attack) =>
+          receive.call(p, {
+            ...attack,
+            damage: attack.damage * this.settings.bossDamage,
+          });
+        try {
+          this.bossSession.update(dt, p);
+          this.bolts.update(dt, p);
+        } finally {
+          p.receiveAttack = receive;
+          p.takeDamage = takeDamage;
+        }
+      }
+      this.captureBossTargets(before);
+      const interaction = this.bossSession.interact?.();
+      if (interaction && interaction.at.distanceTo(p.pos) < 3 && this.input.wasPressed('interact')) interaction.act();
+      if (this.bossSession.naval && (p.pos.y < -1 || this.bossSession.naval.ship.hullFrac <= 0)) this.resetFight();
+    }
     for (const a of this.actors) {
       if (a instanceof SandboxTarget) a.update(dt);
       else if (this.settings.enemyAI || !a.alive) a.update(dt, p);
     }
-    this.bolts.update(dt, p);
+    if (!this.bossSession) this.bolts.update(dt, p);
     if (this.settings.scenario === 'gauntlet') this.stepGauntlet(dt);
-    else if (this.settings.autoReset && this.actors.length && this.actors.every((a) => !a.alive)) {
+    else if (
+      this.settings.autoReset &&
+      (this.actors.length || (this.bossLoaded && this.bossSession?.health())) &&
+      (this.bossSession ? !this.bossSession.health()?.alive : this.actors.every((a) => !a.alive))
+    ) {
       this.respawnTime += dt;
       if (this.respawnTime > 2) {
-        this.props.reset();
+        this.props.reset(this.settings.scenario !== 'boss');
         this.spawn();
       }
     }
@@ -406,12 +626,15 @@ export class SandboxArena {
       if (f.t < 0.5) f.el.style.opacity = String(Math.max(0, f.t / 0.5));
     }
     while (this.feed.length && this.feed[this.feed.length - 1].t <= 0) this.feed.pop()!.el.remove();
-    if (Math.abs(p.pos.x - this.it.spawn.x) > 27 || Math.abs(p.pos.z - this.it.at(0, 0).z) > 27 || p.pos.y < this.it.spawn.y - 4) this.resetFight();
+    if (!this.bossSession?.naval && (Math.abs(p.pos.x - this.it.spawn.x) > 27 || Math.abs(p.pos.z - this.it.at(0, 0).z) > 27 || p.pos.y < this.it.spawn.y - 4)) this.resetFight();
   }
   /** Live phase labels read gameplay state even while a practice frame is paused. */
+  present(alpha: number, dt: number) {
+    this.bossSession?.present?.(alpha, dt, this.player);
+  }
   frame() {
     const p = this.player;
-    const focus = this.player.lock ?? this.actors.find((a) => a.alive);
+    const focus = this.player.lock ?? this.bossSession?.targets().find((a) => a.alive && a.lockable) ?? this.actors.find((a) => a.alive);
     const read = focus ? peekCombat(focus)?.read : null;
     const distance = focus ? Math.max(0, focus.position.distanceTo(p.pos) - focus.radius).toFixed(1) + ' m to target' : 'No target';
     const playerPhase = p.combatPhase;
@@ -420,7 +643,31 @@ export class SandboxArena {
       seconds = Math.max(1, this.clock - this.firstHit);
     const dps = this.firstHit < 0 ? 0 : Math.round(m.damage / seconds);
     const g = this.gauntlet;
-    const gauntlet = this.settings.scenario === 'gauntlet' ? `\nWave ${g.wave + 1}/${WAVES.length} · ${fmtTime(g.t)}${this.settings.best.gauntlet ? ` · best ${fmtTime(this.settings.best.gauntlet)}` : ''}` : '';
+    const gauntlet =
+      this.settings.scenario === 'gauntlet'
+        ? `\nWave ${g.wave + 1}/${WAVES.length} · ${fmtTime(g.t)}${this.settings.best.gauntlet ? ` · best ${fmtTime(this.settings.best.gauntlet)}` : ''}`
+        : '';
+    const health = this.bossSession?.health();
+    const name = this.settings.scenario === 'boss' ? this.bossStatus : (SCENARIO_INFO.find((c) => c.id === this.settings.scenario)?.name ?? 'Empty arena');
+    const title = this.badge.querySelector('.sbx-live-name')!;
+    if (title.textContent !== name) title.textContent = name;
+    const naval = this.bossSession?.naval;
+    const context = naval
+      ? `NAVAL TRIAL · F2 swivel · F3 harpoon · F4 broadside · Hull ${Math.round(naval.ship.hullFrac * 100)}%`
+      : (this.bossSession?.interact?.()?.label ?? 'LMB strike · RMB guard · F parry · Space dodge · Q lock on');
+    this.badge.querySelector('.sbx-context')!.textContent = context;
+    const bar = this.badge.querySelector<HTMLDivElement>('.sbx-boss-health');
+    if (health && !bar) {
+      const el = document.createElement('div');
+      el.className = 'sbx-boss-health';
+      this.badge.querySelector('.sbx-live-name')!.after(el);
+    }
+    if (!health) bar?.remove();
+    if (health) {
+      const el = this.badge.querySelector<HTMLDivElement>('.sbx-boss-health')!;
+      const pct = Math.max(0, (health.hp / health.maxHp) * 100);
+      el.innerHTML = `<span>${Math.ceil(health.hp).toLocaleString()} / ${Math.ceil(health.maxHp).toLocaleString()} HP${!health.alive ? ' · DEFEATED' : ''}</span><i style="width:${pct}%"></i>`;
+    }
     const text = `${phase}\n${Math.round(this.settings.speed * 100)}% speed · ${distance} · ${p.combatReach.toFixed(1)} m reach · ${Math.round(p.inputLatency * 1000)} ms queued${gauntlet}`;
     const stats = `<div><b>${dps}</b><span>DPS</span></div><div><b>${m.hits}</b><span>HITS</span></div><div><b>${Math.round(m.peak)}</b><span>PEAK</span></div><div><b>${m.bestCombo}</b><span>BEST COMBO</span></div><div><b>${m.parries}</b><span>PERFECT PARRIES</span></div><div><b>${m.dodges}</b><span>PERFECT DODGES</span></div>`;
     if (text + stats !== this.badgeText) {
@@ -447,6 +694,65 @@ export class SandboxArena {
     this.resetFight();
     this.renderPanel();
   }
+  private bossPanel() {
+    const boss = practiceBoss(this.chosenBoss),
+      s = this.settings;
+    const loading = s.scenario === 'boss' && !this.bossLoaded && this.bossStatus.startsWith('Preparing');
+    const filtered = PRACTICE_BOSSES.filter(
+      (b) => (!this.bossFilter || b.group === this.bossFilter) && `${b.name} ${b.description}`.toLowerCase().includes(this.bossSearch.toLowerCase())
+    );
+    return `<section id="sbx-bosses"><div class="sbx-section-heading"><div><span class="eyebrow">NO UNLOCKS REQUIRED</span><h3>The boss roster</h3><p>Every boss. Your build. As many attempts as it takes.</p></div><span class="sbx-count">${PRACTICE_BOSSES.length} encounters</span></div><div class="sbx-boss-layout"><div><label class="sbx-search">Find a boss<input type="search" data-boss-search placeholder="Search names or fighting styles…" value="${esc(this.bossSearch)}"></label><div class="sbx-filters" role="group" aria-label="Boss categories">${['', 'Field', 'Lair', 'Dungeon', 'Story', 'Sea'].map((g) => `<button data-boss-filter="${g}" class="${this.bossFilter === g ? 'on' : ''}">${g || 'All bosses'}</button>`).join('')}</div><div class="sbx-roster">${filtered.map((b) => `<button type="button" data-boss="${b.id}" aria-pressed="${b.id === boss.id}" class="${b.id === boss.id ? 'selected' : ''}"><img src="/assets/art/beast/${b.art}.webp" alt="" loading="lazy"><div><small>${b.group} ${b.group === 'Sea' ? '· NAVAL TRIAL' : ''}</small><b>${esc(b.name)}</b><span>${esc(b.description)}</span></div><i>${b.id === boss.id ? '✓' : '→'}</i></button>`).join('') || '<p class="sbx-empty">No bosses match. Try a different name or category.</p>'}</div></div><aside class="sbx-boss-preview"><img src="/assets/art/beast/${boss.art}.webp" alt=""><div><span class="eyebrow">${boss.group.toUpperCase()} ENCOUNTER</span><h3>${esc(boss.name)}</h3><p>${esc(boss.description)}</p><div class="sbx-trial-notes">${boss.group === 'Sea' ? 'A training ship, working swivel guns and heavy harpoons. F2 fires the swivel, F3 the harpoon, F4 a broadside. Lock on to choose a part.' : 'Original boss moves, phase transitions and summons. Retry rebuilds the encounter and clears its hazards.'}</div><div class="sandbox-grid"><label>Boss health<select data-boss-tuning="bossHealth">${[0.25, 0.5, 1, 2, 4].map((n) => `<option value="${n}"${s.bossHealth === n ? ' selected' : ''}>${n}× health</option>`).join('')}</select></label><label>Boss damage<select data-boss-tuning="bossDamage">${[0.25, 0.5, 1, 2, 4].map((n) => `<option value="${n}"${s.bossDamage === n ? ' selected' : ''}>${n}× damage</option>`).join('')}</select></label></div><div class="sbx-presets"><button data-boss-mode="learn" class="${s.immortal ? 'on' : ''}"><b>Learn the fight</b><span>No player damage · unlimited resources</span></button><button data-boss-mode="challenge" class="${!s.immortal ? 'on' : ''}"><b>Test your build</b><span>Real damage · real resource costs</span></button></div><button class="primary sbx-deploy" data-boss-deploy ${loading ? 'disabled aria-busy="true"' : ''}>${loading ? 'Preparing encounter…' : 'Spawn & fight →'}</button><p class="sbx-muted">Health applies on spawn or retry. F8 slows the fight.</p></div></aside></div></section>`;
+  }
+  private bindBossPanel() {
+    const search = this.panel.querySelector<HTMLInputElement>('[data-boss-search]')!;
+    search.oninput = () => {
+      const start = search.selectionStart;
+      this.bossSearch = search.value;
+      this.renderPanel();
+      const next = this.panel.querySelector<HTMLInputElement>('[data-boss-search]')!;
+      next.focus();
+      next.setSelectionRange(start, start);
+    };
+    this.panel.querySelectorAll<HTMLButtonElement>('[data-boss-filter]').forEach(
+      (b) =>
+        (b.onclick = () => {
+          this.bossFilter = b.dataset.bossFilter!;
+          this.renderPanel();
+        })
+    );
+    this.panel.querySelectorAll<HTMLButtonElement>('[data-boss]').forEach(
+      (b) =>
+        (b.onclick = () => {
+          const scroll = this.panel.querySelector('.body')!.scrollTop;
+          this.chosenBoss = b.dataset.boss!;
+          this.renderPanel();
+          this.panel.querySelector('.body')!.scrollTop = scroll;
+        })
+    );
+    this.panel.querySelectorAll<HTMLSelectElement>('[data-boss-tuning]').forEach(
+      (el) =>
+        (el.onchange = () => {
+          this.settings[el.dataset.bossTuning as 'bossHealth' | 'bossDamage'] = Number(el.value);
+          this.persist();
+        })
+    );
+    this.panel.querySelectorAll<HTMLButtonElement>('[data-boss-mode]').forEach(
+      (b) =>
+        (b.onclick = () => {
+          const learn = b.dataset.bossMode === 'learn';
+          Object.assign(this.settings, {
+            immortal: learn,
+            unlimited: learn,
+            instantCooldowns: false,
+          });
+          this.persist();
+          this.renderPanel();
+        })
+    );
+    this.panel.querySelector<HTMLButtonElement>('[data-boss-deploy]')!.onclick = () => {
+      void this.deployBoss();
+    };
+  }
   private renderPanel() {
     const s = this.settings,
       options = (rows: { id: string; name: string }[], selected: string) =>
@@ -455,7 +761,10 @@ export class SandboxArena {
       moveOptions = (selected: unknown) =>
         '<option value="">Empty slot</option>' + moves.map((m) => `<option value="${esc(m.ref)}"${m.ref === selected ? ' selected' : ''}>${esc(m.name)}</option>`).join('');
     const learned = new Set(s.learned);
-    const cards = SCENARIO_INFO.map((c) => `<button type="button" data-scenario="${c.id}" class="${c.id === s.scenario ? 'on' : ''}"><b>${esc(c.name)}</b><span>${esc(c.text)}</span></button>`).join('');
+    const cards = SCENARIO_INFO.map(
+      (c) =>
+        `<button type="button" data-scenario="${c.id}" class="${c.id === s.scenario ? 'on' : ''}"><img src="/assets/art/beast/${({ boss: 'rustKnight', dummy: 'bandit', moving: 'bandit', shield: 'armour', iron: 'armour', world: 'boar', melee: 'bandit', ranged: 'banditChief', group: 'orc', crowd: 'goblin', gauntlet: 'greymane' } as Record<string, string>)[c.id]}.webp" alt="" loading="lazy"><b>${esc(c.name)}</b><span>${esc(c.text)}</span></button>`
+    ).join('');
     const list = MOVE_LIST.map((m) => {
       const where = m.where ? SCENARIO_INFO.find((c) => c.id === m.where)?.name : '';
       return `<div class="${learned.has(m.id) ? 'done' : ''}"><b>${esc(m.name)}</b><small>${esc(m.how)}</small>${where ? `<em>TRY: ${esc(where.toUpperCase())}</em>` : ''}</div>`;
@@ -473,26 +782,49 @@ export class SandboxArena {
     )
       .map(([key, label]) => `<label><input type="checkbox" data-setting="${key}" ${s[key] ? 'checked' : ''}>${label}</label>`)
       .join('');
-    this.panel.innerHTML = `<article><nav><h2>Proving Grounds</h2><a href="#sbx-fight">Fight</a><a href="#sbx-moves">Move list</a><a href="#sbx-build">Build</a><a href="#sbx-gear">Equipment</a><a href="#sbx-rules">Rules</a><span class="grow"></span><button data-action="leave">Save Sandbox & return to adventure</button></nav><div class="body"><button class="sandbox-close" data-action="resume">Resume · F6 / Esc</button>
+    this.panel.innerHTML = `<article><nav aria-label="Sandbox sections"><div class="sbx-brand"><span>COMBAT LABORATORY</span><h2>The Proving<br>Grounds</h2><p>Experiment. Learn. Go again.</p></div>${[
+      ['fight', '01', 'Training'],
+      ['bosses', '02', 'Boss roster'],
+      ['build', '03', 'Your build'],
+      ['gear', '04', 'Equipment'],
+      ['moves', '05', 'Move library'],
+      ['rules', '06', 'Session rules'],
+    ]
+      .map(
+        ([id, n, label]) =>
+          `<a href="#sbx-${id}" data-tab="${id}" class="${this.tab === id ? 'active' : ''}"><small>${n}</small>${label}${id === 'bosses' ? `<em>${PRACTICE_BOSSES.length}</em>` : ''}</a>`
+      )
+      .join(
+        ''
+      )}<div class="grow"></div><div class="sbx-safe">SEPARATE SAVE<span>Your adventure stays where you left it.</span></div><button data-action="leave">Return to adventure ↗</button></nav><div class="sbx-main"><header class="sbx-top"><div><span>THE PROVING GROUNDS</span><b>${({ fight: 'Find your flow', bosses: 'Choose your next challenge', build: 'Make it your own', gear: 'Bring the right tools', moves: 'Learn something new', rules: 'Set your conditions' } as Record<string, string>)[this.tab]}</b></div><button class="sandbox-close" data-action="resume">Resume · F6 / Esc</button></header><div class="body">${this.bossPanel()}
+
 <section id="sbx-fight"><h3>Fight</h3><p>Pick what to fight. Dummies have bodies now: launch them, throw them into the wall, the fence, the fire or the pool.</p><div class="sbx-cards">${cards}</div><div class="sandbox-grid"><label>Encounter<select data-setting="scenario">${options(SCENARIO_INFO, s.scenario)}</select></label><label>Target health<input data-setting="targetHp" type="number" min="100" max="10000000" value="${s.targetHp}"></label><label>Enemy damage<input data-setting="enemyDamage" type="number" min="1" max="10000" value="${s.enemyDamage}"></label><label>Practice speed<select data-setting="speed">${[1, 0.5, 0.25].map((v) => `<option value="${v}"${s.speed === v ? ' selected' : ''}>${v * 100}%</option>`).join('')}</select></label><label>Opponent drill<select data-setting="drill"><option value="free"${s.drill === 'free' ? ' selected' : ''}>Normal AI</option><option value="sequence"${s.drill === 'sequence' ? ' selected' : ''}>Repeat: cut, held strike, lunge</option>${UAL_MOVES.map((m) => `<option value="${m.id}"${s.drill === m.id ? ' selected' : ''}>Repeat: ${esc(moveName(m))}</option>`).join('')}</select></label></div><div class="sandbox-actions"><button data-action="reset">Reset fight · F7</button><button data-action="clear">Clear opponents</button><button data-action="duel">Reference duel · real costs</button><button data-action="lesson">Read the tell · unlimited practice</button></div><p>Best combo ${s.best.combo}${s.best.gauntlet ? ` · best gauntlet ${fmtTime(s.best.gauntlet)}` : ''}</p></section>
 <section id="sbx-moves"><h3>Move list · ${MOVE_LIST.filter((m) => learned.has(m.id)).length} of ${MOVE_LIST.length}</h3><p>Every fluid move and how to do it. Each one is ticked the first time you pull it off here.</p><div class="sbx-list">${list}</div><div class="sandbox-actions"><button data-action="forget">Clear the ticks</button></div></section>
 <section id="sbx-build"><h3>Build</h3><p>Every combat class is level 50. Pick a style and a magic school to unlock their complete movesets at maximum rank. Switching builds resets the fight.</p><div class="sandbox-grid"><label>Combat style<select data-setting="combat">${options(COMBAT_STYLES, s.combat)}</select></label><label>Magic school<select data-setting="magic"><option value="">None</option>${options(MAGIC_SCHOOLS, s.magic)}</select></label></div><h3 style="margin-top:14px">Moves bar · Tab shows it</h3><div class="sandbox-grid">${Array.from({ length: 6 }, (_, i) => `<label>Slot ${i + 1}<select data-move="${i}">${moveOptions(this.player.equip.moves[i])}</select></label>`).join('')}</div></section>
 <section id="sbx-gear"><h3>Equipment</h3><p>I opens equipment; K opens the skill trees. The grappling hook is on key 4.</p><div class="sandbox-grid"><input type="search" placeholder="Find a weapon, spell or armour…" aria-label="Find Sandbox equipment" data-gear-search><select aria-label="Sandbox equipment" data-gear></select></div><div class="sandbox-actions"><button data-action="grant">Add selected item to inventory</button><button data-action="refill">Refill health, mana, stamina and armour</button></div><p class="sandbox-note" role="status"></p></section>
-<section id="sbx-rules"><h3>Rules</h3><div class="sandbox-grid">${rules}</div><div class="sandbox-actions"><button data-action="debug">Toggle combat hitboxes · F9</button></div></section></div></article>`;
-    this.panel.querySelectorAll<HTMLAnchorElement>('nav a').forEach(
+<section id="sbx-rules"><h3>Rules</h3><div class="sandbox-grid">${rules}</div><div class="sandbox-actions"><button data-action="debug">Toggle combat hitboxes · F9</button></div></section></div><footer class="sbx-footer"><span><i></i> ${esc(this.settings.scenario === 'boss' ? this.bossStatus : (SCENARIO_INFO.find((c) => c.id === s.scenario)?.name ?? 'Arena ready'))} · ${Math.round(s.speed * 100)}% speed</span><div><button data-action="reset">↻ Reset fight · F7</button><button data-action="start" class="primary">Enter arena →</button></div></footer></div></article>`;
+    this.panel.querySelectorAll<HTMLElement>('.body > section').forEach((section) => (section.hidden = section.id !== 'sbx-' + this.tab));
+    this.panel.querySelectorAll<HTMLAnchorElement>('[data-tab]').forEach(
       (a) =>
         (a.onclick = (e) => {
           e.preventDefault();
-          this.panel.querySelector(a.getAttribute('href')!)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }),
+          this.tab = a.dataset.tab!;
+          this.renderPanel();
+        })
     );
+    this.bindBossPanel();
     this.panel.querySelectorAll<HTMLButtonElement>('[data-scenario]').forEach(
       (b) =>
         (b.onclick = () => {
-          this.props.reset();
-          this.spawn(b.dataset.scenario as Scenario);
+          if (b.dataset.scenario === 'boss') {
+            this.tab = 'bosses';
+            this.renderPanel();
+            return;
+          }
+          this.settings.scenario = b.dataset.scenario as Scenario;
+          this.resetFight();
           this.renderPanel();
-        }),
+        })
     );
     this.panel.querySelectorAll<HTMLSelectElement | HTMLInputElement>('[data-setting]').forEach(
       (el) =>
@@ -510,7 +842,7 @@ export class SandboxArena {
           }
           if (key === 'drill') {
             s.drill = el.value;
-            this.spawn();
+            this.resetFight();
             return;
           }
           if (key === 'targetHp' || key === 'enemyDamage') {
@@ -519,16 +851,25 @@ export class SandboxArena {
             s[key] = Math.round(Math.max(key === 'targetHp' ? 100 : 1, Math.min(key === 'targetHp' ? 10000000 : 10000, n)));
             el.value = String(s[key]);
           } else if (key === 'scenario') s.scenario = el.value as Scenario;
-          else if (key === 'footprints' || key === 'immortal' || key === 'unlimited' || key === 'instantCooldowns' || key === 'enemyAI' || key === 'autoReset' || key === 'showMoves') s[key] = (el as HTMLInputElement).checked;
+          else if (
+            key === 'footprints' ||
+            key === 'immortal' ||
+            key === 'unlimited' ||
+            key === 'instantCooldowns' ||
+            key === 'enemyAI' ||
+            key === 'autoReset' ||
+            key === 'showMoves'
+          )
+            s[key] = (el as HTMLInputElement).checked;
           if (key === 'showMoves') this.renderMoveList();
           if (key === 'scenario') {
-            this.props.reset();
+            this.props.reset(this.settings.scenario !== 'boss');
             this.panel.querySelectorAll('[data-scenario]').forEach((c) => c.classList.toggle('on', (c as HTMLElement).dataset.scenario === s.scenario));
           }
-          if (key === 'scenario' || key === 'targetHp' || key === 'enemyDamage') this.spawn();
+          if (key === 'scenario' || key === 'targetHp' || key === 'enemyDamage') this.resetFight();
           this.player.invulnerable = s.immortal;
           this.persist();
-        }),
+        })
     );
     this.panel.querySelectorAll<HTMLSelectElement>('[data-move]').forEach(
       (el) =>
@@ -536,7 +877,7 @@ export class SandboxArena {
           this.player.equip.moves[Number(el.dataset.move)] = el.value || null;
           events.emit('equipmentChanged', {});
           this.persist();
-        }),
+        })
     );
     const gear = this.panel.querySelector<HTMLSelectElement>('[data-gear]')!,
       search = this.panel.querySelector<HTMLInputElement>('[data-gear-search]')!;
@@ -557,6 +898,10 @@ export class SandboxArena {
             case 'duel':
             case 'lesson':
               this.practicePreset(b.dataset.action === 'duel');
+              break;
+            case 'start':
+              if (this.tab === 'bosses') void this.deployBoss();
+              else this.openControls(false);
               break;
             case 'resume':
               this.openControls(false);
@@ -593,7 +938,7 @@ export class SandboxArena {
               break;
             }
           }
-        }),
+        })
     );
   }
 }

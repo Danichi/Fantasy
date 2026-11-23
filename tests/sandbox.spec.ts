@@ -17,7 +17,7 @@ test('Sandbox is a maxed combat session with isolated saves, working targets and
           { id: '1', name: 'Original', created: 1 },
           { id: '3', name: 'Adventure', created: 1 },
         ],
-      }),
+      })
     );
     localStorage.setItem('fantasy-rpg-save-v6:3', 'slot-three-sentinel');
   });
@@ -37,7 +37,14 @@ test('Sandbox is a maxed combat session with isolated saves, working targets and
       index: localStorage.getItem('fantasy-rpg-slots'),
     };
   });
-  expect(initial).toMatchObject({ mode: 'interior', kind: 'sandbox', sandbox: true, all: true, targets: 1, normal: 'slot-three-sentinel' });
+  expect(initial).toMatchObject({
+    mode: 'interior',
+    kind: 'sandbox',
+    sandbox: true,
+    all: true,
+    targets: 1,
+    normal: 'slot-three-sentinel',
+  });
   expect(initial.moves).toBeGreaterThan(0);
   const swing = await page.evaluate(() => {
     const g = (window as any).__game,
@@ -64,8 +71,10 @@ test('Sandbox is a maxed combat session with isolated saves, working targets and
   expect(swing.damage).toBeGreaterThan(0);
   await page.keyboard.press('F6');
   await expect(page.getByRole('dialog', { name: 'Sandbox controls' })).toBeVisible();
+  await page.locator('[data-tab="build"]').click();
   await page.locator('[data-setting="combat"]').selectOption('cross');
   await page.locator('[data-setting="magic"]').selectOption('pyromancer');
+  await page.locator('[data-tab="fight"]').click();
   await page.locator('[data-setting="targetHp"]').fill('25000');
   await page.locator('[data-setting="targetHp"]').dispatchEvent('change');
   await page.locator('[data-setting="scenario"]').selectOption('melee');
@@ -77,7 +86,15 @@ test('Sandbox is a maxed combat session with isolated saves, working targets and
     const enemy = s.actors[0];
     await enemy.ready;
     const hp = enemy.hp;
-    strike(enemy, { base: 500, poise: 100, type: 'blunt', from: g.player.pos.clone(), at: enemy.center.clone(), source: 'melee', noCrit: true });
+    strike(enemy, {
+      base: 500,
+      poise: 100,
+      type: 'blunt',
+      from: g.player.pos.clone(),
+      at: enemy.center.clone(),
+      source: 'melee',
+      noCrit: true,
+    });
     g.stepSim(120);
     return {
       hp,
@@ -89,7 +106,13 @@ test('Sandbox is a maxed combat session with isolated saves, working targets and
       finite: g.player.pos.toArray().every(Number.isFinite),
     };
   });
-  expect(fight).toMatchObject({ hp: 25000, active: 'cross', magic: 50, targets: 1, finite: true });
+  expect(fight).toMatchObject({
+    hp: 25000,
+    active: 'cross',
+    magic: 50,
+    targets: 1,
+    finite: true,
+  });
   expect(fight.after).toBeLessThan(fight.hp);
   expect(await page.evaluate(() => (window as any).__game.player.equip.dualWield)).toBe(true);
   expect(fight.hits).toBeGreaterThan(0);
@@ -152,9 +175,12 @@ test('Sandbox is a maxed combat session with isolated saves, working targets and
   expect(reset.hp).toBe(reset.max);
   expect(reset.index).toBe(initial.index);
   await page.keyboard.press('F6');
+  await page.locator('[data-tab="rules"]').click();
   await page.locator('[data-setting="instantCooldowns"]').check();
+  await page.locator('[data-tab="gear"]').click();
   await page.locator('[data-gear-search]').fill('Iron Arrows');
   await page.getByRole('button', { name: 'Add selected item to inventory' }).click();
+  await page.locator('[data-tab="build"]').click();
   await page.locator('[data-move="5"]').selectOption('');
   await page.getByRole('button', { name: 'Resume · F6 / Esc' }).click();
   const saved = await page.evaluate(() => {
@@ -185,6 +211,7 @@ test('Sandbox is a maxed combat session with isolated saves, working targets and
 
 test('the normal pause menu launches Sandbox and leaves the selected adventure intact', async ({ page }) => {
   test.setTimeout(720_000 * SLOW);
+  page.setDefaultTimeout(30_000 * SLOW);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(() => {
@@ -210,24 +237,46 @@ test('the normal pause menu launches Sandbox and leaves the selected adventure i
         maps: {},
         dungeon: { gateOpen: false, bossDead: false, chests: [] },
         mine: { gateOpen: false, guardianDead: false },
-        guild: { rank: 'D', rep: 0, completed: 0, nextQuestId: 1, active: [], available: [], explored: [] },
+        guild: {
+          rank: 'D',
+          rep: 0,
+          completed: 0,
+          nextQuestId: 1,
+          active: [],
+          available: [],
+          explored: [],
+        },
         world: {
           flags: {},
           time: { hour: 9, day: 1 },
           pos: [0, 0, 10],
-          quests: { 'mq-fall': { status: 'done', stage: 1, progress: [1] }, 'mq-stranger': { status: 'active', stage: 0, progress: [] } },
-          story: { flags: { fallStarted: true, fallFought: true, fallMorning: true }, log: [], met: [], clues: [], named: {} },
+          quests: {
+            'mq-fall': { status: 'done', stage: 1, progress: [1] },
+            'mq-stranger': { status: 'active', stage: 0, progress: [] },
+          },
+          story: {
+            flags: { fallStarted: true, fallFought: true, fallMorning: true },
+            log: [],
+            met: [],
+            clues: [],
+            named: {},
+          },
         },
-      }),
+      })
     );
   });
-  await page.goto('/?debug');
-  await page.waitForFunction(() => (window as any).__game, null, { timeout: 240_000 * SLOW });
+  await page.goto('/?debug&quality=low');
+  await page.waitForFunction(() => (window as any).__game, null, {
+    timeout: 240_000 * SLOW,
+  });
   await page.evaluate(() => {
     (window as any).__game.player.invulnerable = true;
   });
-  await page.locator('.cta').first().click();
-  await page.waitForFunction(() => (window as any).__game.steps > 60, null, { timeout: 240_000 * SLOW });
+  console.log('adventure ready; entering through the title menu');
+  await page.getByRole('menuitem', { name: /^Continue/ }).click();
+  await page.waitForFunction(() => (window as any).__game.steps > 60, null, {
+    timeout: 240_000 * SLOW,
+  });
   const position = await page.evaluate(() => {
     localStorage.setItem('fantasy.loadInto', 'ghagrabba');
     return (window as any).__game.player.pos.toArray();
@@ -235,26 +284,37 @@ test('the normal pause menu launches Sandbox and leaves the selected adventure i
   await page.keyboard.press('Escape');
   // Headless Chrome keeps pointer lock after a synthetic Esc; release it as the browser normally does.
   await page.evaluate(() => document.exitPointerLock());
-  await expect(page.getByRole('button', { name: 'Enter Sandbox', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Enter Sandbox', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: /^Combat Sandbox/ })).toBeVisible();
+  await page.getByRole('menuitem', { name: /^Combat Sandbox/ }).click();
   await page.waitForURL(/sandbox/);
   await page.waitForFunction(() => (window as any).__game?.sandbox && !(window as any).__game.realm.busy, null, {
     timeout: 240_000 * SLOW,
   });
+  console.log('Sandbox entered through pause menu');
   const adventure = await page.evaluate(() => {
     const raw = localStorage.getItem('fantasy-rpg-save-v6');
     (window as any).__game.save();
-    return { raw, after: localStorage.getItem('fantasy-rpg-save-v6'), gold: JSON.parse(raw!).prog.gold };
+    return {
+      raw,
+      after: localStorage.getItem('fantasy-rpg-save-v6'),
+      gold: JSON.parse(raw!).prog.gold,
+    };
   });
   expect(adventure.gold).toBe(23456);
   expect(adventure.after).toBe(adventure.raw);
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Save Sandbox & return to adventure', exact: true }).click();
+  await page.getByRole('button', { name: 'Return to adventure', exact: false }).click();
   await page.waitForURL((url) => !url.searchParams.has('sandbox'));
-  await page.waitForFunction(() => (window as any).__game, null, { timeout: 240_000 * SLOW });
+  await page.waitForFunction(() => (window as any).__game, null, {
+    timeout: 240_000 * SLOW,
+  });
+  console.log('adventure restored');
   const returned = await page.evaluate(() => {
     const g = (window as any).__game;
-    return { gold: g.player.prog.gold, pos: g.player.pos.toArray(), title: g.overlays.start.classList.contains('hidden') };
+    return {
+      gold: g.player.prog.gold,
+      pos: g.player.pos.toArray(),
+      title: g.overlays.start.classList.contains('hidden'),
+    };
   });
   expect(returned.gold).toBe(23456);
   expect(returned.title).toBe(true);

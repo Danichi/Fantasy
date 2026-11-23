@@ -6,6 +6,7 @@ import { newTargetId, targets, type HitInfo, type Target } from '../combat/targe
 import { buildCharacter, type BuiltCharacter } from '../npc/charBuilder';
 import { buildSword } from '../items/weaponModels';
 import { sfx } from '../audio/sfx';
+import { Undead } from './undead';
 import { EDRIC_LOOK } from '../world/roadToRiches';
 import type { FX } from '../fx/particles';
 import type { Player } from '../player/player';
@@ -23,6 +24,7 @@ interface Ring { at: THREE.Vector3; r: number; speed: number; mesh: THREE.Mesh; 
 interface Bolt { mesh: THREE.Mesh; vel: THREE.Vector3; life: number }
 
 export class CorruptedBrother implements Target {
+  readonly ready: Promise<void>;
   id = newTargetId();
   kind = 'edricHollowed';
   name = 'Edric, the Hollowed';
@@ -38,6 +40,7 @@ export class CorruptedBrother implements Target {
   /** phase notches for the boss bar */
   readonly phases = [0.5];
   private root = new THREE.Group();
+  private disposed = false;
   private built: BuiltCharacter | null = null;
   private acts: Record<string, THREE.AnimationAction> = {};
   private clip = '';
@@ -68,7 +71,11 @@ export class CorruptedBrother implements Target {
     this.aura.position.y = 1.05;
     this.root.add(this.aura);
     const look = { ...EDRIC_LOOK, skin: 0x8a8a9a, hairColor: 0x2a2030, cloth: 0x1a1220, linen: 0x3a2a4a, pauldron: true, bracers: true, height: 1.95 };
-    void buildCharacter(look, ['sword_idle', 'sword_attack', 'sword_combo', 'hit', 'death', 'jog', 'idle', 'crouch']).then((b) => {
+    this.ready = buildCharacter(look, ['sword_idle', 'sword_attack', 'sword_combo', 'hit', 'death', 'jog', 'idle', 'crouch']).then((b) => {
+      if (this.disposed) {
+        b.mixer.stopAllAction();
+        return;
+      }
       this.built = b;
       for (const a of (b.mixer as unknown as { _actions: THREE.AnimationAction[] })._actions) this.acts[a.getClip().name] = a;
       const hand = b.bones.get('hand_r') ?? b.bones.get('Hand_R') ?? b.bones.get('RightHand');
@@ -94,7 +101,7 @@ export class CorruptedBrother implements Target {
 
   /** The fight begins (after his words). */
   wake() {
-    if (this.state !== 'waiting') return;
+    if (this.disposed || this.state !== 'waiting') return;
     this.lockable = true;
     targets.add(this);
     this.set('idle');
@@ -384,10 +391,20 @@ export class CorruptedBrother implements Target {
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     targets.delete(this);
     this.scene.remove(this.root);
     for (const r of this.rings) this.scene.remove(r.mesh);
     for (const b of this.bolts) this.scene.remove(b.mesh);
     this.built?.mixer.stopAllAction();
   }
+}
+
+/** The same Gravewood dead answer Edric in the sanctum and in practice. */
+export function summonEdricDead(at: THREE.Vector3, scene: THREE.Scene, fx: FX, groundY = at.y): Undead[] {
+  return Array.from({ length: 3 }, (_, k) => {
+    const yaw = (k / 3) * Math.PI * 2 + Math.random();
+    return new Undead('skeleton', new THREE.Vector3(at.x + Math.cos(yaw) * 5, groundY, at.z + Math.sin(yaw) * 5), yaw, scene, fx);
+  });
 }

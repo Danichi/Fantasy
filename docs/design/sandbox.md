@@ -1,6 +1,6 @@
 # Sandbox combat lab
 
-Open the pause menu and choose **Enter Sandbox**. It saves the current adventure and loads a separate practice session. The Sandbox starts directly in the Proving Grounds, an open-air training ring, without character creation or the story opening. Use the pause menu’s **Save Sandbox & return to adventure** action to return to the same adventure slot.
+Open the title or pause menu and choose **Combat Sandbox**. It saves the current adventure and loads a separate practice session. The Sandbox opens the Proving Grounds fight console, with tabs for training, bosses, builds, equipment, moves and rules. Closing it enters the open-air training ring. No character creation or story opening is required. Use the pause menu’s **Return to your adventure** action (or **Return to adventure** in the fight console) to return to the same adventure slot.
 
 Sandbox progress lives under `fantasy-rpg-sandbox-v1`; practice settings use `fantasy-rpg-sandbox-settings-v1`. The adventure slot index and old save migration keys are left alone. Autosaves, before-unload saves and the normal inventory/skills screens use the Sandbox namespace throughout that boot. Reloading keeps the Sandbox build, equipment, move bar and rules, while opponents start fresh.
 
@@ -8,9 +8,23 @@ Every combat class is available at its level cap (currently 50). Choosing a comb
 
 - **F6**: open or close Sandbox controls; the simulation pauses while configuring.
 - **F7**: reset the fight, restore health/resources, cancel delayed attacks and live projectiles, and recreate opponents.
+- **F8**: cycle full, half and quarter speed for the whole simulation.
 - **F9**: existing combat inspection overlay and hitboxes.
 - **I / K / Tab / 1–6**: normal equipment, skills, bar mode and equipped moves.
 
 Pick an encounter from the cards in the Fight section: a straw dummy (light enough to launch and throw), a moving target, a shield bearer, an iron dummy, the "world as a weapon" layout (dummies by the wall, fence, brazier, pool, barrels and ledge), a sparring partner, a crossbow, three opponents, a crowd of five, or a five-wave gauntlet against the clock. Health and outgoing damage are adjustable. Player invulnerability, unlimited mana/stamina, instant technique cooldowns, opponent AI and automatic replacement are independent practice rules. Defaults favour uninterrupted experimentation; turn them off to check real timing and survival. Stationary targets stay alive, while living opponents can be defeated. A defeated player is restored in the arena after a short delay.
 
 The lab uses the regular character, combat, animation, damage, posture, spells and skill systems. Its readout reports DPS, hits, peak hit, best combo and perfect parries/dodges. A combo meter counts blows landed within two seconds of each other, a feed names every move as you do it, and the move list (right side, also in the controls) explains every fluid move and ticks each one the first time you pull it off; the ticks, best combo and best gauntlet time are kept. The arena: a sand ring walled in stone with pillars, high ground with a slope off it (north-west), a free-standing slam wall (east), a fence (north), two braziers, a pool (south-east) and barrels; F7 puts the breakables back. The grappling hook is on key 4. See docs/design/combat-flow.md for the moves.
+
+
+## Boss trials
+
+The **Boss roster** tab lists field and discovery bosses, all five wild lair bosses, Grukk, Captain Vess, the Tide-Warden, the desert bosses, Edric, the Stitched Abomination, the Living Armour, living rival champions and all six sea monsters. Search by name or description; filter by Field, Lair, Dungeon, Story or Sea. A card selects a boss for the preview; **Spawn & fight** starts a fresh encounter. The White Stag retains its original hunt and interaction rather than becoming a damage dummy.
+
+**Learn the fight** enables invulnerability and unlimited resources. **Test your build** enables real damage and resource costs. Boss health and damage have independent multipliers; rules and slow motion remain available for either mode. F7 resets the player, boss, summons, phase hazards and projectiles. **Replace defeated opponents** repeats the selected encounter. The live readout identifies the encounter and shows its health; the original boss AI controls attacks, vulnerability and phase transitions.
+
+Dungeon trials run their shared boss definitions, including Grukk's warband and falling roof, Vess's crossbowmen, smoke, reinforcements and oil fires, and the Tide-Warden's daises, rising water and unlocked attacks. Wild lair trials run the shared lair factories and summon callbacks. Field bosses use their real bodies with local practice homes rather than world spawn sites. Boss managers never receive practice kills, so practice does not consume world boss spawns or award quest completions in the adventure.
+
+Sea trials use a separate anchored training ship and the real sea-monster AI, parts, guns and harpoon tethers. **F2** fires the swivel, **F3** a heavy harpoon, **F4** a broadside. Lock on to select a monster part; otherwise shots target the nearest active part. Guns have short trial reloads and unlimited ammunition. Invulnerability also repairs the training hull. Falling overboard or losing the hull restarts the trial. Sailing, fleet ownership and voyage progress stay outside these sessions.
+
+The ring has inlaid distance marks, academy pennants and three interactive stations along its southern wall. Approach a station and press E to choose training, a boss, or a build. The fight console pauses the simulation, supports keyboard focus and Escape, and adapts to smaller windows. The return action stays available in the console and the regular pause menu. Practice health, boss choice and rules persist in the existing isolated settings namespace.

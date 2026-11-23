@@ -86,6 +86,8 @@ export class Gunnery {
   private harpoonMat = new THREE.MeshStandardMaterial({ color: 0x8a8a90, metalness: 0.8, roughness: 0.3 });
   /** a ship was hit (section, damage, who fired, what with) */
   onShipHit?: (ship: Ship, section: number, dmg: number, by: Ship, kind: ShotKind) => void;
+  /** A projectile hit a monster part (practice telemetry). */
+  onMonsterHit?: (part: SeaTarget) => void;
   /** a shot raked a ship down her length */
   onRake?: (ship: Ship, by: Ship) => void;
   /** grapeshot cut down hands aboard a ship */
@@ -256,6 +258,7 @@ export class Gunnery {
         } else if(hit.monster){const m=hit.monster;
           const k = s.kind === 'harpoon' ? 1 : s.kind === 'grape' ? 0.5 : s.kind === 'chain' ? 0.9 : s.kind === 'swivel' ? 0.7 : 0.8;
           m.hitBy(s.dmg * k, s.from.pos, s.kind);
+          this.onMonsterHit?.(m);
           this.fx.alpha.spawn({ pos: s.pos, spread: 3, count: 14, life: [0.4, 0.9], size: [0.18, 0.05], color: 0x5a1a14, alpha: 0.9, gravity: 6 });
           if (s.kind === 'harpoon' && m.tetherable && m.alive && !this.tethers.some((t) => t.target === m)) this.tether(s.from, m, s.dmg > 100);
           s.life = 0;

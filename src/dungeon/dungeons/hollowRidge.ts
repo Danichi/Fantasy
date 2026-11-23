@@ -60,7 +60,7 @@ class VessActor implements BossActor {
   dispose() { this.inner.dispose(); }
 }
 
-const VESS: BossDef = {
+export const VESS: BossDef = {
   name: 'Captain Vess',
   subtitle: 'Smuggler queen of Hollow Ridge',
   kind: 'captainVess',
