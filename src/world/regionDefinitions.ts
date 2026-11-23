@@ -236,7 +236,7 @@ export const REGIONS: Record<string, RegionDef> = {
     },
   },
   azureIsles: {
-    id: 'azureIsles', name: 'The Azure Isles', subtitle: 'New Lands Await', levels: [15, 35],
+    id: 'azureIsles', name: 'The Azure Isles', subtitle: 'Lagoons · Reef Bells · Pearl Divers', levels: [15, 35],
     weather: { clear: 6, cloudy: 2, rain: 1.5, storm: 0.6 }, ambience: 'beach', music: 'sea', encounters: 'azureIsles', faction: 'merchants',
     resources: ['pearls', 'coral', 'fish', 'coconuts'], exports: ['pearls', 'fish'], imports: ['tools', 'grain'],
     landmarks: [place('azureHaven', 'Azure Haven', 'port')], surface: ['tropical villages and beaches'], hidden: ['treasure coves'], deep: ['a sunken temple'],
@@ -246,7 +246,7 @@ export const REGIONS: Record<string, RegionDef> = {
     },
   },
   emeraldIsles: {
-    id: 'emeraldIsles', name: 'The Emerald Isles', subtitle: 'Islands · Fishing · Resources', levels: [15, 35],
+    id: 'emeraldIsles', name: 'The Emerald Isles', subtitle: 'Grovekeepers · Rain Sanctuaries', levels: [15, 35],
     weather: { clear: 4, cloudy: 3, rain: 3, fog: 1, storm: 0.5 }, ambience: 'beach', music: 'sea', encounters: 'emeraldIsles', faction: 'merchants',
     resources: ['rare plants', 'copper', 'timber', 'fish'], exports: ['rare plants', 'timber'], imports: ['tools'],
     landmarks: [place('emeraldCove', 'Emerald Cove', 'port')], surface: ['forested islands and settlements'], hidden: ['mines'], deep: ['a drowned mine'],
@@ -256,7 +256,7 @@ export const REGIONS: Record<string, RegionDef> = {
     },
   },
   shatteredIsles: {
-    id: 'shatteredIsles', name: 'The Shattered Isles', subtitle: 'Storms · Survival', levels: [25, 45],
+    id: 'shatteredIsles', name: 'The Shattered Isles', subtitle: 'Wreckers · Free Harbours', levels: [25, 45],
     weather: { storm: 4, heavyRain: 3, fog: 2, cloudy: 2 }, ambience: 'storm', music: 'sea', encounters: 'shatteredIsles', faction: 'pirates',
     resources: ['salvage', 'black pearls'], exports: ['stolen goods'], imports: ['everything'],
     landmarks: [place('wreckersRest', 'Wrecker’s Rest', 'port')], surface: ['pirate havens'], hidden: ['wrecks'], deep: ['the storm’s eye'],
@@ -266,12 +266,12 @@ export const REGIONS: Record<string, RegionDef> = {
     },
   },
   sunkenIsles: {
-    id: 'sunkenIsles', name: 'The Sunken Isles', subtitle: 'Ruins · Treasures', levels: [30, 55],
+    id: 'sunkenIsles', name: 'The Sunken Isles', subtitle: 'Drowned Archive · Relic Dives', levels: [30, 55],
     weather: { clear: 3, cloudy: 3, rain: 2, fog: 2 }, ambience: 'underwater', music: 'sea', encounters: 'sunkenIsles', faction: 'none',
     resources: ['ancient relics', 'deep coral'], exports: [], imports: [],
     landmarks: [place('sunkenSpire', 'The Sunken Spire', 'landmark')], surface: ['ruins breaking the surface'], hidden: ['diving sites'], deep: ['the drowned city'],
     coherence: {
-      geography: 'A drowned archipelago far to the south-east.', people: 'None now.', produces: 'Relics.', threats: 'Things of the deep.', roads: 'Sea only.', power: 'None.',
+      geography: 'A drowned archipelago far to the south-east.', people: 'Diving crews and keeper scholars.', produces: 'Relics.', threats: 'Things of the deep.', roads: 'Sea only.', power: 'None.',
       unique: 'Teal underwater light, submerged ruins.', secrets: 'Ancient technology.', draw: 'Diving and treasure.', story: 'The ancient civilisation’s fall.',
     },
   },

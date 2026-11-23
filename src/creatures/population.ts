@@ -3,6 +3,7 @@ import { REGIONS } from '../world/regionDefinitions';
 import { PLACE_DEFS, pxToWorld, regionAt, reliefAt, RELIEF } from '../world/worldMap';
 import { heightAt, roadDist, RIVER_LEVEL, TOWN_R } from '../world/terrainHeight';
 import { events } from '../core/events';
+import { SITES as ISLAND_SITES } from '../world/islands/layout';
 import { GRASS_MASKS } from '../world/groundWindow';
 import type { Creature } from './creature';
 import type { FX } from '../fx/particles';
@@ -77,6 +78,7 @@ export function zoneLevel(x: number, z: number, rand = Math.random) {
 /** Places nothing wild should appear: towns and cities. */
 const SAFE: { x: number; z: number; r: number }[] = [
   { x: 0, z: -4, r: TOWN_R + 25 },
+  ...ISLAND_SITES.filter((s) => s.kind === 'village' || s.kind === 'boss').map((s) => ({ x: s.x, z: s.z, r: s.kind === 'village' ? 65 : 35 })),
   ...PLACE_DEFS.filter((p) => ['town', 'city', 'capital', 'port', 'castle'].includes(p.kind)).map((p) => {
     const w = pxToWorld(p.px[0], p.px[1]);
     return { x: w.x, z: w.y, r: 190 };
