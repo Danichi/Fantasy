@@ -1,3 +1,5 @@
+import { Techniques } from './combat/techniques';
+import { TechniqueLibrary } from './ui/techniqueLibrary';
 import { TerrainDressing } from './world/landscape/dressing';
 import { Landscape, landscapeFishingSpots, migrateTerrainPosition } from './world/landscape/landscape';
 import { TERRAIN_REVISION } from './world/landscape/layout';
@@ -593,6 +595,7 @@ async function boot() {
   const threatWarn = new ThreatWarn(() => cam.forward(), () => player.pos);
   hud.resource = () => skillRt.resources();
   skillRt.notify = (m) => hud.toast(m);
+  const techniques = new Techniques(player, skillRt, input, message => hud.toast(message));
   hud.skillSlot = (ref) => {
     const sk = SkillRuntime.parse(ref);
     if (!sk?.def) return null;
@@ -2897,7 +2900,7 @@ async function boot() {
 
   const useHotbar = (i: number) => {
     const eq = player.equip;
-    if (player.dead) return;
+    if (player.dead || input.uiMode) return;
     if (hud.mode === 'items') {
       const it = eq.get(eq.quick[i]);
       if (!it) return;
@@ -2907,9 +2910,7 @@ async function boot() {
     } else {
       const ref = eq.moves[i];
       if (typeof ref === 'string') {
-        const why = skillRt.use(ref);
-        if (why && why !== 'busy') hud.toast(why);
-        else if (!why) hud.pulseSlot(i);
+        if (techniques.request(ref)) hud.pulseSlot(i);
         return;
       }
       if (ref == null) return;
@@ -2920,6 +2921,21 @@ async function boot() {
       hud.markHotbarDirty();
     }
   };
+
+  const techniqueLibrary = new TechniqueLibrary(techniques,
+    () => started && !input.uiMode && !pausedByUser && !paused && overlays.help.classList.contains('hidden') && !filmPlaying() && !rewardPlaying() && !player.dead && !player.vehicle && !player.swimming && !sailing.atHelm,
+    open => {
+      input.uiMode = open || dialogue.open || inv.open || skills.open || mapUI.open || worldMap.open || shopUI.open || questUI.open || repPanel.open || herbalism.isOpen;
+      if (open) input.exitLock();
+      else if (!input.uiMode) input.requestLock();
+    }, save, (index, ref) => {
+      if (ref.startsWith('spell:')) {
+        const it = player.equip.items.find(i => i.def.id === ref.slice(6));
+        if (it) hud.onSlotDrop?.('moves', index, it.uid);
+      } else hud.onSlotDrop?.('moves', index, ref);
+      hud.toast(`Pinned to favorite ${index + 1} · Tab switches the bar`);
+      save();
+    });
 
   // The reward moment: a new weapon, good armour, a key item or a new discipline gets its own little scene.
   const rewardUI = new RewardUI();
@@ -3027,6 +3043,7 @@ async function boot() {
       else if (realm.mode === 'interior') hud.toast('Step outside to read the map.');
       else worldMap.toggle();
     }
+    techniques.update(STEP, !sailing.atHelm);
     if(!sailing.atHelm && !player.swimming) slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
     if (realm.mode === 'overworld') { updateSea(STEP,sailing.current?.pos??player.pos,weather.p); sailing.preStep(STEP); }
     player.update(STEP, input, cam);
@@ -3169,7 +3186,8 @@ async function boot() {
     // Pause the world while the title/pause overlay is up (never in tests).
     const overlayUp = (!TEST_MODE || SANDBOX_MODE) && (!started || pausedByUser);
     // Hit-stop is a brief slow-motion rather than a hard freeze.
-    const timeScale = (hitStop > 0 ? 0.1 : slowT > 0 ? slowScale : 1) * (sandbox?.settings.speed ?? 1);
+    techniqueLibrary.update(dt);
+    const timeScale = (hitStop > 0 ? 0.1 : slowT > 0 ? slowScale : 1) * (sandbox?.settings.speed ?? 1) * techniqueLibrary.timeScale;
     hitStop = Math.max(0, hitStop - dt);
     slowT = Math.max(0, slowT - dt);
     const simDt = dt * timeScale;
@@ -3388,6 +3406,8 @@ async function boot() {
     const fresh = buildSave(player, realm.seed, {}, structuredClone(realm.progress), town.guild.toJSON(), { flags: {} }, { gateOpen: false, guardianDead: false });
     const startHour = time.hour, startDay = time.day;
     const resetForTest = async () => {
+      techniqueLibrary.toggle(false);
+      techniques.reset();
       input.releaseAll();
       dialogue.close();
       if (inv.open) inv.toggle(false);
@@ -3451,7 +3471,7 @@ async function boot() {
       events.emit('progressChanged', {});
     };
     (window as any).__game = {
-      resetForTest,
+      resetForTest, techniques, techniqueLibrary,
       sleep: (on: boolean) => (asleep = on),
       THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, mountains: mtn, archipelagos, elves, landscape, terrainDressing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
       microDiscoveries,

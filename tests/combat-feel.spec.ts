@@ -222,7 +222,7 @@ test('combat feel: fixed-step hits, weapon spacing, commitment, steps and repeat
       g.telegraphs.update();
       g.hud.update(0);
     });
-    await expect(page.locator('.combat-tell[data-phase="commit"]')).toBeVisible();
+    await expect(page.locator('.combat-tell')).toHaveCount(0);
     await expect(page.locator('.sandbox-badge output')).toContainText('Committed');
     const shot = testInfo.outputPath('committed-attack.png');
     await page.screenshot({ path: shot });
@@ -346,7 +346,7 @@ test('combat feel: fixed-step hits, weapon spacing, commitment, steps and repeat
       p.aimDir.set(0, 0, -1);
       p.equip.activeSpell = p.equip.add('fireball').uid;
       p.mana = p.maxMana;
-      g.input.press('KeyR');
+      g.input.press('KeyY');
       g.stepSim();
       const cast = p.act?.def.id;
       g.input.releaseAll();

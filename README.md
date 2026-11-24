@@ -29,15 +29,18 @@ URL options:
 | Shift | Sprint (uses stamina) |
 | Space | Quickstep while locked on; roll when unlocked. Push a direction to choose your escape. |
 | Shift + Space | Full dodge roll, including while locked on. |
-| Left mouse | Light attack, which chains into a 3-hit combo. Hold for a charged heavy attack. |
+| Left mouse | Light attack, which chains into a 3-hit combo. |
 | Right mouse | Block with a shield. With two swords, it's an off-hand attack instead. |
 | F | Parry. Time it to a slime's leap to stun it, then hit it for a critical. |
-| R | Cast the attuned spell. Fireball follows your camera aim or lock-on target. |
+| R | Heavy attack; hold to charge, or use during a light string for its heavy branch. |
+| T + LMB / R / Space / RMB | Held discipline’s light / heavy / dodge / guard technique. |
+| U | Full learned-technique library, assignments and optional direct bindings. |
+| Y | Cast the attuned spell. Fireball follows your camera aim or lock-on target. |
 | C | Jump |
-| 1–4 / 1–6 | Use quick items or equipped moves, according to the selected bar. |
+| 1–4 / 1–6 | Use quick items or favorite moves, according to the selected bar. |
 | I | Inventory and equipment. Click to equip, shift-click for off hand, drag items onto the hotbar. |
 | K | Skills: spend XP on combat classes, magic classes and callings, open their skill trees, and spend attribute points. |
-| Tab | Switch the bar between quick items (1–4) and moves (1–6) |
+| Tab | Switch the bar between quick items (1–4) and favorites (1–6) |
 | Q / middle mouse | Lock on |
 | E | Interact: enter the crypt, open chests, unlock gates, take stairs |
 | M | In the dungeon: open the map to draw walls, floor, icons and notes |
@@ -192,8 +195,8 @@ See [Sandbox combat lab](docs/design/sandbox.md) for controls and save details.
 
 ## Combat feel and practice
 
-Enemy attack cues show **Prepare → Committed → Strike → Open**, with symbols,
-colour and defence hints. A committed humanoid swing stops turning toward you;
+Enemy attack preparation stays visible through animation and effects. Floating
+attack-name and defense-hint cards have been removed. A committed humanoid swing stops turning toward you;
 step out of its line, then punish the recovery. Crossbow enemies visibly prepare
 their shots. Light attacks allow controlled positioning steps and recover into
 movement; heavy strikes retain their commitment. Sword attacks advance further,
@@ -209,3 +212,5 @@ combat strike once. See [combat feel rework](docs/design/combat-feel-rework.md).
 Terrain now has denser grass tufts, woodland pockets, mountain pines, and streamed boulder clusters and rock fins. Steep faces slow uphill travel and slide above the walking limit; use trails and genuine ledges to gain height.
 
 Terrain authoring, traversal controls, regional changes and streaming details: [World terrain overhaul](docs/design/terrain-overhaul.md).
+
+Weapon inputs, held class techniques, the full library and saved bindings: [Combat input guide](docs/design/combat-inputs.md).

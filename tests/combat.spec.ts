@@ -179,7 +179,7 @@ test('attack turns: only two swing at once, more while the player turtles', asyn
   expect(game.errors).toEqual([]);
 });
 
-test('strings: hold into the next cut for a branch, press late for the delayed cut, shove with G', async ({ game }) => {
+test('strings: explicit heavy branches, delayed light cuts and shove with G', async ({ game }) => {
   const { page } = game;
   const res = await page.evaluate(async () => {
     const g = (window as any).__game, P = g.player;
@@ -191,9 +191,7 @@ test('strings: hold into the next cut for a branch, press late for the delayed c
       P['startAction'](id);
       const a = P.act;
       a.t = a.def.combo.from + (late ? 0.3 : 0.02);
-      P['buffer'] = { a: 'attack', t: now(), actT: a.t, actId: a.def.id };
-      P['attackHeld'] = held > 0;
-      P['attackHeldFor'] = held;
+      P['buffer'] = { a: held > 0 ? 'heavy' : 'attack', t: now(), actT: a.t, actId: a.def.id };
       P['consumeBuffer']();
       return P.act?.def.id;
     };

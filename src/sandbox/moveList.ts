@@ -12,13 +12,15 @@ export interface MoveEntry {
 }
 
 export const MOVE_LIST: MoveEntry[] = [
+  { group: 'Flow', id: 'heavy', name: 'Heavy Attack', how: 'Press R for a heavy. Hold R to charge; release on the full-charge cue.' },
+  { group: 'Flow', id: 'link1', name: 'Heavy Branch', how: 'Light attack, then R as the follow-up window opens. The live guide shows the branch.' },
   { group: 'Flow', id: 'dodgeCounter', name: 'Counter Slide', how: 'Dodge (Space) just as a blow lands, then attack.', where: 'melee' },
   { group: 'Flow', id: 'riposte', name: 'Riposte', how: 'Parry (F) just as a blow lands, then attack.', where: 'melee' },
   { group: 'Flow', id: 'dodgeOffset', name: 'Dodge Offset', how: 'Dodge out of a string, then attack: the string carries on where it was.' },
   { group: 'Flow', id: 'feint', name: 'Feint', how: 'Dodge during the wind-up of a swing (costs stamina).' },
-  { group: 'Flow', id: 'shieldPush', name: 'Shield Drive', how: 'Shield up (right mouse), walk in and attack. Drives a foe back.', where: 'shield' },
+  { group: 'Flow', id: 'shieldPush', name: 'Shield Drive', how: 'Guard, move forward and press R for Shield Drive. After blocking a blow, attack for the guard counter.', where: 'shield' },
   { group: 'Flow', id: 'skillWeave', name: 'Skill Weave', how: 'Use a technique right after a blow lands, before the swing ends.' },
-  { group: 'Movement', id: 'thrust', name: 'Lunge', how: 'Move toward a foe and attack.' },
+  { group: 'Movement', id: 'thrust', name: 'Lunge', how: 'Move forward and light attack. Sprint + light gives the running attack.' },
   { group: 'Movement', id: 'retreatCut', name: 'Retreat Cut', how: 'Move away from a foe and attack.' },
   { group: 'Movement', id: 'sideSweep', name: 'Sweep', how: 'Move across a foe and attack.' },
   { group: 'Movement', id: 'sprintAttack', name: 'Charging Strike', how: 'Sprint (Shift) and attack.' },
@@ -32,7 +34,7 @@ export const MOVE_LIST: MoveEntry[] = [
   { group: 'Vertical', id: 'wallKick', name: 'Wall Kick', how: 'Jump, then jump again against a wall (the slam wall, east).' },
   { group: 'Vertical', id: 'hookYank', name: 'Hook Yank', how: 'Grappling hook (key 4) at a light foe: it is pulled off its feet to you.', where: 'dummy' },
   { group: 'Vertical', id: 'hookZip', name: 'Hook Zip', how: 'Grappling hook at a heavy foe: you fly in and arrive cutting.', where: 'iron' },
-  { group: 'Crowd', id: 'dashStrike', name: 'Dash Strike', how: 'Move at a foe 3 to 6 m away and attack: you close the gap in one cut.', where: 'crowd' },
+  { group: 'Crowd', id: 'dashStrike', name: 'Dash Strike', how: 'Use the grappling hook to arrive cutting; normal attacks never choose a dash from enemy distance.', where: 'crowd' },
   { group: 'World', id: 'impact:wall', name: 'Wall Slam', how: 'Kick (G) or charge a foe into a wall.', where: 'world' },
   { group: 'World', id: 'impact:fence', name: 'Through the Fence', how: 'Knock a foe into the fence (north).', where: 'world' },
   { group: 'World', id: 'impact:brazier', name: 'Into the Fire', how: 'Knock a foe into a brazier.', where: 'world' },

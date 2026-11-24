@@ -30,7 +30,7 @@ import { Paths } from '../paths/paths';
 import { baseMods, type CombatMods } from '../combat/mods';
 import { ARMOUR, armourBlow, armourCut, maxArmourOf } from './armour';
 import { launch, juggle, spike, knock, kickBarrels, barrelHit, airborne } from '../combat/impacts';
-import { dashCandidate, vaultTarget } from '../combat/flow';
+import { vaultTarget } from '../combat/flow';
 
 /** The enemy a blow most likely came from (attacks that don't name their attacker). */
 function nearestAttacker(from: THREE.Vector3): Target | undefined {
@@ -48,14 +48,12 @@ const CAPSULE_R = 0.32;
 const CENTER_Y = CAPSULE_HALF + CAPSULE_R;
 const GRAVITY = 22;
 const JUMP_V = 5.8;
-const BUFFER_TIME = 0.32;
+const BUFFER_TIME = 0.22;
 export const SIM_STEP = 1 / 60;
 
-type Buffered = 'attack' | 'offhand' | 'dodge' | 'parry' | 'cast' | 'originAbility' | 'kick' | 'roll';
+type Buffered = 'heavy' | 'attack' | 'offhand' | 'dodge' | 'parry' | 'cast' | 'originAbility' | 'kick' | 'roll';
 
 // ---- combat rework: timing (seconds of action time) ----
-/** hold the button this long into a string's next cut for its heavy branch */
-const BRANCH_HOLD = 0.2;
 /** a press this long after the string window opens takes the delayed branch */
 const DELAY_GAP = 0.24;
 /** a blow that connects lets you cancel this much earlier; a whiff, this much later */
@@ -231,9 +229,21 @@ export class Player {
 
   act: ActiveAction | null = null;
   private buffer: { a: Buffered; t: number; actT: number; actId: string | null } | null = null;
-  /** the attack button: down, and for how long (string branches) */
-  private attackHeld = false;
-  private attackHeldFor = 0;
+  /** Held class input layer; the technique controller consumes its action presses. */
+  techniqueMode = false;
+  setTechniqueMode(on: boolean) {
+    if (on && !this.techniqueMode) { this.buffer = null; this.aiming = false; }
+    this.techniqueMode = on;
+  }
+  clearCombatInput() { this.buffer = null; }
+  get combatGuide() {
+    const a = this.act, c = a?.def.combo;
+    const ready = !a || !!c && a.t >= c.from || a.t >= a.def.cancel;
+    const light = !this.grounded ? this.airOpener() : a?.def.roll ? this.evadeAttack(true) : c?.next ?? (this.sprinting && !(this.counterT > 0) ? 'sprintAttack' : this.opener(true));
+    const heavy = !this.grounded ? 'airAttack' : c?.heavy ?? this.heavyOpener();
+    return { current: a ? moveLabel(a.def.id) : 'Ready', phase: a ? actionPhase(a.def, a.t, a.charging) : 'idle', ready,
+      light: moveLabel(light), heavy: moveLabel(heavy), combo: !!c, charging: !!a?.charging, tier: a?.tier ?? 0 };
+  }
   /** seconds left of the counter window a perfect dodge opens */
   counterT = 0;
   /** after a perfect parry: the next attack is a riposte */
@@ -558,7 +568,7 @@ export class Player {
       return;
     }
     if (!input.uiMode) this.readInput(input, cam, dt);
-    else {this.moveIntent.set(0,0,0);if(this.swimming){this.diveHeld=false;this.riseHeld=false;this.sprinting=false;}}
+    else {this.clearCombatInput();this.moveIntent.set(0,0,0);if(this.swimming){this.diveHeld=false;this.riseHeld=false;this.sprinting=false;}}
     // In a boat: the boat moves you (world/boats.ts); no walking or fighting.
     if (this.vehicle) {
       const v = this.vehicle;
@@ -614,7 +624,7 @@ export class Player {
     if (this.vehicle || this.swimming) {
       this.diveHeld = input.held('swimDown');
       this.riseHeld = input.held('swimUp');
-      this.attackHeld=false;this.attackHeldFor=0;this.stillForDomain=false;this.parryHeldT=0;
+      this.stillForDomain=false;this.parryHeldT=0;
       this.sprinting = this.swimming && input.held('sprint') && this.moveIntent.lengthSq() > 0 && this.stamina > 1;
       this.buffer = null;
       this.act = null;
@@ -624,27 +634,26 @@ export class Player {
     }
     this.riseHeld = false;
     const now = this.gameTime;
-    const priority: Record<Buffered, number> = { attack: 0, offhand: 0, cast: 1, originAbility: 1, kick: 2, parry: 3, dodge: 4, roll: 4 };
+    const priority: Record<Buffered, number> = { heavy: 1, attack: 0, offhand: 0, cast: 1, originAbility: 1, kick: 2, parry: 3, dodge: 4, roll: 4 };
     const buf = (a: Buffered) => {
       if (this.buffer?.t === now && priority[this.buffer.a] > priority[a]) return;
       this.buffer = { a, t: now, actT: this.act?.t ?? -1, actId: this.act?.def.id ?? null };
     };
-    this.attackHeldFor = input.held('attack') ? (this.attackHeld ? this.attackHeldFor + dt : dt) : 0;
-    this.attackHeld = input.held('attack');
     if (input.wasPressed('kick') && !this.aiming) buf('kick');
     // Locked on: the wheel moves the lock to the next enemy left or right.
     if (this.lock && input.wheel !== 0) this.switchLock(cam, Math.sign(input.wheel));
     // Boundary Style: F held while standing still raises the ring (the skill runtime decides if it can).
-    this.parryHeldT = input.held('parry') ? this.parryHeldT + SIM_STEP : 0;
-    this.stillForDomain = this.grounded && !this.mounted && !this.swimming && !this.sprinting && (this.moveIntent.lengthSq() < 0.001 || this.domainMoves);
-    if (input.wasPressed('attack') && !this.aiming) buf('attack');
+    this.parryHeldT = !this.techniqueMode && input.held('parry') ? this.parryHeldT + SIM_STEP : 0;
+    this.stillForDomain = !this.techniqueMode && this.grounded && !this.mounted && !this.swimming && !this.sprinting && (this.moveIntent.lengthSq() < 0.001 || this.domainMoves);
+    if (!this.techniqueMode && input.wasPressed('attack') && !this.aiming) buf('attack');
+    if (!this.techniqueMode && input.wasPressed('heavy')) buf('heavy');
     if (input.wasPressed('offhand') && this.equip.dualWield) buf('offhand');
     if (input.wasPressed('parry')) buf('parry');
     if (input.wasPressed('dodge')) buf(input.held('sprint') ? 'roll' : 'dodge');
     if (input.wasPressed('cast')) buf('cast');
     if (input.wasPressed('originAbility')) buf('originAbility');
     // Raising the shield (or a weapon that can guard) also cuts short the tail end of an attack (once it can be cancelled).
-    const wantBlock = input.held('offhand') && (this.equip.hasShield || !!this.weaponGuard?.()) && this.mods.canBlock;
+    const wantBlock = !this.techniqueMode && input.held('offhand') && (this.equip.hasShield || !!this.weaponGuard?.()) && this.mods.canBlock;
     const ac = this.act;
     const guardAct = (id: string) => id === 'parryShield' || id === 'parryWeapon';
     if (wantBlock && ac && !guardAct(ac.def.id) && !ac.def.roll && ac.def.id !== 'stagger' && ac.def.id !== 'guardBreak' && ac.t >= ac.def.cancel) this.act = null;
@@ -757,7 +766,7 @@ export class Player {
     }
     if (def.roll) this.sinceRoll = 0;
     if (def.hit) events.emit('swing', { heavy: HYPER.has(id) });
-    events.emit('combatMove', { id, name: moveLabel(id) });
+    if (!id.startsWith('sk_')) events.emit('combatMove', { id, name: moveLabel(id) });
     return true;
   }
 
@@ -884,30 +893,37 @@ export class Player {
   }
 
   /** What an attack press from rest does: a finisher, a directional opener when locked on, or the first cut. */
-  private opener(): string {
+  private heavyOpener(): string {
+    if (!this.grounded) return 'airAttack';
+    if (this.blocking && this.blockHitT < 0.7) return 'guardCounter';
+    if (this.blocking && this.equip.hasShield && this.moveIntent.dot(this.forward) > 0.5) return 'shieldPush';
+    return 'heavy';
+  }
+
+  private opener(preview = false): string {
     const fin = this.finisherTarget();
     if (fin) {
-      this.finTarget = fin;
+      if (!preview) this.finTarget = fin;
       return 'finisher';
     }
     // Right out of a perfect dodge: the counter slide. Out of a perfect parry: the riposte.
     if (this.counterT > 0 && this.counterFoe()) return 'dodgeCounter';
     if (this.riposteT > 0) {
-      this.riposteT = 0;
+      if (!preview) this.riposteT = 0;
       return 'riposte';
     }
     // From behind a raised guard: a counter right after it took a blow; walking in, a shield drive.
     if (this.blocking && this.blockHitT < 0.7) return 'guardCounter';
-    if (this.blocking && this.equip.hasShield && this.moveIntent.dot(this.forward) > 0.5) return 'shieldPush';
-    return this.flowNext() ?? this.shapedOpener();
+    if (this.blocking) return this.equip.hasShield ? 'shieldBash' : 'barge';
+    return this.flowNext(!preview) ?? this.shapedOpener();
   }
 
   /** A string you dodged out of picks up where it left off (the dodge offset). */
-  private flowNext(): string | null {
+  private flowNext(consume = true): string | null {
     const f = this.flowOffset;
-    this.flowOffset = null;
+    if (consume) this.flowOffset = null;
     if (!f || this.gameTime >= f.until) return null;
-    events.emit('combatMove', { id: 'dodgeOffset', name: 'Dodge Offset' });
+    if (consume) events.emit('combatMove', { id: 'dodgeOffset', name: 'Dodge Offset' });
     return f.next;
   }
 
@@ -918,17 +934,9 @@ export class Player {
    */
   private shapedOpener(): string {
     const moving = this.moveIntent.lengthSq() > 0.25;
-    if (moving) {
-      const dash = dashCandidate(this.pos, this.moveIntent);
-      if (dash) {
-        this.dashPick = dash;
-        return 'dashStrike';
-      }
-    }
     if (this.sinceRoll < 0.4) return 'risingCut';
-    const lk = this.lock?.alive ? this.lock : moving ? this.aimTarget(4.5) : null;
-    if (lk && moving) {
-      const to = lk.position.clone().sub(this.pos).setY(0).normalize();
+    if (moving) {
+      const to = this.lock?.alive ? this.lock.position.clone().sub(this.pos).setY(0).normalize() : this.forward;
       const d = this.moveIntent.dot(to);
       if (d > 0.6) return 'thrust';
       if (d < -0.6) return 'retreatCut';
@@ -938,9 +946,9 @@ export class Player {
   }
 
   /** What an attack out of a roll or step becomes. */
-  private evadeAttack(): string {
+  private evadeAttack(preview = false): string {
     if (this.counterT > 0 && this.counterFoe()) return 'dodgeCounter';
-    return this.flowNext() ?? 'risingCut';
+    return this.flowNext(!preview) ?? 'risingCut';
   }
 
   private endAction() {
@@ -969,6 +977,7 @@ export class Player {
         return;
       }
       if (b.a === 'attack' && (eq.mainWeapon || this.canFightUnarmed?.())) next = !this.grounded ? this.airOpener() : this.sprinting && !(this.counterT > 0) ? 'sprintAttack' : this.opener();
+      else if (b.a === 'heavy' && (eq.mainWeapon || this.canFightUnarmed?.())) next = this.heavyOpener();
       else if (b.a === 'offhand' && eq.dualWield) next = 'offslash1';
       else if (b.a === 'kick') next = !this.grounded ? (eq.mainWeapon || this.canFightUnarmed?.() ? 'airAttack' : null) : this.sprinting && !this.mounted ? 'slideTackle' : shove();
       else if (b.a === 'dodge' || b.a === 'roll') next = this.grounded ? this.vaultOrDodge(b.a) : null;
@@ -986,7 +995,8 @@ export class Player {
       const cancelable = d.hit && !d.roll && d.id !== 'stagger' && d.id !== 'guardBreak' && !d.air && d.id !== 'finisher';
       const feint = evade && cancelable && a.t < d.hit!.from - 0.02;
       const recover = evade && cancelable && a.t > d.hit!.to && a.t < cancelAt;
-      if (b.a === 'attack' && d.roll && (eq.mainWeapon || this.canFightUnarmed?.())) {
+      if (b.a === 'heavy' && (eq.mainWeapon || this.canFightUnarmed?.()) && (comboOpen || a.t >= cancelAt)) next = !this.grounded ? 'airAttack' : d.combo?.heavy ?? this.heavyOpener();
+      else if (b.a === 'attack' && d.roll && (eq.mainWeapon || this.canFightUnarmed?.())) {
         // Out of a roll or step: a counter slide after a perfect dodge (at once), else a rising cut as it ends.
         if (this.counterT > 0 && a.t >= 0.08) next = this.evadeAttack();
         else if (a.t >= d.cancel * 0.85) next = this.evadeAttack();
@@ -1010,9 +1020,7 @@ export class Player {
         if (fin) {
           this.finTarget = fin;
           next = 'finisher';
-        } else if (c.heavy && this.attackHeld && this.attackHeldFor < BRANCH_HOLD) return; // still deciding: tap or hold
-        else if (c.heavy && this.attackHeld) next = c.heavy;
-        else if (c.delayed && b.actId === d.id && b.actT > c.from + DELAY_GAP) next = c.delayed;
+        } else if (c.delayed && b.actId === d.id && b.actT > c.from + DELAY_GAP) next = c.delayed;
         else next = c.next;
       } else if (b.a === 'offhand' && eq.dualWield && comboOpen) next = d.id.startsWith('offslash') && d.combo ? d.combo.next : 'offslash1';
       else if (b.a === 'kick' && a.t >= cancelAt) next = shove();
@@ -1039,11 +1047,7 @@ export class Player {
   }
 
   /** An attack in the air: the air string if there is someone up here to cut (or a launcher bought the time), else the plunge. */
-  private airOpener(): string {
-    if (this.airHang > 0) return 'airSlash1';
-    for (const t of targets) if (airborne(t) && t.alive && t.center.distanceTo(this.center) < 3.5) return 'airSlash1';
-    return 'airAttack';
-  }
+  private airOpener(): string { return 'airSlash1'; }
 
   private spellAction(): string | null {
     const sp = this.equip.get(this.equip.activeSpell);
@@ -1065,18 +1069,11 @@ export class Player {
     if (!a) return;
     const d = a.def;
 
-    // A light attack held long enough turns into a charged heavy.
-    if (d.id === 'slash1' && d.hit && a.t < d.hit.from && input.held('attack') && this.attackHeldFor > 0.28) {
-      const hv = this.actionFor?.('heavy') ?? ACTIONS.heavy;
-      const heavy = resolveAction(hv, !!hv.clip && this.char.has(hv.clip));
-      this.startAction('heavy', heavy.chargeAt !== undefined ? heavy.chargeAt * heavy.dur * 0.6 : 0.3);
-      return;
-    }
     // Charging: hold at the charge point while the button stays down. Three
     // tiers; let go just as it fills and the blow lands on the beat.
     const wasCharging = a.charging;
     a.charging = false;
-    if (d.chargeAt !== undefined && a.t >= d.chargeAt * d.dur && input.held('attack') && !a.released) {
+    if (d.chargeAt !== undefined && a.t >= d.chargeAt * d.dur && input.held('heavy') && !this.techniqueMode && !input.uiMode && !a.released) {
       a.charge += dt;
       const tier = CHARGE_TIERS.reduce((t, need, i) => (a.charge >= need ? i : t), 0);
       if (tier > a.tier) {
@@ -2220,8 +2217,7 @@ export class Player {
 
   respawn(at: THREE.Vector3) {
     this.buffer = null;
-    this.attackHeld = false;
-    this.attackHeldFor = 0;
+    this.setTechniqueMode(false);
     this.inputLatency = 0;
     this.poseFrom = null;
     this.poseFade = 1;

@@ -49,7 +49,7 @@ export const DRILLS: Drill[] = [
   },
   {
     id: 'strings', name: 'Strings and branches', need: 3, goal: 'different branch blows on the dummy', xp: 60,
-    brief: 'Tap for the next cut. Hold the button into the second, third or fourth blow and it branches: a rising thrust, a whirling cut, a crushing overhead. Locked on, push toward, away or across your target as you strike for a lunge, a retreating cut or a sweep. Show me three different ones on the dummy.',
+    brief: 'Tap left click for the next cut. Press R during the second, third or fourth follow-up window and it branches: a rising thrust, a whirling cut, a crushing overhead. Locked on, push toward, away or across your target as you strike for a lunge, a retreating cut or a sweep. Show me three different ones on the dummy.',
   },
   {
     id: 'charge', name: 'Charge on the beat', need: 1, goal: 'perfect charged blow', xp: 50,
@@ -75,7 +75,7 @@ interface Step {
 export const BASICS: Step[] = [
   { id: 'cut', need: 3, goal: 'cuts on the dummy', say: 'Left click: a cut. Go to the straw dummy and hit it three times. Watch the blade land, not your feet.' },
   { id: 'string', need: 2, goal: 'strings of three cuts', say: 'Click again just as each cut lands, not before, and the blows run together into a string. Two strings of three on the dummy.' },
-  { id: 'heavy', need: 2, goal: 'heavy blows on the dummy', say: 'Hold left click instead of tapping it: you wind up a heavy blow. Let go to swing. Slow, but it breaks a guard. Two on the dummy.' },
+  { id: 'heavy', need: 2, goal: 'heavy blows on the dummy', say: 'Press R for a heavy blow. Hold R to charge, then let go to swing. Slow, but it breaks a guard. Two on the dummy.' },
   { id: 'lock', need: 1, goal: 'locked on', partner: ['cut'], say: 'Now someone who hits back. Press Q (or the middle mouse button) to lock on to her. Locked on, you circle her instead of wandering off.' },
   { id: 'block', need: 2, goal: 'blows blocked', partner: ['cut'], say: 'Hold right click to raise your guard, shield or blade. Take two of her cuts on it. Blocking costs stamina: the green bar. When it runs out, your guard breaks.' },
   { id: 'parry', need: 1, goal: 'parry', partner: ['cut'], say: 'Better than a block: a parry. Press F just as her blade arrives. Too early and you only knock it aside. Turn one blow.' },

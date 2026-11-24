@@ -78,21 +78,24 @@ test("a greatsword's heavy has hyper-armour from the first frame; a sword's does
     const { g, p, equip } = eval(H);
     await g.arms.clips;
     const out: Record<string, string> = {};
+    g.pause(true);g.sleep(true);g.input.uiMode=false;
     for (const id of ['longsword', 'ironGreatsword']) {
       equip(id);
       g.slimes.clear();
-      await window.W(10);
-      g.input.press('Mouse0');
-      for (let i = 0; i < 400 && p.act?.def.id !== 'heavy'; i++) await window.W(1);
+      p.act=null;p.clearCombatInput();g.input.releaseAll();p.stamina=p.maxStamina;g.stepSim(10);
+      g.input.press('KeyR');
+      g.stepSim();
+      if(p.act?.def.id!=='heavy')throw Error(`Expected heavy, got ${p.act?.def.id}`);
       // A heavy blow early in the wind-up, before the swing itself.
       p.act.t = 0.1;
       const from = p.pos.clone().add(p.forward.multiplyScalar(1.2));
       p.receiveAttack({ damage: 5, from, parryable: false, poise: 999 });
       out[id] = p.act?.def.id ?? 'none';
-      g.input.release('Mouse0');
-      await window.W(120);
+      g.input.release('KeyR');
+      g.stepSim(120);
       p.hp = p.maxHp;
     }
+    g.pause(false);g.sleep(false);
     return out;
   }, HELPERS);
   expect(res.longsword).toBe('stagger');
@@ -299,7 +302,7 @@ test('a staff speeds spells, and Gale momentum speeds them further', async ({ ga
       const rt = g.skillRt;
       const castSpeed = (weapon: string, flow: number) => {
         equip(weapon); p.mana = p.maxMana; rt.flow = flow; g.stepSim(3);
-        g.input.press('KeyR'); g.stepSim(); g.input.release('KeyR');
+        g.input.press('KeyY'); g.stepSim(); g.input.release('KeyY');
         const sp = p.act?.speed ?? 0;
         for (let i = 0; i < 300 && p.act; i++) g.stepSim();
         return sp;

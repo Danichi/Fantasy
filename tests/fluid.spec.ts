@@ -6,7 +6,7 @@ import { test, expect, boot, SLOW } from './fixtures';
 
 test('fluid combat: shaped openers, launcher and air string, vault, riposte, wall slam, barrels', async ({ page }) => {
   test.setTimeout(480_000 * SLOW);
-  const errors = await boot(page, '?test&sandbox&save&quality=low');
+  const errors = await boot(page, '?test&sandbox&save');
   await page.evaluate(() => (window as any).__game.pause(true));
   const r = await page.evaluate(async () => {
     const g = (window as any).__game,
@@ -72,17 +72,19 @@ test('fluid combat: shaped openers, launcher and air string, vault, riposte, wal
     out.launch = { up, air: [...air] };
     step(120);
 
-    // Moving at a foe a few strides off: a dash strike that closes the gap.
+    // Explicit sprint + attack closes distance; ordinary attacks no longer select a dash.
     S.spawn('dummy');
     d = S.actors[0];
     place(0, 3.5, Math.PI);
     const far = P.pos.distanceTo(d.position);
+    I.press('ShiftLeft');
     I.press('KeyW');
     step(6);
     tap('Mouse0');
     const dash = acts(40);
     I.release('KeyW');
-    out.dash = { acts: dash, before: far, after: P.pos.distanceTo(d.position) };
+    I.release('ShiftLeft');
+    out.running = { acts: dash, before: far, after: P.pos.distanceTo(d.position) };
     step(60);
 
     // Locked on, walking in: a lunge.
@@ -141,14 +143,14 @@ test('fluid combat: shaped openers, launcher and air string, vault, riposte, wal
   });
   expect(r.launch.up).toBeGreaterThan(0.8);
   expect(r.launch.air).toEqual(expect.arrayContaining(['airSlash1', 'airSlash2', 'airSlash3']));
-  expect(r.dash.acts).toContain('dashStrike');
-  expect(r.dash.after).toBeLessThan(r.dash.before - 1.5);
+  expect(r.running.acts).toContain('sprintAttack');
+  expect(r.running.after).toBeLessThan(r.running.before - 1.5);
   expect(r.lunge).toBe('thrust');
   expect(r.vault.acts).toContain('vault');
   expect(r.vault.behind).toBe(true);
   expect(r.riposte.res).toBe('parried');
   expect(r.riposte.acts).toContain('riposte');
-  expect(r.log).toEqual(expect.arrayContaining(['launcher', 'dashStrike', 'vault', 'riposte', 'impact:wall', 'impact:barrel']));
+  expect(r.log).toEqual(expect.arrayContaining(['launcher', 'sprintAttack', 'vault', 'riposte', 'impact:wall', 'impact:barrel']));
   expect(r.learned).toBeGreaterThan(5);
   expect(errors).toEqual([]);
 });

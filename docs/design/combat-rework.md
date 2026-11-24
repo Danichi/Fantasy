@@ -30,7 +30,7 @@ Every blow the player lands goes through `strike(target, spec)`:
 
 ## 2. Offence (`src/combat/actions.ts`, `src/player/player.ts`)
 
-- **Strings with branches.** Tap for the next cut; hold the button into it
+- **Strings with branches.** Tap LMB for the next cut; press R during its follow-up window
   for its heavy branch (Rising Thrust, Whirling Cut, Crushing Overhead);
   press late after the first cut for the Hesitation Cut. Branches are built
   from the equipped family's own moves (`BRANCHES`), so every weapon has them.

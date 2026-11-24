@@ -570,6 +570,7 @@ export class SkillRuntime {
     } else this.uses.set(s.key, used);
     this.kits.onUse(s.key);
     this.roster.onUse(s.key);
+    events.emit('combatMove', { id: def.action ?? s.key, name: s.n.name });
     events.emit('spellCast', { spell: s.key });
     return null;
   }

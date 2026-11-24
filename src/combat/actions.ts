@@ -28,7 +28,7 @@ export interface ActionDef {
   sweep?: { reach: number; arc: number };
   /** the player can't be staggered through this move */
   hyper?: boolean;
-  /** next in the string; `heavy`: hold the button into this branch; `delayed`: press late for this one */
+  /** next in the string; `heavy`: explicit heavy input takes this branch; `delayed`: press late for this one */
   combo?: { next: string; from: number; heavy?: string; delayed?: string };
   heavyFrom?: string; // light attack that turns into this heavy if held
   cancel: number; // dodge may interrupt after this time
@@ -426,7 +426,7 @@ export interface Branch {
 }
 
 export const BRANCHES: Record<string, Branch> = {
-  // ---- strings: hold the button into the next cut for its heavy branch ----
+  // ---- strings: press heavy during the next-cut window for its branch ----
   link1: {
     base: 'sprintAttack', name: 'Rising Thrust',
     build: (d) => ({ ...d, id: 'link1', stamina: 18, dtype: 'pierce', hit: blow(d, 1.7, 50), posture: 1.3, move: { dist: 1.2, from: d.hit ? d.hit.from * 0.3 : 0.1, to: d.hit ? d.hit.to : 0.6 }, combo: { next: 'slash3', from: d.cancel * 0.9 } }),
