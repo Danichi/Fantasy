@@ -107,9 +107,9 @@ test('fireball spends mana and hits', async ({ game }) => {
     g.input.release('Mouse1');
     await (window as any).W(6);
     const m0 = p.mana, hp0 = s.hp;
-    g.input.press('KeyR');
+    g.input.press('KeyY');
     await (window as any).W(2);
-    g.input.release('KeyR');
+    g.input.release('KeyY');
     await (window as any).W(108);
     return { dMana: m0 - p.mana, hit: s.hp < hp0 || !s.alive };
   });
@@ -177,22 +177,18 @@ test('dual wield: off-hand attack and equip armour', async ({ game }) => {
   expect(res.armor).toBeGreaterThan(15);
 });
 
-test('offensive spells refuse to cast without a lock-on', async ({ game }) => {
+test('camera-aimed spell works without a lock-on and spends mana', async ({ game }) => {
   const { page } = game;
-  const res = await page.evaluate(async () => {
-    const g = (window as any).__game;
-    const p = g.player;
-    p.equip.equip(p.equip.add('fireball').uid);
-    g.slimes.spawn('green', p.pos.x, p.pos.z - 7).update = () => {};
-    const m0 = p.mana;
-    g.input.press('KeyR');
-    await new Promise((r) => setTimeout(r, 40));
-    g.input.release('KeyR');
-    await new Promise((r) => setTimeout(r, 600));
-    return { dMana: m0 - p.mana, toast: document.querySelector('.toast')?.textContent ?? '' };
+  const res = await page.evaluate(() => {
+    const g = (window as any).__game, p = g.player;
+    g.pause(true);g.sleep(true);g.input.uiMode=false;g.input.releaseAll();
+    p.equip.equip(p.equip.add('fireball').uid);p.act=null;p.clearCombatInput();p.lock=null;p.mana=p.maxMana;
+    const m0=p.mana;g.input.press('KeyY');g.stepSim();
+    const result={spent:m0-p.mana,action:p.act?.def.id,lock:p.lock};
+    g.input.releaseAll();g.stepSim(100);g.pause(false);g.sleep(false);
+    return result;
   });
-  expect(res.dMana).toBeLessThan(1);
-  expect(res.toast).toContain('Lock on');
+  expect(res.spent).toBeGreaterThan(0);expect(res.action).toBe('castFireball');expect(res.lock).toBeNull();
 });
 
 test('walking uphill keeps its pace, and standing on a slope does not slide', async ({ game }) => {

@@ -5,6 +5,7 @@
 export type Action =
   | 'forward' | 'back' | 'left' | 'right'
   | 'sprint' | 'walk' | 'dodge' | 'jump'
+  | 'heavy' | 'technique' | 'techniqueLibrary'
   | 'attack' | 'offhand' | 'parry' | 'lockOn' | 'cast' | 'kick'
   | 'inventory' | 'skills' | 'help' | 'toggleBar' | 'interact' | 'map' | 'originAbility'
   | 'swimUp' | 'swimDown' | 'seaOrders' | 'seaAnchor' | 'seaReef' | 'seaLash' | 'seaMode' | 'seaTrimIn' | 'seaTrimOut' | 'seaCut' | 'seaSpyglass' | 'seaShot' | 'seaRow'
@@ -31,7 +32,10 @@ export const DEFAULT_BINDINGS: Record<Action, string[]> = {
   interact: ['KeyE'],
   map: ['KeyM'],
   originAbility: ['KeyV'],
-  cast: ['KeyR'],
+  heavy: ['KeyR'],
+  technique: ['KeyT'],
+  techniqueLibrary: ['KeyU'],
+  cast: ['KeyY'],
   inventory: ['KeyI'],
   skills: ['KeyK'],
   help: ['KeyH'],

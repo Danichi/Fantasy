@@ -10,12 +10,12 @@ Code: `src/player/player.ts` (inputs, openers, cancels, the air string), `src/co
 - **Riposte** (`riposte`): after a perfect parry, attack and the parry cuts straight into a heavy thrust. The window is one second.
 - **Dodge Offset**: dodge out of a string and attack within 0.9 s: the string carries on from where it was, rather than starting over.
 - **Costed cancels**: a dodge can cut a swing short in its wind-up (a **Feint**, +8 stamina) or in its recovery (+12, or +6 if the blow landed). Never during the blow itself.
-- **Shield Drive** (`shieldPush`): shield up, walk in, attack. Knocks the foe back hard and breaks guards.
+- **Guard interrupt**: guard and light attack for a shield bash or shove. After a blocked impact, attack for the guard counter.
 - **Skill Weave**: once a blow has landed and its swing is past, a technique can come out straight away instead of waiting for the swing to finish.
 
 ## 2. Movement shapes the attack
 
-The first cut depends on how you are moving relative to the nearest foe in front (the lock, or a soft target within 4.5 m):
+The first cut depends on your movement relative to the lock, or your facing when unlocked:
 
 - toward it: **Lunge** (`thrust`); away: **Retreat Cut**; across it: **Sweep**;
 - sprinting: **Charging Strike**; sprint and kick: **Slide Tackle** (a low slide that knocks the legs out, half again as far down a slope);
@@ -25,7 +25,7 @@ The first cut depends on how you are moving relative to the nearest foe in front
 
 - **Launcher**: jump during a grounded cut. A light foe goes up about 1.5 m; if it connected, you go up after it.
 - **Air String**: three air cuts (`airSlash1`-`3`). Each keeps the foe up near your height; the third (**Falling Strike**) spikes it into the ground. You hang while you cut, on a budget: 1.4 s after a launcher, a third of a second otherwise. No finishers in the air.
-- **Plunge**: kick in the air, or attack while falling with nobody up there to cut.
+- **Plunge**: press heavy (R) or kick in the air. Light attack always selects the air string.
 - **Vault**: dodge toward a reeling, broken or shield-raised foe close in front: you go over it and land behind (iframes most of the way).
 - **Wall Kick**: jump again in the air against a wall: up and away from it, twice per jump.
 - **Hook Yank / Hook Zip**: the grappling hook aimed at a foe. A light foe is pulled off its feet to you; a heavy one pulls you to it and you arrive in a dash strike.
@@ -35,7 +35,7 @@ Who can be thrown: anything with a body (bandits, the dead, orcs, beasts, the Sa
 
 ## 4. Crowd flow
 
-- **Dash Strike**: moving at a foe 3 to 6.5 m away (in a narrow cone along your movement) and attacking closes the whole gap in one cut, with a few frames of iframes at the start. Nothing already in reach on that line: no dash, just the cut.
+- **Dash Strike**: the grappling hook’s explicit arrival strike retains its gap closing. Ordinary light attacks no longer select it from enemy distance.
 - **Warning flash**: a foe winding up a blow within 7 m and outside the camera's view lights the edge of the screen on its side, once per tell.
 
 ## 5. The world as a weapon

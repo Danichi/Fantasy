@@ -1,3 +1,4 @@
+import { readTechniques, type TechniqueLoadout } from './combat/techniqueLoadout';
 import { SANDBOX_MODE, SANDBOX_SAVE_KEY } from './sandbox/mode';
 import type { Player } from './player/player';
 import type { Slot } from './items/itemDefs';
@@ -78,6 +79,7 @@ export interface SaveData {
   quick: (number | null)[];
   moves: (number | string | null)[];
   activeSpell: number | null;
+  techniques?: TechniqueLoadout;
   maps: Record<string, MapData>;
   dungeon: DungeonProgress;
   /** Old King's Road Mine progression */
@@ -252,6 +254,7 @@ export function buildSave(player: Player, seed: number, maps: Record<string, Map
     quick: cleanItems(eq.quick),
     moves: cleanMoves(eq.moves),
     activeSpell: idx(eq.activeSpell),
+    techniques: readTechniques(eq.techniques),
     maps,
     dungeon,
     mine,
@@ -322,6 +325,7 @@ export function applySave(player: Player, d: SaveData) {
   const stale = (k: string) => (pv < 2 && /^skill:(pyromancer|lightbinder):/.test(k)) || (pv < 3 && /^skill:(gale|boundary|cross):/.test(k));
   const moveRef = (k: number | string | null) => (typeof k === 'string' ? (stale(k) ? null : k) : uid(k));
   eq.moves = d.moves.map(moveRef);
+  eq.techniques = readTechniques(d.techniques);
   const sp = uid(d.activeSpell);
   if (sp != null) eq.equip(sp);
   player.hp = player.maxHp;

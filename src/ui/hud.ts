@@ -1,11 +1,7 @@
 import './art/hudkit.css';
 import { DISCIPLINES } from '../paths/data';
 import * as THREE from 'three';
-import { ATTACK_CUE } from '../combat/readability';
-import { PHASE_LABEL } from '../combat/phases';
-import './combatReadouts.css';
 import { peekCombat } from '../combat/core';
-import type { Target } from '../combat/targets';
 import type { Player } from '../player/player';
 import { targets } from '../combat/targets';
 import { events } from '../core/events';
@@ -56,8 +52,6 @@ export class HUD {
   mode: 'items' | 'moves' = 'items';
   private reticle: HTMLDivElement;
   private ehp = new Map<number, { e: HTMLDivElement; i: HTMLElement; b: HTMLElement; p: HTMLElement; shown: number; trail: number }>();
-  /** enemy tells over their heads (combat/core.ts), and the last blow on each enemy (for the damage numbers) */
-  private tells: { t: Target; e: HTMLDivElement }[] = [];
   private lastStrike = new Map<number, { at: number; typeMult: number; reason?: string; shown: boolean }>();
   /** floating damage numbers (a setting: the pause screen toggles it) */
   damageNumbers = readDamageNumbers();
@@ -185,15 +179,6 @@ export class HUD {
       this.lastStrike.set(target.id, { at: performance.now(), typeMult, reason, shown: false });
     });
     events.on('parrySuccess', ({ perfect }) => this.showBanner(perfect === false ? 'DEFLECTED' : 'PERFECT PARRY'));
-    events.on('telegraph', ({ target, kind }) => {
-      if (target.center.distanceTo(this.player.center) > 32 || this.tells.some((r) => r.t === target)) return;
-      const e = el('div', 'combat-tell', this.root);
-      e.setAttribute('aria-hidden', 'true');
-      e.innerHTML = '<span class="ct-symbol"></span><span class="ct-name"></span><span class="ct-phase"></span><span class="ct-answer"></span><span class="ct-meter"><i></i></span>';
-      e.dataset.kind = kind;
-      e.dataset.target = String(target.id);
-      this.tells.push({ t: target, e });
-    });
     events.on('blockImpact', ({ guardBroken }) => guardBroken && this.showBanner('GUARD BROKEN'));
     events.on('playerDamaged', () => {
       this.vignette.classList.add('hurt');
@@ -370,7 +355,7 @@ export class HUD {
     }
     // Quick items or moveset.
     const moves = this.mode === 'moves';
-    this.barTitle.innerHTML = `<span class="${moves ? '' : 'on'}">ITEMS</span><span class="${moves ? 'on' : ''}">MOVES</span><kbd>Tab</kbd>`;
+    this.barTitle.innerHTML = `<span class="${moves ? '' : 'on'}">ITEMS</span><span class="${moves ? 'on' : ''}">FAVORITES</span><kbd>Tab</kbd>`;
     const list = moves ? eq.moves : eq.quick;
     this.slots.forEach((s, i) => {
       const ref = list[i];
@@ -496,37 +481,6 @@ export class HUD {
       (post.querySelector('i') as HTMLElement).style.transform = `scaleX(${bpf})`;
       if (!this.boss.alive) this.bossBar(null);
     }
-
-    // These read the live attack state. Drawing cannot advance or outlive an attack.
-    for (const tl of this.tells) {
-      const read = peekCombat(tl.t)?.read;
-      if (!read || !tl.t.alive) { tl.e.remove(); continue; }
-      const cue = ATTACK_CUE[read.kind];
-      const at = tl.t.center.clone().add(new THREE.Vector3(0, (tl.t.halfHeight ?? 0.4) + tl.t.radius + 0.55, 0));
-      const screen = this.project(at);
-      const distance = tl.t.center.distanceTo(p.center);
-      const warning = !screen.on && distance < (read.shape === 'line' ? 28 : 18) && read.managed && (read.phase === 'commit' || read.phase === 'active' || (read.shape === 'line' && read.phase === 'recovery'));
-      tl.e.style.display = (screen.on && distance < 24) || warning ? 'grid' : 'none';
-      let x = screen.x, y = screen.y;
-      if (warning) {
-        const view = at.clone().applyMatrix4(this.camera.matrixWorldInverse);
-        const behind = view.z > 0;
-        x = behind ? innerWidth * 0.5 + Math.sign(view.x) * Math.min(240, innerWidth * 0.25) : x;
-        y = behind ? innerHeight - 165 : y;
-        x = Math.max(90, Math.min(innerWidth - 90, x));
-        y = Math.max(85, Math.min(innerHeight - 165, y));
-      }
-      tl.e.style.left = `${x}px`; tl.e.style.top = `${y}px`;
-      tl.e.dataset.kind = read.kind; tl.e.dataset.phase = warning && read.phase === 'recovery' ? 'active' : read.phase;
-      tl.e.classList.toggle('ct-offscreen', warning);
-      tl.e.querySelector('.ct-symbol')!.textContent = cue.symbol;
-      tl.e.querySelector('.ct-name')!.textContent = warning ? 'Incoming attack' : read.name + (read.blows > 1 ? ` ${read.blow}/${read.blows}` : '');
-      tl.e.querySelector('.ct-phase')!.textContent = warning ? 'Incoming' : read.managed ? PHASE_LABEL[read.phase] : 'Prepare';
-      tl.e.querySelector('.ct-answer')!.textContent = warning && read.shape === 'line' ? 'Guard / find cover' : read.phase === 'recovery' ? 'Punish the opening' : cue.answer;
-      const progress = Math.min(1, Math.max(0, 1 - read.left / Math.max(0.01, read.total)));
-      (tl.e.querySelector('.ct-meter i') as HTMLElement).style.transform = `scaleX(${progress})`;
-    }
-    this.tells = this.tells.filter((tl) => tl.t.alive && !!peekCombat(tl.t)?.read);
 
     // Lock-on reticle.
     const lock = p.lock;

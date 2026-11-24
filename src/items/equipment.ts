@@ -1,3 +1,4 @@
+import { emptyTechniques } from '../combat/techniqueLoadout';
 import * as THREE from 'three';
 import { Character } from '../player/character';
 import { RigLayer } from '../player/rigLayer';
@@ -35,8 +36,9 @@ export class Equipment implements LimbFit {
   quick: (number | null)[] = [null, null, null, null];
   /** moveset bar (Tab), keys 1-6: spell item uids, or class skills as "skill:<discipline>:<node>" */
   moves: (number | string | null)[] = [null, null, null, null, null, null];
-  /** the spell R casts */
+  /** the spell Y casts */
   activeSpell: number | null = null;
+  techniques = emptyTechniques();
   showArmor = true;
 
   private models = new Map<Slot, THREE.Object3D[]>();

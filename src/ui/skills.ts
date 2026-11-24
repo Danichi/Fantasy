@@ -378,7 +378,7 @@ export class SkillsUI {
     this.body.innerHTML = `<div class="sk-view sk-atlas">
       <section class="sk-atlas-tier"><h3>Fighting classes <span>${primary ? esc(primary.name) : 'None'}${P.secondary && DISC[P.secondary] ? ` + ${esc(DISC[P.secondary].name)}` : ''}</span></h3><p>${note}</p>
       <div class="sk-atlas-grid">${pick || '<p class="sk-foot">No fighting class yet. A mentor will teach you one.</p>'}</div></section>
-      <section class="sk-atlas-tier"><h3>Magic you carry <span>${magic.length}</span></h3><p>Every magic class you know is always with you: its techniques on your bar, its resource on your HUD.</p>
+      <section class="sk-atlas-tier"><h3>Magic you carry <span>${magic.length}</span></h3><p>Every magic class you know is always with you: its techniques in your library, its resource on your HUD.</p>
       <div class="sk-atlas-grid">${magic.map((d) => card(d, '', '')).join('') || '<p class="sk-foot">No magic yet.</p>'}</div></section>
     </div>`;
   }
@@ -538,7 +538,7 @@ export class SkillsUI {
         const ref = `skill:${d.id}:${n.id}`;
         const at = this.player.equip.moves.indexOf(ref);
         h += `<div class="sk-kv">${skill.mana !== undefined ? `<span>Mana</span><span>${this.runtime?.manaCost(skill) ?? skill.mana}</span>` : ''}${skill.stamina ? `<span>Stamina</span><span>${skill.stamina}</span>` : ''}${skill.flow ? `<span>Flow</span><span>${skill.flow}</span>` : ''}${skill.cd ? `<span>Cooldown</span><span>${skill.cd}s</span>` : ''}</div>`;
-        h += `<div class="sk-bar"><span>On your moves bar (Tab, keys 1-6):</span><div>${[0, 1, 2, 3, 4, 5].map((i) => `<button class="sk-slot${at === i ? ' on' : ''}" type="button" data-bar="${i}">${i + 1}</button>`).join('')}</div></div>`;
+        h += `<div class="sk-bar"><span>Optional favorites (Tab, keys 1–6). All learned techniques are in U:</span><div>${[0, 1, 2, 3, 4, 5].map((i) => `<button class="sk-slot${at === i ? ' on' : ''}" type="button" data-bar="${i}">${i + 1}</button>`).join('')}</div></div>`;
       }
     } else {
       const why = P.whyNot(d.id, n), ok = P.canLearn(d.id, n);
