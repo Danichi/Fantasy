@@ -83,3 +83,9 @@ Blade hits are checked against the drawn pose, sweeping from the blade's last dr
 ## Low ledge scrambling
 
 Move toward a clear 0.45–1.5 m ledge and press Jump (C by default). The hero rises, then moves onto the lip over 0.38 seconds. Landing capsule checks and swept movement reject walls and low ceilings. Combat launchers keep priority; locking on, guarding, attacking, swimming, flying or riding disables scrambling. The sandbox terrain lane offers three repeatable ledge heights. See [terrain authoring](terrain-overhaul.md).
+
+## Hiking and steep faces
+
+Ground following uses the physical face normal. Flat ground and gentle inclines retain normal running speed; uphill movement slows progressively from 30° to the 48° walking limit. Sprinting stops while hiking, while contouring and downhill travel retain their input response. Faces above 48° reject uphill motion and accelerate into a controlled slide. They do not count as grounded jump resets, and contact sliding does not accumulate free-fall damage. Swimming, flight and ship movement retain their own movement handling.
+
+Scrambling requires a near-vertical front face and a clear walkable top. A continuous hillside cannot trigger a ledge scramble. Use graded trails, switchbacks and bridges to gain height, and scramble over genuine low lips along the way.
