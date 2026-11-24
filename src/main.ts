@@ -1,3 +1,4 @@
+import { TerrainDressing } from './world/landscape/dressing';
 import { Landscape, landscapeFishingSpots, migrateTerrainPosition } from './world/landscape/landscape';
 import { TERRAIN_REVISION } from './world/landscape/layout';
 import { SANDBOX_MODE, RETURNING_FROM_SANDBOX, travelToSandbox } from './sandbox/mode';
@@ -2302,6 +2303,15 @@ async function boot() {
   questUI.giverName = (id) => serviceNpc(id)?.spec.name ?? npcs.find(id)?.rec.name;
   repPanel.codex = () => story.state.codex();
   repPanel.onName = (id, power) => story.state.nameAs(id, power as never);
+  const terrainDressing = new TerrainDressing(r.scene, (x, z, radius) => stylizedNature.canPlace(x, z, radius));
+  {
+    const previous = player.onTeleport;
+    player.onTeleport = p => {
+      previous?.(p);
+      if (realm.mode === 'overworld' && !realm.interior) terrainDressing.warm(p);
+    };
+  }
+  hideHooks.push(hidden => terrainDressing.setVisible(!hidden));
   const baseSiteMarks = worldMap.siteMarkers;
   // The hidden teachers (paths/roster): one for each hidden class; a gateway shows you where.
   const teachers = buildHiddenTeachers(r.scene, worldFlags);
@@ -3023,6 +3033,7 @@ async function boot() {
     combat.tick(STEP); // posture, poise and wind-ups of everything that fights (combat/core.ts)
     mtn.update(STEP, realm.mode === 'overworld' && !realm.interior); // the White Mountains, and the Iron Kettle's passage
     landscape.update(STEP, player.pos, realm.mode === 'overworld' && !realm.interior);
+    terrainDressing.update(STEP, player.pos, realm.mode === 'overworld' && !realm.interior);
     archipelagos.update(STEP, realm.mode === 'overworld' && !realm.interior);
     elves.update(STEP, realm.mode === 'overworld' && !realm.interior);
     stepImpacts(STEP); // knocked foes meeting walls, fences, braziers, water; rolling barrels (combat/impacts.ts)
@@ -3406,6 +3417,7 @@ async function boot() {
       archipelagos.reset();
       elves.reset();
       landscape.reset();
+      terrainDressing.reset();
       arms.reset(); // Arms and Crafting (feat/arms)
       quests.state = {};
       quests.tracked = null;
@@ -3441,7 +3453,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, mountains: mtn, archipelagos, elves, landscape, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
+      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, mountains: mtn, archipelagos, elves, landscape, terrainDressing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       sandbox, overlays, yard, combatDebug, telegraphs, // combat rework: the drill yard and the F9 overlay

@@ -22,12 +22,21 @@ import { MEADOW_FIELD_GLSL } from '../render/palette';
 const NEAR_TILE = 44;
 const MID_TILE = 132;
 const FAR_TILE = 236;
+/** More roots per square metre with fewer instances and economical tuft geometry. */
+export function grassLayout(budget: number) {
+  return [
+    { count: Math.round(budget * 0.6), tile: NEAR_TILE, width: 0.068, fade: 0, seed: 1234, rows: [0, 0.35, 0.72], blades: 3, spread: 0.2 },
+    { count: Math.round(budget * 0.45), tile: MID_TILE, width: 0.115, fade: NEAR_TILE * 0.36, seed: 555, rows: [0, 0.5], blades: 5, spread: 0.32 },
+    { count: Math.round(budget * 0.25), tile: FAR_TILE, width: 0.21, fade: MID_TILE * 0.36, seed: 987, rows: [0], blades: 5, spread: 0.55 },
+  ];
+}
 
 /**
  * A single tapered, curved blade, height 1, width 1: 3 segments + tip close
  * up (7 triangles). Distant layers use fewer rows, where the curve can't be
  * seen: 3 triangles in the middle distance, 1 far away.
  */
+
 function bladeGeometry(rows = [0, 0.3, 0.6, 0.85], blades = 1, spread = 0, seed = 7) {
   const pos: number[] = [];
   const t: number[] = [];
@@ -120,6 +129,8 @@ class GrassLayer {
         .replace(
           '#include <begin_vertex>',
           `vec2 world = uCenter + mod(aOff.xy - uCenter + uTile * 0.5, uTile) - uTile * 0.5;
+          float rootC=cos(aOff.z), rootS=sin(aOff.z);
+          world += mat2(rootC,-rootS,rootS,rootC)*aTuft.xy;
           vec2 guv = (world - uGroundOrigin) / uGroundSize;
           vec4 gd = texture2D(uGround, guv);
           float inWin = step(0.002, guv.x) * step(guv.x, 0.998) * step(0.002, guv.y) * step(guv.y, 0.998);
@@ -131,11 +142,11 @@ class GrassLayer {
           float outer = 1.0 - smoothstep(uTile * 0.38, uTile * 0.5, dist);
           float inner = uFadeIn > 0.0 ? smoothstep(uFadeIn, uFadeIn * 1.4, dist) : 1.0;
           vec4 patchN = texture2D(uNoise, world * 0.004);
-          float keep = step(aOff.w, dens) * outer * inner;
+          float keep = step(fract(aOff.w+aTuft.z*0.31), dens) * outer * inner;
           // Height: ankle-to-shin high (cut down so herbs, flowers and drops show above it),
           // taller in patches, shorter where it's thin.
           // Blades shorten toward path and plaza edges instead of stopping as a wall.
-          float height = mix(1.0, 0.6, smoothstep(0.2, 0.4, tintK) * (1.0 - smoothstep(0.5, 0.6, tintK))) * mix(1.0, 1.25, smoothstep(0.55, 0.7, tintK) * (1.0 - smoothstep(0.8, 0.95, tintK))) * mix(0.17, 0.4, patchN.g) * mix(0.75, 1.15, fract(aOff.w * 13.7)) * mix(0.25, 1.0, smoothstep(0.1, 0.75, dens)) * keep;
+          float height = mix(1.0, 0.6, smoothstep(0.2, 0.4, tintK) * (1.0 - smoothstep(0.5, 0.6, tintK))) * mix(1.0, 1.25, smoothstep(0.55, 0.7, tintK) * (1.0 - smoothstep(0.8, 0.95, tintK))) * mix(0.23, 0.52, patchN.g) * mix(0.75, 1.15, fract(aOff.w * 13.7)) * mix(0.25, 1.0, smoothstep(0.1, 0.75, dens)) * keep;
           float width = uWidth * mix(0.8, 1.25, fract(aOff.w * 5.3)) * keep;
           // Gusts: a scrolling low-frequency field along the wind.
           vec2 gp = world * 0.018 - uWindDir * uTime * 0.09;
@@ -149,7 +160,7 @@ class GrassLayer {
           p.y *= height;
           // The blade turns within its tuft and stands at its place in it; then the whole tuft turns.
           float cb = cos(aTuft.z), sb = sin(aTuft.z);
-          p.xz = mat2(cb, -sb, sb, cb) * p.xz + aTuft.xy;
+          p.xz = mat2(cb, -sb, sb, cb) * p.xz;
           float c = cos(aOff.z), s = sin(aOff.z);
           p.xz = mat2(c, -s, s, c) * p.xz;
           vec2 bend = uWindDir * (0.12 + gust * 0.7 + flutter * 0.06) * uWindStrength;
@@ -229,10 +240,8 @@ export class Grass {
     shared.uGroundOrigin = ground.origin;
     shared.uGroundSize = ground.size;
     scene.add(this.mesh);
-    this.near = new GrassLayer(this.mesh as unknown as THREE.Scene, Q.grassBlades, NEAR_TILE, 0.055, 0, 1234);
-    // Tufts of 4 (middle distance) and 3 (far) blades: the field stays full out to the haze.
-    this.mid = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.5), MID_TILE, 0.1, NEAR_TILE * 0.36, 555, [0, 0.5], 4, 0.28);
-    this.far = new GrassLayer(this.mesh as unknown as THREE.Scene, Math.round(Q.grassBlades * 0.3), FAR_TILE, 0.2, MID_TILE * 0.36, 987, [0], 3, 0.5);
+    const layers=grassLayout(Q.grassBlades).map(l=>new GrassLayer(this.mesh as unknown as THREE.Scene,l.count,l.tile,l.width,l.fade,l.seed,l.rows,l.blades,l.spread));
+    [this.near,this.mid,this.far]=layers;
   }
 
   /** Follow a (mutable) sun direction by reference. */

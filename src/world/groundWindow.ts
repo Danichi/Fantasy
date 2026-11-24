@@ -1,3 +1,5 @@
+import { waterSurfaceAt } from './waterLevel';
+import { forestTrailDistance, inElvenForest } from './elves/layout';
 import { landscapeWaterAt, landscapeTrailDistance } from './landscape/layout';
 import { roadCoverage } from './roadNetwork';
 import * as THREE from 'three';
@@ -22,7 +24,7 @@ const RECENTER = 40; // metres the camera may drift before a rebuild starts
 // Per-relief [grass density, flower suitability, tint]
 const RELIEF_GROUND: Record<number, [number, number, number]> = {
   [RELIEF.deep]: [0, 0, 0], [RELIEF.shelf]: [0, 0, 0], [RELIEF.beach]: [0.03, 0, 1],
-  [RELIEF.open]: [1, 1, 0], [RELIEF.forest]: [0.55, 0.25, 0.66], [RELIEF.mountain]: [0.22, 0.2, 0.33],
+  [RELIEF.open]: [1, 1, 0], [RELIEF.forest]: [0.72, 0.3, 0.66], [RELIEF.mountain]: [0.46, 0.28, 0.33],
   [RELIEF.snow]: [0, 0, 0.33], [RELIEF.sand]: [0.04, 0, 1], [RELIEF.mesa]: [0.12, 0.05, 1], [RELIEF.shore]: [0.9, 0.85, 0],
   [RELIEF.marsh]: [0.65, 0.3, 0.66], [RELIEF.lava]: [0, 0, 1], [RELIEF.volcanic]: [0.05, 0, 1],
 };
@@ -93,6 +95,10 @@ export class GroundWindow {
           [grass, flower, tint] = blendedGround(x, z);
         }
         const h = heightAt(x, z);
+        const slope=Math.hypot(heightAt(x+2.5,z)-h,heightAt(x,z+2.5)-h)/2.5;
+        const grow=Math.max(0,Math.min(1,(1.1-slope)/0.6));
+        grass*=grow;flower*=grow;
+        if(waterSurfaceAt(x,z)!==null || (inElvenForest(x,z)&&forestTrailDistance(x,z)<2.7)){grass=0;flower=0;}
         const localWater = landscapeWaterAt(x, z);
         if ((localWater && h < localWater.level + .3) || landscapeTrailDistance(x, z) < 1.7) { grass = 0; flower = 0; }
         // Beach sand only near the waterline: above it, the grass comes back.

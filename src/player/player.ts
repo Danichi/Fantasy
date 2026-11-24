@@ -1,3 +1,4 @@
+import { traversalSupport, resolveTraversalStep, uphillSpeed, WALKABLE_NORMAL } from './traversal';
 import { landscapeWaterAt } from '../world/landscape/layout';
 import * as THREE from 'three';
 import { blessing } from '../progression/blessings';
@@ -493,12 +494,10 @@ export class Player {
   private airJumps = 0;
   private mantle: { start: THREE.Vector3; end: THREE.Vector3; t: number } | null = null;
   get mantling() { return this.mantle !== null; }
-  /** Height of the walkable surface (terrain, bridges, floors) under (x, z) near the player's feet. */
-  private probeGround(x: number, z: number) {
-    const top = this.pos.y + 1.3;
-    const t = physics.castRay(new THREE.Vector3(x, top, z), new THREE.Vector3(0, -1, 0), 3, STATIC_ONLY);
-    return t === null ? null : top - t;
-  }
+  private slopeSlideSpeed = 0;
+  get slopeSliding() { return this.slopeSlideSpeed > 0.1; }
+
+  private probeGround(x:number,z:number){ return traversalSupport(x,z,this.pos.y)?.height ?? null; }
 
   private groundBelow() {
     return heightAtGround(this.pos.x, this.pos.z);
@@ -783,7 +782,8 @@ export class Player {
     if (this.act || this.blocking || this.lock || this.vehicle || this.mounted || this.swimming || this.flying || this.moveIntent.lengthSq() < .1 || this.vel.y < -5) return false;
     const dir = this.moveIntent.clone().setY(0).normalize();
     const origin = this.pos.clone().add(new THREE.Vector3(0, .4, 0));
-    if (physics.castRay(origin, dir, 1.2) === null) return false;
+    const front=physics.world.castRayAndGetNormal(new physics.R.Ray(origin,dir),1.2,true,undefined,STATIC_ONLY);
+    if(!front || Math.abs(front.normal.y)>0.3)return false; // A continuous hillside is not a ledge.
     const end = this.pos.clone().addScaledVector(dir, 1.15);
     const top = end.clone().setY(this.pos.y + 1.65);
     const ray = new physics.R.Ray(top, { x: 0, y: -1, z: 0 });
@@ -1331,6 +1331,10 @@ export class Player {
     const a = this.act;
     const intent = this.moveIntent;
     const still = waterSurfaceAt(this.pos.x, this.pos.z);
+    const support = !this.swimming && !this.flying && !this.vehicle ? traversalSupport(this.pos.x,this.pos.z,this.pos.y) : null;
+    const nearSupport = support && Math.abs(support.height-this.pos.y)<0.4 ? support : null;
+    const hike = uphillSpeed(nearSupport,{x:intent.x,y:0,z:intent.z});
+    if(hike<0.98)this.sprinting=false;
     let targetSpeed = 0;
     if (intent.lengthSq() > 0) {
       const ms = this.mountStats ?? { canter: 11.5, gallop: 15, accel: 8 };
@@ -1342,6 +1346,7 @@ export class Player {
       if (wade > 0.25 && !(this.waterWalk > 0)) targetSpeed *= 0.5;
       if (this.swimming) targetSpeed = (this.sprinting ? 3.6 : 2.3) * this.swimSpeedMul * (this.fieldSwim?.() ?? 1);
     }
+    if(!this.swimming && !this.flying) targetSpeed *= hike;
     // Swimming: float with the chest at the waterline, tire, and drown if spent.
     // (At sea you float on the waves themselves.)
     const surface = still !== null && Math.abs(still - SEA_LEVEL) < 0.01 ? still + waveAt(this.pos.x, this.pos.z).y : still;
@@ -1515,22 +1520,11 @@ export class Player {
 
     const current = this.swimming ? landscapeWaterAt(this.pos.x, this.pos.z) : null;
     const desired = { x: this.vel.x * dt + this.push.x + (current?.flowX ?? 0) * dt, y: this.vel.y * dt, z: this.vel.z * dt + this.push.z + (current?.flowZ ?? 0) * dt };
-    // Ground following: on foot, the step rises and falls with the ground itself.
-    // A flat step pushed into a slope lost speed going uphill, and the constant
-    // downward push made you creep downhill while standing still.
-    if (this.grounded && this.vel.y <= 0 && !this.swimming) {
-      const h0 = this.probeGround(this.pos.x, this.pos.z);
-      const h1 = this.probeGround(this.pos.x + desired.x, this.pos.z + desired.z);
-      const run = Math.hypot(desired.x, desired.z);
-      if (run < 1e-4) {
-        desired.y = -0.001; // standing: just keep contact, nothing to slide on
-      } else if (h0 !== null && h1 !== null && h1 - h0 > -Math.max(0.3, run * 1.5)) {
-        desired.y = Math.min(h1 - h0, run * 1.25 + 0.02) - 0.005;
-      } else {
-        // Stepping off an edge: let gravity take over.
-        desired.y = -GRAVITY * dt * dt;
-      }
-    }
+    if(!this.swimming && !this.flying && !this.vehicle){
+      const ahead = traversalSupport(this.pos.x+desired.x,this.pos.z+desired.z,this.pos.y);
+      const motion=resolveTraversalStep(desired,this.pos.y,support,ahead,this.grounded,dt,this.slopeSlideSpeed);
+      Object.assign(desired,motion.delta);this.slopeSlideSpeed=motion.slide;
+    }else this.slopeSlideSpeed=0;
     this.kcc.computeColliderMovement(this.collider, desired, physics.R.QueryFilterFlags.EXCLUDE_SENSORS, STATIC_ONLY);
     const m = this.kcc.computedMovement();
     const cur = this.body.translation();
@@ -1548,15 +1542,21 @@ export class Player {
         this.vel.z = mz / dt;
       }
     }
+    // Sliding is continuous surface contact, not an ever-accelerating free fall.
+    if(this.slopeSlideSpeed>0&&dt>0){this.vel.y=Math.min(0,m.y/dt);this.fallSpeed=0;this.airTime=0;}
     const wasGrounded = this.grounded;
     this.grounded = this.kcc.computedGrounded() && this.vel.y <= 0.1;
+    if(this.grounded&&!this.swimming&&!this.flying){
+      const floor=traversalSupport(next.x,next.z,next.y-CENTER_Y-0.02);
+      if(floor && floor.ny<WALKABLE_NORMAL)this.grounded=false;
+    }
     // Stairs and kerbs: the capsule hops a step in one tick; let the body ease
     // through it instead (the feet still land on the step, see present()).
     this.stepOffset *= Math.exp(-13 * dt);
     if (this.grounded && wasGrounded && !this.swimming && Math.abs(m.y) > Math.hypot(m.x, m.z) * 0.9 + 0.04) {
       this.stepOffset = clamp(this.stepOffset - m.y, -0.45, 0.45);
     }
-    if (!this.grounded) {
+    if (!this.grounded && this.slopeSlideSpeed === 0) {
       this.airTime += dt;
       this.fallSpeed = Math.max(this.fallSpeed, -this.vel.y);
     }
@@ -1601,6 +1601,7 @@ export class Player {
 
   teleport(p: THREE.Vector3) {
     this.mantle = null;
+    this.slopeSlideSpeed = 0;
     const c = { x: p.x, y: p.y + CENTER_Y + 0.05, z: p.z };
     this.body.setTranslation(c, true);
     this.collider.setTranslation(c);

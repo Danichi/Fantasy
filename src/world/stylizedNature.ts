@@ -1,3 +1,5 @@
+import { landscapeWeight } from './landscape/layout';
+import { waterSurfaceAt } from './waterLevel';
 import { landscapeWaterAt, landscapeTrailDistance } from './landscape/layout';
 import * as THREE from 'three';
 import type RAPIER from '@dimforge/rapier3d-compat';
@@ -575,6 +577,7 @@ export class StylizedNature {
     if (this.clearGridOf !== this.clearings || this.clearGridLen !== this.clearings.length) this.indexClearings();
     const near = this.clearGrid.get(Math.floor(x / 64) * 100003 + Math.floor(z / 64));
     if (near) for (const [cx, cz, cr] of near) if ((x - cx) ** 2 + (z - cz) ** 2 < cr * cr) return false;
+    if(waterSurfaceAt(x,z)!==null)return false;
     const water = landscapeWaterAt(x, z);
     if (water && heightAt(x, z) < water.level + .4) return false;
     if (landscapeTrailDistance(x, z) < 4) return false;
@@ -585,6 +588,24 @@ export class StylizedNature {
     if (Math.hypot(x - CRYPT.x, z - CRYPT.y - 12) < 28) return false;
     if (Math.hypot(x - PORT_AURELLE.x, z - PORT_AURELLE.y) < 210) return false;
     if (x < -4800 && sunspirePad(x, z) > 0) return false; // inside Ghagrabba's walls
+    return true;
+  }
+
+  /** Reserve a complete formation footprint, including foundations, routes and water. */
+  canPlace(x: number, z: number, radius = 0) {
+    if (this.clearGridOf !== this.clearings || this.clearGridLen !== this.clearings.length) this.indexClearings();
+    for (let i = Math.floor((x - radius) / 64); i <= Math.floor((x + radius) / 64); i++)
+      for (let j = Math.floor((z - radius) / 64); j <= Math.floor((z + radius) / 64); j++) {
+        for (const [cx, cz, cr] of this.clearGrid.get(i * 100003 + j) ?? []) if (Math.hypot(x - cx, z - cz) < radius + cr) return false;
+      }
+    for (let ring = 0; ring < 3; ring++)
+      for (let i = 0; i < (ring ? 16 : 1); i++) {
+        const a = (i * Math.PI) / 8,
+          r = (radius * ring) / 2,
+          px = x + Math.cos(a) * r,
+          pz = z + Math.sin(a) * r;
+        if (!this.clearSpot(px, pz) || landscapeWeight(px, pz) < 0.95 || waterSurfaceAt(px, pz) !== null) return false;
+      }
     return true;
   }
 
@@ -616,12 +637,12 @@ export class StylizedNature {
     // Ancient forests grow taller the further north into the elven woods.
     const giant = region === 'verdantElves' ? 1.2 + smoothstep(-2200, -3600, z) * 0.9 : region === 'deepWilderness' ? 1.35 : 1;
     switch (rel) {
-      case RELIEF.forest: return [0.5 + grove * 0.3, alpine || z < -4200 ? 'pine' : 'mix', giant];
+      case RELIEF.forest: return [0.64 + grove * 0.4, alpine || z < -4200 ? 'pine' : 'mix', giant];
       // Plains: groves and copses with lone trees between (Zelda-style open country, not an empty lawn).
-      case RELIEF.open: return [smoothstep(0.5, 0.74, grove) * 0.52 + 0.02, alpine ? 'pine' : 'tree', giant];
+      case RELIEF.open: return [smoothstep(0.39, 0.61, grove) * 0.7 + 0.025, alpine ? 'pine' : 'tree', giant];
       case RELIEF.marsh: return [0.12 + grove * 0.15, 'tree', giant];
       case RELIEF.shore: return [smoothstep(0.55, 0.8, grove) * 0.3 + 0.01, 'tree', giant];
-      case RELIEF.mountain: return [h < 320 ? 0.16 + grove * 0.2 : h < 420 ? 0.05 : 0, 'pine', 1];
+      case RELIEF.mountain: return [h < 300 ? 0.3 + grove * 0.35 : h < 430 ? 0.14 + grove * 0.18 : h < 500 ? 0.035 : 0, 'pine', h>350?0.65:0.95];
       case RELIEF.mesa: return [0.004, 'tree', 0.8];
       case RELIEF.volcanic: return [0.01, 'pine', 0.9];
       default: return [0, 'tree', 1];
@@ -631,7 +652,7 @@ export class StylizedNature {
   private generateTile(i: number, j: number): VegTile {
     const rnd = tileRng(i, j, 1);
     const x0 = i * TILE, z0 = j * TILE;
-    const step = 9;
+    const step = 7;
     const trees: number[] = [];
     for (let z = z0; z < z0 + TILE; z += step) {
       for (let x = x0; x < x0 + TILE; x += step) {
@@ -641,6 +662,8 @@ export class StylizedNature {
         if (!this.clearSpot(px, pz)) continue;
         const [d, type, giant] = this.density(px, pz);
         if (roll > d) continue;
+        const ground=heightAt(px,pz),slope=Math.hypot(heightAt(px+2,pz)-ground,heightAt(px,pz+2)-ground)/2;
+        if(slope>1.05)continue; // Roots need a shelf; sheer rock faces remain bare.
         const list = type === 'pine' ? this.pines : type === 'tree' ? this.trees : pick < 0.72 ? this.trees : this.pines;
         if (!list.length) continue;
         const proto = list[Math.floor(pick * 997) % list.length];
@@ -663,9 +686,9 @@ export class StylizedNature {
         const stony = fbm(px * 0.012 + 17, pz * 0.012 - 9, 3);
         // Bushes gather in loose clumps (a second noise) and thicken toward groves.
         const clump = smoothstep(0.36, 0.56, fbm(px * 0.021 + 5.3, pz * 0.021 - 2.7, 2)); // (this fbm spans ~0.1..0.65)
-        if (this.rocks.length && ((stony > 0.58 && roll < 0.18) || (slope > 2.2 && roll < 0.1) || roll < 0.012)) {
+        if (this.rocks.length && ((stony > 0.48 && roll < 0.22) || (slope > 2.2 && roll < 0.1) || roll < 0.035)) {
           trees.push(px, h - 0.3, pz, rot, 0.55 + sc * 1.1, this.rocks[Math.floor(pick * 991) % this.rocks.length]);
-        } else if (this.bushes.length && d < 0.5 && roll < 0.025 + clump * 0.3 + d * 0.3 && sandWeight(px, pz) < 0.3) {
+        } else if (this.bushes.length && h < 470 && reliefAt(px,pz)!==RELIEF.snow && d < 0.5 && roll < 0.025 + clump * 0.3 + d * 0.3 && sandWeight(px, pz) < 0.3) {
           trees.push(px, h - 0.06, pz, rot, 0.7 + sc * 0.6, this.bushes[Math.floor(pick * 991) % this.bushes.length]);
         }
       }
@@ -680,9 +703,10 @@ export class StylizedNature {
         const roll = ur(), pick = ur(), sc = ur(), rot = ur() * Math.PI * 2;
         if (!this.clearSpot(px, pz)) continue;
         const [d] = this.density(px, pz);
+        if(heightAt(px,pz)>470 || reliefAt(px,pz)===RELIEF.snow || reliefAt(px,pz)===RELIEF.lava)continue;
         const wood = d > 0.25;
         const meadow = d < 0.2 && heightAt(px, pz) > SEA_LEVEL + 1 && fbm(px * 0.025, pz * 0.025, 3) > 0.5 && sandWeight(px, pz) < 0.3;
-        if (!(wood && roll < 0.35) && !(meadow && roll < 0.26)) continue;
+        if (!(wood && roll < 0.55) && !(meadow && roll < 0.38)) continue;
         const list = wood ? (pick < 0.7 ? this.smalls.fern : this.smalls.mushroom) : this.smalls.flower;
         if (!list.length) continue;
         under.push(px, heightAt(px, pz) - 0.02, pz, rot, 0.72 + sc * 0.65, list[Math.floor(pick * 991) % list.length]);
@@ -844,7 +868,8 @@ export class StylizedNature {
         keep.add(id);
         if (this.colliders.has(id)) continue;
         const r = proto.trunk * arr[o + 4] * (proto.spec.targetHeight / proto.height);
-        this.colliders.set(id, physics.addCylinder(new THREE.Vector3(arr[o], arr[o + 1] + 2, arr[o + 2]), 2, Math.max(0.22, Math.min(proto.spec.kind === 'rock' ? 1.1 : 0.7, r))));
+        const halfHeight=proto.spec.kind==='rock'?Math.max(0.15,proto.spec.targetHeight*arr[o+4]*0.5):2;
+        this.colliders.set(id, physics.addCylinder(new THREE.Vector3(arr[o], arr[o + 1] + halfHeight, arr[o + 2]), halfHeight, Math.max(0.22, Math.min(proto.spec.kind === 'rock' ? 1.1 : 0.7, r))));
       }
     };
     for (const t of this.tiles.values()) if (Math.abs(t.i - pi) <= 1 && Math.abs(t.j - pj) <= 1) visit(t.trees, `${t.i},${t.j}`);
