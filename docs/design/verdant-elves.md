@@ -1,8 +1,53 @@
 # The Verdant Elves (update 4 plan)
 
-Status: plan, 2026-10-08. Nothing here is built yet beyond what "What exists"
-lists. It follows phase 9 of the World Expansion plan and the region data in
-`world/regionDefinitions.ts` (`verdantElves`). Numbers are starting points.
+Status: playable implementation, 2026-11-23. The original design follows below;
+this implementation uses the existing Ranger, Windcaller, Lightbinder, Druid
+and Shapeshifter classes. “Wildwarden” is the Hermit’s title, rather than a
+second form system. Wolf, bear and hawk forms keep their existing skill trees.
+
+## Playing the forest
+
+- Follow Greenwood Road north from Elder Glen. **Nimri stands on the near side
+  of the marker at (-148, -678)**, so the passage quest is accessible before
+  the barrier opens. Its reward covers a first day’s guide fee.
+- Visit Thornwick, then hire Nimri (80 gold, 24 in-game hours) or follow the
+  lantern road. Elves and Dungeoneering 15 can read the true paths. Clear the
+  Silver Spring and settle Corwen’s dispute to earn permanent guidance.
+- The logging dispute has two saved agreements: withdraw from the grove or
+  use only the marked fallen-timber concession. Both permit the story to continue.
+- Silverbough reveals itself to guided travellers. Its bowyer and windcaller,
+  heartwood workbench, provisions and bridge homes support the journey inward.
+- The World Tree remains at **(-2842, -2931)**. Take its southern spiral ramp
+  to the 28 m canopy ring, archive boughs, houses and Council. Read all three
+  archives before reporting to Lirael.
+- Defeat the level 35 Blighted Elder and its wolves to unseal **Starfall**.
+  The two-floor temple uses native mirror puzzles, a level 39 population,
+  Asterion’s phase summons and warned falling-light attacks, a chart chamber,
+  rest shrines, shortcuts and a return portal.
+- Bring the actual chart to Lirael, then follow the eastern refuges to
+  **Moonlight Glade (3256, -2856)**. Sylwen reads it between **20:00 and 05:00**.
+  Existing mountain and desert progress is preserved; these are additional bearings.
+- Seven side quests cover the logging agreement, spring, lost hunter, peaceful
+  spirit-fox trail, root-harp song, night blossoms and an elf’s homecoming.
+  Restore the First Song to open the Hermit’s Druid and Shapeshifter training.
+- Refuge waystones connect locations already visited. Rest or wait for dusk,
+  cook, brew moonblossom draughts and craft spirit-amber keepsakes. Gathering
+  replenishes daily; sacred heartwood requires the earned token.
+
+Lost Woods warnings give time to return to the lantern road before a fade
+returns you to a nearby refuge. The outer woods never loop. Combat, swimming,
+vehicles, interiors and guided travel suspend the loop. Guidance expiry,
+choices, discoveries, resources and completed encounters are saved, and
+completed encounters replay into quests accepted later.
+
+Implementation lives in `src/world/elves/`, `src/quests/elfQuests.ts`,
+`src/dungeon/dungeons/starfall.ts` and `src/items/catalog/elves.ts`. Terrain,
+water, bridge decks and worker tiles share pure layout data. Region geometry,
+colliders and encounters stream around the player; the World Tree’s distant
+silhouette remains visible. Both bosses are available in the combat sandbox.
+
+The original longer-term design below also describes optional expansions
+(such as broader tree-cutting consequences) beyond the current adventure.
 
 ---
 

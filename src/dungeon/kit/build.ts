@@ -54,10 +54,14 @@ export interface KitDungeonDef {
   seed?: number;
   /** wandering enemies per floor */
   mobs: (floor: number) => MobKind[];
+  /** Explicit regional combat level, independent of the dungeon’s off-world coordinates. */
+  mobLevel?: number;
   loot: LootTable;
   boss?: { floor: number; def: BossDef };
   /** the named gear waiting in the boss's reward room (once) */
   reward?: string;
+  /** Story finds in the boss chamber must be recoverable by every build. */
+  rewardUnlocked?: boolean;
   /** what the way out says on each floor */
   exitLabel: (floor: number) => string;
   arrive: (floor: number) => string;
@@ -834,7 +838,7 @@ export class KitInstance {
       this.chests.push(rec);
       this.box(pos.clone().setY(0.4), V(0.55, 0.4, 0.55));
       // Most chests are locked (items/catalog/locks.ts); hidden ones are a secret's reward and stay open.
-      const lockId = `${this.def.id}/${ch.id}`, lockLv = rec.hidden ? 0 : lockLevel(lockId, ch.tier);
+      const lockId = `${this.def.id}/${ch.id}`, lockLv = rec.hidden || (this.def.rewardUnlocked && ch.id.startsWith('reward-')) ? 0 : lockLevel(lockId, ch.tier);
       const L = () => GEAR.locks;
       this.interactables.push({
         pos, radius: 1.9,
@@ -1053,7 +1057,7 @@ export class KitInstance {
     }
     // Instanced coordinates have no geographical meaning. Each dungeon has an
     // authored tier, rather than inheriting the road tier of its remote origin.
-    const level=this.def.id==='crypt'?5+this.floor*2:this.def.id==='hollowRidge'?14: this.def.id==='drownedShrine'?24:8;
+    const level=this.def.mobLevel ?? (this.def.id==='crypt'?5+this.floor*2:this.def.id==='hollowRidge'?14: this.def.id==='drownedShrine'?24:8);
     const target=mob.obj as typeof mob.obj & Target;
     const scale=wildlifeScale(level);target.level=level;
     target.hp=target.maxHp=Math.round(target.maxHp*scale.hp);
@@ -1061,6 +1065,7 @@ export class KitInstance {
     if(mob.obj instanceof OrcMob)mob.obj.hitDamage*=scale.dmg;
     if(mob.obj instanceof Undead||mob.obj instanceof Slime)mob.obj.damageScale=scale.dmg;
     if(mob.obj instanceof Rat)mob.obj.hitDamage*=scale.dmg;
+    if(mob.obj instanceof LivingArmour && this.def.mobLevel !== undefined)mob.obj.damageScale=scale.dmg;
     this.mobs.push(mob);
     return mob;
   }

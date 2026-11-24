@@ -204,6 +204,7 @@ import { GuardArc } from './ui/guardArc';
 import { ThreatWarn } from './ui/threatWarn';
 import { setupMountains } from './world/mountains/wiring';
 import { Archipelagos } from './world/islands/archipelagos';
+import { ElvenForest } from './world/elves/elvenForest';
 import { ColdMeter } from './ui/coldMeter';
 import { stepImpacts } from './combat/impacts';
 import { scanThreats } from './combat/flow';
@@ -2036,6 +2037,44 @@ async function boot() {
   stylizedNature.clearings.push(...landscape.clearings);
   const warmLandscape = player.onTeleport;
   player.onTeleport = p => { warmLandscape?.(p); if (realm.mode === 'overworld' && !realm.interior) landscape.warm(p); };
+  // The Verdant Woods: persistent quests and people, streamed forest districts and canopy.
+  const elves = new ElvenForest({
+    scene: r.scene, mats: world.mats, fx, player, quests, realm, flags: worldFlags,
+    day: () => time.day, hour: () => time.hour,
+    toast: text => hud.toast(text), card: (name, text) => hud.regionCard(name, text, true, regionArt('verdantElves')),
+    give: (id, n) => giveItem(id, n), save: () => save(),
+    close: () => dialogue.close(), talk: (name, title, text, opts) => dialogue.show(name, title, text, opts),
+    bossBar: (target, name) => hud.bossBar(target, name), openRoad: () => roads.open('forest'),
+    rest: hour => {
+      time.skipTo(hour); player.hp = player.maxHp; player.mana = player.maxMana;
+      player.stamina = player.maxStamina; player.restoreArmour(); save();
+      hud.toast(hour === 20 ? 'You wait beside the lantern until moonrise.' : 'You rest beneath the boughs until morning.');
+    },
+    craft: (kind, name) => arms.craft.show(kind, name, 0),
+    trade: name => town.showShop(name, 'Verdant Forest', 'Only fallen heartwood; only freely given light.',
+      [['elfTrailRation', 32], ['elfMoonDraught', 85], ['elfIronbark', 75], ['elfHeartwood', 90], ['elfSilverboughBow', 520], ['healthPotion', 35]],
+      { wants: [['elfSpiritAmber', 65], ['elfMoonblossom', 30], ['elfHeartwood', 35]], buyRate: { default: 0.4 } }),
+  });
+  { const previous = player.onTeleport; player.onTeleport = p => { previous?.(p); if (realm.mode === 'overworld' && !realm.interior) elves.warm(); }; }
+  for (const settlement of elves.settlements) npcs.addSettlement(settlement);
+  for (const record of elves.records) npcs.add(record);
+  realm.overworldInteractables.push(...elves.interactables);
+  stylizedNature.clearings.push(...elves.clearings);
+  for (const [id, options] of elves.services()) {
+    const previous = folkServices.get(id);
+    folkServices.set(id, (show, back) => [...options(t => show(t, [{ label: 'Go on.', run: back }]), back), ...(previous?.(show, back) ?? [])]);
+  }
+  for (const id of ['elf-faelan', 'elf-thessaly', 'elf-sylwen', 'elf-hermit']) {
+    const previous = folkServices.get(id);
+    folkServices.set(id, (show, back) => [
+      ...(previous?.(show, back) ?? []),
+      ...(id !== 'elf-hermit' || quests.isDone('elf-song') ? mentorOptions(player.paths, { id }, t => show(t, [{ label: 'Go on.', run: back }]), m => hud.toast(m), trials) : [
+        { label: 'Teach me the Living Green.', run: () => show('Restore the First Song at the root harps, then return. Lirael keeps its quest; leaf, rain, starlight is its order.', [{ label: 'Go on.', run: back }]) },
+      ]),
+    ]);
+  }
+  { const absent = npcs.absent; npcs.absent = id => elves.absent(id) ?? absent?.(id) ?? false; }
+  hideHooks.push(hidden => elves.setVisible(!hidden));
   // Island interiors stream independently of their permanent harbours.
   const archipelagos = new Archipelagos({
     scene: r.scene, mats: world.mats, fx, player, quests, sailing, ports: islands.ports.filter(p => p.def.style !== 'dwarven'),
@@ -2366,7 +2405,7 @@ async function boot() {
   const lanternHints = () => lanterns.spots.filter((s) => (worldFlags['llHint:' + s.id] && !lanterns.isLit(s.id)) || (lanterns.isLit(s.id) && !s.dark)).map((s) => lanterns.isLit(s.id)
     ? { x: s.x, z: s.z, kind: 'siteDone' as const, glyph: '✧', color: '#ffc860', label: 'A relit lantern' }
     : { x: s.x, z: s.z, kind: 'site' as const, glyph: '✦', color: s.dark ? '#b08aff' : '#ffc860', label: `A Lost Lantern (rumoured)${s.dark ? ' - in the Dark' : ''}` });
-  worldMap.siteMarkers = () => [...baseSiteMarks(), ...landscape.markers(), ...archipelagos.markers(), ...story.wheel.markers(), ...teachers.markers(), ...festivals.markers(), ...lanternHints()];
+  worldMap.siteMarkers = () => [...baseSiteMarks(), ...landscape.markers(), ...elves.markers(), ...archipelagos.markers(), ...story.wheel.markers(), ...teachers.markers(), ...festivals.markers(), ...lanternHints()];
   almanac = new Almanac({
     day: () => time.day, hour: () => time.hour, moon: () => time.moonName,
     upcoming: () => festivals.upcoming(6),
@@ -2985,6 +3024,7 @@ async function boot() {
     mtn.update(STEP, realm.mode === 'overworld' && !realm.interior); // the White Mountains, and the Iron Kettle's passage
     landscape.update(STEP, player.pos, realm.mode === 'overworld' && !realm.interior);
     archipelagos.update(STEP, realm.mode === 'overworld' && !realm.interior);
+    elves.update(STEP, realm.mode === 'overworld' && !realm.interior);
     stepImpacts(STEP); // knocked foes meeting walls, fences, braziers, water; rolling barrels (combat/impacts.ts)
     if (!player.dead) scanThreats(STEP, player.pos, cam.forward()); // the warning flash for blows from behind
     director.tick(STEP, player); // attack turns (combat/ai.ts)
@@ -3364,6 +3404,7 @@ async function boot() {
       roadLife.clear();
       sailing.reset();
       archipelagos.reset();
+      elves.reset();
       landscape.reset();
       arms.reset(); // Arms and Crafting (feat/arms)
       quests.state = {};
@@ -3400,7 +3441,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, mountains: mtn, archipelagos, landscape, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
+      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, mountains: mtn, archipelagos, elves, landscape, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
       microDiscoveries,
       arms, // Arms and Crafting (feat/arms)
       sandbox, overlays, yard, combatDebug, telegraphs, // combat rework: the drill yard and the F9 overlay

@@ -48,7 +48,7 @@ function mirror(p: FloorPlan): FloorPlan {
  * A floor with stairs down behind a two-part gate: a portcullis that wants the
  * key from wing A, then a sealed door that wants wing B's mechanism.
  */
-function gatedFloor(o: {
+export function gatedFloor(o: {
   floor: number; name: string; key: string; mech: { id: string; kind: PuzzleKind }; pool: string[]; tier: number;
   n: Names; t: { hub: string; entry: string; ante: string; gate: string; alcove: string; stairs: string }; mirrored?: boolean;
 }): FloorPlan {
@@ -92,7 +92,7 @@ function gatedFloor(o: {
  * shrine and the boss's arena; beyond the boss, the reward room and a one-way
  * stair back down to the hub.
  */
-function bossFloor(o: {
+export function bossFloor(o: {
   floor: number; name: string; gate: LinkDef; key?: string; mech?: { id: string; kind: PuzzleKind }; pool: string[]; tier: number;
   n: Names; t: { hub: string; entry: string; ante: string; alcove: string; boss: string; reward: string; ret: string }; mirrored?: boolean;
   /** the alcove sits in the gate's path (the gate is two doors: hub -> alcove -> antechamber) */

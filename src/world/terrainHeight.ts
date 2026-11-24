@@ -8,6 +8,7 @@ import { capitalHeight } from './capitalCity';
 import { islandPadHeight } from './sea/islandPortsData';
 import { shapeIslands } from './islands/layout';
 import { shapeLandscape } from './landscape/layout';
+import { shapeElvenForest } from './elves/layout';
 import { mountainShape } from './mountains/mountainLayout';
 
 // ---------------------------------------------------------------------------
@@ -232,8 +233,9 @@ export function baseWorldHeightFn(x: number, z: number) {
   return h;
 }
 /** Shared authored landscape used by the local grid, streamed tiles and worker. */
+export function forestBaseHeight(x: number, z: number) { return shapeLandscape(x, z, baseWorldHeightFn); }
 export function worldHeightFn(x: number, z: number) {
-  return shapeLandscape(x, z, baseWorldHeightFn);
+  return shapeElvenForest(x, z, forestBaseHeight);
 }
 /** The Sinkhole's pit and the Drowned Watchtower's mere. */
 function discoveryCuts(x: number, z: number, h: number) {

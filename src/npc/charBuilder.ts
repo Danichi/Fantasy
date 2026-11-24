@@ -64,6 +64,8 @@ export interface Garb {
 }
 
 export interface Look {
+  /** Forest residents retain their pointed ears on the shared animated rig. */
+  elven?: boolean;
   /** a named character's own outfit */
   garb?: Garb;
   body: 'female' | 'male';
@@ -439,6 +441,13 @@ async function finishCharacter(model: THREE.Object3D, anchor: THREE.SkinnedMesh,
   await addClips(clips);
   const bones = new Map<string, THREE.Bone>();
   for (const b of anchor.skeleton.bones) bones.set(b.name, b);
+  if (look.elven) {
+    const head = bones.get('Head') ?? [...bones.values()].find(b => /^head$/i.test(b.name));
+    if (head) for (const side of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.32, 5), new THREE.MeshStandardMaterial({ color: look.skin ?? 0xe6d7bd, roughness: 0.85 }));
+      ear.name = 'ElvenEar'; ear.position.set(side * 0.15, 0.08, 0.01); ear.rotation.z = -side * 1.1; head.add(ear);
+    }
+  }
   // A SkinnedMesh with no bounding sphere gets one on its first render (three
   // sorts by it even with frustum culling off) by skinning every vertex on the
   // CPU: a stall each time a townsperson is built or baked for a sprite. The

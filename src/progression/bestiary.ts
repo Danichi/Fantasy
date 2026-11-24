@@ -28,6 +28,8 @@ export interface BeastEntry {
 type Row = [name: string, region: string, tier: number, lore: string];
 
 const COMMON: Record<string, Row> = {
+  elfSpider: ['Blightweaver Spider', 'Silver Spring, Verdant Woods', 4, 'Its pale landing circle shows where the committed pounce will fall. Move away, then punish the recovery.'],
+  elfBlightWolf: ['Blighted Wolf', 'Ancient Forest, Verdant Woods', 4, 'The pack hunts a wounded forest. Separate its lunges and keep the root lanes clear.'],
   green: ['Green Slime', 'Elder Glen, the crypt', 1, 'A bag of meadow-water with an appetite. Soft, slow, and the first thing most Glen children learn to swat.'],
   cave: ['Cave Slime', 'Crypts and caves', 1, 'Grey ooze that drips from crypt ceilings and lands on whoever is underneath. Mind the roof.'],
   blue: ['Blue Slime', 'The lower crypt', 2, 'Colder and tougher than its green cousin. It splits a bolt of frost when struck hard.'],
@@ -72,6 +74,8 @@ const COMMON: Record<string, Row> = {
 };
 
 const BOSSES: Record<string, Row> = {
+  elfBlightedElder: ['The Blighted Elder', 'Ancient Forest, Verdant Woods', 5, 'A guardian consumed by its own wound. Root lanes, rings and blighted wolves grow more dangerous as its core opens.'],
+  starwarden: ['Asterion, the Last Starwarden', 'Temple of Starfall', 5, 'Keeper of the sky before the Turning. His falling stars show their circles before they strike.'],
   grukk: ['Grukk, the Orc Warlord', 'The Crypt of Elder Glen', 3, 'Warlord of the crypt, paid in black iron by someone who wanted the Glen\'s dead dug up. His war-chest refills every time you leave.'],
   captainVess: ['Captain Vess', 'Hollow Ridge Caves', 3, 'Smuggler-captain of the Hollow Ridge. Someone always takes her place, and her purse.'],
   tideWarden: ['The Tide-Warden', 'The Drowned Shrine', 5, 'A shrine guardian of coral and old prayer. The water rises when it is angry.'],

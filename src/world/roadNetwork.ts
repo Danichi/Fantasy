@@ -314,7 +314,7 @@ export function buildRoadFurniture(scene: THREE.Scene, m: WorldMats, talk: (who:
       label: () => (r.id === 'forest' ? 'Read the marker stone' : 'Read the notice'),
       enabled: () => true,
       action: () => talk(r.name, r.id === 'capital' ? 'Crown checkpoint' : r.id === 'forest' ? 'Elven marker stone' : 'Closed road',
-        gate.open ? 'The barrier is lifted aside. A Crown Guard waves you through: registered at the Academy, the Crown Road is yours.' : r.gate!.reason),
+        gate.open && gate.road === 'forest' ? 'The marker’s runes brighten. Nimri has granted you passage along Greenwood Road.' : gate.open ? 'The barrier is lifted aside. A Crown Guard waves you through: registered at the Academy, the Crown Road is yours.' : r.gate!.reason),
     });
   }
   return {

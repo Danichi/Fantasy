@@ -33,6 +33,9 @@ import { Missiles } from '../enemies/wilds/projectiles';
 import { GRUKK_BOSS } from '../dungeon/dungeons/crypt';
 import { VESS } from '../dungeon/dungeons/hollowRidge';
 import { TIDE_WARDEN } from '../dungeon/dungeons/drownedShrine';
+import { STARWARDEN } from '../dungeon/dungeons/starfall';
+import { makeBlightedElder } from '../world/elves/blightedElder';
+import type { WildBeast } from '../enemies/wilds/wildBeast';
 import type { BossDef, BossFight, BossActor } from '../dungeon/kit/boss';
 import { theme } from '../dungeon/kit/theme';
 import { physics } from '../physics/physics';
@@ -126,7 +129,7 @@ async function dungeon(def: BossDef, c: BossContext): Promise<BossSession> {
   c.scene.add(group);
   const adds: (PracticeBody & Target)[] = [];
   const colliders: ReturnType<typeof physics.addBox>[] = [];
-  const th = theme(def === TIDE_WARDEN ? 'drowned' : def === VESS ? 'cave' : 'crypt');
+  const th = theme(def === STARWARDEN ? 'starfall' : def === TIDE_WARDEN ? 'drowned' : def === VESS ? 'cave' : 'crypt');
   const ctr = c.at.clone().add(V(0, 0, 4));
   const room = { id: 'practice-boss', rect: { x: 0, y: 0, w: 8, h: 8 } };
   const ctx = {
@@ -169,13 +172,14 @@ async function dungeon(def: BossDef, c: BossContext): Promise<BossSession> {
     s: {},
     phase: 0,
     target: null,
+    started: true,
   } as unknown as BossFight;
   def.arena?.(f);
   try {
     f.target = await def.create(c.at.clone(), 0, f);
   } catch (e) {
     group.removeFromParent();
-    for (const col of colliders) physics.world.removeCollider(col, true);
+    for (const col of colliders) physics.removeStatic(col);
     throw e;
   }
   def.onIntro?.(f);
@@ -204,7 +208,7 @@ async function dungeon(def: BossDef, c: BossContext): Promise<BossSession> {
       def.onReset?.(f);
       f.target?.dispose();
       for (const a of adds) a.dispose();
-      for (const col of colliders) physics.world.removeCollider(col, true);
+      for (const col of colliders) physics.removeStatic(col);
       group.removeFromParent();
       group.traverse((o) => {
         if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).geometry.dispose();
@@ -263,6 +267,12 @@ async function lair(id: string, c: BossContext): Promise<BossSession> {
   };
 }
 export const PRACTICE_BOSSES: PracticeBoss[] = [
+  {id:'elfBlightedElder',name:'The Blighted Elder',description:'Ancient roots, marked lanes and blight-wolf summons.',group:'Field',art:'gnarlbark',
+    async create(c){
+      const tele=new Telegraphs(c.scene),missiles=new Missiles(c.scene,c.fx),adds:WildBeast[]=[];
+      const b=makeBlightedElder(c.at,c.scene,c.fx,{tele,missiles},w=>adds.push(w),n=>c.say('Blighted Elder · phase '+(n+1)));b.wake();
+      return {phases:[0.6,0.3],health:()=>b,targets:()=>[b,...adds],update(dt,p){b.update(dt,p);for(const w of adds)w.update(dt,p);tele.update(dt);missiles.update(dt,p);},dispose(){b.dispose();for(const w of adds)w.dispose();tele.clear();missiles.clear();}};
+    }},
   ...fieldDefs.map((d) => ({
     id: d.id,
     name: d.name,
@@ -282,12 +292,12 @@ export const PRACTICE_BOSSES: PracticeBoss[] = [
     art: d.id === 'ulgra' ? 'exileOrc' : d.id,
     create: (c: BossContext) => lair(d.id, c),
   })),
-  ...[GRUKK_BOSS, VESS, TIDE_WARDEN].map((d) => ({
+  ...[GRUKK_BOSS, VESS, TIDE_WARDEN, STARWARDEN].map((d) => ({
     id: d.kind,
     name: d.name,
     description: d.subtitle,
     group: 'Dungeon' as const,
-    art: d.kind === 'grukk' ? 'orc' : d.kind,
+    art: d.kind === 'grukk' ? 'orc' : d.kind === 'starwarden' ? 'rustKnight' : d.kind,
     create: (c: BossContext) => dungeon(d, c),
   })),
   {

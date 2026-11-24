@@ -51,6 +51,8 @@ export interface ScheduleEntry {
 }
 
 export interface NpcRecord {
+  /** An authored elevated settlement floor; the World Tree’s fixed canopy posts use this. */
+  elevation?: number;
   id: string;
   name: string;
   job: string;
@@ -488,7 +490,7 @@ export class NpcManager {
     const r = p.seated ? 0.4 : (crowded ? 2.2 : 0.4) + (((st.seed >> 3) % 97) / 97) * (crowded ? 2.4 : 1.0);
     spot.x += Math.cos(a) * r;
     spot.z += Math.sin(a) * r;
-    spot.y = heightAt(spot.x, spot.z);
+    spot.y = heightAt(spot.x, spot.z) + (st.rec.elevation ?? 0);
     return { spot, indoors: !!p.indoors, yaw: p.yaw ?? a };
   }
 
@@ -711,7 +713,7 @@ export class NpcManager {
             st.pos.z += mz * step;
             st.yaw = dampAngle(st.yaw, Math.atan2(mx, mz), 7, dt);
           }
-          st.pos.y = heightAt(st.pos.x, st.pos.z);
+          st.pos.y = heightAt(st.pos.x, st.pos.z) + (st.rec.elevation ?? 0);
         }
       } else if (!st.moving && !held && !st.hidden) this.idleLife(st, dt, player);
       const dist = st.pos.distanceTo(player);
@@ -939,7 +941,7 @@ export class NpcManager {
     if (pd < 0.9 && pd > 1e-4 && st !== this.engaged && !place?.seated) {
       st.pos.x += (px / pd) * 1.6 * dt;
       st.pos.z += (pz / pd) * 1.6 * dt;
-      st.pos.y = heightAt(st.pos.x, st.pos.z);
+      st.pos.y = heightAt(st.pos.x, st.pos.z) + (st.rec.elevation ?? 0);
     }
     const leisure = e.activity === 'idle' || e.activity === 'talk' || e.activity === 'drink' || e.activity === 'play' || e.activity === 'shop';
     const onBeat = e.activity === 'patrol' && !st.rec.named && !place?.indoors;
@@ -976,7 +978,7 @@ export class NpcManager {
           to = pl.spots[Math.floor(Math.random() * pl.spots.length)].clone();
           to.x += (Math.random() - 0.5) * 3;
           to.z += (Math.random() - 0.5) * 3;
-          to.y = heightAt(to.x, to.z);
+          to.y = heightAt(to.x, to.z) + (st.rec.elevation ?? 0);
           if (to.distanceTo(st.pos) > 140) to = null; // not a day's walk
           else st.errand = st.spot.clone();
         }
@@ -996,7 +998,7 @@ export class NpcManager {
     const r = child ? 1.5 + Math.random() * 3 : onBeat ? 3 + Math.random() * 6 : 0.6 + Math.random() * 1.8;
     const a = Math.random() * Math.PI * 2;
     const to = new THREE.Vector3(st.spot.x + Math.cos(a) * r, 0, st.spot.z + Math.sin(a) * r);
-    to.y = heightAt(to.x, to.z);
+    to.y = heightAt(to.x, to.z) + (st.rec.elevation ?? 0);
     if (this.ray && (this.inside(to) || this.ray(new THREE.Vector3(st.pos.x, st.pos.y + 1, st.pos.z), new THREE.Vector3(to.x - st.pos.x, 0, to.z - st.pos.z).normalize(), Math.hypot(to.x - st.pos.x, to.z - st.pos.z)) !== null)) return; // a wall in the way: stay put
     st.path = [to];
     st.moving = true;
@@ -1073,7 +1075,7 @@ export class NpcManager {
         if (away.lengthSq() < 1e-4) away.set(Math.sin(st.seed), 0, Math.cos(st.seed));
         away.normalize();
         st.pos.addScaledVector(away, 4.6 * dt);
-        st.pos.y = heightAt(st.pos.x, st.pos.z);
+        st.pos.y = heightAt(st.pos.x, st.pos.z) + (st.rec.elevation ?? 0);
         st.yaw = dampAngle(st.yaw, Math.atan2(away.x, away.z), 10, dt);
         st.moving = false;
         if (a) {

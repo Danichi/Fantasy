@@ -15,6 +15,7 @@ export function normalizeOrigin(o: unknown): Origin {
 // burst out of defeated enemies and fly to the player.
 
 export const XP_FOR_KIND: Record<string, [xp: number, gold: number]> = {
+  elfSpider: [95, 18], elfBlightWolf: [130, 25], elfBlightedElder: [1100, 240], starwarden: [1300, 300],
   green: [12, 3], blue: [26, 6], magma: [30, 8], cave: [22, 5], armour: [48, 14], orc: [420, 0], dummy: [0, 0],
   rat: [4, 1], dire: [140, 30], bandit: [34, 12], watchGuard: [0, 0], banditChief: [260, 120],
   zombie: [28, 5], skeleton: [32, 7], abomination: [650, 240],

@@ -31,7 +31,7 @@ export const FACTIONS: Record<string, Faction> = {
   goblin: { name: 'the goblins', home: [], drop: ['goblin'] },
   twoCoins: { name: 'the Two Coins crew', home: [], shop: /Fence|Two Coins|Smuggler/i, quest: /^(red-hand|quiet-hands|missing-gold|caravan-ledger|mq-ledger|hesk)$/, drop: ['bandit'] },
   gloam: { name: 'the Dark and the Gloam', home: [], quest: /^(mq-fall|mq-turning|mq-four|gravewood|mq-archive)$/, drop: ['gloam', 'undead'] },
-  elven: { name: 'the elven envoy', home: ['verdantElves', 'royalCapital'], shop: /Lirael|Elf|Elven|Envoy|Verdant/i, quest: /^(verdant|ysmay|moon|veyr|veyrs-lesson)$/ },
+  elven: { name: 'the elven envoy', home: ['verdantElves', 'royalCapital'], shop: /Lirael|Elf|Elven|Envoy|Verdant|Silverbough|Woodsman/i, quest: /^(elf-.*|verdant|ysmay|moon|veyr|veyrs-lesson)$/ },
   valorian: { name: 'the Valorian Legion', home: ['valoria', 'royalCapital'], shop: /Legation|Varro|Valoria|Legion/i, quest: /^(valoria|varro)$/ },
   hunter: { name: 'the hedge and hunting folk', home: ['elderGlen', 'cresha', 'wildlands', 'southernMarches'], shop: /Wenna|Hunter|Charcoal|Bram|Trapper|Carpenter|Herbal/i, quest: /^(rl-hunters|rl-charcoal|wenna|herb-.*|herbalist-list)$/, drop: ['beast'] },
 };
