@@ -89,6 +89,7 @@ export class Rootwarden implements Target {
   private spikeMat: THREE.MeshStandardMaterial;
   private rb: RAPIER.RigidBody;
   private col: RAPIER.Collider;
+  private disposed = false;
   private time = 0;
   private enraged = false;
   private pendingSummon = false;
@@ -250,7 +251,7 @@ export class Rootwarden implements Target {
     this.lines = [];
     this.set('dying');
     targets.delete(this);
-    events.emit('enemyDied', { at: this.center.clone(), enemyId: this.id, kind: this.kind });
+    events.emit('enemyDied', { at: this.center.clone(), enemyId: this.id, kind: this.kind, level: (this as Target).level });
     wildsSfx.creak(0, 0.9);
     this.onDeath?.();
   }
@@ -594,10 +595,18 @@ export class Rootwarden implements Target {
   }
 
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
     targets.delete(this);
     this.scene.remove(this.root);
     for (const s of this.spikes) this.scene.remove(s.mesh);
     this.spikes = [];
+    this.tele.cancel(this.mark);
+    const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>();
+    this.root.traverse(o => { if (o instanceof THREE.Mesh) { geometries.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m); } });
+    geometries.add(this.spikeGeo); materials.add(this.spikeMat);
+    for (const g of geometries) g.dispose();
+    for (const m of materials) m.dispose();
     physics.world.removeCollider(this.col, false);
     physics.world.removeRigidBody(this.rb);
   }

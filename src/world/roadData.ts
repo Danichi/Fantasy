@@ -73,7 +73,7 @@ export const ROAD_SPECS: RoadSpec[] = [
   {
     // The northern forest road toward the elven woods.
     id: 'forest', name: 'The Greenwood Road', kind: 'lane',
-    pts: [[0, -300], [-20, -380], [-70, -520], [-160, -700], [-300, -900], [-520, -1150], [-900, -1500], [-1500, -2000], [-2100, -2500], [-2800, -3000]],
+    pts: [[0, -300], [-20, -380], [-70, -520], [-160, -700], [-300, -900], [-520, -1150], [-900, -1500], [-940, -1730], [-1730, -2290], [-2842, -2931]],
     gate: { at: [-160, -700], reason: 'An elven marker stone stands across the road: none pass into the Verdant Woods without a guide.' },
   },
   {

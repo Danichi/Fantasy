@@ -1,3 +1,5 @@
+import { forestWaterAt } from './elves/layout';
+import { forestBaseHeight } from './terrainHeight';
 import { CREEK } from './roadData';
 import { segment } from './landscape/layout';
 import { landscapeWaterAt } from './landscape/layout';
@@ -11,6 +13,8 @@ import { CANAL, QUAY_X } from './portCity';
 /** Water surface height at a point, or null if there is no water. */
 export function waterSurfaceAt(x: number, z: number): number | null {
   const ground = heightAt(x, z);
+  const forest = forestWaterAt(x,z,forestBaseHeight);
+  if(forest && ground < forest.level) return forest.level;
   const local = landscapeWaterAt(x, z);
   if (local && ground < local.level && local.distance < local.half + local.bank) {
     // A falling ribbon over the coast is not a tall column of swimmable water.

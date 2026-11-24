@@ -37,7 +37,8 @@ export interface Trials {
 export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: string) => void, notify: (msg: string) => void, trials?: Trials): DialogueOption[] {
   const out: DialogueOption[] = [];
   // Hidden classes only come up once their way is open (a gateway, your people's blood).
-  const mine = DISCIPLINES.filter((d) => d.mentorNpc === s.id && (!d.secret || paths.learned(d.id) || paths.canTeach(d.id)));
+  const local: Record<string, string[]> = { 'elf-faelan': ['ranger'], 'elf-thessaly': ['windcaller'], 'elf-sylwen': ['lightbinder'], 'elf-hermit': ['druid', 'shapeshifter'] };
+  const mine = DISCIPLINES.filter((d) => (d.mentorNpc === s.id || local[s.id]?.includes(d.id)) && (!d.secret || paths.learned(d.id) || paths.canTeach(d.id)));
   // The one they offer up front: the first you haven't learned that needs nothing
   // else first (or whose groundwork you have). The rest wait until you ask.
   const unlearned = mine.filter((d) => !paths.learned(d.id));
@@ -50,14 +51,15 @@ export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: 
       out.push({
         label: `Teach me ${d.name}.`,
         run: () => {
-          if (d.trial && trials && trials.status(d.trial) !== 'done') {
-            if (trials.status(d.trial) === 'active') {
-              say(`Not until you have finished my trial. ${trials.note(d.trial)}`);
+          const trial = s.id === 'elf-sylwen' && d.id === 'lightbinder' ? 'elf-bloom' : d.trial;
+          if (trial && trials && trials.status(trial) !== 'done') {
+            if (trials.status(trial) === 'active') {
+              say(`Not until you have finished my trial. ${trials.note(trial)}`);
               return;
             }
-            trials.accept(d.trial);
+            trials.accept(trial);
             notify(`Trial accepted · ${d.name}`);
-            say(trials.offer(d.trial));
+            say(trials.offer(trial));
             return;
           }
           if (!paths.canTeach(d.id)) {
@@ -65,7 +67,7 @@ export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: 
             return;
           }
           // The lesson teaches it, one step at a time (the tree opens at the end).
-          if (lessonHook.start?.(d)) return;
+          if (d.mentorNpc === s.id && lessonHook.start?.(d)) return;
           paths.teach(d.id);
           notify(`Learned ${d.name} · open Skills (K) to invest XP`);
           say(`${d.flavour} That is the first lesson. The rest you pay for in sweat, and in the XP you bring me.`);
@@ -73,7 +75,7 @@ export function mentorOptions(paths: Paths, s: Pick<NpcSpec, 'id'>, say: (text: 
       });
       continue;
     }
-    if (lessonHook.has?.(d.id)) out.push({ label: `Go over the first lesson of ${d.name} again.`, run: () => void lessonHook.start?.(d) });
+    if (d.mentorNpc === s.id && lessonHook.has?.(d.id)) out.push({ label: `Go over the first lesson of ${d.name} again.`, run: () => void lessonHook.start?.(d) });
     // The Ascension: at level 30 the mentor sets the two paths before you, and you choose.
     if (paths.canAscend(d.id)) {
       const [a0, a1] = ASCENSIONS[d.id];

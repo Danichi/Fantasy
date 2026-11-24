@@ -10,7 +10,7 @@ import { mats, paintedWood } from '../../items/materials';
 // sea-glass light over standing water.
 // ---------------------------------------------------------------------------
 
-export type ThemeId = 'crypt' | 'cave' | 'drowned';
+export type ThemeId = 'crypt' | 'cave' | 'drowned' | 'starfall';
 
 export interface ThemeMats {
   wall: THREE.Material;
@@ -157,6 +157,12 @@ export function theme(id: ThemeId): Theme {
         rune: std(0x3a3a48, 0.6, 0, { emissive: 0x7ab8ff, emissiveIntensity: 1.0 }),
       },
     };
+  }
+  if (id === 'starfall') {
+    t.warm = 0xbdebd8; t.cold = 0xa4bfff;
+    t.fog = [0x0b1b20, 12, 48]; t.hemi = {sky:0xaac9d7,ground:0x1b3027,intensity:0.6};
+    t.m.wall = std(0x718c83); t.m.floor = std(0x647a73); t.m.pillar = std(0xb1c1a5); t.m.trim = std(0xc7b67d,0.45,0.3);
+    t.m.cloth = std(0x416c63); t.m.rune.color.setHex(0x7ab2a9); t.m.rune.emissive.setHex(0x9be9d7);
   }
   cache.set(id, t);
   return t;

@@ -1,3 +1,4 @@
+import { forestSafe } from '../world/elves/layout';
 import { waterSurfaceAt } from '../world/waterLevel';
 import * as THREE from 'three';
 import { REGIONS } from '../world/regionDefinitions';
@@ -152,7 +153,7 @@ export class Population {
 
   /** Dry, not too steep, not in a town. */
   spotOk(x: number, z: number, minRoad = 0) {
-    if (isSafe(x, z) || waterSurfaceAt(x, z) !== null) return false;
+    if (isSafe(x, z) || forestSafe(x, z) || waterSurfaceAt(x, z) !== null) return false;
     const y = heightAt(x, z);
     if (y < RIVER_LEVEL + 0.3) return false;
     const rel = reliefAt(x, z);

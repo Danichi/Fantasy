@@ -59,7 +59,7 @@ export const test = base.extend<{ game: Game }, { persistent: BrowserContext; sh
   persistent: [
     async ({}, use, workerInfo) => {
       const opts = workerInfo.project.use;
-      const dir = path.join(process.cwd(), '.pw-cache', `w${workerInfo.parallelIndex}`);
+      const dir = path.join(process.cwd(), process.env.PW_PROFILE_ROOT ?? '.pw-cache', `w${workerInfo.parallelIndex}`);
       const ctx = await chromium.launchPersistentContext(dir, {
         headless: true,
         executablePath: opts.launchOptions?.executablePath,
@@ -67,6 +67,10 @@ export const test = base.extend<{ game: Game }, { persistent: BrowserContext; sh
         viewport: opts.viewport ?? { width: 1280, height: 720 },
         baseURL: opts.baseURL,
       });
+      // A persistent profile can restore game tabs after an interrupted run.
+      // Close startup pages before creating fixtures so old worlds cannot keep
+      // rendering beside the current test and exhaust the browser's memory.
+      await Promise.all(ctx.pages().map(page => page.close()));
       await use(ctx);
       await ctx.close();
     },

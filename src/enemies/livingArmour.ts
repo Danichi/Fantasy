@@ -39,6 +39,7 @@ export class LivingArmour implements Target {
   alive = true;
   lockable = true;
   stunned = false;
+  damageScale = 1;
   hp = HP;
   maxHp = HP;
   radius = 0.42;
@@ -349,7 +350,7 @@ export class LivingArmour implements Target {
     if (dist > REACH + 0.4 || fwd.dot(toP.clone().setY(0).normalize()) < 0.35) return;
     this.hitDone = true;
     const res = player.receiveAttack({
-      damage: DAMAGE,
+      damage: DAMAGE * this.damageScale,
       from: this.position.clone(),
       parryable: true,
       poise: 55,

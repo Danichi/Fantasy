@@ -47,7 +47,7 @@ export const TEMPLATE_INFO: Record<string, { min: [number, number]; name: string
   carvings: { min: [2, 2], name: 'the hall of carvings' },
 };
 
-const CORRIDOR_OF: Record<string, string> = { crypt: 'corridor', cave: 'tunnel', drowned: 'causeway' };
+const CORRIDOR_OF: Record<string, string> = { crypt: 'corridor', cave: 'tunnel', drowned: 'causeway', starfall: 'corridor' };
 const VAULT_OF: Record<string, string> = { crypt: 'vault', cave: 'stash', drowned: 'reliquary' };
 
 /** Every cell pair across the shared wall of two rects: [cell in a, edge dir toward b]. */
@@ -118,7 +118,7 @@ const middle = <T,>(a: T[]) => a[Math.floor((a.length - 1) / 2)];
 
 export interface GrammarOpts {
   /** the dungeon's theme (picks corridor templates) */
-  theme: 'crypt' | 'cave' | 'drowned';
+  theme: 'crypt' | 'cave' | 'drowned' | 'starfall';
   /** traps this dungeon uses */
   traps: TrapKind[];
 }

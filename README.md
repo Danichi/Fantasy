@@ -71,6 +71,19 @@ resume safely at Westgate; owned ships keep their cargo and receive new berths.
 See [the Port Aurelle guide](docs/design/port-aurelle.md) for districts,
 activities, progression and implementation details.
 
+## The Verdant Elves’ forest
+
+Take Greenwood Road north from Elder Glen and speak to Nimri before the marker
+stone. The forest now includes Thornwick, hidden Silverbough, the World Tree’s
+walkable canopy city, the Ancient Forest, Temple of Starfall and Moonlight Glade.
+Its six-part story and seven side quests include guides and Lost Woods paths,
+a lasting logging agreement, a spirit-fox trail, root harps, night gathering,
+local class teachers and two bosses (also available in the combat sandbox).
+
+Follow the lanterns; hire a guide or earn the permanent token. Discovered refuge
+waystones provide return travel, rest and a way to wait until moonrise. The
+[forest guide](docs/design/verdant-elves.md#playing-the-forest) explains progression.
+
 ## The island expeditions
 
 Explore all 43 islands across the Azure, Emerald, Shattered and Sunken
