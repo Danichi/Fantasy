@@ -473,14 +473,14 @@ export function setupAct1(c: ActCtx) {
       // Mid-fight: back out, and the shades go with you. The wheel lets you try again.
       if (story.darkness > 0.5 && F.mirrorFight === 1) return { label: '(Step back through the wheel. You can come again.)', run: () => { story.h.dialogue.close(); mirrorAbandon(); } };
       if (!quests.wants('mirror-walked')) return null;
-      return { label: '(Step through the wheel, into the Dark.)', run: () => { story.h.dialogue.close(); mirrorWalk(); } };
+      return { label: '(Witness the Gravewood echo, into the Dark.)', run: () => { story.h.dialogue.close(); mirrorWalk(); } };
     });
   });
   const mirrorWalk = () => {
     void story.play('mirror', async (s) => {
       s.bars(true);
       await s.dark(1, 1.8);
-      await s.say(null, 'You step through. The graveyard is the same, and not. The graves are open. Beyond the wall the wood is black and dead, and old ruins stand where there were none. No one lives here. Nothing has for a very long time.', 5);
+      await s.say(null, 'The pedestal holds a narrow echo of the Dark. The graves are open. Beyond the wall the wood is petrified, and old ruins stand where there were none. Outside this memory, the Dawn can tether you to the ancient world itself.', 5);
       await s.voice('Do not stay long. The Dark remembers the shape of anyone who walks in it.', 3.4);
     });
     const go = () => {

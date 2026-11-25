@@ -54,7 +54,9 @@ interface Saved {
 }
 
 export class Realm {
-  mode: 'overworld' | 'dungeon' | 'interior' = 'overworld';
+  mode: 'overworld' | 'dungeon' | 'interior' | 'dark' = 'overworld';
+  darkInteractables: Interactable[] = [];
+  darkRespawn = new THREE.Vector3();
   /** the building you're inside (mode 'interior') */
   interior: Interior | null = null;
   /** people and things the game adds inside a building (keepers, patrons) */
@@ -218,6 +220,7 @@ export class Realm {
   }
 
   get interactables() {
+    if (this.mode === 'dark') return this.darkInteractables;
     if (this.mode === 'interior' && this.interior) return [...this.interior.interactables, ...this.interiorExtras];
     if (this.mode === 'dungeon' && this.active === 'mine' && this.mineInstance) return this.finds.length ? [...this.mineInstance.interactables, ...this.finds] : this.mineInstance.interactables;
     if (this.mode === 'dungeon' && this.instance) return this.finds.length ? [...this.instance.interactables, ...this.finds] : this.instance.interactables;
@@ -226,6 +229,7 @@ export class Realm {
 
   /** Where to respawn after dying. */
   get respawnPoint() {
+    if (this.mode === 'dark') return this.darkRespawn.clone();
     if (this.mode === 'dungeon' && this.active === 'mine' && this.mineInstance) return this.mineInstance.spawnPoint;
     if (this.mode === 'dungeon' && this.instance) return this.instance.respawnPoint;
     if (this.interior) return this.interior.spawn.clone();
@@ -371,6 +375,45 @@ export class Realm {
       bossBar: (t: { hp: number; maxHp: number; alive: boolean } | null, name?: string) => this.hud.bossBar(t, name),
       save: () => this.onSave?.(),
     };
+  }
+
+  /** An outdoor dimension with independent collision, not a dungeon instance. */
+  enterDark(ground: (x: number, z: number) => number | null, actions: Interactable[]) {
+    if (this.mode !== 'overworld' || this.busy) return false;
+    this.overworld.clearEnemies();
+    this.overworld.enemiesEnabled(false);
+    this.overworld.hide(true);
+    this.atmosphere(true);
+    this.mode = 'dark';
+    this.darkInteractables = actions;
+    setGroundOverride(ground);
+    const r = this.r, u = r.post?.finalMat.uniforms;
+    r.scene.background = new THREE.Color(0x333447);
+    r.scene.fog = new THREE.Fog(0x555568, 180, 850);
+    r.scene.environmentIntensity = .45;
+    r.hemi.intensity = .95;
+    r.hemi.color.set(0xbfc9e7);
+    r.hemi.groundColor.set(0x514655);
+    r.sun.intensity = 1.1;
+    r.camera.far = 1100;
+    r.camera.updateProjectionMatrix();
+    if (u) {
+      u.uHaze.value = .0018;
+      (u.uHazeColor.value as THREE.Color).set(0x555568);
+      (u.uSunColor.value as THREE.Color).set(0xa7aec8);
+      u.uExposure.value = 1;
+    }
+    return true;
+  }
+
+  leaveDark() {
+    if (this.mode !== 'dark') return;
+    setGroundOverride(null);
+    this.darkInteractables = [];
+    this.mode = 'overworld';
+    this.overworld.hide(false);
+    this.overworld.enemiesEnabled(true);
+    this.atmosphere(false);
   }
 
   /** The Sandbox's Proving Grounds are open to the sky: daylight, a long view, a pale haze (restored on leaving like any interior). */

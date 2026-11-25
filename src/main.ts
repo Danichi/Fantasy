@@ -188,6 +188,7 @@ import { River } from './world/water';
 import { Foliage } from './world/foliage';
 import { StylizedNature } from './world/stylizedNature';
 import { DarkRealm } from './world/darkRealm';
+import { DarkJourney } from './world/dark/journey';
 import { Flowers } from './world/flowers';
 import { Rewards, XP_FOR_KIND } from './progression/progression';
 import { levelScale } from './creatures/creature';
@@ -630,8 +631,11 @@ async function boot() {
   let frontier!: FrontierRegion;
   let microDiscoveries!: MicroDiscoveries;
   let fieldLife: FrontierLife | undefined;
+  let darkJourney: DarkJourney | undefined;
+  let darkReady = false;
   const realm = new Realm(r, player, cam, fx, hud, mapUI, {
     hide: (h) => {
+      darkJourney?.setLivingVisible(!h);
       terrain.group.visible = !h;
       grass.mesh.visible = !h;
       ambient.setVisible(!h);
@@ -1769,9 +1773,9 @@ async function boot() {
       id: 'map', label: 'Map', key: 'M',
       subs: [{
         id: 'map', label: 'Map', see: true, el: () => null,
-        isOpen: () => worldMap.open || mapUI.open,
-        open: () => (realm.mode === 'dungeon' ? mapUI.toggle(true) : realm.mode === 'interior' ? hud.toast('Step outside to read the map.') : worldMap.toggle(true)),
-        close: () => (worldMap.open ? worldMap.toggle(false) : mapUI.toggle(false)),
+        isOpen: () => worldMap.open || mapUI.open || !!darkJourney?.view.open,
+        open: () => (realm.mode === 'dark' ? darkJourney?.view.toggleMap(true) : realm.mode === 'dungeon' ? mapUI.toggle(true) : realm.mode === 'interior' ? hud.toast('Step outside to read the map.') : worldMap.toggle(true)),
+        close: () => (darkJourney?.view.open ? darkJourney.view.toggleMap(false) : worldMap.open ? worldMap.toggle(false) : mapUI.toggle(false)),
       }],
     },
   ]);
@@ -2229,6 +2233,20 @@ async function boot() {
       town.setVisible(!h);
     },
   });
+  darkJourney = new DarkJourney({
+    r, player, cam, realm, fx, flags: worldFlags, network: story.wheel, dialogue,
+    toast: text => hud.toast(text), save: () => save(),
+    blocked: () => !!(story.director.active || story.darkness > .1 || gravewood.trapped || sailing.aboard),
+    menuOpen: () => input.uiMode,
+    wildWheels: () => sites.of('stone').map(s => ({ id: 'stone:' + s.id, name: `Sunwheel Stone ${s.n + 1}`, kind: 'stone', pos: new THREE.Vector3(s.x, heightAt(s.x, s.z), s.z) })),
+    prepareLiving: at => { terrain.warm(at); landscape.warm(at); terrainDressing.warm(at); archipelagos.warm(at); elves.warm(at); },
+    mapMode: open => {
+      input.releaseAll();
+      input.uiMode = open || inv.open || skills.open || dialogue.open || mapUI.open || worldMap.open;
+      if (open) input.exitLock(); else if (!input.uiMode) input.requestLock();
+    },
+  });
+  stylizedNature.clearings.push(...darkJourney.clearings);
   // ---- Lessons: a mentor teaching you plays a scene and walks you through it step by step ----
   const lessons = new Lessons({
     player, dialogue, flags: worldFlags,
@@ -2645,7 +2663,8 @@ async function boot() {
   const save = () => {
     if (TEST_MODE && !location.search.includes('save')) return;
     if (!heroMade) return;
-    const at = realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null;
+    darkJourney?.sync();
+    const at = darkJourney?.saveAnchor ?? (realm.interior ? realm.interior.door.pos : realm.mode === 'overworld' ? player.pos : null);
     const pos = at ? ([+at.x.toFixed(2), +at.y.toFixed(2), +at.z.toFixed(2)] as [number, number, number]) : saveData?.world?.pos;
     writeSave(player, realm.seed, realm.maps, realm.progress, town.guild.toJSON(), { discovery: discovery.toJSON(), flags: worldFlags, story: story.save(), social: social.save(), requests: requests.save(), pos, time: time.toJSON(), weather: weather.toJSON(), quests: quests.toJSON(), herbalism: herbalism.toJSON(), farm: farmLife.toJSON(), landmarks: landmarks.toJSON(), forage: foraging.toJSON(), wilds: population.toJSON(), raids: raids.toJSON(), bosses: bosses.toJSON(), sites: sites.toJSON(), horses: horses.toJSON(), fishing: fishing.toJSON(), sailing: sailing.toJSON(), arms: arms.toJSON() }, realm.mineProgress);
   };
@@ -2993,6 +3012,11 @@ async function boot() {
 
   events.on('playerDied', () => {
     if (SANDBOX_MODE) return;
+    if (darkJourney?.active) {
+      const journey = darkJourney;
+      setTimeout(() => { if (journey.active && player.dead) journey.recoverDeath(); }, TEST_MODE ? 4200 : 6500);
+      return;
+    }
     story.playerFell(); // a story fight you fell in waits for you to come back
     setTimeout(async () => {
       // Dying in the Sanctum Below puts you back up the stair.
@@ -3056,7 +3080,8 @@ async function boot() {
     if (input.wasPressed('help')) overlays.toggleHelp();
     if (input.wasPressed('toggleBar') && !sailing.atHelm && !player.swimming) hud.setMode(hud.mode === 'items' ? 'moves' : 'items');
     if (input.wasPressed('map')) {
-      if (realm.mode === 'dungeon') mapUI.toggle();
+      if (realm.mode === 'dark') darkJourney?.view.toggleMap();
+      else if (realm.mode === 'dungeon') mapUI.toggle();
       else if (realm.mode === 'interior') hud.toast('Step outside to read the map.');
       else worldMap.toggle();
     }
@@ -3064,6 +3089,7 @@ async function boot() {
     if(!sailing.atHelm && !player.swimming) slotActions.forEach((a, i) => input.wasPressed(a) && useHotbar(i));
     if (realm.mode === 'overworld') { updateSea(STEP,sailing.current?.pos??player.pos,weather.p); sailing.preStep(STEP); }
     player.update(STEP, input, cam);
+    darkJourney?.update(STEP);
     combat.tick(STEP); // posture, poise and wind-ups of everything that fights (combat/core.ts)
     mtn.update(STEP, realm.mode === 'overworld' && !realm.interior); // the White Mountains, and the Iron Kettle's passage
     landscape.update(STEP, player.pos, realm.mode === 'overworld' && !realm.interior);
@@ -3205,14 +3231,14 @@ async function boot() {
     const overlayUp = (!TEST_MODE || SANDBOX_MODE) && (!started || pausedByUser);
     // Hit-stop is a brief slow-motion rather than a hard freeze.
     techniqueLibrary.update(dt);
-    traversalView.update(dt, realm.mode === 'overworld' || realm.interior?.kind === 'sandbox');
+    traversalView.update(dt, realm.mode === 'overworld' || realm.mode === 'dark' || realm.interior?.kind === 'sandbox');
     const timeScale = (hitStop > 0 ? 0.1 : slowT > 0 ? slowScale : 1) * (sandbox?.settings.speed ?? 1) * techniqueLibrary.timeScale;
     hitStop = Math.max(0, hitStop - dt);
     slowT = Math.max(0, slowT - dt);
     const simDt = dt * timeScale;
     acc += simDt;
     let steps = 0;
-    if (paused || overlayUp || mapUI.open || worldMap.open || story.director.holdWorld || filmPlaying() || rewardPlaying()) acc = 0;
+    if (paused || overlayUp || mapUI.open || worldMap.open || darkJourney?.view.open || (darkJourney?.active && !darkReady) || story.director.holdWorld || filmPlaying() || rewardPlaying()) acc = 0;
     while (acc >= STEP && steps < MAX_STEPS) {
       acc -= STEP;
       steps++;
@@ -3255,13 +3281,13 @@ async function boot() {
     trail.update(dt);
     updateSnare(player);
     r.camera.getWorldDirection(player.aimDir);
-    ground.update(r.camera.position);
+    if (realm.mode === 'overworld') ground.update(r.camera.position);
     grass.update(dt, r.camera.position, renderPos);
     ambient.update(dt, r.camera.position, now / 1000);
     // Sea simulation advances on the fixed step; rendering reads the same clock.
     ocean.update(dt, r.camera.position);
     // Time of day and weather drive the sky, light, water, grass and sound.
-    const worldRunning = !SANDBOX_MODE && !(paused || overlayUp || mapUI.open || worldMap.open || questUI.open);
+    const worldRunning = !SANDBOX_MODE && !darkJourney?.active && !(paused || overlayUp || mapUI.open || worldMap.open || questUI.open);
     if (worldRunning) time.update(dt);
     const here = realm.mode === 'dungeon' ? 'cresha' : realm.interior ? regionAt(realm.interior.door.pos.x, realm.interior.door.pos.z) : regionAt(player.pos.x, player.pos.z);
     weather.update(worldRunning ? dt : 0, here === 'ocean' ? 'portAurelle' : here);
@@ -3374,6 +3400,7 @@ async function boot() {
     social.barks.enabled = realm.mode === 'overworld' && !dialogue.open;
     social.update(dt);
     main.frame(dt);
+    darkJourney?.frame();
     if (realm.mode === 'overworld') trouble.update(dt);
     physDebug?.update();
     origins.frame(paused ? 0 : dt); // ---- Origins (feat/origins) ----
@@ -3400,6 +3427,7 @@ async function boot() {
     }
   };
   await Promise.all([town.ready, gravewood.ready, loadArmourKit()]); // the mine's Living Armour
+  if (saveData && !SANDBOX_MODE && !sailing.aboard) darkJourney?.restore();
   mark('npcs');
   // Compile every material's shaders up front, in parallel where the
   // browser supports it, instead of stalling the first frames one by one.
@@ -3418,6 +3446,7 @@ async function boot() {
   });
   await loadBakedIcons();
   buildIcons(r.renderer, r.scene.environment, player.equip.items.map((i) => i.def.id));
+  darkReady = true;
 
   if (DEBUG || TEST_MODE) {
     // Tests share one booted game per worker; resetForTest puts it back to how
@@ -3425,6 +3454,7 @@ async function boot() {
     const fresh = buildSave(player, realm.seed, {}, structuredClone(realm.progress), town.guild.toJSON(), { flags: {} }, { gateOpen: false, guardianDead: false });
     const startHour = time.hour, startDay = time.day;
     const resetForTest = async () => {
+      darkJourney?.reset();
       techniqueLibrary.toggle(false);
       techniques.reset();
       input.releaseAll();
@@ -3492,7 +3522,7 @@ async function boot() {
       events.emit('progressChanged', {});
     };
     (window as any).__game = {
-      resetForTest, techniques, techniqueLibrary, traversalView,
+      resetForTest, techniques, techniqueLibrary, traversalView, darkJourney,
       sleep: (on: boolean) => (asleep = on),
       THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, mountains: mtn, archipelagos, elves, landscape, terrainDressing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
       microDiscoveries, fieldLife,

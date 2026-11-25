@@ -737,8 +737,7 @@ export class ElvenForest {
       this.d.toast('The path has folded back to a lantern refuge. Follow the lights, or ask Nimri for guidance.');
     }
   }
-  private stream() {
-    const p = this.d.player.pos;
+  private stream(p = this.d.player.pos) {
     for (const s of FOREST_SITES) {
       const d = Math.hypot(p.x - s.at[0], p.z - s.at[1]),
         show = d < 360 && !(s.id === 'silverbough' && !this.guided);
@@ -824,8 +823,8 @@ export class ElvenForest {
     this.currentLayer = null;
     this.warning = false;
   }
-  warm() {
-    this.stream();
+  warm(at = this.d.player.pos) {
+    this.stream(at);
     this.scan = 0.65;
   }
   markers(): MapMarker[] {

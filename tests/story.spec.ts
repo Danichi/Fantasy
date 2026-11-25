@@ -173,7 +173,8 @@ test('Act I: trust, the wheel wakes and carries you, the crypt and the Wheelbrea
   expect(res.beforeWake).toEqual({ awake: false, stage: 'active@3' });
   expect(res.riteLabel).toContain('hand');
   expect(res.afterWake).toEqual({ awake: true, crypt: 'none', stranger: 'active@4' });
-  expect(res.reported).toEqual({ stranger: 'done@4', lead: ['maud'], crypt: 'none' });
+  expect(res.reported).toMatchObject({ stranger: 'done@4', crypt: 'none' });
+  expect(res.reported.lead).toContain('maud'); // Parallel regional chapters can offer leads too.
   expect(res.tookCrypt).toBe('active@0');
   expect(res.travelOpts.some((o: string) => /Millbrook/.test(o))).toBe(true);
   expect(res.atMillbrook).toBe(true);
