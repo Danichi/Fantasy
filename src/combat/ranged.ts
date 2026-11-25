@@ -129,7 +129,7 @@ export class Ranged {
   update(dt: number, input: Input) {
     const p = this.player, L = this.launcher;
     this.renock = Math.max(0, this.renock - dt);
-    const free = !!L && !p.techniqueMode && !p.dead && !p.mounted && !p.vehicle && !p.swimming && !input.uiMode;
+    const free = !!L && !p.adventure.busy && !p.adventure.gliding && !p.techniqueMode && !p.dead && !p.mounted && !p.vehicle && !p.swimming && !input.uiMode;
     const wantAim = free && input.held('offhand') && !p.act;
     this.aiming = wantAim;
     p.aiming = wantAim;

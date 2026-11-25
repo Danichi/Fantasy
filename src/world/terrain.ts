@@ -1,3 +1,4 @@
+import { markClimbable } from '../player/traversalSurfaces';
 import * as THREE from 'three';
 import { MEADOW_FIELD_GLSL } from '../render/palette';
 import { worldNoise } from '../render/noise';
@@ -552,7 +553,7 @@ export class Terrain {
     const n = TILE_N;
     const hf = new Float32Array(n * n);
     for (let b = 0; b < n; b++) for (let a = 0; a < n; a++) hf[a * n + b] = data[b * n + a];
-    return physics.addHeightfield(new THREE.Vector3((i + 0.5) * TILE, 0, (j + 0.5) * TILE), TILE_SEG, TILE_SEG, hf, TILE, TILE);
+    return markClimbable(physics.addHeightfield(new THREE.Vector3((i + 0.5) * TILE, 0, (j + 0.5) * TILE), TILE_SEG, TILE_SEG, hf, TILE, TILE), 'terrain');
   }
 
   dispose() {

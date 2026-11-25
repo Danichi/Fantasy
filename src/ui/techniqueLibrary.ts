@@ -267,7 +267,7 @@ export class TechniqueLibrary {
   }
   update(dt: number) {
     if (this.open && (this.model.player.dead || this.model.player.vehicle || this.model.player.swimming)) this.toggle(false);
-    this.launcher.hidden = this.open || this.model.input.uiMode || this.model.player.dead || !!this.model.player.vehicle || this.model.player.swimming;
+    this.launcher.hidden = this.open || this.model.input.uiMode || this.model.player.dead || this.model.player.adventure.busy || this.model.player.adventure.gliding || !!this.model.player.vehicle || this.model.player.swimming;
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = 0.1;
@@ -275,7 +275,7 @@ export class TechniqueLibrary {
     if (this.open) this.refreshStatus();
     const m = this.model,
       p = m.player;
-    this.guide.hidden = (!p.techniqueMode && !this.showGuide) || this.open || p.dead || !!p.vehicle || p.swimming;
+    this.guide.hidden = (!p.techniqueMode && !this.showGuide) || this.open || p.dead || p.adventure.busy || p.adventure.gliding || !!p.vehicle || p.swimming;
     document.body.classList.toggle('has-combat-input-guide', !this.guide.hidden);
     if (this.guide.hidden) return;
     if (p.techniqueMode) {

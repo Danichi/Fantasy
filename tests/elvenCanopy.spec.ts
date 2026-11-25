@@ -10,6 +10,7 @@ test('the World Tree spiral supports a capsule from the roots to the canopy and 
       P = await import('/src/physics/physics.ts' as string),
       T = await import('/src/world/terrainHeight.ts' as string),
       THREE = await import('/node_modules/three/build/three.module.js' as string);
+    const S = await import('/src/player/traversalSurfaces.ts' as string);
     const p = P.physics;
     await p.init();
     const scene = new THREE.Scene(),
@@ -60,8 +61,11 @@ test('the World Tree spiral supports a capsule from the roots to the canopy and 
       R.QueryFilterFlags.ONLY_FIXED,
       P.STATIC_ONLY
     );
+    const anchorCount = S.grappleAnchors.size;
+    const anchorGaps = [...S.grappleAnchors.values()].filter((a) => a.id.startsWith('canopy:')).map((a, i, all) => (i ? a.landing.distanceTo(all[i - 1].landing) : 0));
     p.world.removeRigidBody(body);
     g.dispose();
+    const anchorsLeft = S.grappleAnchors.size;
     const town = F.buildForestSite(
         L.FOREST_SITES.find((s: any) => s.id === 'thornwick'),
         palette,
@@ -93,6 +97,9 @@ test('the World Tree spiral supports a capsule from the roots to the canopy and 
     town.dispose();
     const end = p.world.bodies.len();
     return {
+      anchorCount,
+      anchorGaps,
+      anchorsLeft,
       refugeOverlaps,
       bridgeError,
       entryGap,
@@ -117,4 +124,7 @@ test('the World Tree spiral supports a capsule from the roots to the canopy and 
   expect(result.entryGap).toBeLessThan(0.15);
   expect(result.exitGap).toBeLessThan(0.15);
   expect(result.end).toBe(result.start);
+  expect(result.anchorCount).toBe(15);
+  expect(Math.max(...result.anchorGaps)).toBeLessThan(30);
+  expect(result.anchorsLeft).toBe(0);
 });

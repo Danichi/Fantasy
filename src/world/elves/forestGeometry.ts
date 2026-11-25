@@ -1,3 +1,4 @@
+import { addGrappleAnchor, removeGrappleAnchor } from '../../player/traversalSurfaces';
 import * as THREE from 'three';
 import { StaticBatch } from '../cityKit';
 import { buildHouse, type WorldMats } from '../buildings';
@@ -53,6 +54,8 @@ export class ForestGeometry {
   colliders: ReturnType<typeof physics.addBox>[] = [];
   private batch = new StaticBatch();
   private textures: THREE.Texture[] = [];
+  private anchors: string[] = [];
+  anchor(id: string, landing: THREE.Vector3) { this.anchors.push(id); addGrappleAnchor({ id, point: landing.clone().add(new THREE.Vector3(0, 1.8, 0)), landing: landing.clone().add(new THREE.Vector3(0, 0.06, 0)) }); }
   constructor(readonly p: ForestPalette) {}
   mesh(g: THREE.BufferGeometry, m: THREE.Material, at: THREE.Vector3, scale?: THREE.Vector3, q?: THREE.Quaternion) {
     if (m === this.p.bark && g instanceof THREE.CylinderGeometry) {
@@ -192,6 +195,8 @@ export class ForestGeometry {
     return this;
   }
   dispose() {
+    for (const id of this.anchors) removeGrappleAnchor(id);
+    this.anchors = [];
     this.root.removeFromParent();
     for (const c of this.colliders) physics.removeStatic(c);
     this.colliders = [];
@@ -329,6 +334,10 @@ export function buildForestSite(s: ForestSite, p: ForestPalette, mats: WorldMats
           4.4
         );
       }
+      for (let k = 1; k <= 12; k++) {
+        const a = k * Math.PI / 3 + Math.PI / 2;
+        g.anchor('canopy:' + k, new THREE.Vector3(x + Math.cos(a) * 25, y + (k / 12) * CANOPY_HEIGHT, z + Math.sin(a) * 25));
+      }
       g.deck(new THREE.Vector3(x, y + CANOPY_HEIGHT, z + 25), new THREE.Vector3(x, y + CANOPY_HEIGHT, z + 32), 4.4, false);
       for (let i = 0; i < 48; i++) {
         const a = (i * Math.PI * 2) / 48,
@@ -347,6 +356,7 @@ export function buildForestSite(s: ForestSite, p: ForestPalette, mats: WorldMats
         g.box(outer.clone().add(new THREE.Vector3(0, -0.3, 0)), 12, 0.6, 12, p.wood, true);
         g.mesh(new THREE.ConeGeometry(7, 6, 8), p.leaf, outer.clone().add(new THREE.Vector3(0, 6, 0)));
         g.lantern(v.x, v.z, v.y);
+        g.anchor('archive:' + i, outer.clone());
         g.sign(outer, 'Living Archive', ['The First Turning', 'The Fifth Summon', 'The Root Warning'][i]);
       }
       // Homes and workshops occupy their own boughs so the circulation ring stays open.

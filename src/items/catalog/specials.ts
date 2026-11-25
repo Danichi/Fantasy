@@ -48,8 +48,7 @@ interface Trap {
 export class Specials {
   readonly allies: Allies;
   /** a pull on the grappling rope in progress */
-  pull: { from: THREE.Vector3; to: THREE.Vector3; hook: THREE.Vector3; t: number; dur: number; strike?: Target } | null = null;
-  private rope: THREE.Line | null = null;
+  get pull() { return this.d.player.adventure.rope; }
   /** why the last throw failed (tests) */
   lastFail = '';
   traps: Trap[] = [];
@@ -87,6 +86,8 @@ export class Specials {
     // A foe on the line: a light one is yanked to you, a heavy one pulls you in to a strike.
     const foe = this.foeOnLine(origin, dir, Math.min(dist ?? range + camGap, 22 + camGap), camGap);
     if (foe) return this.hookFoe(foe);
+    const anchor = p.adventure.aimedAnchor(origin, dir);
+    if (anchor) return this.haul(anchor.landing, anchor.point, undefined, anchor.id);
     if (dist === null || dist < camGap * 0.6) {
       d.toast('The hook falls back: nothing to bite within 30 m.');
       this.lastFail = 'nothing';
@@ -121,13 +122,17 @@ export class Specials {
       this.lastFail = why;
       return false;
     }
-    const length = top.distanceTo(p.pos);
-    this.pull = { from: p.pos.clone(), to: top, hook: hook.clone(), t: 0, dur: Math.max(0.5, Math.min(1.8, length / 15)) };
-    const geo = new THREE.BufferGeometry().setFromPoints([p.center.clone(), hook]);
-    this.rope = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x6a5032 }));
-    d.scene.add(this.rope);
-    this.stats.grapples++;
-    return true;
+    return this.haul(top, hook);
+  }
+  private haul(to: THREE.Vector3, hook: THREE.Vector3, strike?: Target, anchor?: string) {
+    const p = this.d.player;
+    const ok = p.adventure.grappleTo(to, hook, strike, anchor);
+    if (ok) this.stats.grapples++;
+    else {
+      this.lastFail = p.stamina < 12 ? 'stamina' : 'blocked route';
+      this.d.toast(p.stamina < 12 ? 'The grapple needs 12 stamina.' : 'No clear route for the rope. Move back or aim at another ledge.');
+    }
+    return ok;
   }
   /** The nearest live foe whose body the aim line passes within a metre of. */
   private foeOnLine(origin: THREE.Vector3, dir: THREE.Vector3, max: number, minD: number): Target | null {
@@ -146,9 +151,9 @@ export class Specials {
 
   private hookFoe(t: Target): boolean {
     const p = this.d.player;
-    this.stats.grapples++;
-    this.flashRope(t.center);
     if (throwable(t)) {
+      this.stats.grapples++;
+      this.flashRope(t.center);
       // Yank: off its feet and across to you.
       const to = p.pos.clone().sub(t.position).setY(0);
       const dist = to.length();
@@ -165,7 +170,7 @@ export class Specials {
     const len = to.length();
     const end = p.pos.clone().addScaledVector(to.normalize(), Math.max(0, len - t.radius - 1.3));
     end.y = Math.max(p.pos.y, t.position.y);
-    this.pull = { from: p.pos.clone(), to: end, hook: t.center.clone(), t: 0, dur: Math.max(0.3, Math.min(0.9, len / 24)), strike: t };
+    if (!this.haul(end, t.center, t)) return false;
     events.emit('combatMove', { id: 'hookZip', name: 'Hook Zip' });
     return true;
   }
@@ -181,14 +186,7 @@ export class Specials {
   }
   private flashes: { line: THREE.Line; left: number }[] = [];
 
-  private endPull() {
-    this.pull = null;
-    if (this.rope) {
-      this.d.scene.remove(this.rope);
-      this.rope.geometry.dispose();
-      this.rope = null;
-    }
-  }
+  private endPull() { if (this.pull) this.d.player.adventure.cancel(); }
 
   // ---- traps and decoys -------------------------------------------------------------------------
   place(kind: Trap['kind'], r: number, dmg: number, sec: number) {
@@ -309,26 +307,6 @@ export class Specials {
   update(dt: number) {
     const d = this.d, p = d.player;
     this.allies.update(dt);
-    // The rope hauls you up, in an arc that clears the lip.
-    if (this.pull) {
-      const pl = this.pull;
-      pl.t += dt / pl.dur;
-      const k = Math.min(1, pl.t), e = k * k * (3 - 2 * k);
-      const at = pl.from.clone().lerp(pl.to, e);
-      at.y += Math.sin(k * Math.PI) * 1.2;
-      p.teleport(at);
-      if (this.rope) {
-        const pos = this.rope.geometry.attributes.position as THREE.BufferAttribute;
-        pos.setXYZ(0, p.center.x, p.center.y + 0.4, p.center.z);
-        pos.needsUpdate = true;
-      }
-      if (k >= 1) {
-        p.teleport(pl.to);
-        const foe = pl.strike;
-        this.endPull();
-        if (foe?.alive) p.strikeAt(foe);
-      }
-    }
     for (const f of this.flashes) {
       f.left -= dt;
       (f.line.material as THREE.LineBasicMaterial).opacity = Math.max(0, f.left / 0.3);

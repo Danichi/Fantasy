@@ -1,3 +1,4 @@
+import { buildTraversalLane } from './traversalLane';
 import * as THREE from 'three';
 import { physics } from '../physics/physics';
 import { addProp, clearProps } from '../combat/props';
@@ -19,6 +20,7 @@ const mats = () => ({
 
 export class ArenaProps {
   private root = new THREE.Group();
+  private traversalCleanup?: () => void;
   private m = mats();
   private flames: { light: THREE.PointLight; coal: THREE.Mesh; t: number }[] = [];
 
@@ -29,6 +31,7 @@ export class ArenaProps {
 
   /** Everything back where it started. */
   reset(training = true) {
+    this.traversalCleanup?.(); this.traversalCleanup = undefined;
     clearProps();
     resetImpacts();
     this.root.traverse(o=>{if((o as THREE.Mesh).isMesh)(o as THREE.Mesh).geometry.dispose();});
@@ -47,11 +50,13 @@ export class ArenaProps {
   }
 
   dispose() {
+    this.traversalCleanup?.();
     clearProps();
     this.scene.remove(this.root);
   }
 
   private build() {
+    this.traversalCleanup = buildTraversalLane(this.root, this.it);
     // Barrels: a cluster in the ring and a few by the slam wall.
     for (const [x, z] of [[6.5, 3], [7.4, 4.1], [5.8, 4.6], [12.5, -3], [12.8, -8.5], [-6, -9]] as const) this.barrel(x, z);
     // A fence in front of the north wall.

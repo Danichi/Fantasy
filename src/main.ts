@@ -1,3 +1,4 @@
+import { TraversalView } from './player/traversalView';
 import { Techniques } from './combat/techniques';
 import { TechniqueLibrary } from './ui/techniqueLibrary';
 import { TerrainDressing } from './world/landscape/dressing';
@@ -2306,6 +2307,7 @@ async function boot() {
   questUI.giverName = (id) => serviceNpc(id)?.spec.name ?? npcs.find(id)?.rec.name;
   repPanel.codex = () => story.state.codex();
   repPanel.onName = (id, power) => story.state.nameAs(id, power as never);
+  const traversalView = new TraversalView(r.scene, player, r.camera, input);
   const terrainDressing = new TerrainDressing(r.scene, (x, z, radius) => stylizedNature.canPlace(x, z, radius));
   {
     const previous = player.onTeleport;
@@ -2923,7 +2925,7 @@ async function boot() {
   };
 
   const techniqueLibrary = new TechniqueLibrary(techniques,
-    () => started && !input.uiMode && !pausedByUser && !paused && overlays.help.classList.contains('hidden') && !filmPlaying() && !rewardPlaying() && !player.dead && !player.vehicle && !player.swimming && !sailing.atHelm,
+    () => started && !input.uiMode && !pausedByUser && !paused && !player.adventure.busy && !player.adventure.gliding && overlays.help.classList.contains('hidden') && !filmPlaying() && !rewardPlaying() && !player.dead && !player.vehicle && !player.swimming && !sailing.atHelm,
     open => {
       input.uiMode = open || dialogue.open || inv.open || skills.open || mapUI.open || worldMap.open || shopUI.open || questUI.open || repPanel.open || herbalism.isOpen;
       if (open) input.exitLock();
@@ -3112,7 +3114,7 @@ async function boot() {
         }
       }
     }
-    hud.prompt(best ? best.label() : null);
+    hud.prompt(!player.adventure.busy && best ? best.label() : null);
     if (dialogue.open) hud.prompt(null);
     else if (best && input.wasPressed('interact')) best.action();
     spells.update(STEP);
@@ -3187,6 +3189,7 @@ async function boot() {
     const overlayUp = (!TEST_MODE || SANDBOX_MODE) && (!started || pausedByUser);
     // Hit-stop is a brief slow-motion rather than a hard freeze.
     techniqueLibrary.update(dt);
+    traversalView.update(dt, realm.mode === 'overworld' || realm.interior?.kind === 'sandbox');
     const timeScale = (hitStop > 0 ? 0.1 : slowT > 0 ? slowScale : 1) * (sandbox?.settings.speed ?? 1) * techniqueLibrary.timeScale;
     hitStop = Math.max(0, hitStop - dt);
     slowT = Math.max(0, slowT - dt);
@@ -3471,7 +3474,7 @@ async function boot() {
       events.emit('progressChanged', {});
     };
     (window as any).__game = {
-      resetForTest, techniques, techniqueLibrary,
+      resetForTest, techniques, techniqueLibrary, traversalView,
       sleep: (on: boolean) => (asleep = on),
       THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, mountains: mtn, archipelagos, elves, landscape, terrainDressing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
       microDiscoveries,

@@ -1,3 +1,4 @@
+import { AdventureTraversal } from './adventureTraversal';
 import { traversalSupport, resolveTraversalStep, uphillSpeed, WALKABLE_NORMAL } from './traversal';
 import { landscapeWaterAt } from '../world/landscape/layout';
 import * as THREE from 'three';
@@ -227,6 +228,7 @@ export class Player {
   mounted = false;
   private mountVisual = new THREE.Group();
 
+  readonly adventure = new AdventureTraversal(this);
   act: ActiveAction | null = null;
   private buffer: { a: Buffered; t: number; actT: number; actId: string | null } | null = null;
   /** Held class input layer; the technique controller consumes its action presses. */
@@ -562,15 +564,17 @@ export class Player {
 
     if (this.dead) {
       this.mantle = null;
+      this.adventure.cancel();
       this.flightLean = 0;
       this.deadT += dt;
       this.sampleCombatPose(dt);
       return;
     }
-    if (!input.uiMode) this.readInput(input, cam, dt);
+    if (!input.uiMode && !this.adventure.busy) this.readInput(input, cam, dt);
     else {this.clearCombatInput();this.moveIntent.set(0,0,0);if(this.swimming){this.diveHeld=false;this.riseHeld=false;this.sprinting=false;}}
     // In a boat: the boat moves you (world/boats.ts); no walking or fighting.
     if (this.vehicle) {
+      this.adventure.cancel();
       const v = this.vehicle;
       this.pos.copy(v.pos);
       this.yaw = v.yaw;
@@ -593,6 +597,7 @@ export class Player {
       this.blocking = false;
       this.act = null;
       if (this.boundAt) {
+        this.adventure.cancel();
         const c = { x: this.boundAt.x, y: this.boundAt.y + CENTER_Y + 0.05, z: this.boundAt.z };
         this.body.setTranslation(c, true);
         this.collider.setTranslation(c);
@@ -604,6 +609,7 @@ export class Player {
         return;
       }
     } else this.boundAt = null;
+    if (this.adventure.step(dt, input, cam)) { this.sampleCombatPose(dt); return; }
     this.flight?.(dt, input, cam);
     this.updateAction(dt, input);
     this.updateLock(cam);
@@ -832,6 +838,19 @@ export class Player {
       this.mantle = null; this.vel.set(0, 0, 0);
     }
   }
+
+  /** Swept traversal never calls teleport or the world's warm-on-teleport hooks. */
+  traversalMove(delta: THREE.Vector3) {
+    this.kcc.disableSnapToGround(); this.kcc.disableAutostep();
+    this.kcc.computeColliderMovement(this.collider, delta, physics.R.QueryFilterFlags.EXCLUDE_SENSORS, STATIC_ONLY);
+    this.kcc.enableSnapToGround(0.35); this.kcc.enableAutostep(0.4, 0.15, false);
+    const m = this.kcc.computedMovement(), at = this.body.translation();
+    const next = { x: at.x + m.x, y: at.y + m.y, z: at.z + m.z };
+    this.body.setNextKinematicTranslation(next); this.collider.setTranslation(next);
+    this.pos.set(next.x, next.y - CENTER_Y - 0.02, next.z);
+    return new THREE.Vector3(m.x, m.y, m.z);
+  }
+  traversalResetFall() { this.airTime = 0; this.fallSpeed = 0; }
 
   /** Jump in the air against a wall: push off it, up and away. */
   private tryWallKick(): boolean {
@@ -1498,6 +1517,10 @@ export class Player {
       // Windcaller's field ability: hold Jump while falling to glide.
       if (!this.grounded && this.diveHeld && this.vel.y < -2.4 && this.fieldGlide?.()) this.vel.y = -2.4;
     }
+    if (!this.flying && this.adventure.gliding) {
+      hv.set(hv0x, 0, hv0z);
+      this.adventure.glideVelocity(dt, hv);
+    }
     this.vel.x = hv.x;
     this.vel.z = hv.z;
 
@@ -1597,6 +1620,7 @@ export class Player {
   }
 
   teleport(p: THREE.Vector3) {
+    this.adventure.cancel();
     this.mantle = null;
     this.slopeSlideSpeed = 0;
     const c = { x: p.x, y: p.y + CENTER_Y + 0.05, z: p.z };
@@ -1858,9 +1882,17 @@ export class Player {
       vis.position.y = -k * 0.05;
       vis.position.z = -k * 0.2;
     }
+    const traversal = this.adventure.mode;
+    if (this.adventure.busy || this.adventure.gliding) {
+      const hanging = traversal === 'hang', wing = traversal === 'glide';
+      const reach = wing ? 0.65 : 0.35;
+      const hand = (side: number): HandPose => ({ grip: [side * reach, wing ? 1.5 : hanging ? 1.7 : 1.45, wing ? 0.25 : 0.42], dir: [0, 1, 0], normal: [0, 0, 1], pole: [side * 0.7, 1.0, 0.2], w: 1 });
+      pose = { spinePitch: wing ? 0.15 : -0.1, headPitch: -0.18, legTuck: hanging ? 0.22 : wing ? 0.05 : 0.15, right: hand(-1), left: hand(1) };
+    }
+    this.equip.setHandsVisible(!this.adventure.busy && !this.adventure.gliding);
     this.rig.apply(pose);
     // Feet on the real ground (slopes, stairs), hips sinking into a long sprint stride or a pivot.
-    const plant = this.grounded && !this.dead && !rolling && !this.mounted && !this.vehicle && !this.swimming && !this.flying && !a?.def.air;
+    const plant = !this.adventure.busy && !this.adventure.gliding && this.grounded && !this.dead && !rolling && !this.mounted && !this.vehicle && !this.swimming && !this.flying && !a?.def.air;
     this.footW = damp(this.footW, plant ? 1 : 0, plant ? 10 : 20, dt);
     // Pinned feet through attacks and casts, and while turning on the spot.
     const lockWant = plant && a && !a.def.roll ? 1 - actionMobility(a.def, a.t) : plant && !a && speed < 0.4 ? 1 : 0;
@@ -2341,7 +2373,7 @@ export class Player {
 
   /** Is the player free to start a skill right now? */
   get canAct() {
-    return !this.dead && (!this.act || this.act.t >= this.act.def.cancel || this.weaveOpen(this.act));
+    return !this.dead && !this.adventure.busy && (!this.act || this.act.t >= this.act.def.cancel || this.weaveOpen(this.act));
   }
 
   /** Skill weaving: a blow that landed can flow straight into a skill once it is past. */
