@@ -1,4 +1,5 @@
 import { forestWaterAt } from './elves/layout';
+import { inDark } from './dark/land';
 import { forestBaseHeight } from './terrainHeight';
 import { CREEK } from './roadData';
 import { segment } from './landscape/layout';
@@ -12,6 +13,7 @@ import { CANAL, QUAY_X } from './portCity';
 
 /** Water surface height at a point, or null if there is no water. */
 export function waterSurfaceAt(x: number, z: number): number | null {
+  if (inDark(x, z)) return null; // The Dark's ancient sea beds are exposed, not swimmable living ocean.
   const ground = heightAt(x, z);
   const forest = forestWaterAt(x,z,forestBaseHeight);
   if(forest && ground < forest.level) return forest.level;

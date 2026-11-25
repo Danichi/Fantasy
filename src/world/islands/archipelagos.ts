@@ -515,8 +515,13 @@ export class Archipelagos {
     // rather than accumulating a generic signal every frame.
     if (scanning) for (const [key, value] of Object.entries(this.d.flags)) if (value && key.startsWith('isle:') && this.d.quests.wants(key)) this.d.quests.signal(key);
   }
-  private refresh() {
-    const p = this.d.player;
+  /** Build destination collision without moving the hero or selecting an encounter. */
+  warm(at: THREE.Vector3) {
+    this.refresh(at, false);
+    this.scan = 0;
+  }
+  private refresh(at = this.d.player.pos, select = true) {
+    const p = { pos: at };
     const on = islandAt(p.pos.x, p.pos.z);
     const proximity = (i: IslandDef) =>
       i === on ? -1e6 : Math.min(...[i.at, i.landing, i.sea, ...i.sites.map((s) => s.at), ...(i.dive ? [i.dive] : [])].map((at) => Math.hypot(at[0] - p.pos.x, at[1] - p.pos.z)));
@@ -533,6 +538,7 @@ export class Archipelagos {
         live.root.visible = true;
       } else if (this.clock - live.lastNear > 3 || !SITES.some((s) => s.island === id && Math.hypot(s.x - p.pos.x, s.z - p.pos.z) < 800)) this.unload(id);
     }
+    if (!select) return;
     this.selectedLanding = nearby.find((i) => this.canClimb(i)) ?? null;
     const water = this.selectedLanding ? islandLandingWater(this.selectedLanding) : null;
     this.interactables[1].pos.set(water?.[0] ?? 0, water ? SEA_LEVEL - 0.7 : -999, water?.[1] ?? 0);

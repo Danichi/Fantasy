@@ -38,6 +38,9 @@ export interface WheelHooks {
 const KIND_NAME: Record<WheelNode['kind'], string> = { waystone: 'A Waystone', stone: 'A Sunwheel Stone', ring: 'The Standing Stones', pedestal: 'The Gravewood Pedestal', ruin: 'An Old Wheel' };
 
 export class SunwheelNetwork {
+  extraNodes: () => WheelNode[] = () => [];
+  passage?: (node: WheelNode) => DialogueOption | null;
+  nodes() { return [...new Map([...this.extraNodes(), ...this.h.nodes()].map(n => [n.id, n])).values()]; }
   constructor(private h: WheelHooks) {}
 
   attuned(id: string) {
@@ -52,7 +55,7 @@ export class SunwheelNetwork {
   get respawn(): THREE.Vector3 | null {
     const id = this.h.flags.wheelRest as string | undefined;
     if (!id) return null;
-    const n = this.h.nodes().find((x) => x.id === id);
+    const n = this.nodes().find((x) => x.id === id);
     return n ? n.pos.clone().add(new THREE.Vector3(2, 0.6, 0)) : null;
   }
 
@@ -62,29 +65,31 @@ export class SunwheelNetwork {
     if (first) this.h.toast(`Attuned: ${node.name}`);
     const title = node.name;
     const who = KIND_NAME[node.kind];
+    const passage = this.passage?.(node);
     if (!this.h.awake()) {
       // Asleep, but the story may be waiting here (Magus Orren's waystone: the
       // rite that wakes it). That rite has to be offered before the wheel is
       // awake, or the main quest can never move on.
       const waking = this.h.rite?.(node);
       if (waking) {
-        this.h.show(who, title, 'The Sunwheel carved here goes warm the moment your palm touches it. Light gathers in the spokes. Something on the other side of the stone is listening for you.', [waking, { label: 'Step back.', run: () => this.h.close() }]);
+        this.h.show(who, title, 'The Sunwheel carved here goes warm the moment your palm touches it. Light gathers in the spokes. Something on the other side of the stone is listening for you.', [waking, ...(passage ? [passage] : []), { label: 'Step back.', run: () => this.h.close() }]);
         this.h.save();
         return;
       }
       this.h.show(who, title, first
-        ? 'The Sunwheel carved here warms under your palm and glows, as if it has remembered you. Something in you answers, very faintly, and then nothing more. Not yet.'
-        : 'The wheel glows at your touch, and waits. It knows you now, but it will not carry you yet. (Magus Orren in Elder Glen knows more about the wheels.)', [{ label: 'Step back.', run: () => this.h.close() }]);
+        ? passage ? 'The Dawn answers through the carved spokes. It can tether you to the ancient Dark for a short journey. Finding wheels on either side strengthens that connection. Magus Orren knows how to wake the living travel network.' : 'The Sunwheel carved here warms under your palm and glows, as if it has remembered you. Something in you answers, very faintly, and then nothing more. Not yet.'
+        : 'The wheel knows you. The Dawn can tether you to the Dark; Magus Orren can teach you to travel between living wheels.', [...(passage ? [passage] : []), { label: 'Step back.', run: () => this.h.close() }]);
       this.h.save();
       return;
     }
-    const others = this.h.nodes().filter((o) => o.id !== node.id && this.attuned(o.id)).sort((a, b) => a.pos.distanceTo(node.pos) - b.pos.distanceTo(node.pos));
+    const others = this.nodes().filter((o) => o.id !== node.id && this.attuned(o.id)).sort((a, b) => a.pos.distanceTo(node.pos) - b.pos.distanceTo(node.pos));
     const PER = 6;
     const pages = Math.max(1, Math.ceil(others.length / PER));
     const pg = page % pages;
     const opts: DialogueOption[] = [];
     const rite = this.h.rite?.(node);
     if (rite) opts.push(rite);
+    if (passage) opts.push(passage);
     opts.push(...others.slice(pg * PER, pg * PER + PER).map((o) => ({
       label: `Travel to ${o.name}`,
       run: () => {
@@ -118,6 +123,6 @@ export class SunwheelNetwork {
 
   /** The wheels you know, for the map. */
   markers(): MapMarker[] {
-    return this.h.nodes().filter((n) => this.attuned(n.id)).map((n) => ({ x: n.pos.x, z: n.pos.z, kind: 'site' as const, glyph: '✸', color: this.h.awake() ? '#ffcf6a' : '#b8a070', label: n.name }));
+    return this.nodes().filter((n) => this.attuned(n.id)).map((n) => ({ x: n.pos.x, z: n.pos.z, kind: 'site' as const, glyph: '✸', color: this.h.awake() ? '#ffcf6a' : '#b8a070', label: n.name }));
   }
 }
