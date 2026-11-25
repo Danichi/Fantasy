@@ -76,6 +76,17 @@ resume safely at Westgate; owned ships keep their cargo and receive new berths.
 See [the Port Aurelle guide](docs/design/port-aurelle.md) for districts,
 activities, progression and implementation details.
 
+## Field discoveries and wartime encounters
+
+Twenty-eight new field stops add clue trails, lookouts, civilian relief, disputed
+checkpoints, convoy fights and Dark rifts across the playable regions. Use **E**
+at their props and camps, and **J → Field Notes** to reread clues and outcomes.
+Road travelers offer local leads. Supplies, evidence, payment and combat provide
+different responses; helping a route modestly changes later road traffic.
+Cresha and the other mortal governments retain their own interests, and the
+Dark’s breaches remain separate from their wars. See the
+[field stories guide](docs/design/field-stories.md).
+
 ## The Verdant Elves’ forest
 
 Take Greenwood Road north from Elder Glen and speak to Nimri before the marker

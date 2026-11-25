@@ -10,6 +10,8 @@ import type { BeastSpawner } from '../enemies/beastSpawner';
 import type { Player } from '../player/player';
 import type { Interactable } from '../dungeon/instance';
 import type { FX } from '../fx/particles';
+import { FRONTS, pressureKey, type Front } from './frontiers/context';
+import type { FieldFlags } from './frontiers/progress';
 
 // Road encounters (World Expansion phase 4, prompt §42): data tables for each
 // stretch of the King's Road by time of day and weather. Travellers,
@@ -18,7 +20,7 @@ import type { FX } from '../fx/particles';
 // bandit ambushes wait beside it. Groups appear out of sight ahead or behind
 // and are dropped once they fall far behind, so only a few exist at a time.
 
-type Kind = 'traveller' | 'pilgrims' | 'merchant' | 'adventurers' | 'patrol' | 'wolves' | 'stag' | 'dire' | 'bandits' | 'orcs' | 'undead' | 'knights';
+type Kind = 'traveller' | 'pilgrims' | 'merchant' | 'adventurers' | 'patrol' | 'wolves' | 'stag' | 'dire' | 'bandits' | 'orcs' | 'undead' | 'knights' | 'refugees' | 'courier' | 'sappers';
 type Table = [number, Kind][];
 type Segment = 'farmland' | 'woods' | 'coast' | 'crownFields' | 'crownWilds' | 'orcMarches' | 'capitalApproach';
 
@@ -63,6 +65,9 @@ const ROUTES: Route[] = [
 ];
 
 const LINES: Record<string, string[]> = {
+  refugees: ['We left when the border stores burned. The wardens gave us a route, but there are too few wagons for all the families.', 'Our village was caught between the hired companies. None of us enlisted. We just need somewhere to sleep.'],
+  courier: ['These dispatches carry grain counts and crossing times. Keeping a convoy moving matters as much as taking a hill.', 'The Dark rifts do not follow the front lines. Do not mistake every shadow for a soldier from the neighboring realm.'],
+  sappers: ['We repair the crossings between patrols. Lose a bridge here and three fronts wait for flour.', 'A blue banner is easy to copy. A genuine post carries the warden’s countersigned road order.'],
   traveller: ['Long road, but a good one. Mind the ridge after dark.', 'Port Aurelle? Keep walking till you smell the sea.', 'Stopped at the Wayfarer\'s Rest last night. Best stew this side of the capital.'],
   pilgrims: ['We walk to the Chapel of the Dawn at Millbrook. The Dawn keeps travellers safe.', 'May your road be dry and your boots be whole, friend.'],
   merchant: ['Wares for the road! Potions, rope, dried fruit, honest prices.', 'Caravans pay better, but I like my own company.'],
@@ -105,8 +110,11 @@ class Walker {
   talkT = 0;
   private clip = '';
   private actions: Record<string, THREE.AnimationAction> = {};
+  private disposed = false;
+  routeId = 'kings';
   constructor(scene: THREE.Scene, readonly kind: string, look: Look, readonly name: string) {
     void buildCharacter(look, ['walk', 'idle', 'talk']).then((b) => {
+      if (this.disposed) return;
       this.built = b;
       const acts = (b.mixer as unknown as { _actions: THREE.AnimationAction[] })._actions;
       for (const a of acts) this.actions[a.getClip().name] = a;
@@ -130,6 +138,7 @@ class Walker {
     this.built.mixer.update(dt);
   }
   dispose(scene: THREE.Scene) {
+    this.disposed = true;
     if (this.built) scene.remove(this.built.root);
   }
 }
@@ -149,6 +158,9 @@ interface Group {
 }
 
 const NAMES: Record<string, string[]> = {
+  refugees: ['A Displaced Farmer', 'A Displaced Weaver', 'A Displaced Miller'],
+  courier: ['A Civilian Courier'],
+  sappers: ['A Crown Bridgewright', 'A Road Engineer'],
   traveller: ['A Traveller', 'A Wayfarer'],
   pilgrims: ['A Pilgrim of the Dawn'],
   merchant: ['A Road Merchant'],
@@ -166,7 +178,8 @@ export class Encounters {
   readonly interactable: Interactable & { update(p: THREE.Vector3): void };
   /** a road merchant's shop */
   onShop?: (name: string) => void;
-  onTalk?: (name: string, title: string, text: string, shop: boolean) => void;
+  onTalk?: (name: string, title: string, text: string, shop: boolean, front: Front) => void;
+  warFlags?: FieldFlags;
   private kr = road('kings');
   private fx: FX;
   /** the Hollow Ridge camp and its chief (spawned by the quest system) */
@@ -187,7 +200,10 @@ export class Encounters {
         w.talkT = 5;
         const lines = LINES[w.kind] ?? LINES.traveller;
         const title = { traveller: 'On the road', pilgrims: 'Pilgrim', merchant: 'Travelling merchant', adventurers: 'Adventurer', patrol: 'Crown Road Warden', knights: 'Knight of the Silver Lance' }[w.kind] ?? '';
-        self.onTalk?.(w.name, title, lines[Math.floor(Math.random() * lines.length)], w.kind === 'merchant');
+        const front = w.routeId === 'capital' ? 'crownRoad' : 'heartland';
+        const relief = Number(self.warFlags?.[pressureKey(front)]) || 0;
+        const report = relief > 0 ? 'Travelers say a nearby supply stop has been helped. The route is a little safer; the war is not over.' : FRONTS[front].news;
+        self.onTalk?.(w.name, title || 'On the wartime road', lines[Math.floor(Math.random() * lines.length)] + ' ' + report, w.kind === 'merchant', front);
       },
       update(p: THREE.Vector3) {
         self.near = null;
@@ -265,9 +281,10 @@ export class Encounters {
       }
       default: {
         const looks = LOOKS[kind] ?? LOOKS.traveller;
-        const n = kind === 'traveller' || kind === 'merchant' ? 1 : kind === 'adventurers' || kind === 'knights' ? 3 : 2;
+        const n = kind === 'traveller' || kind === 'merchant' || kind === 'courier' ? 1 : kind === 'adventurers' || kind === 'knights' || kind === 'refugees' ? 3 : 2;
         for (let k = 0; k < n; k++) {
           const w = new Walker(this.scene, kind, looks[k % looks.length], NAMES[kind]?.[k % (NAMES[kind]?.length ?? 1)] ?? 'A Traveller');
+          w.routeId = route.id;
           w.pos.copy(off(-dir * 1.8 + (k % 2) * 0.9 * dir, -k * 1.6 * dir));
           g.walkers.push(w);
         }
@@ -300,6 +317,9 @@ export class Encounters {
       this.timer = route.gap[0] + Math.random() * (route.gap[1] - route.gap[0]);
       const night = hour >= 21 || hour < 5;
       const table = TABLES[route.segment(s)][night ? 'night' : 'day'].map(([w, k]) => [k === 'traveller' || k === 'pilgrims' || k === 'merchant' ? w * (1 - rain * 0.6) : w, k] as [number, Kind]);
+      const relief = Math.min(3, Number(this.warFlags?.[pressureKey(route.id === 'capital' ? 'crownRoad' : 'heartland')]) || 0);
+      for (const row of table) if (row[1] === 'bandits' || row[1] === 'orcs') row[0] *= 1 - relief * .12;
+      if (!night) table.push([2.5-relief*.5,'refugees'], [1.2,'courier'], [.7+relief*.3,'sappers']);
       const kind = this.roll(table);
       // Friendlies come toward you; ambushes wait ahead of you.
       const fwd = Math.sign(this.player.vel.x * onRoad.dir.x + this.player.vel.z * onRoad.dir.y) || (Math.random() < 0.5 ? 1 : -1);

@@ -11,7 +11,7 @@
 #ui .journal .jq-sum b { color: var(--ink-red); font: 700 15px/1 var(--serif); }
 
 /* ---- shelves ---- */
-#ui .journal .jq-tabs { display: flex; gap: 6px; padding: 12px 22px 0; }
+#ui .journal .jq-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 22px 0; }
 #ui .journal .jq-tab {
   display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px 9px; border: 1px solid rgba(122, 90, 46, .45); border-bottom: 0; border-radius: 6px 6px 0 0;
   background: rgba(214, 190, 140, .45); color: var(--ink-mid); font: 700 11.5px/1 var(--serif); letter-spacing: .12em; text-transform: uppercase; cursor: pointer;

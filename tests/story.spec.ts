@@ -32,6 +32,10 @@ test('the opening: you fall into the wheat, the Dark comes, Kaela and Brannoc co
   const { page, errors } = game;
   const res = await page.evaluate(async (src) => {
     const h = eval(src), { g, q, S } = h;
+    // tick() owns simulation and story frames in this test. A slow software
+    // render must not run a second batch of steps between its wave snapshots.
+    g.pause(true);
+    g.sleep(true);
     q.state = {};
     S.reset();
     q.accept('mq-fall');
@@ -54,6 +58,8 @@ test('the opening: you fall into the wheat, the Dark comes, Kaela and Brannoc co
     // (Maud puts the next chapter to you; it doesn't start by itself.)
     const offered = h.stage('mq-stranger');
     h.take('maud');
+    g.sleep(false);
+    g.pause(false);
     return { fight, fell, second, morning, offered, after: [h.stage('mq-fall'), h.stage('mq-stranger')], log: S.state.log.length };
   }, HELPERS);
   expect(res.fight.foes).toBe(3);

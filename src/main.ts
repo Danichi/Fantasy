@@ -1,4 +1,5 @@
 import { TraversalView } from './player/traversalView';
+import { FrontierLife } from './world/frontiers/frontierLife';
 import { Techniques } from './combat/techniques';
 import { TechniqueLibrary } from './ui/techniqueLibrary';
 import { TerrainDressing } from './world/landscape/dressing';
@@ -628,6 +629,7 @@ async function boot() {
   const mapUI = new DungeonMapUI();
   let frontier!: FrontierRegion;
   let microDiscoveries!: MicroDiscoveries;
+  let fieldLife: FrontierLife | undefined;
   const realm = new Realm(r, player, cam, fx, hud, mapUI, {
     hide: (h) => {
       terrain.group.visible = !h;
@@ -654,6 +656,7 @@ async function boot() {
       stylizedNature.setVisible(!h && stylizedNature.loaded);
       gravewood.setVisible(!h);
       microDiscoveries?.setVisible(!h);
+      fieldLife?.setVisible(!h);
       town.setVisible(!h);
     },
     clearEnemies: () => { slimes.clear(); frontier?.dispose(); encounters?.clear(); roadLife.clear(); wilds?.clear(); },
@@ -963,8 +966,9 @@ async function boot() {
   // ---- Road encounters, caravans and the King's Road quests (phase 4) ------------------
   const encounters = new Encounters(r.scene, player, slimes, fx);
   encounters.enabled = !TEST_MODE;
-  encounters.onTalk = (name, title, text, shop) => dialogue.show(name, title, text, [
+  encounters.onTalk = (name, title, text, shop, front) => dialogue.show(name, title, text, [
     ...(shop ? [{ label: 'Browse wares', run: () => town.showShop(name, title, 'Rope, rations and remedies. Road prices, but honest ones.', [['healthPotion', 24], ['manaPotion', 28], ['brambleBerries', 4], ['wheatSeed', 4], ['carrotSeed', 4]]) }] : []),
+    { label: 'Any local leads?', run: () => { dialogue.close(); fieldLife?.report(front); } },
     { label: 'Safe travels.', run: () => dialogue.close() },
   ]);
   const caravans = new Caravans(r.scene, world.mats, time);
@@ -1858,6 +1862,7 @@ async function boot() {
     return quests.markers().filter((m) => m.quest === tracked).map((m) => ({ x: m.x, z: m.z, kind: 'quest' as const, label: m.label, tracked: true }));
   };
   const worldFlags: Record<string, boolean | number | string> = saveData?.world?.flags ?? {};
+  encounters.warFlags = worldFlags;
   // ---- Cartography (world/cartography.ts): map pieces, charts, rumour walls, treasure ----
   const carto = new Cartography({
     discovery, map: worldMap, scene: r.scene, flags: worldFlags,
@@ -2317,6 +2322,16 @@ async function boot() {
     };
   }
   hideHooks.push(hidden => terrainDressing.setVisible(!hidden));
+  fieldLife = new FrontierLife({
+    scene:r.scene,mats:world.mats,player,fx,flags:worldFlags,avoid:stylizedNature.clearings,
+    save:()=>save(),toast:text=>hud.toast(text),talk:(name,title,text,options)=>dialogue.show(name,title,text,options),close:()=>dialogue.close(),
+    give:(id,n)=>giveItem(id,n),has:(id,n)=>countItem(id)>=n,take:(id,n)=>{if(countItem(id)<n)return false;takeItem(id,n);return true;},
+    gold:()=>player.prog.gold,addGold:n=>player.prog.addGold(n),xp:n=>player.prog.addXp(n),ink:(x,z,radius)=>discovery.inkAround(x,z,radius),
+    rumor:(id,x,z,text)=>{if(!discovery.marks.some(m=>m.rumour==='field:'+id))discovery.addMark({kind:'rumour',x:x+35,z:z-25,r:100,rumour:'field:'+id,text,glyph:'camp',color:'#876c45'});},
+  });
+  realm.overworldInteractables.push(...fieldLife.interactables);
+  stylizedNature.clearings.push(...fieldLife.clearings);
+  questUI.fieldNotes=()=>fieldLife?.notes()??[];
   const baseSiteMarks = worldMap.siteMarkers;
   // The hidden teachers (paths/roster): one for each hidden class; a gateway shows you where.
   const teachers = buildHiddenTeachers(r.scene, worldFlags);
@@ -2420,7 +2435,7 @@ async function boot() {
   const lanternHints = () => lanterns.spots.filter((s) => (worldFlags['llHint:' + s.id] && !lanterns.isLit(s.id)) || (lanterns.isLit(s.id) && !s.dark)).map((s) => lanterns.isLit(s.id)
     ? { x: s.x, z: s.z, kind: 'siteDone' as const, glyph: '✧', color: '#ffc860', label: 'A relit lantern' }
     : { x: s.x, z: s.z, kind: 'site' as const, glyph: '✦', color: s.dark ? '#b08aff' : '#ffc860', label: `A Lost Lantern (rumoured)${s.dark ? ' - in the Dark' : ''}` });
-  worldMap.siteMarkers = () => [...baseSiteMarks(), ...landscape.markers(), ...elves.markers(), ...archipelagos.markers(), ...story.wheel.markers(), ...teachers.markers(), ...festivals.markers(), ...lanternHints()];
+  worldMap.siteMarkers = () => [...baseSiteMarks(), ...landscape.markers(), ...elves.markers(), ...archipelagos.markers(), ...story.wheel.markers(), ...teachers.markers(), ...festivals.markers(), ...lanternHints(), ...fieldLife?.markers()??[]];
   almanac = new Almanac({
     day: () => time.day, hour: () => time.hour, moon: () => time.moonName,
     upcoming: () => festivals.upcoming(6),
@@ -3055,6 +3070,7 @@ async function boot() {
     terrainDressing.update(STEP, player.pos, realm.mode === 'overworld' && !realm.interior);
     archipelagos.update(STEP, realm.mode === 'overworld' && !realm.interior);
     elves.update(STEP, realm.mode === 'overworld' && !realm.interior);
+    fieldLife?.update(STEP, realm.mode === 'overworld' && !realm.interior && story.darkness < .5);
     stepImpacts(STEP); // knocked foes meeting walls, fences, braziers, water; rolling barrels (combat/impacts.ts)
     if (!player.dead) scanThreats(STEP, player.pos, cam.forward()); // the warning flash for blows from behind
     director.tick(STEP, player); // attack turns (combat/ai.ts)
@@ -3433,6 +3449,7 @@ async function boot() {
       if (realm.mode === 'interior') await realm.leaveInterior();
       slimes.clear();
       encounters.clear();
+      encounters.enabled = !TEST_MODE;
       crownRoad.threats.clear();
       wilds?.clear();
       roadLife.clear();
@@ -3441,6 +3458,7 @@ async function boot() {
       elves.reset();
       landscape.reset();
       terrainDressing.reset();
+      fieldLife?.reset();
       arms.reset(); // Arms and Crafting (feat/arms)
       quests.state = {};
       quests.tracked = null;
@@ -3477,7 +3495,7 @@ async function boot() {
       resetForTest, techniques, techniqueLibrary, traversalView,
       sleep: (on: boolean) => (asleep = on),
       THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, mountains: mtn, archipelagos, elves, landscape, terrainDressing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
-      microDiscoveries,
+      microDiscoveries, fieldLife,
       arms, // Arms and Crafting (feat/arms)
       sandbox, overlays, yard, combatDebug, telegraphs, // combat rework: the drill yard and the F9 overlay
       bestiary, bestiaryUI, reagentDrops, // the Wardens' Bestiary; kill loot on the ground
