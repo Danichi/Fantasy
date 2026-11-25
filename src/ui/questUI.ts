@@ -5,6 +5,7 @@ import { heightAt } from '../world/terrainHeight';
 import { ITEMS } from '../items/itemDefs';
 import { iconFor } from './icons';
 import './journal.css';
+import type { FieldNote } from '../world/frontiers/frontierLife';
 
 // Quest presentation (World Expansion §46): side quests under the main quest
 // in the HUD tracker, a journal (J) with active and completed quests, gold
@@ -16,10 +17,11 @@ import './journal.css';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
-type Shelf = 'main' | 'side' | 'contract' | 'done';
+type Shelf = 'main' | 'side' | 'contract' | 'done' | 'field';
 const svg = (body: string) => `<svg viewBox="0 0 32 32" aria-hidden="true">${body}</svg>`;
 /** The crest on each shelf's tab, card and page. */
 const CREST: Record<Shelf | 'story', string> = {
+  field: svg('<path d="M4 7h10l2 3 2-3h10v20H18l-2 2-2-2H4z"/><path d="M16 10v16" class="ln"/>'),
   // a sun-crown
   main: svg('<circle cx="16" cy="18" r="6.5"/><path d="M16 3l2 6h-4zM5 9l5 4-3 2zM27 9l-5 4 3 2zM3 20h6v2H3zM23 20h6v2h-6zM8 27h16v2H8z"/>'),
   // a scroll
@@ -32,6 +34,7 @@ const CREST: Record<Shelf | 'story', string> = {
   story: svg('<path d="M4 7c4-1.5 8-1 12 1.5C20 6 24 5.5 28 7v18c-4-1.5-8-1-12 1.5C12 24 8 23.5 4 25z"/><path d="M16 8.5v18" class="ln"/>'),
 };
 const EMPTY: Record<Shelf, string> = {
+  field: 'Follow roadside clues or ask a traveler for local leads. Field notes record discoveries and the people you help.',
   main: 'The story will find you.',
   side: 'No side quests. Townsfolk with a gold ❗ over their heads have work for you.',
   contract: 'No guild contracts. The Adventurer\'s Guild board has them.',
@@ -59,6 +62,7 @@ export class QuestUI {
   private wpPos = new THREE.Vector3();
   /** the main story's recap ("The Story So Far", top of the journal) */
   storyRecap?: () => string;
+  fieldNotes?: () => FieldNote[];
   /** "Show on map" in the journal */
   onShowOnMap?: (x: number, z: number) => void;
   /** an NPC id's name (the quest giver on cards and pages) */
@@ -107,7 +111,7 @@ export class QuestUI {
         this.catPicked = true;
         // Show the first quest on that shelf.
         const first = this.cat === 'done' ? this.quests.completed().slice(-1)[0] : this.quests.active().find((q) => (this.cat === 'main' ? q.main : this.cat === 'contract' ? q.contract && !q.main : !q.main && !q.contract));
-        this.selected = first?.id ?? (this.cat === 'main' && this.storyRecap ? '__story' : null);
+        this.selected = this.cat === 'field' ? 'field:' + (this.fieldNotes?.()[0]?.id ?? '') : first?.id ?? (this.cat === 'main' && this.storyRecap ? '__story' : null);
         this.render();
         return;
       }
@@ -116,6 +120,8 @@ export class QuestUI {
         this.selected = pick.dataset.quest!;
         this.render();
       }
+      const fieldMap = t0.closest<HTMLElement>('[data-field-map]');
+      if(fieldMap){const note=this.fieldNotes?.().find(n=>n.id===fieldMap.dataset.fieldMap);if(note)this.onShowOnMap?.(note.x,note.z);}
       // (Buttons hold an icon glyph; act on the button, not the glyph clicked.)
       const t = (t0.closest('[data-track],[data-map],[data-close]') as HTMLElement | null) ?? t0;
       if (t.dataset.track) {
@@ -223,9 +229,11 @@ export class QuestUI {
       side: active.filter((q) => !q.main && !q.contract),
       contract: active.filter((q) => q.contract),
       done: done.slice().reverse(),
+      field: [] as QuestDef[],
     };
-    const tabs = ([['main', 'Main Story'], ['side', 'Side Quests'], ['contract', 'Contracts'], ['done', 'Completed']] as const)
-      .map(([k, label]) => `<button class="jq-tab cat-${k} ${this.cat === k ? 'on' : ''}" data-cat="${k}">${CREST[k]}<span>${label}</span><em>${shelves[k].length}</em></button>`).join('');
+    const notes=this.fieldNotes?.()??[];
+    const tabs = ([['main', 'Main Story'], ['side', 'Side Quests'], ['contract', 'Contracts'], ['done', 'Completed'], ['field','Field Notes']] as const)
+      .map(([k, label]) => `<button class="jq-tab cat-${k} ${this.cat === k ? 'on' : ''}" data-cat="${k}">${CREST[k]}<span>${label}</span><em>${k==='field'?notes.length:shelves[k].length}</em></button>`).join('');
     const card = (q: QuestDef) => {
       const st = this.quests.state[q.id];
       const isDone = st?.status === 'done';
@@ -242,10 +250,15 @@ export class QuestUI {
     let nav = '';
     if (this.cat === 'main' && this.storyRecap) nav += `<button class="jq-card story ${this.selected === '__story' ? 'sel' : ''}" data-quest="__story"><i class="jq-crest">${CREST.story}</i><span class="jq-mid"><b>The Story So Far</b><small>Everything that has happened to you</small></span></button>`;
     nav += list.length ? list.map(card).join('') : `<p class="jq-empty">${EMPTY[this.cat]}</p>`;
+    if(this.cat==='field')nav=notes.length?notes.map(n=>`<button class="jq-card ${this.selected==='field:'+n.id?'sel':''}" data-quest="field:${esc(n.id)}"><i class="jq-crest">${CREST.field}</i><span class="jq-mid"><b>${esc(n.name)}</b><small>${esc(n.region)} · ${n.done?'Resolved':'Open lead'}</small></span></button>`).join(''):`<p class="jq-empty">${EMPTY.field}</p>`;
 
     let detail = `<div class="jq-blank">${CREST.story}<p>Pick a quest from the list.</p></div>`;
     if (this.selected === '__story' && this.storyRecap) detail = `<div class="jq-recap">${this.storyRecap()}</div>`;
     if (selQ) detail = this.detail(selQ);
+    if(this.cat==='field'){
+      const note=notes.find(n=>'field:'+n.id===this.selected);
+      if(note)detail=`<div class="jq-recap"><small>${esc(note.region)} · ${note.done?'RESOLVED':'FIELD NOTE'}</small><h2>${esc(note.name)}</h2><p>${esc(note.hint)}</p><p>${esc(note.text)}</p><button class="jq-btn" data-field-map="${esc(note.id)}">Show on map</button></div>`;
+    }
     const tracked = active.find((x) => x.id === this.quests.tracked) ?? leads.find((l) => 'lead:' + l.quest.id === this.quests.tracked)?.quest;
     this.journal.innerHTML = `<header><span>JOURNAL</span><div class="jq-sum"><b>${active.length}</b> active · <b>${done.length}</b> completed${tracked ? ` · tracking <i>${esc(tracked.title)}</i>` : ''}</div><button data-close>✕</button></header>
       <div class="jq-tabs">${tabs}</div>
