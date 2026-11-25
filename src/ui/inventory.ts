@@ -418,6 +418,9 @@ export function buildOverlays(onStart: (origin: Origin | null) => void, initialO
       <span><kbd>F</kbd> Parry (the last instant is a perfect parry)</span><span><kbd>G</kbd> Kick / shield bash: breaks guards</span>
       <span><kbd>MMB</kbd> / <kbd>Q</kbd> Lock on · wheel switches target</span><span>A broken or downed enemy: attack for a finisher</span>
       <span><kbd>C</kbd> Jump · LMB air cuts · R plunge</span><span><kbd>Y</kbd> Cast attuned spell · aim with the camera or lock on</span><span><kbd>V</kbd> Origin ability</span>
+      <span>Falling: hold <kbd>C</kbd> to glide · A/D steer · S brake · release C to fold</span>
+      <span>Rock: <kbd>E</kbd> grip · W/S climb · A/D traverse · C push off · Space drop</span>
+      <span>Ledge: W/C pull up · A/D shimmy · S/Space drop</span><span>Brass anchor: aim and <kbd>E</kbd> grapple with a carried hook · Space releases</span>
       <span><kbd>1</kbd>–<kbd>4</kbd> Quick items · <kbd>Tab</kbd> switches to favorites 1–6</span><span><kbd>I</kbd> Inventory · <kbd>K</kbd> Skills</span><span><kbd>T</kbd> Hold for class techniques · <kbd>U</kbd> full technique library, bindings and live combat guide</span>
       <span><kbd>E</kbd> Interact (doors, chests, gates)</span><span><kbd>M</kbd> World map · draw the map in dungeons</span>
       <span><kbd>N</kbd> Seamanship · <kbd>B</kbd> hold for the spyglass</span><span>At a ship's helm: <kbd>A</kbd>/<kbd>D</kbd> steer · <kbd>W</kbd>/<kbd>S</kbd> sail · <kbd>L</kbd> lash the wheel</span>

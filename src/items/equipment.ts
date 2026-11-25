@@ -46,6 +46,8 @@ export class Equipment implements LimbFit {
 
   constructor(private char: Character, private rig: RigLayer) {}
 
+  setHandsVisible(visible: boolean) { for (const slot of ['main', 'off'] as const) for (const model of this.models.get(slot) ?? []) model.visible = visible; }
+
   /** Move worn and held gear onto a rebuilt body (origins: a new look). */
   rebind(char: Character, rig: RigLayer) {
     for (const objs of this.models.values()) for (const o of objs) o.removeFromParent();

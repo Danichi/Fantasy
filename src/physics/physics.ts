@@ -1,3 +1,4 @@
+import { forgetTraversalSurface } from '../player/traversalSurfaces';
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 
@@ -71,6 +72,7 @@ export class Physics {
 
   /** Remove a static collider and the fixed body it was created on. */
   removeStatic(c: RAPIER.Collider) {
+    forgetTraversalSurface(c);
     const body = c.parent();
     this.world.removeCollider(c, false);
     if (body) this.world.removeRigidBody(body);

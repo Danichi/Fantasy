@@ -36,7 +36,9 @@ URL options:
 | T + LMB / R / Space / RMB | Held discipline’s light / heavy / dodge / guard technique. |
 | U | Full learned-technique library, assignments and optional direct bindings. |
 | Y | Cast the attuned spell. Fireball follows your camera aim or lock-on target. |
-| C | Jump |
+| C | Jump; hold while falling to open the glider. A/D steer, S brakes; release C to fold. |
+| E near rock | Grip a climbable face. W/S climb, A/D traverse; C pushes off, Space drops. At a ledge, W/C pulls up. |
+| E at a brass ring | Grapple to a marked anchor when carrying a grappling hook. Space releases the rope. |
 | 1–4 / 1–6 | Use quick items or favorite moves, according to the selected bar. |
 | I | Inventory and equipment. Click to equip, shift-click for off hand, drag items onto the hotbar. |
 | K | Skills: spend XP on combat classes, magic classes and callings, open their skill trees, and spend attribute points. |

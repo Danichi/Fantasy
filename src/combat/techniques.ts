@@ -156,6 +156,7 @@ export class Techniques {
   blocked(e: TechniqueEntry) {
     const p = this.player;
     if (p.dead) return 'You are dead';
+    if (p.adventure.busy) return 'Finish climbing or grappling first';
     if (p.swimming || p.vehicle) return 'Leave the water or helm to use techniques';
     if (e.def) {
       if (e.def.action && e.def.action !== 'sk_dash' && !p.grounded) return 'Land to use this technique';
@@ -217,7 +218,7 @@ export class Techniques {
   }
   update(dt: number, enabled = true) {
     this.recent = this.recent.filter((r) => (r.left -= dt) > 0);
-    const allowed = enabled && !this.input.uiMode && !this.player.dead && !this.player.vehicle && !this.player.swimming;
+    const allowed = enabled && !this.player.adventure.busy && !this.input.uiMode && !this.player.dead && !this.player.vehicle && !this.player.swimming;
     this.player.setTechniqueMode(allowed && this.input.held('technique'));
     if (!allowed) {
       this.pending = null;

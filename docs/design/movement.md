@@ -89,3 +89,21 @@ Move toward a clear 0.45–1.5 m ledge and press Jump (C by default). The hero r
 Ground following uses the physical face normal. Flat ground and gentle inclines retain normal running speed; uphill movement slows progressively from 30° to the 48° walking limit. Sprinting stops while hiking, while contouring and downhill travel retain their input response. Faces above 48° reject uphill motion and accelerate into a controlled slide. They do not count as grounded jump resets, and contact sliding does not accumulate free-fall damage. Swimming, flight and ship movement retain their own movement handling.
 
 Scrambling requires a near-vertical front face and a clear walkable top. A continuous hillside cannot trigger a ledge scramble. Use graded trails, switchbacks and bridges to gain height, and scramble over genuine low lips along the way.
+
+## Climbing, ledges and gliding
+
+Press **E** facing suitable steep natural terrain or a substantial rock outcrop to grip it. **W/S** climbs or descends at 1.45 m/s; **A/D** traverses sideways. Grip remains latched after releasing E. Climbing up or sideways costs 12 stamina/s, descending costs 6/s, and resting against the face costs 4/s. **C** pushes off; **Space** releases. Walls on buildings and in dungeons do not acquire climbing access merely by being vertical.
+
+A clear top within reach becomes a ledge grip. **A/D** shimmies along the lip; **W or C** pulls up for 8 stamina. Hanging costs 3 stamina/s. **S or Space** drops. A standing-capsule clearance test rejects obstructed landings, and the pull-up rises before moving across the edge. Empty stamina or an unblocked damaging hit releases the grip. Teleporting, dying, entering deep water or boarding a vehicle clears traversal state.
+
+Hold **C while falling** to deploy the travel glider once there is sufficient ground and overhead clearance. It moves toward camera heading at 6.8 m/s; **A/D** steers and **S** brakes to 2.6 m/s. Descent is limited to 2.6 m/s and costs 6 stamina/s. Release C, attack, or run out of stamina to fold it. Existing class wind gliding remains free and improves descent to 1.8 m/s. Air jumps, low scrambles, wall kicks and combat launchers retain their existing jump priority.
+
+The context panel shows controls and remaining stamina; the character grips with free hands, and a visible cloth glider opens overhead. The Proving Grounds has an eight-metre chalk-marked climbing wall and two resting shelves west of the combat ring. Boss scenarios remove these practice obstacles.
+
+## Marked grapple routes
+
+Carry a **grappling hook**, aim at a **brass ring**, then press **E** within 30 m. There are anchors on broad natural rock slabs, the World Tree's public canopy route and archive platforms, and the practice wall. Hooks remain usable through the item bar against ordinary suitable ledges and foes.
+
+A grapple costs 12 stamina plus 1/s during the trip. It first lifts toward the hook, then settles onto the landing. **Space** releases the rope. Both route legs are checked with the standing capsule before charging stamina; every movement is also swept against actual static collision. Obstruction or removal of the anchor interrupts the trip. Grapples never repeatedly teleport the player or trigger terrain warm-up hooks each frame.
+
+`player/adventureTraversal.ts` owns traversal state; `traversalSurfaces.ts` owns explicit surface tags and anchor registrations. Terrain streaming and outcrop collision removal clear their tags and owned anchors. Forest and sandbox geometry unregister anchors on disposal/reset. `traversalView.ts` draws shared anchor instances, rope, glider and contextual controls. The full learned-technique library is unavailable while attached or gliding.

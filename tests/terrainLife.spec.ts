@@ -13,6 +13,7 @@ test('terrain dressing is seeded, protects complete footprints, uses three batch
       P = await import('/src/physics/physics.ts' as string),
       THREE = await import('/node_modules/three/build/three.module.js' as string),
       G = await import('/src/world/grass.ts' as string);
+    const S = await import('/src/player/traversalSurfaces.ts' as string);
     await P.physics.init();
     // Use the production nature protection queries without loading render assets.
     const nature = Object.create(N.StylizedNature.prototype);
@@ -42,6 +43,8 @@ test('terrain dressing is seeded, protects complete footprints, uses three batch
       blocked = 0,
       total = 0,
       tall = 0;
+    let anchors = 0,
+      climbable = 0;
     for (const [x, z] of locations) {
       const i = Math.floor(x / D.DRESSING_CELL),
         j = Math.floor(z / D.DRESSING_CELL),
@@ -49,6 +52,10 @@ test('terrain dressing is seeded, protects complete footprints, uses three batch
         b = D.formationsForCell(i, j, allow);
       deterministic &&= JSON.stringify(a) === JSON.stringify(b);
       dressing.warm(new THREE.Vector3(x, T.heightAt(x, z), z));
+      P.physics.step(1 / 60);
+      dressing.update(0.4, new THREE.Vector3(x, T.heightAt(x, z), z));
+      anchors = Math.max(anchors, S.grappleAnchors.size);
+      climbable = Math.max(climbable, S.traversalSurfaceCount());
       counts.push({ ...dressing.stats });
       for (const l of dressing.active.values())
         for (const f of l.formations) {
@@ -73,6 +80,10 @@ test('terrain dressing is seeded, protects complete footprints, uses three batch
       };
     });
     return {
+      anchors,
+      climbable,
+      anchorsLeft: S.grappleAnchors.size,
+      tagsLeft: S.traversalSurfaceCount(),
       counts,
       enclosedClearing,
       hidden,
@@ -93,6 +104,10 @@ test('terrain dressing is seeded, protects complete footprints, uses three batch
   expect(r.total).toBeGreaterThan(30);
   expect(r.tall).toBeGreaterThan(10);
   expect(r.bodies).toBe(0);
+  expect(r.anchors).toBeGreaterThan(0);
+  expect(r.climbable).toBeGreaterThan(0);
+  expect(r.anchorsLeft).toBe(0);
+  expect(r.tagsLeft).toBe(0);
   expect(r.reserved).toEqual([false, false, false]);
   for (const c of r.counts) {
     expect(c.cells).toBeLessThan(110);

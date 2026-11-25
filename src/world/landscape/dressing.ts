@@ -1,3 +1,4 @@
+import { markClimbable, addGrappleAnchor, grappleAnchors } from '../../player/traversalSurfaces';
 import * as THREE from 'three';
 import { physics, G_STATIC, groups } from '../../physics/physics';
 import { heightAt } from '../terrainHeight';
@@ -232,10 +233,22 @@ export class TerrainDressing {
             const desc = physics.R.ColliderDesc.convexHull(vertices);
             if (!desc) continue;
             const body = physics.world.createRigidBody(physics.R.RigidBodyDesc.fixed());
-            l.colliders.set(s, physics.world.createCollider(desc.setCollisionGroups(groups(G_STATIC, 0xffff)), body));
+            const collider = physics.world.createCollider(desc.setCollisionGroups(groups(G_STATIC, 0xffff)), body);
+            if (s.height > 2.2) markClimbable(collider);
+            l.colliders.set(s, collider);
           } else if (!near && l.colliders.has(s)) {
             physics.removeStatic(l.colliders.get(s)!);
             l.colliders.delete(s);
+          }
+          const c = l.colliders.get(s);
+          if (near && c && s.kind === 1 && s.width > 4 && s.depth > 3 && s.height > 3 && !grappleAnchors.has('outcrop:' + c.handle)) {
+            const origin = new THREE.Vector3(s.x, s.y + s.height * 1.3 + 3, s.z);
+            const hit = physics.world.castRayAndGetNormal(new physics.R.Ray(origin, { x: 0, y: -1, z: 0 }), s.height * 1.5 + 4, true, undefined, groups(0xffff, G_STATIC));
+            if (hit && hit.collider.handle === c.handle && hit.normal.y > 0.8) {
+              const landing = origin.clone().setY(origin.y - hit.timeOfImpact + 0.055);
+              const point = landing.clone().add(new THREE.Vector3(Math.sin(s.yaw) * s.depth * 0.45, 1.8, Math.cos(s.yaw) * s.depth * 0.45));
+              addGrappleAnchor({ id: 'outcrop:' + c.handle, point, landing, owner: c.handle });
+            }
           }
         }
     this.draw(pos);
