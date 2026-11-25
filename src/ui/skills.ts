@@ -1,4 +1,5 @@
 import './skills.css';
+import { codexHelp } from './codexTooltip';
 import type { Player } from '../player/player';
 import { events } from '../core/events';
 import { DISC, DISCIPLINES, FAMILIES, NODE_TEXT, type DisciplineDef, type Family } from '../paths/data';
@@ -303,6 +304,8 @@ export class SkillsUI {
   }
 
   private disposeTree() {
+    const canvas = this.body.querySelector('canvas');
+    if (canvas) codexHelp().hide(canvas);
     this.view?.dispose();
     this.view = null;
   }
@@ -318,15 +321,28 @@ export class SkillsUI {
       return this.renderPanel();
     }
     this.body.innerHTML = `<div class="sk-view sk-tree" style="--c:var(${d.color})">
-      <div class="sk-stage"><canvas aria-label="${esc(d.name)} skill tree"></canvas><span class="look">${f.look}</span><span class="hint">${t ? 'HOVER TO READ · CLICK TO SELECT · ESC TO GO BACK' : 'ESC TO GO BACK'}</span></div>
+      <div class="sk-stage"><canvas aria-label="${esc(d.name)} skill tree"></canvas><span class="look">${f.look}</span><span class="hint">${t ? 'Hover to read · Click to select · Esc to go back' : 'Esc to go back'}</span></div>
       <div class="sk-panel"></div></div>`;
     const cv = this.body.querySelector('canvas')!;
     if (t) {
       this.view = new TreeView(cv, d, this.paths);
       this.view.selected = this.selected;
+      this.view.onHover = (n, anchor) => {
+        const help = codexHelp();
+        if (!n) return help.release(cv);
+        const v = this.paths.node(d.id, n.id), learned = this.paths.has(d.id, n.id);
+        help.show(cv, {
+          title: this.paths.displayName(d.id, n, n.type === 'choice' ? v?.pick : undefined),
+          eyebrow: `${d.name} · ${TYPE_LABEL[n.type]}`,
+          body: this.nodeDesc(d, n),
+          footer: learned ? `Learned${v && n.type === 'active' ? ` · Rank ${ROMAN[v.r - 1]}` : ''} · Click to inspect` : `${this.paths.whyNot(d.id, n) || 'Ready to learn'} · Click to inspect`,
+        }, anchor);
+      };
       this.view.onSelect = (n) => {
         this.selected = n.id;
         this.renderPanel();
+        const panel = this.body.querySelector<HTMLElement>('.sk-panel'), card = panel?.querySelector<HTMLElement>('.sk-node');
+        if (panel && card) panel.scrollTop += card.getBoundingClientRect().top - panel.getBoundingClientRect().top - 16;
       };
     } else requestAnimationFrame(() => drawSealed(cv, this.paths.learned(d.id)));
     this.renderPanel();

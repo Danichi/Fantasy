@@ -16,14 +16,14 @@
   z-index: 36;
   text-align: center;
   font:
-    12px/1.5 Inter,
+    12px/1.5 Alegreya,
     sans-serif;
   pointer-events: none;
 }
 .traversal-controls strong {
   display: block;
   font:
-    17px Cinzel,
+    17px IM Fell English SC,
     serif;
   color: #e2ce8d;
 }
@@ -67,7 +67,7 @@
   color: #fff2c8;
   background: #172a2bdc;
   font:
-    12px Inter,
+    12px Alegreya,
     sans-serif;
   z-index: 34;
   pointer-events: none;

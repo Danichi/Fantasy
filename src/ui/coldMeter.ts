@@ -13,7 +13,7 @@ export class ColdMeter {
     this.el.className = 'cold-meter';
     Object.assign(this.el.style, {
       position: 'fixed', right: '26px', top: '104px', width: '220px', height: '18px', zIndex: '30', pointerEvents: 'none',
-      display: 'none', alignItems: 'center', gap: '8px', font: '600 11px Inter, sans-serif', letterSpacing: '0.12em', color: '#d8ecff',
+      display: 'none', alignItems: 'center', gap: '8px', font: '600 11px Alegreya, sans-serif', letterSpacing: '0.12em', color: '#d8ecff',
       textShadow: '0 1px 2px #000a',
     } as CSSStyleDeclaration);
     const label = document.createElement('span');

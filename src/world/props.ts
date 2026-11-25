@@ -301,7 +301,7 @@ export async function buildWorld(scene: THREE.Scene, renderer: THREE.WebGLRender
     const g = c.getContext('2d')!;
     g.fillStyle = '#f5e8c9'; g.fillRect(0, 0, c.width, c.height);
     g.strokeStyle = '#8b6336'; g.lineWidth = 8; g.strokeRect(4, 4, c.width - 8, c.height - 8);
-    g.fillStyle = color; g.font = '700 26px Cinzel, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = color; g.font = '700 26px IM Fell English SC, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(text, c.width / 2, c.height / 2);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, 1.0), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 }));

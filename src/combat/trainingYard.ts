@@ -349,15 +349,15 @@ export class TrainingYard {
     if (!this.coach) {
       const el = document.createElement('div');
       el.className = 'yard-coach';
-      el.style.cssText = 'position:absolute;left:50%;top:14vh;transform:translateX(-50%);width:min(560px,calc(100vw - 32px));padding:12px 18px;background:rgba(14,12,10,.78);border:1px solid rgba(232,200,140,.35);border-radius:8px;color:#f3ead8;font:15px/1.45 Georgia,serif;pointer-events:none;z-index:20;text-align:left;box-shadow:0 6px 24px rgba(0,0,0,.4)';
+      el.style.cssText = 'position:absolute;left:50%;top:14vh;transform:translateX(-50%);width:min(560px,calc(100vw - 32px));padding:12px 18px;background:rgba(14,12,10,.78);border:9px solid transparent;border-image:var(--codex-plaque) 24 fill / 9px / 0 stretch;border-radius:0;color:#f3ead8;font:16px/1.45 Alegreya,serif;pointer-events:none;z-index:20;text-align:left;box-shadow:0 6px 24px rgba(0,0,0,.4)';
       document.getElementById('ui')?.appendChild(el);
       this.coach = el;
     }
     const st = BASICS[this.step];
     const head = final ? 'Kaela Voss' : `Kaela Voss · the basics ${this.step + 1}/${BASICS.length}`;
     const body = final ?? st.say;
-    const goal = final ? '' : `<div style="margin-top:6px;color:#e8c47a;font:600 13px system-ui,sans-serif;letter-spacing:.04em">${this.stepCount}/${st.need} ${st.goal}</div>`;
-    this.coach.innerHTML = `<div style="color:#e8c47a;font:600 12px system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">${head}</div>${body}${goal}`;
+    const goal = final ? '' : `<div style="margin-top:6px;color:#e8c47a;font:600 13px Alegreya, serif;letter-spacing:.04em">${this.stepCount}/${st.need} ${st.goal}</div>`;
+    this.coach.innerHTML = `<div style="color:#e8c47a;font:600 12px Alegreya, serif;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">${head}</div>${body}${goal}`;
   }
 
   private hideCoach() {

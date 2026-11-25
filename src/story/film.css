@@ -22,7 +22,7 @@
 .story-film .film-skip {
   position: absolute; right: 26px; bottom: calc(9vh + 14px);
   background: #0008; color: #d9c79a; border: 1px solid #d9c79a55; border-radius: 3px;
-  font: 600 12px/1 'Cinzel', serif; letter-spacing: .14em; text-transform: uppercase;
+  font: 600 12px/1 'IM Fell English SC', serif; letter-spacing: .14em; text-transform: uppercase;
   padding: 8px 12px; cursor: pointer; opacity: .55; transition: opacity .2s;
 }
 .story-film .film-skip:hover { opacity: 1; }
@@ -35,7 +35,7 @@
 }
 .story-film.titled .film-title { opacity: 1; transform: none; }
 .story-film .film-title h1 {
-  margin: 0; font: 600 clamp(34px, 4.4vw, 64px)/1.05 'Cinzel', 'Georgia', serif; letter-spacing: .08em;
+  margin: 0; font: 600 clamp(34px, 4.4vw, 64px)/1.05 'IM Fell English SC', 'Georgia', serif; letter-spacing: .08em;
   color: #f1dfb0; text-shadow: 0 3px 10px #000, 0 0 30px #a0201888;
 }
 .story-film .film-title p {

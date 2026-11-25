@@ -49,8 +49,8 @@ function sign(text: string, sub = '') {
   g.fillStyle = '#f2e4c2'; g.fillRect(0, 0, 384, 96);
   g.strokeStyle = '#7a5530'; g.lineWidth = 8; g.strokeRect(4, 4, 376, 88);
   g.fillStyle = '#3a2a1a'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = '700 32px Cinzel, serif'; g.fillText(text, 192, sub ? 38 : 48);
-  if (sub) { g.font = '600 18px Cinzel, serif'; g.fillText(sub, 192, 70); }
+  g.font = '700 32px IM Fell English SC, serif'; g.fillText(text, 192, sub ? 38 : 48);
+  if (sub) { g.font = '600 18px IM Fell English SC, serif'; g.fillText(sub, 192, 70); }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   // Front face only: from behind you see the board's timber back, not mirrored letters.

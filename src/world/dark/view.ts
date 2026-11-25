@@ -34,10 +34,10 @@ export class DarkView {
     const css = document.createElement('style');
     css.textContent = `
       #ui.dark-exploring .quest-tracker,#ui.dark-exploring .wmini{display:none}
-      #dark-tether{position:absolute;top:82px;left:50%;transform:translateX(-50%);width:min(410px,80vw);padding:12px 18px;color:#eee5d8;background:linear-gradient(100deg,#151522e8,#282335eb);border:1px solid #b6a07d77;border-radius:4px;text-align:center;pointer-events:auto;font:12px Inter,sans-serif;box-shadow:0 6px 30px #0006}
-      #dark-tether[hidden],#dark-atlas[hidden]{display:none}#dark-tether strong{letter-spacing:.2em;font:14px Cinzel,serif}#dark-tether .dark-readout{margin:5px 0;color:#dcd0be}#dark-tether .dark-track{height:5px;background:#514653;margin:8px 0}.dark-fill{height:100%;background:linear-gradient(90deg,#a58ab7,#ffe2a7);transition:width .15s}#dark-tether.fraying{border-color:#dd7872}#dark-tether.fraying .dark-fill{background:#e38379}
-      #dark-tether button,#dark-atlas button{background:#34303f;border:1px solid #b5a27c77;border-radius:3px;color:#f2e5cc;font:12px Inter,sans-serif;padding:7px 12px;cursor:pointer;margin:7px 3px 0}#dark-tether button:hover,#dark-atlas button:hover{background:#575063}#dark-tether button:disabled,#dark-atlas button:disabled{opacity:.4;cursor:default}
-      #dark-atlas{position:absolute;inset:4vh 5vw;background:#171723f7;color:#eae0cf;border:1px solid #b9a27d88;z-index:170;pointer-events:auto;padding:22px;overflow:auto;font:13px Inter,sans-serif}#dark-atlas h2{font:24px Cinzel,serif;letter-spacing:.16em;margin:0 0 8px}#dark-atlas p{margin:7px 0;color:#c0b8c6;max-width:850px}#dark-atlas canvas{display:block;width:100%;height:min(53vh,490px);background:#222330;border:1px solid #635b6c;margin:15px 0}#dark-atlas .dark-map-actions{display:flex;flex-wrap:wrap;gap:5px;align-items:center}#dark-atlas .dark-legend{color:#ddc594}
+      #dark-tether{position:absolute;top:82px;left:50%;transform:translateX(-50%);width:min(410px,80vw);padding:12px 18px;color:#eee5d8;background:linear-gradient(100deg,#151522e8,#282335eb);border:1px solid #b6a07d77;border-radius:4px;text-align:center;pointer-events:auto;font:12px Alegreya,sans-serif;box-shadow:0 6px 30px #0006}
+      #dark-tether[hidden],#dark-atlas[hidden]{display:none}#dark-tether strong{letter-spacing:.2em;font:14px IM Fell English SC,serif}#dark-tether .dark-readout{margin:5px 0;color:#dcd0be}#dark-tether .dark-track{height:5px;background:#514653;margin:8px 0}.dark-fill{height:100%;background:linear-gradient(90deg,#a58ab7,#ffe2a7);transition:width .15s}#dark-tether.fraying{border-color:#dd7872}#dark-tether.fraying .dark-fill{background:#e38379}
+      #dark-tether button,#dark-atlas button{background:#34303f;border:1px solid #b5a27c77;border-radius:3px;color:#f2e5cc;font:12px Alegreya,sans-serif;padding:7px 12px;cursor:pointer;margin:7px 3px 0}#dark-tether button:hover,#dark-atlas button:hover{background:#575063}#dark-tether button:disabled,#dark-atlas button:disabled{opacity:.4;cursor:default}
+      #dark-atlas{position:absolute;inset:4vh 5vw;background:#171723f7;color:#eae0cf;border:1px solid #b9a27d88;z-index:170;pointer-events:auto;padding:22px;overflow:auto;font:13px Alegreya,sans-serif}#dark-atlas h2{font:24px IM Fell English SC,serif;letter-spacing:.16em;margin:0 0 8px}#dark-atlas p{margin:7px 0;color:#c0b8c6;max-width:850px}#dark-atlas canvas{display:block;width:100%;height:min(53vh,490px);background:#222330;border:1px solid #635b6c;margin:15px 0}#dark-atlas .dark-map-actions{display:flex;flex-wrap:wrap;gap:5px;align-items:center}#dark-atlas .dark-legend{color:#ddc594}
     `;
     document.head.appendChild(css);
     const ui = document.getElementById('ui')!;
@@ -174,7 +174,7 @@ export class DarkView {
       c.lineTo(w / 2 + k * 100, h);
       c.stroke();
     }
-    c.font = '12px sans-serif';
+    c.font = '12px Alegreya, serif';
     for (const s of SCARS)
       if (flags['dark:memory:' + s.id]) {
         c.strokeStyle = '#8bc7d5';
@@ -194,9 +194,9 @@ export class DarkView {
         c.fillText(n.name, Math.min(w - 190, sx + 11), sz - 8);
       }
     c.fillStyle = '#fff4dc';
-    c.font = '22px serif';
+    c.font = '22px Alegreya, serif';
     c.fillText('✦', w / 2 - 9, h / 2 + 8);
-    c.font = '13px sans-serif';
+    c.font = '13px Alegreya, serif';
     c.fillText(`N ↑   ·   ${Math.round((this.span / 1000) * 10) / 10} km across   ·   ${Math.round(x)}, ${Math.round(z)}`, 14, 23);
   }
 }

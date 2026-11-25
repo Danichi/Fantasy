@@ -166,7 +166,7 @@ export class FarmLife {
     const g = sc.getContext('2d')!;
     g.fillStyle = '#f5e8c9'; g.fillRect(0, 0, 256, 64);
     g.strokeStyle = '#8b6336'; g.lineWidth = 6; g.strokeRect(3, 3, 250, 58);
-    g.fillStyle = '#4f6b2a'; g.font = '700 26px Cinzel, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = '#4f6b2a'; g.font = '700 26px IM Fell English SC, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText('YOUR PLOT', 128, 33);
     const tex = new THREE.CanvasTexture(sc);
     tex.colorSpace = THREE.SRGBColorSpace;

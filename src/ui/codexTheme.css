@@ -1,0 +1,552 @@
+/* The Dawn Codex: hand-cut lettering, parchment leaves and tooled leather.
+   Shared surfaces sit above older page skins; layouts and game state stay in
+   their owning screens. Small dividers and graph links are not panel frames. */
+:root {
+  --font-body: 'Alegreya', Georgia, serif;
+  --font-display: 'IM Fell English SC', Georgia, serif;
+  --font-flavour: 'IM Fell English', 'Alegreya', Georgia, serif;
+  --sans: var(--font-body);
+  --serif: var(--font-display);
+  --fell: var(--font-flavour);
+  --codex-ink: #362619;
+  --codex-muted: #766047;
+  --codex-wax: #883c2c;
+  --codex-bone: #f0e1c3;
+  --codex-brass: #c5a368;
+  --codex-leaf: url('/assets/ui/codex-leaf.svg');
+  --codex-plaque: url('/assets/ui/codex-plaque.svg');
+  --codex-seal: url('/assets/ui/dawn-seal.svg');
+}
+html,
+body {
+  font-family: var(--font-body);
+  font-kerning: normal;
+}
+button,
+select,
+input,
+textarea {
+  font-family: var(--font-body);
+}
+body h1,
+body h2,
+body h3,
+body h4 {
+  font-family: var(--font-display);
+}
+body :is(button, select, input, textarea):focus-visible {
+  outline: 2px solid #ebc684;
+  outline-offset: 4px;
+}
+body kbd {
+  font-family: var(--font-body);
+  font-weight: 700;
+  border-radius: 3px;
+  border-bottom-width: 3px;
+}
+
+/* A single readable folio for native hints and rich skill descriptions. */
+.codex-tooltip {
+  position: fixed;
+  z-index: 10000;
+  width: max-content;
+  max-width: min(370px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  pointer-events: auto;
+  border: 12px solid transparent;
+  border-image: var(--codex-leaf) 20 fill / 12px / 0 stretch;
+  border-radius: 0;
+  background: #e9d6ad;
+  color: var(--codex-ink);
+  padding: 12px 16px 14px;
+  box-shadow: 0 10px 28px #08050388;
+  font: 400 16px/1.45 var(--font-body);
+  text-shadow: none;
+  animation: codex-appear 0.12s ease-out;
+}
+.codex-tooltip[hidden] {
+  display: none;
+}
+.codex-tooltip header {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #98774b55;
+}
+.codex-tooltip header::before {
+  content: '';
+  width: 39px;
+  height: 39px;
+  flex: 0 0 39px;
+  background: var(--codex-seal) center / contain no-repeat;
+}
+.codex-tooltip h3 {
+  margin: 0;
+  font: 400 22px/1.15 var(--font-display);
+  color: #572d21;
+  overflow-wrap: anywhere;
+}
+.codex-tooltip .codex-eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  font: 600 12px/1.2 var(--font-body);
+  color: var(--codex-muted);
+  letter-spacing: 0.06em;
+}
+.codex-tooltip p {
+  margin: 11px 0 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.codex-tooltip footer {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #98774b55;
+  font-size: 14px;
+  color: #70462d;
+}
+@keyframes codex-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Existing painted outer frames stay. The insets now share their materials. */
+body #ui .sk {
+  --sk-display: var(--font-display);
+  --sk-serif: var(--font-display);
+  --sk-body: var(--font-body);
+  --sk-mono: var(--font-body);
+  --sk-flavour: var(--font-flavour);
+  --sk-line: #ac87513d;
+  --sk-line-2: #c19a5e70;
+  --sk-bone: #efdfc4;
+  --sk-muted: #c0ac8b;
+  --sk-dim: #99896f;
+  --sk-gold: #c9a165;
+  --sk-gold-hi: #efd39d;
+  font-size: 15px;
+  line-height: 1.45;
+}
+body #ui .sk:not(.bk-page),
+body .tl-panel,
+body .sandbox-panel,
+body #dark-atlas {
+  border: 15px solid transparent;
+  border-image: var(--codex-plaque) 24 fill / 15px / 0 stretch;
+  border-radius: 0;
+  box-shadow: 0 18px 65px #000a;
+}
+body #ui :is(.sk-coin, .sk-attr, .sk-asc, .sk-atlas-card),
+body .tl-detail {
+  border: 9px solid transparent;
+  border-image: var(--codex-plaque) 24 fill / 9px / 0 stretch;
+  border-radius: 0;
+  box-shadow: 0 3px 8px #0004;
+}
+body #ui .sk-family {
+  padding: 14px 16px;
+  background: #17120fb8;
+  box-shadow:
+    inset 0 2px #d1ab652e,
+    inset 0 -3px #0006;
+}
+body #ui .sk-disc {
+  border: 0;
+  border-bottom: 2px solid #b5915c2e;
+  border-radius: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--c) 9%, transparent), transparent 80%);
+  padding: 12px 8px;
+  box-shadow: none;
+}
+body #ui .sk-disc:hover {
+  background-color: #bf9a4c12;
+  box-shadow: inset 3px 0 var(--c);
+  transform: none;
+}
+body #ui .sk-disc .nm b {
+  font-size: 19px;
+}
+body #ui :is(.sk-fam-head span, .sk-disc .sub, .sk-help, .sk-attr p, .sk-asc p, .sk-asc ul, .sk-atlas-card small) {
+  font-size: 14px;
+}
+body #ui :is(.sk-crumb, .sk-coin .l, .sk-node .t, .sk-legend, .sk-mchip, .sk-ranks span) {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+body #ui .sk-badge {
+  border: 0;
+  border-radius: 2px;
+  padding: 2px 7px;
+  font-size: 11px;
+  background: #a98b5b24;
+  letter-spacing: 0.04em;
+}
+body #ui .sk-badge.active {
+  color: #f2deb8;
+  background: #77432d;
+}
+body #ui .sk-panel {
+  gap: 18px;
+  padding: 20px 18px;
+  background: linear-gradient(90deg, #1d1510ed, #241c15c9);
+  border-left: 4px solid #9b79404d;
+}
+body #ui .sk-stage {
+  border-right: 0;
+}
+body #ui .sk-stage :is(.hint, .look) {
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  color: #dfcfaf;
+}
+body #ui .sk-stage .hint {
+  padding: 7px 10px;
+  background: #221a13dd;
+  max-width: calc(100% - 24px);
+  line-height: 1.35;
+}
+body #ui .sk-node {
+  --sk-bone: #3a281a;
+  --sk-muted: #766047;
+  --sk-gold: #985c32;
+  --sk-gold-hi: #6c3426;
+  color: var(--codex-ink);
+  background: #e9d6ad;
+  border: 11px solid transparent;
+  border-image: var(--codex-leaf) 20 fill / 11px / 0 stretch;
+  border-radius: 0;
+  padding: 14px 13px;
+  gap: 11px;
+  box-shadow: 0 6px 16px #0005;
+}
+body #ui .sk-node h4 {
+  color: #623424;
+  font: 400 25px/1.12 var(--font-display);
+}
+body #ui .sk-node p {
+  color: var(--codex-ink);
+  font-size: 16px;
+  line-height: 1.5;
+}
+body #ui .sk-node :is(.status, .sk-bar, .sk-kv, .sk-kv > span, .sk-ranks span) {
+  color: #65472e;
+  font-size: 14px;
+}
+body #ui .sk-node .status:not(.no) {
+  color: #496336;
+  font-weight: 700;
+}
+body #ui .sk-node .sk-kv {
+  padding: 8px 0;
+  border-block: 1px solid #a58a5a55;
+}
+body #ui .sk-node .sk-ranks i {
+  border: 2px solid #8e683c;
+  box-shadow: none;
+}
+body #ui .sk-node .sk-ranks i.on {
+  background: #925039;
+  box-shadow: none;
+}
+body #ui .sk-node .sk-slot {
+  color: #eddfc5 !important;
+  background: #423021;
+  border-width: 2px;
+}
+body #ui .sk-node .sk-slot.on {
+  color: #fff4db !important;
+  background: #8a3c2b;
+}
+body #ui .sk-note {
+  border: 0;
+  border-left: 4px solid #c19a5b;
+  border-radius: 0;
+  background: #a98b5b15;
+  padding: 10px 13px;
+  font-size: 14px;
+}
+body #ui .sk-toast {
+  border: 10px solid transparent;
+  border-image: var(--codex-plaque) 24 fill / 10px / 0 stretch;
+  border-radius: 0;
+  font-size: 15px;
+}
+
+/* Gear reads as an opened satchel. Only the selected item gets a full inset. */
+body #ui .inv2 .detail {
+  border: 11px solid transparent;
+  border-image: var(--codex-plaque) 24 fill / 11px / 0 stretch;
+  border-radius: 0;
+  padding: 14px;
+  background: #281c13;
+  box-shadow: 0 6px 18px #0006;
+}
+body #ui .inv2 .detail :is(.desc, .flavour, .trait) {
+  font-size: 16px;
+  line-height: 1.5;
+}
+body #ui .inv2 .detail :is(.stats, .cmp, .req) {
+  font-size: 14px;
+  line-height: 1.4;
+}
+body #ui .inv2 .detail .dn {
+  font-family: var(--font-display);
+  font-size: 25px;
+}
+body #ui .inv2 .detail .name {
+  font-family: var(--font-display);
+  font-size: 24px;
+}
+body #ui .inv2 .detail p {
+  font-size: 16px;
+  line-height: 1.45;
+}
+body #ui .inv2 :is(.inv-search, .inv-sort) {
+  border: 2px solid #927044;
+  border-radius: 3px;
+  background: #251b14;
+  font-size: 15px;
+}
+body #ui .inv2 .inv-cats .cat {
+  border: 0;
+  border-radius: 0;
+  font-size: 14px;
+}
+body #ui .inv2 .inv-cats .cat.on {
+  box-shadow: inset 3px 0 #c4a46d;
+  background: #8a633729;
+}
+body #ui .inv2 .summary span {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+body #ui .inv2 .summary b {
+  font-size: 17px;
+}
+body #ui .bar .label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+body #ui .bar .num {
+  font-size: 11px;
+}
+body #ui :is(.bar .num, .slot .qty, .slot .cost, .sk-kv, .sc-gold) {
+  font-variant-numeric: tabular-nums;
+}
+body #ui :is(.inventory h2, .journal h2, .guild-panel h2) {
+  letter-spacing: 0.06em;
+}
+body #ui :is(.dialogue .say, .jq-body p, .bw-page p, .craft-detail p) {
+  font-size: 17px;
+  line-height: 1.5;
+}
+body #ui .dialogue .who {
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: 0.03em;
+}
+body #ui .dialogue .opts button {
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+/* Compact HUD and standalone screens use the same plaques, not web cards. */
+body :is(.sea-hud, .combat-input-guide, .cold-meter, .lesson-panel, .technique-launcher, .traversal-controls),
+body #ui :is(#dark-tether, .toast.show) {
+  border: 9px solid transparent;
+  border-image: var(--codex-plaque) 24 fill / 9px / 0 stretch;
+  border-radius: 0;
+  background-color: #251c17;
+  box-shadow: 0 6px 22px #0006;
+}
+body :is(.sea-hud, .combat-input-guide, .lesson-panel, .technique-library, .sandbox-panel) {
+  font-family: var(--font-body);
+}
+body #ui .prompt {
+  border: 8px solid transparent;
+  border-image: var(--codex-plaque) 24 fill / 8px / 0 stretch;
+  font: 600 15px/1.2 var(--font-body);
+  letter-spacing: 0.02em;
+}
+body .tl-panel {
+  background: #231c16;
+}
+body .tl-panel :is(button, input[type='search'], select) {
+  border-width: 2px;
+  border-color: #90734b;
+  background: #34281e;
+  border-radius: 3px;
+}
+body .tl-panel button:is(:hover, :focus-visible, [aria-pressed='true']) {
+  background: #63452d;
+  border-color: #dec184;
+}
+body .tl-panel .tl-empty {
+  color: #e5d4b5;
+  background: #211a14;
+  border-radius: 0;
+  box-shadow:
+    inset 0 2px #a98b5b40,
+    inset 0 -2px #a98b5b40;
+}
+body .tl-panel :is(h2, h3) {
+  font-family: var(--font-display);
+  color: #ebd3a3;
+}
+body .tl-panel p {
+  font-size: 16px;
+  color: #dccbb1;
+}
+body :is(.tl-card, .tl-wheel button) {
+  border-width: 2px;
+  border-radius: 3px;
+}
+body #ui :is(#dark-tether, #dark-atlas) {
+  font-family: var(--font-body);
+}
+body #ui #dark-atlas p {
+  font-size: 16px;
+  line-height: 1.4;
+}
+body #ui #dark-tether {
+  font-size: 14px;
+}
+/* Framing only: retain the different painted paper/room backgrounds and their
+   existing light or dark ink. A border-image without fill leaves them intact. */
+body #ui :is(.panel, .menu-panel, .guild-panel, .rep-panel, .dmap-editor, .creator, .bw, .shop2, .journal):not(.bk-page),
+body #ui .inv2 > section {
+  border: 11px solid transparent;
+  border-image: var(--codex-plaque) 24 / 11px / 0 stretch;
+  border-radius: 0;
+}
+body #ui .journal :is(.jq-now, .jq-story) {
+  border: 8px solid transparent;
+  border-image: var(--codex-leaf) 20 fill / 8px / 0 stretch;
+  border-radius: 0;
+}
+body #ui :is(.inv-stats, .sc-inspect) {
+  border-radius: 0;
+}
+body #ui :is(.wmap-legend, .wmap-tray, .wmap-note) {
+  border: 9px solid transparent;
+  border-image: var(--codex-plaque) 24 / 9px / 0 stretch;
+  border-radius: 0;
+}
+body #ui .wmap-frame {
+  border: 12px solid transparent;
+  border-image: var(--codex-plaque) 24 / 12px / 0 stretch;
+  border-radius: 0;
+}
+body #ui .wmap-frame::before {
+  display: none;
+}
+body #ui .wmap-tools :is(.wt-row, .wt-glyphs) {
+  border: 8px solid transparent;
+  border-image: var(--codex-plaque) 24 fill / 8px / 0 stretch;
+  border-radius: 0;
+}
+body #ui .wmap-tools button:not(.ink) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+}
+body #ui .wmap-tools button:not(.ink).on {
+  background: #986c3d66;
+  box-shadow: inset 0 -3px #d0ac6b;
+}
+@media (max-width: 1100px) {
+  body #ui .bk-page.inv2 {
+    grid-template-columns: minmax(300px, 0.8fr) minmax(380px, 1.2fr);
+  }
+  body #ui .inv2 .inv-char-body {
+    grid-template-columns: 105px minmax(0, 1fr) 105px;
+    gap: 7px;
+    padding: 8px;
+  }
+  body #ui .inv2 .inv-char > :is(header, .summary, .inv-quick) {
+    flex-shrink: 0;
+  }
+  body #ui .inv2 .summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 10px;
+  }
+  body #ui .inv2 .summary b {
+    white-space: normal;
+    text-align: center;
+  }
+  body #ui .inv2 .inv-figure {
+    overflow: auto;
+  }
+  body #ui .inv2 .preview-frame {
+    min-height: 140px;
+  }
+  body #ui .inv2 .weapons {
+    grid-template-columns: 1fr;
+  }
+  body #ui .inv2 .inv-bag-body {
+    grid-template-columns: 110px minmax(0, 1fr);
+    grid-template-rows: minmax(150px, 1fr) minmax(160px, 1fr);
+  }
+  body #ui .inv2 .inv-cats {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    padding-inline: 4px;
+  }
+  body #ui .inv2 .grid {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  body #ui .inv2 .detail {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  body #ui .inv2 .inv-search {
+    min-width: 90px;
+    width: 100px;
+  }
+  body #ui .inv2 .inv-char > header,
+  body #ui .inv2 .inv-bag > header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+  }
+}
+@media (max-width: 780px) {
+  body #ui .bk-page.inv2 {
+    grid-template-columns: 1fr;
+    grid-template-rows: 460px 580px;
+    overflow: auto;
+  }
+  body #ui .inv2 > section {
+    min-height: 0;
+  }
+}
+body #ui :is(.sk-ladder span, .sk-perk) {
+  border: 0;
+  border-radius: 2px;
+  background: #b99c6530;
+}
+@media (max-width: 700px) {
+  .codex-tooltip {
+    max-width: calc(100vw - 20px);
+    padding: 9px;
+    font-size: 15px;
+  }
+  body #ui .sk-panel {
+    padding: 13px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .codex-tooltip {
+    animation: none;
+  }
+}

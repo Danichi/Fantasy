@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <defs>
+    <linearGradient id="paper" x2=".2" y2="1"><stop stop-color="#f5e8cb"/><stop offset=".6" stop-color="#e9d6ac"/><stop offset="1" stop-color="#d8bc87"/></linearGradient>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".55" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".07"/></feComponentTransfer><feBlend in="SourceGraphic" mode="multiply"/></filter>
+  </defs>
+  <path d="M7 3 28 4 44 2 69 4 94 3 116 5 151 3 156 8 155 29 158 47 156 74 158 99 155 127 157 152 150 157 128 155 104 158 77 156 55 158 30 155 7 157 3 151 5 127 2 105 4 79 2 56 5 31 3 9Z" fill="url(#paper)" stroke="#80613e" stroke-width="2"/>
+  <path d="M11 9H149V150H10Z" fill="#eddbb6" opacity=".36" filter="url(#grain)"/>
+  <path d="M13 27V14H28M132 13H147V28M13 132V147H28M132 147H147V132" fill="none" stroke="#a48655" stroke-width="1.5"/>
+</svg>

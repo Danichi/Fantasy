@@ -59,6 +59,7 @@ export class Input {
   /** Mouse-look without pointer lock (used if the browser refuses to lock). */
   fallbackLook = false;
   onLockFailed?: () => void;
+  private wantsLock = false;
 
   constructor(private canvas: HTMLElement) {
     window.addEventListener('keydown', (e) => {
@@ -96,6 +97,11 @@ export class Input {
       if (this.locked) this.wheel += Math.sign(e.deltaY);
     }, { passive: true });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener('pointerlockchange', () => {
+      // A closing page can request capture just before the next page opens.
+      // Late browser approval must not steal the new menu's pointer.
+      if (this.locked && (!this.wantsLock || this.uiMode)) document.exitPointerLock();
+    });
   }
 
   get locked() {
@@ -103,17 +109,20 @@ export class Input {
   }
 
   requestLock() {
+    if (this.uiMode) return;
+    this.wantsLock = true;
     // requestPointerLock returns a promise in modern browsers; ignore rejection
     // (it rejects when the user exits lock and clicks again too quickly).
     try {
       const r = this.canvas.requestPointerLock?.() as unknown as Promise<void> | undefined;
-      r?.catch?.(() => this.onLockFailed?.());
+      r?.catch?.(() => { if (this.wantsLock && !this.uiMode) this.onLockFailed?.(); });
     } catch {
       this.onLockFailed?.();
     }
   }
 
   exitLock() {
+    this.wantsLock = false;
     if (this.locked) document.exitPointerLock();
   }
 

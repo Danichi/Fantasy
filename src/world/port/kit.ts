@@ -188,10 +188,10 @@ export class PortKit {
     g.fillStyle = '#f0e1bc';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.font = '600 40px Cinzel';
+    g.font = '600 40px IM Fell English SC';
     g.fillText(title, 384, sub ? 70 : 96, 710);
     if (sub) {
-      g.font = '28px Inter';
+      g.font = '28px Alegreya';
       g.fillText(sub, 384, 132, 710);
     }
     const tex = new THREE.CanvasTexture(c);

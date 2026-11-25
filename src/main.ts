@@ -30,14 +30,9 @@ import { CombatDebug } from './combat/debugOverlay';
 import { WeaponTrail } from './fx/weaponTrail';
 import './render/stylize';
 import { initCompressedGltf } from './core/gltf';
-import '@fontsource/cinzel/500.css';
-import '@fontsource/cinzel/700.css';
-import '@fontsource/inter/400.css';
-import '@fontsource/inter/500.css';
-import '@fontsource/inter/600.css';
-import '@fontsource/im-fell-english/400.css';
-import '@fontsource/im-fell-english/400-italic.css';
 import './ui/fantasyTheme.css';
+import { loadGameFonts } from './ui/typography';
+import { codexHelp } from './ui/codexTooltip';
 import * as THREE from 'three';
 import { Renderer, SUN_DIR } from './render/renderer';
 import { physics, PhysicsDebug } from './physics/physics';
@@ -278,6 +273,8 @@ const mark = (k: string) => {
 (window as any).__boot = bootTimes;
 
 async function boot() {
+  await loadGameFonts();
+  codexHelp();
   const container = document.getElementById('game')!;
   const r = new Renderer(container);
   initCompressedGltf(r.renderer);

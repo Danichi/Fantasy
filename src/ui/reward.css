@@ -77,7 +77,7 @@
 }
 .reward.on .rw-text { opacity: 1; transform: translate(-50%, 0); transition: opacity .6s ease .75s, transform .8s ease .75s; }
 .reward .rw-text small {
-  display: block; font: 600 12px/1 'Cinzel', 'Georgia', serif; letter-spacing: .34em; text-transform: uppercase;
+  display: block; font: 600 12px/1 'IM Fell English SC', 'Georgia', serif; letter-spacing: .34em; text-transform: uppercase;
   color: var(--glow); text-shadow: 0 1px 4px #000;
   width: max-content; margin: 0 auto; padding: 6px 14px; border-radius: 3px; background: rgba(10, 6, 4, .62);
 }
@@ -87,7 +87,7 @@
   display: flex; align-items: center; justify-content: center; padding: 9% 16% 3%; box-sizing: border-box;
 }
 .reward .rw-ribbon span {
-  font: 700 clamp(20px, 2.4vw, 32px)/1.05 'Cinzel', 'Georgia', serif; letter-spacing: .04em; color: #fbecc6;
+  font: 700 clamp(20px, 2.4vw, 32px)/1.05 'IM Fell English SC', 'Georgia', serif; letter-spacing: .04em; color: #fbecc6;
   text-shadow: 0 2px 0 #4a0d0a, 0 3px 8px rgba(0, 0, 0, .8);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -99,7 +99,7 @@
 }
 .reward .rw-next {
   position: absolute; left: 50%; bottom: 3.5vh; transform: translateX(-50%);
-  font: 600 11px/1 'Cinzel', 'Georgia', serif; letter-spacing: .28em; text-transform: uppercase; color: #d9c79a;
+  font: 600 11px/1 'IM Fell English SC', 'Georgia', serif; letter-spacing: .28em; text-transform: uppercase; color: #d9c79a;
   opacity: 0; transition: opacity .4s;
 }
 .reward.ready .rw-next { opacity: .5; animation: death-pulse 2.2s ease-in-out infinite; }

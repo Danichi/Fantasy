@@ -1876,7 +1876,7 @@ function questWallTexture(columns: number[], bounties: number) {
   ranks.forEach((rk, i) => {
     const x0 = 20 + i * colW;
     g.fillStyle = '#d9b15a';
-    g.font = '700 22px Cinzel, serif';
+    g.font = '700 22px IM Fell English SC, serif';
     g.fillText(rk, x0 + colW / 2 - 10, 26);
     for (let k = 0; k < Math.min(4, columns[i] ?? 0); k++) {
       const x = x0 + 12 + rnd() * 20, y = 38 + k * 52 + rnd() * 6, w = 82 + rnd() * 14, h = 46;
@@ -1897,7 +1897,7 @@ function questWallTexture(columns: number[], bounties: number) {
   g.fillStyle = '#2e1e12';
   g.fillRect(bx - 8, 8, c.width - bx - 4, c.height - 16);
   g.fillStyle = '#e8c766';
-  g.font = '700 20px Cinzel, serif';
+  g.font = '700 20px IM Fell English SC, serif';
   g.fillText('WANTED', bx + (c.width - bx) / 2 - 6, 30);
   for (let k = 0; k < Math.min(3, bounties); k++) {
     const x = bx + 10 + k * 88, y = 44, w = 78, h = 112 + (k % 2) * 30;
@@ -1927,7 +1927,7 @@ function rankLadderTexture() {
   g.lineWidth = 6;
   g.strokeRect(6, 6, c.width - 12, c.height - 12);
   g.fillStyle = '#e8c766';
-  g.font = '700 26px Cinzel, serif';
+  g.font = '700 26px IM Fell English SC, serif';
   g.textAlign = 'center';
   g.fillText('THE RANK LADDER', c.width / 2, 40);
   const ranks = ['SSS', 'SS', 'S', 'A', 'B', 'C', 'D'];
@@ -1936,7 +1936,7 @@ function rankLadderTexture() {
     g.fillStyle = 'rgba(217,177,90,.25)';
     g.fillRect(24, y, c.width - 48, 36);
     g.fillStyle = '#e8c766';
-    g.font = '700 20px Cinzel, serif';
+    g.font = '700 20px IM Fell English SC, serif';
     g.textAlign = 'left';
     g.fillText(rk, 36, y + 25);
     g.fillStyle = 'rgba(240,226,190,.7)';

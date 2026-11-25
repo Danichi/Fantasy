@@ -195,6 +195,7 @@ export class TreeView {
   hover: TreeNode | null = null;
   selected = 'c';
   onSelect?: (n: TreeNode) => void;
+  onHover?: (n: TreeNode | null, anchor?: DOMRect) => void;
   private ctx: CanvasRenderingContext2D;
   private tree: Tree;
   private bb: BB;
@@ -221,10 +222,11 @@ export class TreeView {
       if (n !== this.hover) {
         this.hover = n;
         cv.style.cursor = n ? 'pointer' : 'default';
+        this.onHover?.(n, n ? this.screenRect(n) : undefined);
         if (reduce) this.draw(0);
       }
     });
-    cv.addEventListener('mouseleave', () => (this.hover = null));
+    cv.addEventListener('mouseleave', () => { this.hover = null; this.onHover?.(null); if (reduce) this.draw(0); });
     cv.addEventListener('click', (e) => {
       const n = this.pick(e);
       if (!n) return;
@@ -242,6 +244,7 @@ export class TreeView {
   }
 
   dispose() {
+    this.onHover?.(null);
     this.alive = false;
     cancelAnimationFrame(this.raf);
   }
@@ -282,12 +285,17 @@ export class TreeView {
     return best;
   }
 
+  private screenRect(n: TreeNode) {
+    const r = this.cv.getBoundingClientRect(), ratio = r.width / (this.cv.width || 1), radius = 20 * this.cam.s * ratio;
+    return new DOMRect(r.left + (n.x! * this.cam.s + this.cam.ox) * ratio - radius, r.top + (n.y! * this.cam.s + this.cam.oy) * ratio - radius, radius * 2, radius * 2);
+  }
+
   private draw(ts: number) {
     const { w, h } = this.size();
     const { d, tree: t, paths: P } = this;
     const bw = this.bb.x1 - this.bb.x0, bh = this.bb.y1 - this.bb.y0, s = Math.min(w / bw, h / bh);
     this.cam = { s, ox: (w - bw * s) / 2 - this.bb.x0 * s, oy: (h - bh * s) / 2 - this.bb.y0 * s };
-    const c = this.ctx, col = this.col, gold = this.gold;
+    const c = this.ctx, col = this.col;
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, w, h);
     const shape = TREE_SHAPES[d.id];
@@ -314,25 +322,6 @@ export class TreeView {
       c.arc(p.x, p.y, 10 + k * 70 * p.k, 0, 7);
       c.stroke();
       c.globalAlpha = 1;
-    }
-    const hv = this.hover;
-    if (hv) {
-      const v = P.node(d.id, hv.id);
-      const nm = hv.type === 'choice' ? (v ? hv.name.split('|')[v.pick ?? 0] : hv.name.replace('|', ' / ')) : P.displayName(d.id, hv);
-      c.font = '15px Cinzel, serif';
-      const tw = c.measureText(nm).width, bx = hv.x! - tw / 2 - 10, by = hv.y! - 52;
-      c.fillStyle = 'rgba(7,8,12,.92)';
-      c.strokeStyle = gold;
-      c.lineWidth = 1;
-      c.beginPath();
-      c.rect(bx, by, tw + 20, 26);
-      c.fill();
-      c.stroke();
-      c.fillStyle = this.bone;
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.fillText(nm, hv.x!, by + 13);
-      c.textBaseline = 'alphabetic';
     }
   }
 
@@ -381,7 +370,7 @@ export class TreeView {
       const side = Math.abs(tg[1]) < 0.5;
       const at = shape.label?.[bi] ?? (side ? [cap.x!, cap.y! - 40] : [cap.x! + tg[0] * 50, cap.y! + tg[1] * 50 + (tg[1] > 0 ? 14 : 0)]);
       c.fillStyle = 'rgba(236,229,211,0.7)';
-      c.font = '16px Cinzel, serif';
+      c.font = '16px IM Fell English SC, serif';
       c.textAlign = 'center';
       c.fillText(this.d.branches![bi].name.toUpperCase(), at[0], at[1]);
     });
@@ -400,7 +389,7 @@ export class TreeView {
       c.stroke();
       c.setLineDash([]);
       c.fillStyle = open ? hexA(col, 0.55) : 'rgba(255,255,255,0.2)';
-      c.font = '10px ui-monospace, monospace';
+      c.font = '10px Alegreya, serif';
       c.textAlign = 'center';
       c.fillText('LV ' + TIER_GATE[i + 1], 0, R + 4);
     }
@@ -416,7 +405,7 @@ export class TreeView {
     c.arc(0, 0, 392, 0, 7);
     c.stroke();
     c.fillStyle = hexA(gold, 0.55);
-    c.font = '11px serif';
+    c.font = '11px Alegreya, serif';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     for (let i = 0; i < 60; i++) {
@@ -451,7 +440,7 @@ export class TreeView {
       if (Math.sin(la) > 0.1) rot += Math.PI;
       c.rotate(rot);
       c.fillStyle = 'rgba(236,229,211,0.6)';
-      c.font = '15px Cinzel, serif';
+      c.font = '15px IM Fell English SC, serif';
       c.textAlign = 'center';
       c.fillText(b.name.toUpperCase(), 0, 0);
       c.restore();
@@ -487,7 +476,7 @@ export class TreeView {
     }
     c.setTransform(this.cam.s, 0, 0, this.cam.s, this.cam.ox, this.cam.oy);
     c.fillStyle = hexA(col, 0.4);
-    c.font = '12px ui-monospace, monospace';
+    c.font = '12px Alegreya, serif';
     c.textAlign = 'center';
     d.branches!.forEach((b, bi) => {
       const cap = this.tree.map[`${bi}-cap`];
@@ -560,7 +549,7 @@ export class TreeView {
     for (let i = 0; i < 6; i++) {
       const y = 290 - i * 40, on = L >= TIER_GATE[i + 1];
       c.fillStyle = on ? hexA(col, 0.8) : 'rgba(255,255,255,0.18)';
-      c.font = '10px ui-monospace, monospace';
+      c.font = '10px Alegreya, serif';
       c.textAlign = 'right';
       c.fillText('LV ' + TIER_GATE[i + 1], -40, y + 3);
       c.fillRect(-32, y, 8, 1.5);
@@ -577,7 +566,7 @@ export class TreeView {
       c.lineWidth = 3;
       c.stroke();
       c.fillStyle = 'rgba(236,229,211,0.7)';
-      c.font = '18px Cinzel, serif';
+      c.font = '18px IM Fell English SC, serif';
       c.textAlign = 'center';
       c.fillText(this.d.branches![bi].name.toUpperCase(), b.e[0] + (bi === 1 ? 90 : 0), b.e[1] - (bi === 1 ? 6 : 52));
     });
@@ -900,7 +889,7 @@ export function drawSealed(cv: HTMLCanvasElement, learned: boolean) {
   c.setLineDash([]);
   c.fillStyle = '#968f80';
   c.textAlign = 'center';
-  c.font = `${Math.max(14, w / 44)}px Cinzel, serif`;
+  c.font = `${Math.max(14, w / 44)}px IM Fell English SC, serif`;
   c.fillText(learned ? 'This tree is still being written' : 'The tree is revealed when you learn it', 0, 0);
 }
 

@@ -2,6 +2,10 @@
 
 The target is Breath of the Wild (chosen 2026-10-29): a bright open world with soft cel light, detailed textures, clean models and a huge, airy blue distance. Wide, windy, alive, readable at a glance, and beautiful from anywhere you stand. Every asset, shader and layout decision follows this page. When something looks wrong, check it against these rules before adding detail.
 
+The interface follows [the Dawn Codex identity](design/ui-identity.md): locally
+bundled book typography, engraved names, parchment notes and substantial leather
+frames. Use its shared type and surface roles for new menus and hints.
+
 ## 1. The five rules
 
 1. **Detailed textures, clean models.** Textures keep their full detail (only a whisper of softening, so nothing reads as a photograph). Models are clean: crisp silhouettes, no noise, no outlines, no brush filters. Light does the stylising, not the textures.
