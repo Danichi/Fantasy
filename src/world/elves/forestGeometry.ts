@@ -174,11 +174,11 @@ export class ForestGeometry {
     ctx.lineWidth = 5;
     ctx.strokeRect(6, 6, 756, 180);
     ctx.fillStyle = '#f1e7c2';
-    ctx.font = 'bold 36px serif';
+    ctx.font = 'bold 36px Alegreya, serif';
     ctx.textAlign = 'center';
     ctx.fillText(title, 384, 72, 720);
     ctx.fillStyle = '#b6d4c4';
-    ctx.font = '24px serif';
+    ctx.font = '24px Alegreya, serif';
     ctx.fillText(subtitle, 384, 125, 720);
     const tex = new THREE.CanvasTexture(c);
     this.textures.push(tex);

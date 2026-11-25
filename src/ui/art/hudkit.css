@@ -40,7 +40,7 @@
 #ui .hand .cap {
   z-index: 2; top: -11px; left: 50%; transform: translateX(-50%); padding: 0; white-space: nowrap;
   background: none; border: 9px solid transparent; border-image: url('/assets/art/ui/btn-red.webp') 40 110 fill / 9px 22px / 0 stretch;
-  font: 700 9px/1 'Cinzel', var(--serif); letter-spacing: 0.24em; color: #fbe6b8; text-shadow: 0 1px 1px #3a0806;
+  font: 700 9px/1 'IM Fell English SC', var(--serif); letter-spacing: 0.24em; color: #fbe6b8; text-shadow: 0 1px 1px #3a0806;
 }
 #ui .hand.off .cap { border-image-source: url('/assets/art/ui/btn-iron.webp'); color: #e3e7ee; text-shadow: 0 1px 1px #000; }
 /* the key: a small gold-rimmed gem in the corner */
@@ -55,7 +55,7 @@
   z-index: 2; left: 50%; right: auto; bottom: -9px; transform: translateX(-50%); max-width: calc(100% - 10px);
   border: 9px solid transparent; border-image: url('/assets/art/ui/btn-parch.webp') 40 110 fill / 9px 20px / 0 stretch;
   padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box;
-  font: 700 11px/1 'Cinzel', var(--serif); letter-spacing: 0.04em; color: #3a2610; text-shadow: 0 1px 0 rgba(255, 244, 214, 0.6);
+  font: 700 11px/1 'IM Fell English SC', var(--serif); letter-spacing: 0.04em; color: #3a2610; text-shadow: 0 1px 0 rgba(255, 244, 214, 0.6);
 }
 #ui .hand.empty .nm { color: #7a6448; }
 #ui .hand .nm:empty { display: none; }
@@ -66,7 +66,7 @@
 #ui .bar-title { gap: 4px; margin-left: 6px; }
 #ui .bar-title span {
   border: 8px solid transparent; border-image: url('/assets/art/ui/btn-leather.webp') 40 110 fill / 8px 18px / 0 stretch;
-  font: 700 9px/1 'Cinzel', var(--serif); letter-spacing: 0.22em; color: rgba(236, 220, 186, 0.55); padding: 0 2px;
+  font: 700 9px/1 'IM Fell English SC', var(--serif); letter-spacing: 0.22em; color: rgba(236, 220, 186, 0.55); padding: 0 2px;
 }
 #ui .bar-title span.on { border-image-source: url('/assets/art/ui/btn-red.webp'); color: #fbe6b8; text-shadow: 0 1px 1px #3a0806; }
 #ui .bar-title kbd {

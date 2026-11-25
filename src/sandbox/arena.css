@@ -9,7 +9,7 @@ body.in-sandbox :is(.quest-tracker, .wmini, .compass, .waypoint, .region-card, .
   --bg: #16120ee8;
   --ok: #9fd38a;
   font:
-    12px Inter,
+    12px Alegreya,
     system-ui,
     sans-serif;
   color: var(--ink);
@@ -42,7 +42,7 @@ body.in-sandbox :is(.quest-tracker, .wmini, .compass, .waypoint, .region-card, .
 .sandbox-badge h4 {
   margin: 0;
   font:
-    600 11px Inter,
+    600 11px Alegreya,
     sans-serif;
   letter-spacing: 0.16em;
   color: var(--gold);
@@ -99,7 +99,7 @@ body.in-sandbox :is(.quest-tracker, .wmini, .compass, .waypoint, .region-card, .
 }
 .sbx-combo span {
   font:
-    700 12px Inter,
+    700 12px Alegreya,
     sans-serif;
   letter-spacing: 0.3em;
   color: var(--gold);
@@ -495,7 +495,7 @@ body.in-sandbox :is(.quest-tracker, .wmini, .compass, .waypoint, .region-card, .
 }
 .sandbox-panel .sbx-brand h2 {
   font:
-    500 26px/1.15 Cinzel,
+    500 26px/1.15 IM Fell English SC,
     Georgia,
     serif;
   margin: 12px 0;
@@ -574,7 +574,7 @@ body.in-sandbox :is(.quest-tracker, .wmini, .compass, .waypoint, .region-card, .
 }
 .sbx-top b {
   font:
-    500 23px Cinzel,
+    500 23px IM Fell English SC,
     Georgia,
     serif;
   color: #f2e4c8;
@@ -598,7 +598,7 @@ body.in-sandbox :is(.quest-tracker, .wmini, .compass, .waypoint, .region-card, .
 }
 .sandbox-panel h3 {
   font:
-    500 21px Cinzel,
+    500 21px IM Fell English SC,
     Georgia,
     serif;
   border: 0;
@@ -743,7 +743,7 @@ body.in-sandbox :is(.quest-tracker, .wmini, .compass, .waypoint, .region-card, .
 .sbx-roster b {
   display: block;
   font:
-    500 15px/1.3 Cinzel,
+    500 15px/1.3 IM Fell English SC,
     Georgia,
     serif;
   color: #f0e1c6;
@@ -891,7 +891,7 @@ body.in-sandbox :is(.quest-tracker, .wmini, .compass, .waypoint, .region-card, .
 }
 .sbx-live-name {
   font:
-    500 19px/1.3 Cinzel,
+    500 19px/1.3 IM Fell English SC,
     Georgia,
     serif;
   color: #f1e1c1;

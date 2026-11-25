@@ -16,7 +16,7 @@ export interface SeamanshipSource {
 const CSS = `
 .sea-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;padding:14px 16px;overflow:auto;flex:1;min-height:0}
 .sea-col{display:flex;flex-direction:column;gap:7px;min-width:0}
-.sea-col h3{margin:0;font:700 14px Cinzel,serif;color:#f2d68a;letter-spacing:.04em}
+.sea-col h3{margin:0;font:700 14px IM Fell English SC,serif;color:#f2d68a;letter-spacing:.04em}
 .sea-col .blurb{font-size:11px;color:#968f80;min-height:44px;line-height:1.35}
 .sea-node{position:relative;padding:8px 9px;border:1px solid #363f55;border-radius:4px;background:linear-gradient(180deg,#1b2130,#141925);cursor:pointer;transition:border-color .15s,transform .1s}
 .sea-node:hover{border-color:#d9b15a;transform:translateY(-1px)}
@@ -24,8 +24,8 @@ const CSS = `
 .sea-node.locked:hover{transform:none;border-color:#363f55}
 .sea-node.have{border-color:#8fbf6a;background:linear-gradient(180deg,#1f2b24,#151d19)}
 .sea-node.cap{border-color:#b08a3a}
-.sea-node b{display:block;font:600 12.5px Inter,sans-serif;color:#ece5d3}
-.sea-node .req{position:absolute;right:7px;top:7px;font:600 10px Inter,sans-serif;color:#d9b15a}
+.sea-node b{display:block;font:600 12.5px Alegreya,sans-serif;color:#ece5d3}
+.sea-node .req{position:absolute;right:7px;top:7px;font:600 10px Alegreya,sans-serif;color:#d9b15a}
 .sea-node p{margin:3px 0 0;font-size:11px;line-height:1.35;color:#b9b3a0}
 .sea-node .pips{margin-top:4px;display:flex;gap:3px}
 .sea-node .pips i{width:9px;height:9px;border-radius:50%;border:1px solid #d9b15a}

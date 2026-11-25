@@ -201,7 +201,7 @@ export function tierPlate(g: G, tier: number) {
   if (tier >= 4) glow(g, x + w / 2, y + 9, 22, tier === 5 ? '#ffd76a' : '#ffb84a', 0.55);
   shade(g, rrect(x, y, w, 19, 5), c, { gloss: 1, band: 2.5, box: [x, y, x + w, y + 19] });
   g.save();
-  g.font = '700 14px Cinzel, Georgia, serif';
+  g.font = '700 14px IM Fell English SC, Georgia, serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillStyle = dark(c, 0.75);

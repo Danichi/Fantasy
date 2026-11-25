@@ -71,7 +71,7 @@ function signTexture() {
     g.lineWidth = 10;
     g.strokeRect(10, 10, c.width - 20, c.height - 20);
     g.fillStyle = '#e8c766';
-    g.font = '700 74px Cinzel, Georgia, serif';
+    g.font = '700 74px IM Fell English SC, Georgia, serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.fillText('ADVENTURER\'S GUILD', c.width / 2, c.height / 2 + 4, c.width - 60);
@@ -79,7 +79,7 @@ function signTexture() {
   };
   paint();
   // (Paint again once the carved letters' font has loaded.)
-  document.fonts?.load('700 74px Cinzel').then(paint).catch(() => {});
+  document.fonts?.load('700 74px IM Fell English SC').then(paint).catch(() => {});
   return t;
 }
 

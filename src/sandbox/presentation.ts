@@ -13,10 +13,10 @@ function label(text: string, sub: string) {
   ctx.strokeRect(8, 8, 752, 176);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#f1dbad';
-  ctx.font = '28px Georgia';
+  ctx.font = '28px Alegreya';
   ctx.fillText(text, 384, 84);
   ctx.fillStyle = '#a5c0ce';
-  ctx.font = '18px sans-serif';
+  ctx.font = '18px Alegreya, serif';
   ctx.fillText(sub, 384, 130);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;

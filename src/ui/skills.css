@@ -27,10 +27,10 @@
   --c-earth: #d09a5a;
   --c-tide: #4fc3e0;
   --c-storm: #b0a4ff;
-  --sk-display: 'Cinzel', 'Times New Roman', serif;
-  --sk-body: 'Inter', system-ui, sans-serif;
-  --sk-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
-  --sk-flavour: Georgia, 'Times New Roman', serif;
+  --sk-display: var(--font-display);
+  --sk-body: var(--font-body);
+  --sk-mono: var(--font-body);
+  --sk-flavour: var(--font-flavour);
 
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   width: min(1320px, calc(100vw - 32px)); height: min(820px, calc(100vh - 40px));

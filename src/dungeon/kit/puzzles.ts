@@ -71,7 +71,7 @@ function symbolTexture(sym: string, label = '') {
     g.fill();
   }
   if (label) {
-    g.font = 'bold 22px Georgia';
+    g.font = 'bold 22px Alegreya';
     g.fillText(label, 8, 120);
   }
   const t = new THREE.CanvasTexture(c);

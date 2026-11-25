@@ -679,7 +679,7 @@ export class Archipelagos {
       c.strokeRect(3, 3, 506, 90);
       c.textAlign = 'center';
       c.fillStyle = '#f3e4be';
-      c.font = '24px Georgia';
+      c.font = '24px Alegreya';
       c.fillText(text, 256, 56, 490);
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;

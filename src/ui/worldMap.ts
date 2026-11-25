@@ -3,6 +3,7 @@ import { GW, GH, CELL, MPP, MAP_PX, worldToPx, REGION_DEFS } from '../world/worl
 import { REGIONS } from '../world/regionDefinitions';
 import { ROAD_LINES } from '../world/terrainHeight';
 import type { Discovery, MapMark } from '../world/discovery';
+import { codexHelp } from './codexTooltip';
 
 // The world map (M in the overworld) and the local minimap (docs/design/mapping.md).
 // Your sheet is drawn in three hands: a pencil SKETCH where you have walked,
@@ -210,7 +211,7 @@ export class WorldMapUI {
   private picked: PaperMark | null = null;
   /** a copy waiting to be placed by hand */
   private copying: { paper: Paper; mark: PaperMark } | null = null;
-  private hover: { sx: number; sy: number; text: string } | null = null;
+  private hoverText: string | null = null;
   /** the reveal: a patch inking in, with a brush wipe */
   private reveal: { x: number; z: number; t: number; label: string } | null = null;
   // Minimap
@@ -396,6 +397,7 @@ export class WorldMapUI {
   private bindInput() {
     const c = this.canvas;
     c.addEventListener('mousedown', (e) => {
+      this.mapNote(null);
       if (e.button !== 0) return;
       const onPaper = !!this.paper && e.offsetX > this.split;
       const w = this.screenToWorld(e.offsetX, e.offsetY);
@@ -436,6 +438,7 @@ export class WorldMapUI {
     });
     c.addEventListener('wheel', (e) => {
       e.preventDefault();
+      this.mapNote(null);
       const before = this.screenToMap(e.offsetX, e.offsetY);
       this.zoom = Math.max(0.6, Math.min(8, this.zoom * (e.deltaY < 0 ? 1.18 : 1 / 1.18)));
       const after = this.screenToMap(e.offsetX, e.offsetY);
@@ -454,23 +457,34 @@ export class WorldMapUI {
     });
     c.addEventListener('mousemove', (e) => {
       if (this.drag || this.drawing) return;
-      this.hover = null;
       const onPaper = !!this.paper && e.offsetX > this.split;
       if (onPaper) {
         const pm = this.paperMarkAt(e.offsetX, e.offsetY);
-        if (pm) this.hover = { sx: e.offsetX, sy: e.offsetY, text: pm.label };
+        this.mapNote(pm?.label ?? null, e);
         this.info.textContent = this.paper!.title;
         return;
       }
       const w = this.screenToWorld(e.offsetX, e.offsetY);
       const mk = this.discovery.markNear(w.x, w.z, (12 / this.scale()) * MPP);
-      if (mk?.text) this.hover = { sx: e.offsetX, sy: e.offsetY, text: mk.text + (mk.day !== undefined ? ` (copied day ${mk.day})` : '') };
+      this.mapNote(mk?.text ? mk.text + (mk.day !== undefined ? ` (copied day ${mk.day})` : '') : null, e);
       const gx = Math.floor((w.x - this.x0()) / CELL), gz = Math.floor((w.z - this.z0()) / CELL);
       const inked = gx >= 0 && gz >= 0 && gx < GW && gz < GH && this.discovery.isInked(gx, gz);
       const m = this.screenToMap(e.offsetX, e.offsetY);
       const rd = REGION_DEFS.find((r) => this.discovery.regions.has(r.id) && this.inRegion(r, m.x, m.y));
       this.info.textContent = inked && rd ? `${REGIONS[rd.id]?.name ?? rd.id} · ${REGIONS[rd.id]?.subtitle ?? ''}` : '';
     });
+    c.addEventListener('mouseleave', () => {
+      this.hoverText = null;
+      codexHelp().release(c);
+    });
+  }
+
+  private mapNote(text: string | null, e?: MouseEvent) {
+    if (text === this.hoverText) return;
+    this.hoverText = text;
+    const help = codexHelp();
+    if (!text || !e) return help.hide(this.canvas);
+    help.show(this.canvas, { title: text.length > 85 ? 'Map annotation' : text, body: text.length > 85 ? text : undefined, eyebrow: 'Cartographer’s notes' }, new DOMRect(e.clientX, e.clientY, 1, 1));
   }
 
   private x0() { return -worldToPx(0, 0).x * MPP; }
@@ -564,6 +578,8 @@ export class WorldMapUI {
       this.buildTools();
       this.buildCharts();
     } else {
+      this.hoverText = null;
+      codexHelp().hide(this.canvas);
       this.paper = null;
       this.picked = null;
       this.copying = null;
@@ -664,14 +680,14 @@ export class WorldMapUI {
     for (const m of this.seaMarkers()) {
       const p = this.worldToScreen(m.x, m.z);
       const [glyph, color] = STYLE[m.kind] ?? ['•', '#fff'];
-      g.font = m.kind === 'storm' ? '22px serif' : '16px serif';
+      g.font = m.kind === 'storm' ? '22px Alegreya, serif' : '16px Alegreya, serif';
       g.lineWidth = 3;
       g.strokeStyle = 'rgba(0,0,0,0.75)';
       g.strokeText(glyph, p.x, p.y + 6);
       g.fillStyle = color;
       g.fillText(glyph, p.x, p.y + 6);
       if (m.label && this.zoom > 2.2) {
-        g.font = '600 11px Inter, sans-serif';
+        g.font = '600 11px Alegreya, sans-serif';
         g.strokeText(m.label, p.x, p.y + 22);
         g.fillStyle = '#fff4d8';
         g.fillText(m.label, p.x, p.y + 22);
@@ -735,7 +751,7 @@ export class WorldMapUI {
     } else if (m.kind === 'pin') {
       const gi = this.glyphImg.get(m.glyph ?? 'flag');
       if (gi) g.drawImage(gi, p.x - 14, p.y - 26, 28, 28);
-      else { g.font = '18px serif'; g.textAlign = 'center'; g.fillText('⚑', p.x, p.y); }
+      else { g.font = '18px Alegreya, serif'; g.textAlign = 'center'; g.fillText('⚑', p.x, p.y); }
     } else if (m.kind === 'note') {
       g.font = 'italic 600 13px "Segoe Script", "Bradley Hand", cursive';
       g.textAlign = 'center';
@@ -795,7 +811,7 @@ export class WorldMapUI {
       g.fillStyle = grd;
       g.fillRect(0, 0, this.split, H);
       g.textAlign = 'center';
-      this.label(g, this.reveal.label, p.x, p.y - 40, '700 20px Cinzel, serif', `rgba(255,236,190,${1 - k * 0.6})`);
+      this.label(g, this.reveal.label, p.x, p.y - 40, '700 20px IM Fell English SC, serif', `rgba(255,236,190,${1 - k * 0.6})`);
       if (this.reveal.t > 3.2) this.reveal = null;
     }
     // Your trail: a faint pencil line.
@@ -846,13 +862,13 @@ export class WorldMapUI {
       }
       const p = this.mapToScreen(cx, cy);
       const size = Math.max(11, Math.min(26, 13 * this.zoom * ('circle' in r ? 0.55 : 1)));
-      g.font = `700 ${size}px Cinzel, serif`;
+      g.font = `700 ${size}px IM Fell English SC, serif`;
       g.lineWidth = 4;
       g.strokeStyle = 'rgba(6,12,24,0.8)';
       g.strokeText(def.name, p.x, p.y);
       g.fillStyle = '#f4e2b0';
       g.fillText(def.name, p.x, p.y);
-      g.font = `italic 500 ${Math.max(9, size * 0.5)}px Inter, sans-serif`;
+      g.font = `italic 500 ${Math.max(9, size * 0.5)}px Alegreya, sans-serif`;
       g.fillStyle = 'rgba(244,226,176,0.8)';
       g.fillText(def.subtitle, p.x, p.y + size * 0.8);
     }
@@ -863,7 +879,7 @@ export class WorldMapUI {
       const p = this.worldToScreen(l.x, l.z);
       const named = this.discovery.named(l.id);
       if (!named) {
-        this.label(g, '?', p.x, p.y + 6, '700 16px Cinzel, serif', '#c9b48a');
+        this.label(g, '?', p.x, p.y + 6, '700 16px IM Fell English SC, serif', '#c9b48a');
         continue;
       }
       const icon = KIND_ICON[l.kind] ?? KIND_ICON.landmark;
@@ -871,7 +887,7 @@ export class WorldMapUI {
       this.label(g, icon.glyph, p.x, p.y + 6, `${known ? 14 : 18}px serif`, known ? 'rgba(220,210,190,0.8)' : icon.color);
       const capital = l.kind === 'capital';
       if ((capital || this.zoom > 2.6) && !REGIONS[l.id]) {
-        this.label(g, l.name, p.x, p.y + 22, capital ? '700 14px Cinzel, serif' : '600 12px Inter, sans-serif', '#fff4d8');
+        this.label(g, l.name, p.x, p.y + 22, capital ? '700 14px IM Fell English SC, serif' : '600 12px Alegreya, sans-serif', '#fff4d8');
       }
     }
     // Your own marks (under the game's markers, so quests stay readable).
@@ -903,10 +919,10 @@ export class WorldMapUI {
       const sitey = m.kind === 'site' || m.kind === 'siteDone';
       const glyph = m.glyph ?? st.glyph;
       this.label(g, glyph, p.x, p.y + (m.kind === 'offer' ? 5 : 6), m.tracked ? 'bold 22px serif' : m.kind === 'offer' ? 'bold 13px serif' : sitey ? '14px serif' : '17px serif', m.kind === 'siteDone' ? st.color : m.color ?? st.color);
-      if (sitey && m.label && this.zoom > 3 && !m.tracked) this.label(g, m.label, p.x, p.y + 19, '600 10px Inter, sans-serif', m.kind === 'siteDone' ? '#b8b0a0' : '#f0e6cc');
+      if (sitey && m.label && this.zoom > 3 && !m.tracked) this.label(g, m.label, p.x, p.y + 19, '600 10px Alegreya, sans-serif', m.kind === 'siteDone' ? '#b8b0a0' : '#f0e6cc');
       const bossy = m.kind === 'boss' || m.kind === 'bossSlain';
-      if (bossy && m.label && this.zoom > 1.6 && !m.tracked) this.label(g, m.label, p.x, p.y + 22, 'italic 600 11px Inter, sans-serif', '#ffd8c8');
-      if (m.tracked && m.label) this.label(g, m.label, p.x, p.y + 30, '600 12px Inter, sans-serif', '#fff4d8');
+      if (bossy && m.label && this.zoom > 1.6 && !m.tracked) this.label(g, m.label, p.x, p.y + 22, 'italic 600 11px Alegreya, sans-serif', '#ffd8c8');
+      if (m.tracked && m.label) this.label(g, m.label, p.x, p.y + 30, '600 12px Alegreya, sans-serif', '#fff4d8');
     }
     this.drawSea(g);
     if (this.obscured > 0.01) this.drawMist(g, this.split, H, this.obscuredText);
@@ -926,15 +942,6 @@ export class WorldMapUI {
     g.restore();
     this.drawCompass(g, this.split - 90, H - 100, 52);
     if (this.paper) this.drawPaper(g, W, H);
-    if (this.hover) {
-      g.font = '600 12px Inter, sans-serif';
-      const w = g.measureText(this.hover.text).width + 16;
-      g.fillStyle = 'rgba(8,14,28,0.9)';
-      g.fillRect(this.hover.sx + 12, this.hover.sy - 26, w, 22);
-      g.fillStyle = '#f4e2b0';
-      g.textAlign = 'left';
-      g.fillText(this.hover.text, this.hover.sx + 20, this.hover.sy - 11);
-    }
   }
 
   /** The paper laid beside your sheet: its own map and marks, same view, sepia. */
@@ -982,7 +989,7 @@ export class WorldMapUI {
       if (gi) g.drawImage(gi, p.x - 14, p.y - 14, 28, 28);
       if (picked || this.zoom > 1.4) {
         g.textAlign = 'center';
-        this.label(g, m.label + (m.copied ? ' ✓' : ''), p.x, p.y + 26 + (m.r ? 0 : 0), `600 ${picked ? 13 : 11}px Inter, sans-serif`, picked ? '#fff4d8' : '#f0e2c0');
+        this.label(g, m.label + (m.copied ? ' ✓' : ''), p.x, p.y + 26 + (m.r ? 0 : 0), `600 ${picked ? 13 : 11}px Alegreya, sans-serif`, picked ? '#fff4d8' : '#f0e2c0');
       }
     }
     g.restore();
@@ -990,8 +997,8 @@ export class WorldMapUI {
     g.fillStyle = 'rgba(0,0,0,0.6)';
     g.fillRect(pane - 2, 0, 4, H);
     g.textAlign = 'center';
-    this.label(g, paper.title, pane + (W - pane) / 2, 54, '700 16px Cinzel, serif', '#f4e2b0');
-    this.label(g, 'YOUR SHEET', pane / 2, 54, '700 14px Cinzel, serif', '#f4e2b0');
+    this.label(g, paper.title, pane + (W - pane) / 2, 54, '700 16px IM Fell English SC, serif', '#f4e2b0');
+    this.label(g, 'YOUR SHEET', pane / 2, 54, '700 14px IM Fell English SC, serif', '#f4e2b0');
   }
 
   /** Rolling grey fog over a map canvas, drifting with time. */
@@ -1012,7 +1019,7 @@ export class WorldMapUI {
       g.fillRect(0, 0, W, H);
     }
     if (label) {
-      g.font = '600 18px Cinzel, serif';
+      g.font = '600 18px IM Fell English SC, serif';
       g.textAlign = 'center';
       g.fillStyle = `rgba(226,230,222,${0.85 * a})`;
       g.fillText(label, W / 2, H * 0.18);
@@ -1039,7 +1046,7 @@ export class WorldMapUI {
       g.fill();
       g.restore();
     }
-    g.font = '700 13px Cinzel, serif';
+    g.font = '700 13px IM Fell English SC, serif';
     g.fillStyle = '#f4e2b0';
     g.textAlign = 'center';
     g.fillText('N', 0, -r - 12);
@@ -1112,7 +1119,7 @@ export class WorldMapUI {
       if (sx < -10 || sy < -10 || sx > S + 10 || sy > S + 10) continue;
       const named = this.discovery.named(l.id);
       const icon = KIND_ICON[l.kind] ?? KIND_ICON.landmark;
-      g.font = named ? '15px serif' : '700 14px Cinzel, serif';
+      g.font = named ? '15px Alegreya, serif' : '700 14px IM Fell English SC, serif';
       g.fillStyle = named ? icon.color : '#c9b48a';
       g.strokeStyle = 'rgba(0,0,0,0.7)';
       g.lineWidth = 3;
@@ -1149,7 +1156,7 @@ export class WorldMapUI {
         sy = S / 2 + ((sy - S / 2) / d) * (S / 2 - 10);
       }
       const st = MARK_STYLE[m.kind];
-      g.font = m.tracked ? 'bold 18px serif' : m.kind === 'offer' ? 'bold 12px serif' : '14px serif';
+      g.font = m.tracked ? 'bold 18px Alegreya, serif' : m.kind === 'offer' ? 'bold 12px Alegreya, serif' : '14px Alegreya, serif';
       g.fillStyle = st.color;
       g.strokeText(st.glyph, sx, sy + 5);
       g.fillText(st.glyph, sx, sy + 5);

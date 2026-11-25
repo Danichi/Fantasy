@@ -168,10 +168,10 @@ function signMat(text: string, sub = '', bg = '#f3ead2', ink = '#1f2c4a') {
   g.strokeStyle = '#c9a55a'; g.lineWidth = 10; g.strokeRect(5, 5, 502, 118);
   g.fillStyle = ink; g.textAlign = 'center'; g.textBaseline = 'middle';
   let size = 40;
-  g.font = `700 ${size}px Cinzel, serif`;
-  while (g.measureText(text).width > 470 && size > 20) g.font = `700 ${--size}px Cinzel, serif`;
+  g.font = `700 ${size}px IM Fell English SC, serif`;
+  while (g.measureText(text).width > 470 && size > 20) g.font = `700 ${--size}px IM Fell English SC, serif`;
   g.fillText(text, 256, sub ? 50 : 64);
-  if (sub) { g.font = '600 22px Cinzel, serif'; g.fillText(sub, 256, 94); }
+  if (sub) { g.font = '600 22px IM Fell English SC, serif'; g.fillText(sub, 256, 94); }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return new THREE.MeshStandardMaterial({ map: t, roughness: 0.8, side: THREE.DoubleSide });
@@ -1274,7 +1274,7 @@ export class RoyalCapital {
       g.strokeStyle = 'rgba(160,150,255,1)'; g.lineWidth = 6;
       g.beginPath(); g.arc(128, 128, 118, 0, Math.PI * 2); g.stroke();
       g.beginPath(); g.arc(128, 128, 90, 0, Math.PI * 2); g.stroke();
-      g.font = '28px serif'; g.fillStyle = 'rgba(180,170,255,1)'; g.textAlign = 'center';
+      g.font = '28px Alegreya, serif'; g.fillStyle = 'rgba(180,170,255,1)'; g.textAlign = 'center';
       const runes = 'ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃ';
       for (let k = 0; k < 12; k++) {
         const a = (k / 12) * Math.PI * 2;

@@ -225,7 +225,7 @@ function paint(g: CanvasRenderingContext2D, d: MapData, cs: number, ox: number, 
     const [i, j] = k.split(',').map(Number);
     drawIcon(g, icon, X(i + 0.5), Y(j + 0.5), cs);
   }
-  g.font = `italic ${Math.max(9, cs * 0.34)}px Georgia, serif`;
+  g.font = `italic ${Math.max(9, cs * 0.34)}px Alegreya, serif`;
   g.fillStyle = INK;
   for (const n of d.notes) {
     g.beginPath();

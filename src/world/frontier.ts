@@ -47,7 +47,7 @@ function signTexture(text: string) {
   g.lineWidth = 10;
   g.strokeRect(5, 5, c.width - 10, c.height - 10);
   g.fillStyle = '#4c3827';
-  g.font = '700 38px Cinzel, serif';
+  g.font = '700 38px IM Fell English SC, serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText(text, c.width / 2, c.height / 2);

@@ -1050,7 +1050,7 @@ export class PortLife {
       ctx.fillStyle = '#f0e1bc';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = '600 38px Cinzel';
+      ctx.font = '600 38px IM Fell English SC';
       ctx.fillText(
         ending === 'families'
           ? 'NETTERS’ STOREHOUSE'
@@ -1061,7 +1061,7 @@ export class PortLife {
         78,
         710,
       );
-      ctx.font = '26px Inter';
+      ctx.font = '26px Alegreya';
       ctx.fillText(
         ending ? 'Held in trust for the harbour' : 'Bonded warehouse',
         384,

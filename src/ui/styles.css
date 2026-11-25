@@ -11,8 +11,8 @@
   --st-hi: #8cc15e;
   --mp: #2d5fb8;
   --mp-hi: #5a92ea;
-  --serif: 'Cinzel', 'Times New Roman', serif;
-  --sans: 'Inter', system-ui, sans-serif;
+  --serif: var(--font-display, "IM Fell English SC", Georgia, serif);
+  --sans: var(--font-body, Alegreya, Georgia, serif);
 }
 
 * { box-sizing: border-box; }
@@ -235,7 +235,7 @@ body.book-open .bossbar { display: none; }
 }
 .ehp i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(#e0584f, #9c1d16); }
 .ehp b { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255, 230, 180, 0.6); }
-.ehp .ehp-name { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 3px; white-space: nowrap; font: 600 11px/1 'Cinzel', serif; letter-spacing: 0.06em; color: #f3ead6; text-shadow: 0 1px 2px #000, 0 0 4px rgba(0, 0, 0, 0.8); }
+.ehp .ehp-name { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 3px; white-space: nowrap; font: 600 11px/1 'IM Fell English SC', serif; letter-spacing: 0.06em; color: #f3ead6; text-shadow: 0 1px 2px #000, 0 0 4px rgba(0, 0, 0, 0.8); }
 .dmg {
   position: absolute; font: 700 18px/1 var(--serif); color: #f3e7cf;
   text-shadow: 0 2px 3px #000, 0 0 6px rgba(0, 0, 0, 0.6); white-space: nowrap;
@@ -302,15 +302,15 @@ body.book-open .bossbar { display: none; }
   opacity: 0; transition: opacity 1.6s ease .5s, transform 2.2s ease .5s;
 }
 .death.show .death-card { opacity: 1; transform: translate(-50%, -50%); }
-.death-card small { display: block; font: 600 12px/1 'Cinzel', var(--serif); letter-spacing: .32em; text-transform: uppercase; color: #c9a45c; opacity: .8; }
+.death-card small { display: block; font: 600 12px/1 'IM Fell English SC', var(--serif); letter-spacing: .32em; text-transform: uppercase; color: #c9a45c; opacity: .8; }
 .death-card h1 {
-  margin: 14px 0 0; font: 600 clamp(40px, 5.4vw, 78px)/1 'Cinzel', var(--serif); letter-spacing: .12em; text-transform: uppercase;
+  margin: 14px 0 0; font: 600 clamp(40px, 5.4vw, 78px)/1 'IM Fell English SC', var(--serif); letter-spacing: .12em; text-transform: uppercase;
   color: #b3261b; text-shadow: 0 0 34px rgba(179, 38, 27, .55), 0 3px 10px #000;
 }
 .death-rule { width: min(440px, 60vw); height: 1px; margin: 18px auto; background: linear-gradient(90deg, transparent, #c9a45c, transparent); }
 .death-line { margin: 0; font: italic 500 clamp(18px, 1.7vw, 25px)/1.4 'Cormorant Garamond', var(--serif); color: #f0e2bf; text-shadow: 0 2px 8px #000; }
 .death-rise {
-  display: inline-block; margin-top: 22px; font: 600 11px/1 'Cinzel', var(--serif); letter-spacing: .26em; text-transform: uppercase;
+  display: inline-block; margin-top: 22px; font: 600 11px/1 'IM Fell English SC', var(--serif); letter-spacing: .26em; text-transform: uppercase;
   color: #d9c79a; opacity: .55; animation: death-pulse 2.4s ease-in-out infinite;
 }
 @keyframes death-pulse { 50% { opacity: .9; } }
@@ -634,17 +634,17 @@ body.book-open .bossbar { display: none; }
   gap: 3px;
 }
 .quest-tracker .q-kicker {
-  font: 700 9px/1 Inter, sans-serif;
+  font: 700 9px/1 Alegreya, sans-serif;
   letter-spacing: .22em;
   color: rgba(255,214,125,.86);
 }
 .quest-tracker b {
-  font: 700 12px/1.2 Cinzel, serif;
+  font: 700 12px/1.2 IM Fell English SC, serif;
   letter-spacing: .08em;
   color: #f7f1df;
 }
 .quest-tracker small {
-  font: 500 10px/1.45 Inter, sans-serif;
+  font: 500 10px/1.45 Alegreya, sans-serif;
   color: rgba(233,239,236,.68);
 }
 @media (max-width: 900px) {

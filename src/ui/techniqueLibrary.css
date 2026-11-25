@@ -12,7 +12,7 @@
   padding: 20px;
   color: #eee9d7;
   font:
-    14px/1.45 Inter,
+    14px/1.45 Alegreya,
     sans-serif;
   backdrop-filter: blur(4px);
 }
@@ -34,7 +34,7 @@
 }
 .tl-panel h2 {
   font:
-    26px Cinzel,
+    26px IM Fell English SC,
     serif;
   margin: 3px 0;
 }
@@ -44,7 +44,7 @@
 }
 .tl-panel h3 {
   font:
-    22px Cinzel,
+    22px IM Fell English SC,
     serif;
   margin: 0 0 8px;
 }
@@ -148,7 +148,7 @@
 }
 .tl-center b {
   font:
-    34px Cinzel,
+    34px IM Fell English SC,
     serif;
   color: #e6d197;
 }
@@ -262,7 +262,7 @@
   color: #e6eadc;
   pointer-events: none;
   font:
-    12px/1.5 Inter,
+    12px/1.5 Alegreya,
     sans-serif;
 }
 .combat-input-guide > small {
@@ -292,7 +292,7 @@
 }
 .combat-input-guide kbd {
   font:
-    10px Inter,
+    10px Alegreya,
     sans-serif;
   background: #3b5049;
   border: 1px solid #aab68c55;
@@ -359,7 +359,7 @@
   background: #15282bee;
   color: #e4e6d1;
   font:
-    12px Inter,
+    12px Alegreya,
     sans-serif;
   cursor: pointer;
 }
