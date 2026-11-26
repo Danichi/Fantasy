@@ -1,11 +1,9 @@
-import { macroHeight, WORLD_X0, WORLD_Z0, WORLD_W, WORLD_H } from '../worldMap';
+import { WORLD_X0, WORLD_Z0, WORLD_W, WORLD_H } from '../worldMap';
 import ISLES from '../islands/atlas.json';
 
-// Separate physical space, shared map coordinates. Living fortifications cannot
-// collide with an ancient path, and no saved hero position uses these offsets.
-export const DARK_X = 60000,
-  DARK_Z = -60000;
-export const inDark = (x: number, z: number) => x > DARK_X - 16000 && x < DARK_X + 22000 && z > DARK_Z - 14000 && z < DARK_Z + 16000;
+// The Dark is the world's shadow: the same land, in the same place, under a
+// red sky. Nothing anyone built stands in it. The seven scars below are where
+// the war that ended the endless day struck the shadow so hard it still shows.
 export const onMap = (x: number, z: number) => x >= WORLD_X0 && x <= WORLD_X0 + WORLD_W && z >= WORLD_Z0 && z <= WORLD_Z0 + WORLD_H;
 
 export const SCARS = [
@@ -16,7 +14,7 @@ export const SCARS = [
     z: -170,
     r: 115,
     depth: 35,
-    text: 'The bowl is fused glass. Something larger than a keep struck here before Elder Glen had a name.',
+    text: 'The ground here is fused glass. Light fell on this place the wrong way: down, into the shadow, to burn out whatever lived in it.',
   },
   {
     id: 'severed-crown',
@@ -25,7 +23,7 @@ export const SCARS = [
     z: -680,
     r: 210,
     depth: 65,
-    text: 'A straight wound crosses the ridge. The mountain was not mined: it was parted in a single blow.',
+    text: 'A knight cut this ridge in two to stop an army that never slept. It marched around.',
   },
   {
     id: 'harbour-before',
@@ -34,7 +32,7 @@ export const SCARS = [
     z: 110,
     r: 180,
     depth: 28,
-    text: 'Where Aurelle now raises walls, a black basin remembers a different coastline. No living kingdom’s border reaches this basin.',
+    text: 'The sea pulled back from here for a hundred years. The things that crawled up out of the dry bed were starving.',
   },
   {
     id: 'white-cleft',
@@ -43,7 +41,7 @@ export const SCARS = [
     z: -4480,
     r: 300,
     depth: 110,
-    text: 'The petrified forest points away from the impact. Even the mountains seem to have recoiled.',
+    text: 'The trees bent away from a light that never set, until they turned to stone rather than face it.',
   },
   {
     id: 'western-fall',
@@ -52,7 +50,7 @@ export const SCARS = [
     z: 200,
     r: 360,
     depth: 95,
-    text: 'The broken foundations predate the present kingdoms. Their quarrels are young beside this scar.',
+    text: 'A city stood here that kept its lamps lit for someone else’s king. Its people left lanterns at the edge of town for the knights who came to put the others out.',
   },
   {
     id: 'forest-echo',
@@ -61,7 +59,7 @@ export const SCARS = [
     z: -2780,
     r: 150,
     depth: 50,
-    text: 'Stone roots hang over a wound in the earth. Whatever fought here left no armies to bury.',
+    text: 'Eleven knights went down into the dark from here. One came back up. Then he went down again, alone, and stayed.',
   },
   {
     id: 'southern-wound',
@@ -70,26 +68,9 @@ export const SCARS = [
     z: 2000,
     r: 260,
     depth: 80,
-    text: 'A crater has swallowed the old horizon. The Dawn holds your outline steady against its silence.',
+    text: 'A crater has swallowed the old horizon. The Dawn holds your outline steady against its silence. Something here remembers being held the same way, and let go.',
   },
 ] as const;
-
-/** Continental silhouette without settlements, roads or modern flattening. */
-export function ancientHeight(x: number, z: number) {
-  let h = Math.max(14, macroHeight(x, z) * 0.82 + 16);
-  h += Math.sin(x / 73) * Math.cos(z / 91) * 5 + Math.sin((x + z) / 181) * 8;
-  for (const s of SCARS) {
-    const d = Math.hypot(x - s.x, z - s.z) / s.r;
-    if (d < 1) h -= s.depth * Math.pow(1 - d * d, 2);
-    if (d > 0.8 && d < 1.4) h += Math.sin(((d - 0.8) / 0.6) * Math.PI) * s.depth * 0.25;
-  }
-  // Long, traversable cleavages: ancient blows rather than modern trails.
-  const cut = Math.abs(z + 680 - (x + 1280) * 0.26);
-  const along = Math.abs(x + 1280);
-  if (along < 650 && cut < 42) h -= Math.pow(1 - cut / 42, 2) * 44 * (1 - along / 650);
-  // Dry exposed beds, kept above the game's global void rescue threshold.
-  return Math.max(-18, h);
-}
 
 // Both dimensions have these wheels. Two lie across guarded boundaries;
 // their living counterparts do not remove guards or grant diplomatic immunity.

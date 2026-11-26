@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 
 /** How far into the Dark mirror the world looks (0..1; story/darkMirror.ts drives it). */
-export const DARK = { value: 0 };
+/** `floor`: the least it can be (the explorable Dark holds it at 1 while you're in it). */
+export const DARK = { value: 0, floor: 0 };
+/** The explorable Dark's murk: far things sink into a red-black haze (0 or 1). */
+export const DARK_FOG = { value: 0 };
 
 // ---------------------------------------------------------------------------
 // Lean single-chain post-processing, replacing EffectComposer on Medium/High:
@@ -110,6 +113,7 @@ const FINAL_FRAG = /* glsl */ `
   uniform sampler2D tAO; uniform float uAO;
   uniform vec2 uTexel;
   uniform float uDark;
+  uniform float uDarkFog;
   varying vec2 vUv;
 
   vec3 aces(vec3 x) {
@@ -197,6 +201,12 @@ const FINAL_FRAG = /* glsl */ `
       float ash = step(0.996, noise2(pxd / 3.0 + vec2(0.0, uTime * 40.0)));
       dk += ash * vec3(0.5, 0.4, 0.45);
       dk *= 0.92 + 0.08 * sin(uTime * 2.3 + noise2(pxd / 120.0) * 6.0);
+      // The explorable Dark: the land a shade darker, and far things sinking into a red-black murk.
+      if (uDarkFog > 0.0 && !sky) {
+        float murk = smoothstep(20.0, 230.0, dist);
+        dk = mix(dk, dk * 0.8, uDarkFog);
+        dk = mix(dk, vec3(0.2, 0.065, 0.1) + ld * 0.06, murk * 0.82 * uDarkFog);
+      }
       col = mix(col, dk, uDark);
     }
     // Vignette.
@@ -280,7 +290,7 @@ export class Post {
         uNear: { value: 0.1 }, uFar: { value: 900 }, uTime: { value: 0 },
         uExposure: { value: 1.0 }, uBloom: { value: 0.3 }, uHaze: { value: 0.00072 }, uClouds: { value: 0.85 }, uMist: { value: 0 },
         tAO: { value: null }, uAO: { value: 0.75 },
-        uTexel: { value: new THREE.Vector2(1, 1) }, uDark: DARK,
+        uTexel: { value: new THREE.Vector2(1, 1) }, uDark: DARK, uDarkFog: DARK_FOG,
       },
       depthTest: false,
       depthWrite: false,

@@ -33,28 +33,82 @@ export class Physics {
     return this.world.createRigidBody(d);
   }
 
+  // ---- the veil (the Dark) ----
+  // In the Dark the land is the same land, but nothing anyone built stands on
+  // it: every fixed collider except the terrain's heightfields switches off
+  // while the veil is up, including ones that stream in meanwhile. Colliders
+  // made inside `physics.dark(...)` belong to the Dark and stay solid.
+  private veiled: Set<RAPIER.Collider> | null = null;
+  private darkDepth = 0;
+  private darkOwned = new WeakSet<RAPIER.Collider>();
+  get veilUp() {
+    return !!this.veiled;
+  }
+  private veilable(c: RAPIER.Collider) {
+    if (!c.isEnabled() || this.darkOwned.has(c)) return false;
+    const b = c.parent();
+    if (b && !b.isFixed()) return false;
+    return c.shapeType() !== RAPIER.ShapeType.HeightField;
+  }
+  /** Raise (true) or lower (false) the veil. */
+  veil(on: boolean) {
+    if (on && !this.veiled) {
+      const v = (this.veiled = new Set());
+      this.world.forEachCollider((c) => {
+        if (this.veilable(c)) {
+          c.setEnabled(false);
+          v.add(c);
+        }
+      });
+    } else if (!on && this.veiled) {
+      const v = this.veiled;
+      this.veiled = null;
+      // Only colliders that still exist are visited (some were removed meanwhile).
+      this.world.forEachCollider((c) => {
+        if (v.has(c)) c.setEnabled(true);
+      });
+    }
+  }
+  /** Make colliders that belong to the Dark (they stay solid under the veil). */
+  dark<T>(fn: () => T): T {
+    this.darkDepth++;
+    try {
+      return fn();
+    } finally {
+      this.darkDepth--;
+    }
+  }
+  private track(c: RAPIER.Collider) {
+    if (this.darkDepth > 0) this.darkOwned.add(c);
+    else if (this.veiled && this.veilable(c)) {
+      c.setEnabled(false);
+      this.veiled.add(c);
+    }
+    return c;
+  }
+
   addBox(pos: THREE.Vector3, half: THREE.Vector3, rot?: THREE.Quaternion) {
     const b = this.fixedBody(pos, rot);
-    return this.world.createCollider(
+    return this.track(this.world.createCollider(
       RAPIER.ColliderDesc.cuboid(half.x, half.y, half.z).setCollisionGroups(groups(G_STATIC, 0xffff)),
       b,
-    );
+    ));
   }
 
   addCylinder(pos: THREE.Vector3, halfHeight: number, radius: number) {
     const b = this.fixedBody(pos);
-    return this.world.createCollider(
+    return this.track(this.world.createCollider(
       RAPIER.ColliderDesc.cylinder(halfHeight, radius).setCollisionGroups(groups(G_STATIC, 0xffff)),
       b,
-    );
+    ));
   }
 
   addTrimesh(vertices: Float32Array, indices: Uint32Array) {
     const b = this.fixedBody(new THREE.Vector3());
-    return this.world.createCollider(
+    return this.track(this.world.createCollider(
       RAPIER.ColliderDesc.trimesh(vertices, indices).setCollisionGroups(groups(G_STATIC, 0xffff)),
       b,
-    );
+    ));
   }
 
   /**
@@ -73,6 +127,7 @@ export class Physics {
   /** Remove a static collider and the fixed body it was created on. */
   removeStatic(c: RAPIER.Collider) {
     forgetTraversalSurface(c);
+    this.veiled?.delete(c);
     const body = c.parent();
     this.world.removeCollider(c, false);
     if (body) this.world.removeRigidBody(body);

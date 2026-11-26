@@ -2237,6 +2237,27 @@ async function boot() {
     menuOpen: () => input.uiMode,
     wildWheels: () => sites.of('stone').map(s => ({ id: 'stone:' + s.id, name: `Sunwheel Stone ${s.n + 1}`, kind: 'stone', pos: new THREE.Vector3(s.x, heightAt(s.x, s.z), s.z) })),
     prepareLiving: at => { terrain.warm(at); landscape.warm(at); terrainDressing.warm(at); archipelagos.warm(at); elves.warm(at); },
+    worldDeps: {
+      treesNear: (x, z, rr) => stylizedNature.treesNear(x, z, rr),
+      level: (x, z) => zoneLevel(x, z, () => 0.5),
+      toast: (t) => hud.toast(t),
+      read: (title, text) => dialogue.show('In the Dark', title, text, [{ label: 'Leave it.', run: () => dialogue.close() }]),
+      borrowed: () => [lanterns.interactable],
+      loot: (at, tier) => {
+        // What the Dark's dead left behind: coin, and the stuff of the Dark itself.
+        const gold = 15 * tier + Math.floor(Math.random() * 18 * tier);
+        rewards.spawn(at, 25 * tier, gold);
+        const pool: [string, number][] = [['shadeSmoke', 1 + Math.floor(tier / 2)], ['gloamIchor', 1], ['boneDust', 2 + tier], ['riftShard', 1]];
+        const got: string[] = [];
+        for (const [id, n] of pool) if (ITEMS[id] && Math.random() < 0.55) { player.equip.add(id, n); got.push(`${n} ${ITEMS[id].name}`); }
+        if (tier >= 4 && ITEMS.duskElixir && Math.random() < 0.3) { player.equip.add('duskElixir', 1); got.push('a Dusk Elixir'); }
+        events.emit('equipmentChanged', {});
+        return [`${gold} gold`, ...got].join(', ');
+      },
+    },
+    landVisible: (on) => { terrain.group.visible = on; ocean.setVisible(on); river.mesh.visible = on; },
+    wardlight: (x, z) => lanterns.litNear(x, z, 7),
+    keepVisible: () => [player.char.root, r.sky?.mesh, fx.drops.mesh],
     mapMode: open => {
       input.releaseAll();
       input.uiMode = open || inv.open || skills.open || dialogue.open || mapUI.open || worldMap.open;
@@ -2285,7 +2306,7 @@ async function boot() {
     scene: r.scene, fx, flags: worldFlags,
     toast: (m) => hud.toast(m),
     card: (t, sub) => hud.regionCard(t, sub, true),
-    inDark: () => realm.mode === 'overworld' && story.darkness > 0.5,
+    inDark: () => realm.mode === 'dark' || (realm.mode === 'overworld' && story.darkness > 0.5),
     hasLight: () => player.paths.learned('lightbinder') || skillRt.roster.field('light') || player.equip.items.some((it) => it.def.id === 'lanternCharm' && !!player.equip.slotOf(it.uid)),
     night: () => time.state.night,
     festival: () => lanternFestival.on(),
@@ -3087,6 +3108,8 @@ async function boot() {
     if (realm.mode === 'overworld') { updateSea(STEP,sailing.current?.pos??player.pos,weather.p); sailing.preStep(STEP); }
     player.update(STEP, input, cam);
     darkJourney?.update(STEP);
+    // The Dark keeps the Lost Lanterns that were hung in it (relit, they hold the tether).
+    if (realm.mode === 'dark') lanterns.update(STEP, player.pos, player.center, !player.dead);
     combat.tick(STEP); // posture, poise and wind-ups of everything that fights (combat/core.ts)
     mtn.update(STEP, realm.mode === 'overworld' && !realm.interior); // the White Mountains, and the Iron Kettle's passage
     landscape.update(STEP, player.pos, realm.mode === 'overworld' && !realm.interior);
@@ -3222,7 +3245,7 @@ async function boot() {
     const dtMs = Math.max(0, Math.min(MAX_FRAME_MS, now - last));
     last = now;
     const dt = dtMs / 1000;
-    music.setZone(realm.mode === 'dungeon' || gravewood.trapped ? 'crypt' : 'village');
+    music.setZone(realm.mode === 'dungeon' || realm.mode === 'dark' || gravewood.trapped ? 'crypt' : 'village');
     music.update(dt);
     // Pause the world while the title/pause overlay is up (never in tests).
     const overlayUp = (!TEST_MODE || SANDBOX_MODE) && (!started || pausedByUser);
@@ -3375,9 +3398,9 @@ async function boot() {
     }
     worldMap.setRegionLabel(`${regionName} · ${time.label.split(', ')[1]} ${time.moonGlyph}`);
     flowers.update(dt, r.camera.position);
-    if (realm.mode === 'overworld') terrain.update(r.camera.position, player.pos);
+    if (realm.mode === 'overworld' || realm.mode === 'dark') terrain.update(r.camera.position, player.pos);
     foliage?.update(dt, r.camera.position);
-    if (realm.mode === 'overworld') stylizedNature.update(dt, r.camera.position, player.pos);
+    if (realm.mode === 'overworld' || realm.mode === 'dark') stylizedNature.update(dt, r.camera.position, player.pos);
     input.endFrame();
     hud.update(dt, player.lock?.id ?? null);
     sailing.frame(dt);

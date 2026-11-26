@@ -9,6 +9,7 @@ import { cryptDef } from './dungeons/crypt';
 import { events } from '../core/events';
 import { MineInstance, type MineProgress } from './mine';
 import { setGroundOverride, heightAt } from '../world/terrain';
+import { physics } from '../physics/physics';
 import { Q } from '../core/settings';
 import { emptyMap, type DungeonMapUI, type MapData } from '../ui/dungeonMap';
 import { ITEMS } from '../items/itemDefs';
@@ -377,43 +378,27 @@ export class Realm {
     };
   }
 
-  /** An outdoor dimension with independent collision, not a dungeon instance. */
-  enterDark(ground: (x: number, z: number) => number | null, actions: Interactable[]) {
+  /** The explorable Dark: the same land under a red sky. Everything living is
+   * hidden and everything anyone built stops being solid (the physics veil);
+   * the caller shows the land again and lays the Dark over it. */
+  enterDark(actions: Interactable[]) {
     if (this.mode !== 'overworld' || this.busy) return false;
     this.overworld.clearEnemies();
     this.overworld.enemiesEnabled(false);
     this.overworld.hide(true);
-    this.atmosphere(true);
+    physics.veil(true);
     this.mode = 'dark';
     this.darkInteractables = actions;
-    setGroundOverride(ground);
-    const r = this.r, u = r.post?.finalMat.uniforms;
-    r.scene.background = new THREE.Color(0x333447);
-    r.scene.fog = new THREE.Fog(0x555568, 180, 850);
-    r.scene.environmentIntensity = .45;
-    r.hemi.intensity = .95;
-    r.hemi.color.set(0xbfc9e7);
-    r.hemi.groundColor.set(0x514655);
-    r.sun.intensity = 1.1;
-    r.camera.far = 1100;
-    r.camera.updateProjectionMatrix();
-    if (u) {
-      u.uHaze.value = .0018;
-      (u.uHazeColor.value as THREE.Color).set(0x555568);
-      (u.uSunColor.value as THREE.Color).set(0xa7aec8);
-      u.uExposure.value = 1;
-    }
     return true;
   }
 
   leaveDark() {
     if (this.mode !== 'dark') return;
-    setGroundOverride(null);
+    physics.veil(false);
     this.darkInteractables = [];
     this.mode = 'overworld';
     this.overworld.hide(false);
     this.overworld.enemiesEnabled(true);
-    this.atmosphere(false);
   }
 
   /** The Sandbox's Proving Grounds are open to the sky: daylight, a long view, a pale haze (restored on leaving like any interior). */

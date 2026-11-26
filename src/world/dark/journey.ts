@@ -10,9 +10,10 @@ import type { Realm } from '../../dungeon/realm';
 import type { FX } from '../../fx/particles';
 import type { DialogueUI } from '../../ui/dialogue';
 import type { SunwheelNetwork, WheelNode } from '../../story/sunwheel';
-import { DARK_X, DARK_Z, PASSAGES, SCARS, onMap } from './land';
+import { PASSAGES, SCARS, onMap } from './land';
+import { DARK, DARK_FOG } from '../../render/post';
 import { Tether, type DarkFlags } from './tether';
-import { DarkWorld } from './world';
+import { DarkWorld, type DarkWorldDeps } from './world';
 import { DarkView } from './view';
 
 interface Hooks {
@@ -31,6 +32,14 @@ interface Hooks {
   wildWheels(): WheelNode[];
   prepareLiving(at: THREE.Vector3): void;
   mapMode(open: boolean): void;
+  /** what the Dark's world borrows from the living one (trees, levels, loot) */
+  worldDeps: DarkWorldDeps;
+  /** show the land (and the water on it) while everything else living is hidden */
+  landVisible(on: boolean): void;
+  /** a relit Lost Lantern stands near: a Wardlight, where the tether holds */
+  wardlight(x: number, z: number): boolean;
+  /** scene objects that stay in view in the Dark (you, the sky, the weather of particles) */
+  keepVisible(): (THREE.Object3D | null | undefined)[];
 }
 
 /** The Dawn holds a connection, not a second health pool. Crossing at another
@@ -117,6 +126,23 @@ export class DarkJourney {
       });
     }
   }
+  /** Everything living in the scene goes out of view (the systems' own hide misses
+   * whatever is normally too far from a dungeon to matter; in the Dark nothing is). */
+  private veiled: THREE.Object3D[] = [];
+  private veilScene(dark: THREE.Object3D) {
+    const keep = new Set(this.h.keepVisible().filter(Boolean) as THREE.Object3D[]);
+    const sky = this.h.r.sky?.mesh.geometry;
+    for (const c of this.h.r.scene.children) {
+      if (!c.visible || c === dark || keep.has(c) || c instanceof THREE.Light || c instanceof THREE.Points) continue;
+      if (c instanceof THREE.Mesh && c.geometry === sky) continue;
+      c.visible = false;
+      this.veiled.push(c);
+    }
+  }
+  private unveilScene() {
+    for (const c of this.veiled) c.visible = true;
+    this.veiled = [];
+  }
   setLivingVisible(visible: boolean) {
     this.livingProps.visible = visible;
   }
@@ -138,7 +164,7 @@ export class DarkJourney {
     }
     this.attune(n);
     this.warning = 0;
-    h.toast('The Dark • thousands of years beneath the living world. Your health remains; your tether is running. Find wheels to extend your connection.');
+    h.toast('The Dark: the world\'s shadow, under a red sky. Your tether is running. Sunwheels and relit lanterns hold it; new wheels and memories lengthen it.');
     this.sync();
     h.save();
     return true;
@@ -151,13 +177,29 @@ export class DarkJourney {
       h.fx,
       this.tether,
       (n) => this.touch(n),
-      (id, text) => this.memory(id, text)
+      (id, text) => this.memory(id, text),
+      h.worldDeps
     );
     world.start(this.nodes());
-    if (!h.realm.enterDark(world.ground, world.actions)) {
+    if (!h.realm.enterDark(world.actions)) {
       world.dispose();
       return false;
     }
+    // The ground where you'll stand (a reload can put you far from where the game loaded).
+    h.prepareLiving(world.at(run.x, run.z));
+    this.veilScene(world.group);
+    h.landVisible(true);
+    // The Dark's own light: a low, tired sun the colour of a bruise. (Time stands
+    // still for the living world while you're here; leaving hands the sky back.)
+    h.r.sun.intensity = 1.15;
+    h.r.sun.color.set(0xffb4a2);
+    h.r.hemi.intensity = 0.6;
+    h.r.hemi.color.set(0x8c6a82);
+    h.r.hemi.groundColor.set(0x2e1e26);
+    h.r.scene.environmentIntensity = 0.32;
+    DARK.floor = 1;
+    DARK_FOG.value = 1;
+    DARK.value = 1;
     this.world = world;
     let at = world.at(run.x, run.z, 0.4);
     if (run.y !== undefined) at.y = Math.max(at.y, run.y + 0.05);
@@ -247,7 +289,8 @@ export class DarkJourney {
   private memory(id: string, text: string) {
     if (!this.active || this.h.player.dead) return;
     const s = SCARS.find((s) => s.id === id);
-    if (!s || this.world!.at(s.x + s.r * 0.84, s.z).distanceTo(this.h.player.pos) > 4.5) return;
+    const at = this.world?.memoryAt(id);
+    if (!s || !at || at.distanceTo(this.h.player.pos) > 4.5) return;
     const before = this.tether.capacity;
     const first = this.tether.discover('memory', id);
     const gain = this.tether.capacity - before;
@@ -266,6 +309,16 @@ export class DarkJourney {
     this.h.save();
   }
   private safeLiving(n: WheelNode) {
+    // Checked against the living world as it stands: lower the veil for the look.
+    const veiled = physics.veilUp;
+    physics.veil(false);
+    try {
+      return this.livingSpot(n);
+    } finally {
+      if (veiled && this.active) physics.veil(true);
+    }
+  }
+  private livingSpot(n: WheelNode) {
     this.h.prepareLiving(n.pos);
     // Refresh broad phase after warming destination terrain and structures.
     physics.step(1 / 60);
@@ -312,7 +365,10 @@ export class DarkJourney {
     this.view.toggleMap(false);
     this.world?.dispose();
     this.world = null;
+    this.unveilScene();
     this.h.realm.leaveDark();
+    DARK.floor = 0;
+    DARK_FOG.value = 0;
     this.tether.end();
     this.h.player.clearCombatInput();
     this.h.player.act = null;
@@ -340,8 +396,8 @@ export class DarkJourney {
     if (!this.active || !this.world || this.h.player.dead || this.h.menuOpen()) return;
     const run = this.tether.run!,
       p = this.h.player.pos;
-    run.x = p.x - DARK_X;
-    run.z = p.z - DARK_Z;
+    run.x = p.x;
+    run.z = p.z;
     run.y = p.y;
     run.hp = this.h.player.hp;
     if (!onMap(run.x, run.z) || !Number.isFinite(p.y)) {
@@ -351,7 +407,7 @@ export class DarkJourney {
     const nearby = this.nodes().find((n) => this.near(n));
     if (nearby) this.attune(nearby);
     const threatened = [...this.world.foes.values()].some((f) => f.alive && f.position.distanceTo(p) < 15);
-    this.tether.tick(dt, !!nearby && !threatened);
+    this.tether.tick(dt, (!!nearby || this.h.wardlight(p.x, p.z)) && !threatened);
     if (run.left <= 0) {
       this.recall();
       this.h.toast('Tether exhausted • the Dawn pulls you back before your connection is lost.');
@@ -366,12 +422,12 @@ export class DarkJourney {
   }
   frame() {
     const run = this.active ? this.tether.run : null;
-    this.view.update(run, this.tether.capacity, this.nodes(), this.h.flags, this.h.player.pos, this.h.player.dead, this.h.menuOpen());
+    this.view.update(run, this.tether.capacity, this.nodes(), this.h.flags, this.h.player.pos, this.h.player.dead, this.h.menuOpen(), !!run && this.h.wardlight(this.h.player.pos.x, this.h.player.pos.z));
   }
   sync() {
     if (this.active && this.tether.run) {
-      this.tether.run.x = this.h.player.pos.x - DARK_X;
-      this.tether.run.z = this.h.player.pos.z - DARK_Z;
+      this.tether.run.x = this.h.player.pos.x;
+      this.tether.run.z = this.h.player.pos.z;
       this.tether.run.y = this.h.player.pos.y;
       this.tether.run.hp = this.h.player.hp;
     }
@@ -407,6 +463,9 @@ export class DarkJourney {
       this.world?.dispose();
       this.world = null;
       this.tether.end();
+      this.unveilScene();
+      DARK.floor = 0;
+      DARK_FOG.value = 0;
     }
     this.view.toggleMap(false);
     this.anchor = null;

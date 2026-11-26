@@ -13,6 +13,7 @@ import { sfx } from '../audio/sfx';
 import type { FX } from '../fx/particles';
 import type { Interactable } from '../dungeon/instance';
 import type RAPIER from '@dimforge/rapier3d-compat';
+import { SCARS, PASSAGES } from './dark/land';
 
 // The Lost Lanterns (docs/design/lanterns.md). Before the Fall the Dawn's
 // keepers hung lanterns along every road and over every hearth. When the Dark
@@ -175,6 +176,9 @@ export function placeLanterns(inp: PlaceInput): LanternSpot[] {
   }
   // The Dark: around the Gravewood's wheel, among the dead trees and the ruins.
   ring(GRAVEWOOD.x, GRAVEWOOD.y, 40, 222, 84, 'dark', true, 30);
+  // ...and across the rest of the Dark: round the seven scars, and by its wheels.
+  for (const sc of SCARS) ring(sc.x, sc.z, 30, Math.min(220, sc.r + 60), 9, 'dark', true, 30);
+  for (const p of PASSAGES) ring(p.x, p.z, 14, 70, 3, 'dark', true, 20);
   return out;
 }
 
@@ -310,6 +314,11 @@ export class LostLanterns {
 
   private cell(x: number, z: number) {
     return Math.floor(x / 200) * 100003 + Math.floor(z / 200);
+  }
+
+  /** A relit lantern of the realm you're in stands within r of a point (a Wardlight). */
+  litNear(x: number, z: number, r: number) {
+    return this.around(x, z, r).some((s) => this.isLit(s.id));
   }
 
   isLit(id: string) {

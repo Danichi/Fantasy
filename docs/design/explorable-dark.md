@@ -1,104 +1,118 @@
 # The explorable Dark
 
-The Dark is now a traversable ancient mirror of the playable continent. Use
-the Dawn at any accessible Sunwheel, explore on foot with the existing combat,
-climbing and gliding systems, and emerge through another wheel. It is older
-than the current kingdoms: petrified woodland, exposed sea beds, fused impact
-basins, broken monoliths and cleaved ridges replace roads and towns. A real
-passage runs beneath the severed ridge west of Elder Glen.
+Rebuilt 2026-11-26. The Dark is the world's shadow again: **the same land, in
+the same place, under a red sky**, the look the Gravewood mirror had in Act I,
+now stretching across the whole map. All the mechanics of the streamed Dark
+stay: crossing at any Sunwheel, the tether, emerging at other wheels, the seven
+memories, the chart, and saving and resuming a run.
 
-The Champions’ Game and the Hollow King remain the main story. Present-day
-wars remain wars between mortal governments and armies; great powers’ influence
-does not make every nation their property. The Dark gives another approach to
-a defended place, without changing reputation or pacifying the troops there.
-The Queen’s blockade and the eastern army’s preparations still exist in the
-living world.
+## What you see
+
+- **The red sky and the drained land.** The post-process Dark grading
+  (`render/post.ts`, `DARK`) is held at full while you're in it. A Dark-only
+  murk (`DARK_FOG`) darkens the land a little and sinks far things into a
+  red-black haze. The light is a low, tired sun the colour of a bruise.
+  Living time stands still while you're there.
+- **The land is the living land.** The real terrain stays in view, and the
+  sea and rivers with it (black and still under the grading). Everything else
+  living goes out of view: people, animals, plants, buildings, roads' furniture,
+  islands' and the elves' structures.
+- **A dead forest.** Every living tree stands as a dead black one, and the
+  Dark's forest is thicker than ours: it stands even where the fields are.
+  Graves lean in clusters, and violet cracks run through the ground.
+- **Wild ruins.** About one in two 300 m cells holds one: a broken round keep,
+  a colonnade, a great arch over nothing, a fallen giant whose face was cut
+  away, a huddle of burned shacks round a violet fire, an obelisk, a toppled
+  Sunwheel half sunk in the ground, or a gallows. They're solid near you and
+  you can climb them.
+- **Mirrors of the living places.** Every town, city, castle and port has a
+  ruined mirror where it stands: a broken ring of wall, burned shacks, graves,
+  a fallen statue and a violet fire. Some are special:
+
+  | Place | Its mirror |
+  |---|---|
+  | The Royal Capital | A palace older than the one above: a ring of colossal columns, a fallen Sunwheel the size of a house, a faceless king on a plinth |
+  | The Elven Sanctum | The World Tree, stone to the crown and long dead, seen from far off |
+  | Frostpeak, the Deep Hold, Frosthold | A hold's gate split down the middle |
+  | Ghagrabba, the Rust Market, the Waystop | Spires of black glass where a sun that never set melted the sand |
+  | Ports | Black hulls on the dry shore beyond the town |
+
+  The first time you come near one, a line tells you what it is.
+- **The seven scars.** Each is a floor of fused glass, a ring of leaning
+  monoliths you can climb, violet cracks, and a memory stone. The memories now
+  tell the war that ended the endless day (see the story guide):
+
+  | Scar | Memory |
+  |---|---|
+  | The First Wound | Light fell the wrong way, down into the shadow |
+  | The Severed Crown | A knight cut a ridge in two to stop an army that never slept |
+  | The Unbuilt Harbour | The sea pulled back for a hundred years |
+  | The Spear of Silence | Trees turned to stone rather than face the light |
+  | The Fallen Horizon | A city that kept its lamps lit for someone else's king |
+  | The Rootless Choir | Eleven knights went down; one came back, then went down alone |
+  | The Last Footfall | Something remembers being held, and let go |
+
+## What lives there
+
+- **Packs of shades.** About one in two 180 m cells has a pack of two to four
+  skeletons and zombies that rise out of the ground when you come within 110 m.
+  They're as strong as the living zone there, plus two levels. A cleared pack
+  stays cleared for the rest of the trip.
+- **The scars' knights.** Each scar keeps a knight (a living armour) and two
+  shades, stronger with each scar. They stay dead once killed (saved).
+- **Black-iron caches.** About one in three 260 m cells has one: gold and the
+  stuff of the Dark (shade smoke, gloam ichor, bone dust, rift shards, and now
+  and then a Dusk Elixir at higher tiers). Each opens once (saved).
+- **Lost Lanterns.** Besides the Gravewood's ring, the Dark has lanterns round
+  each scar and by its wheels. **A relit lantern is a Wardlight: standing by
+  one holds the tether** like a Sunwheel does (unless an enemy is close).
 
 ## Playing
 
-- At a Sunwheel, choose **Use the Dawn · enter the Dark**. This crossing works
-  before learning living-world fast travel. Dismount and stand on dry ground.
-- The tether panel shows current time, permanent capacity and the bearing to
-  the nearest wheel. **M** opens a dedicated Dark chart; M or Esc closes it.
-- Walk, sprint, climb and glide using the normal traversal controls. Terrain,
-  petrified trunks, rocks and the ancient ridge passage have their own collision.
-- Ancient wheels shelter the tether. Nearby enemies prevent that shelter;
-  neither shelter nor opening a menu repeatedly refills the timer.
-- Touch a Dark wheel to emerge at its living counterpart or keep exploring.
-  A newly found wheel also attunes its living counterpart. Normal fast travel
-  retains its existing story gate.
-- Collect memories at the glowing blue stones on seven ancient battle scars.
-  These explain what the landscape remembers and extend the tether once each.
-- **Recall to entry** on the panel/chart returns to the place where this trip
-  began. Exhaustion does this automatically. Health is not restored by recalling
-  or crossing. Death uses the normal death screen, then returns to the entry.
+- At a Sunwheel, choose **Use the Dawn · enter the Dark**. Dismount and stand
+  on dry ground.
+- The tether panel sits top-left, where the minimap was. **M** opens the Dark
+  chart; M or Esc closes it.
+- Walk, sprint, climb and glide as normal. Nothing anyone built is solid in
+  the Dark: no walls, gates or guards. The Dark's own ruins and trees are.
+- Touch a Dark wheel to emerge at its living counterpart, recall to your
+  entry, or keep exploring. Emerging checks the living side for room first.
+- **Recall** on the panel or chart returns you to where the trip began.
+  Exhaustion does this automatically. Death uses the normal death screen, then
+  returns you to the entry.
 
 ## Tether rules
 
-Capacity starts at 90 seconds, with the following permanent gains:
+Unchanged: capacity starts at 90 seconds and grows with living wheels
+(+8 s each, first 30), Dark wheels (+35 s each) and memories (+18 s each), to
+15 minutes. Damage frays it by `min(15, damage × 0.25)` seconds. Menus pause it.
+Sunwheels and Wardlights hold it while no enemy is within 15 m.
 
-| Discovery                   |                Capacity gain |
-| --------------------------- | ---------------------------: |
-| Living Sunwheel attunement  |  +8 seconds, first 30 wheels |
-| Ancient counterpart attuned | +35 seconds per unique wheel |
-| Ancient memory              |  +18 seconds per unique scar |
-| Maximum capacity            |                   15 minutes |
+## How it works
 
-Discovering a wheel or memory adds only that newly earned capacity to the
-current run. Taking health damage frays the tether by `min(15, damage × .25)`
-seconds. Small poison/burn ticks therefore do not multiply a fixed per-hit loss.
-Blocking a blow without health damage does not fray it. Tether pauses
-in menus and during the title/loading/pause screens. Offline time is not charged.
+- **The veil** (`physics/physics.ts`): `physics.veil(true)` switches off every
+  fixed collider except the terrain's heightfields, including ones that stream
+  in while it's up. Colliders made inside `physics.dark(...)` belong to the
+  Dark and stay solid. `veil(false)` brings back everything that still exists.
+  Emerging lowers the veil for the overlap check, so a living wall still
+  blocks an exit.
+- **The scene veil** (`dark/journey.ts`): every visible scene child except the
+  land, the sky, you, the particles, the lights and the Dark itself is hidden
+  on entry and shown again on the way out.
+- `dark/world.ts`: the Dark's streaming (trees every 24 m, sites every 30 m),
+  the wheels, scars, mirrors, ruins, caches, packs, fires and ash.
+- `dark/ruins.ts`: the ruin kit. Every ruin is built in world coordinates,
+  each piece grounded where it stands, and merged into one mesh per material.
+- `dark/land.ts`: the scars and the extra paired wheels (logical and physical
+  coordinates are now the same).
+- `dark/journey.ts`, `dark/tether.ts`, `dark/view.ts`: crossings, saving,
+  recall, death, the HUD and the chart.
 
-Every run saves its entry wheel, logical map position, height, health and remaining time.
-Reloading resumes the same connection, with no refill. The ordinary world
-position in the save remains a safe living anchor; invalid run data falls back
-to that position. Dark memory, attunement and defeated-sentinel flags persist.
+The Gravewood's scripted echo (Act I) still uses `world/darkRealm.ts` and is
+unchanged.
 
-## Geography and crossings
-
-The main network’s existing wheels, including all twelve wild stones, have
-ancient counterparts. Wild stones can be found in the Dark before their living
-inscriptions have been read; inscription/quest progress is kept separate.
-
-Additional paired wheels connect Elder Glen’s western palisade, the far river
-bank, Aurelle’s sea approaches, the forest near Eastwatch, the White Mountains,
-the western and southern marches, the eastern requisition camp, and one shore
-in each built island group. Destination overlap, slope and water checks select
-a clear emergence spot near a wheel. An obstructed destination leaves the
-player in the Dark with recall available.
-
-This uses the current playable map’s coordinates. The newer painted political
-map concepts do not silently relocate the game’s existing settlements.
-
-The original Gravewood mirror fight remains a scripted story echo, using its
-existing quest state and six shades. Its story rite is separate from the Dawn’s
-free-exploration option on the same pedestal. The standing-stone vision and
-opening’s Dark incursions also keep their existing cinematic behavior.
-
-## Implementation and verification
-
-- `world/dark/land.ts`: ancient heights, scars, logical/physical coordinates,
-  paired passage definitions.
-- `world/dark/world.ts`: streamed heightfields and meshes, nearby prop collision,
-  petrified trees/rocks, Sunwheels, memories, ancient sentinels and disposal.
-- `world/dark/tether.ts`: permanent progression and resumable run state.
-- `world/dark/journey.ts`: crossings, safe emergence, attunement, recall,
-  exhaustion, health damage, death recovery and save restoration.
-- `world/dark/view.ts`: tether HUD, bearing, chart and recall controls.
-- `dungeon/realm.ts`: a separate outdoor realm mode, with saved/restored lighting,
-  hidden living visuals and a Dark ground override.
-
-Physical Dark coordinates are offset from the living world, so its walls cannot
-block ancient paths. Heightfields and visible ground use the same samples.
-Only nearby terrain and prop collision is kept; departure removes all Dark
-colliders, enemies, meshes and climb registrations. The living water query
-rejects Dark coordinates, so exposed basins do not accidentally become ocean.
-Nearby trees and rocks use their rendered meshes for collision. Forest and
-island destination structures are warmed at the target position before checking
-an emergence spot, without moving the player prematurely.
-
-`tests/darkDimension.spec.ts` covers tether math and persistence, real Sunwheel
-entry, native movement and terrain collision, health damage, pause behavior,
-different-wheel emergence, memory gains, travel beyond the old mirror limit,
-save/reload, exhaustion, death recovery, cleanup and distant/stale entry rejection.
+`tests/darkDimension.spec.ts` covers the tether maths, the veil, a real
+crossing (the land shown, the veil up, the grading at full, the dead forest),
+walking, damage, pausing, an obstructed exit, emerging, a scar's knight and
+memory, travel far across the map, saving, reloading, exhaustion, death and
+cleanup.

@@ -1,7 +1,9 @@
 import type * as THREE from 'three';
 import type { WheelNode } from '../../story/sunwheel';
 import type { DarkFlags, DarkRun } from './tether';
-import { ancientHeight, DARK_X, DARK_Z, SCARS } from './land';
+import { SCARS } from './land';
+import { heightAt } from '../terrainHeight';
+import { macroHeight } from '../worldMap';
 
 const time = (s: number) => {
   const t = Math.ceil(Math.max(0, s));
@@ -34,17 +36,17 @@ export class DarkView {
     const css = document.createElement('style');
     css.textContent = `
       #ui.dark-exploring .quest-tracker,#ui.dark-exploring .wmini{display:none}
-      #dark-tether{position:absolute;top:82px;left:50%;transform:translateX(-50%);width:min(410px,80vw);padding:12px 18px;color:#eee5d8;background:linear-gradient(100deg,#151522e8,#282335eb);border:1px solid #b6a07d77;border-radius:4px;text-align:center;pointer-events:auto;font:12px Alegreya,sans-serif;box-shadow:0 6px 30px #0006}
-      #dark-tether[hidden],#dark-atlas[hidden]{display:none}#dark-tether strong{letter-spacing:.2em;font:14px IM Fell English SC,serif}#dark-tether .dark-readout{margin:5px 0;color:#dcd0be}#dark-tether .dark-track{height:5px;background:#514653;margin:8px 0}.dark-fill{height:100%;background:linear-gradient(90deg,#a58ab7,#ffe2a7);transition:width .15s}#dark-tether.fraying{border-color:#dd7872}#dark-tether.fraying .dark-fill{background:#e38379}
-      #dark-tether button,#dark-atlas button{background:#34303f;border:1px solid #b5a27c77;border-radius:3px;color:#f2e5cc;font:12px Alegreya,sans-serif;padding:7px 12px;cursor:pointer;margin:7px 3px 0}#dark-tether button:hover,#dark-atlas button:hover{background:#575063}#dark-tether button:disabled,#dark-atlas button:disabled{opacity:.4;cursor:default}
-      #dark-atlas{position:absolute;inset:4vh 5vw;background:#171723f7;color:#eae0cf;border:1px solid #b9a27d88;z-index:170;pointer-events:auto;padding:22px;overflow:auto;font:13px Alegreya,sans-serif}#dark-atlas h2{font:24px IM Fell English SC,serif;letter-spacing:.16em;margin:0 0 8px}#dark-atlas p{margin:7px 0;color:#c0b8c6;max-width:850px}#dark-atlas canvas{display:block;width:100%;height:min(53vh,490px);background:#222330;border:1px solid #635b6c;margin:15px 0}#dark-atlas .dark-map-actions{display:flex;flex-wrap:wrap;gap:5px;align-items:center}#dark-atlas .dark-legend{color:#ddc594}
+      #dark-tether{position:absolute;top:18px;left:18px;width:min(290px,70vw);padding:9px 12px 8px;color:#eee0d6;background:linear-gradient(160deg,#1a0d12e6,#2a1219e6);border:1px solid #b06a6a66;border-left:3px solid #c98a6a;border-radius:3px;pointer-events:auto;font:12px Alegreya,sans-serif;box-shadow:0 4px 18px #0007}
+      #dark-tether[hidden],#dark-atlas[hidden]{display:none}#dark-tether strong{display:block;letter-spacing:.18em;font:13px IM Fell English SC,serif;color:#f0c9a8}#dark-tether .dark-readout{margin:3px 0 0;color:#dccbc0;font-size:11.5px}#dark-tether .dark-track{height:4px;background:#4a2a30;margin:6px 0}.dark-fill{height:100%;background:linear-gradient(90deg,#b04a5a,#ffd9a0);transition:width .15s}#dark-tether.fraying{border-color:#e0605a;animation:dkpulse 1s ease-in-out infinite}#dark-tether.fraying .dark-fill{background:#e3605a}@keyframes dkpulse{50%{box-shadow:0 0 18px #e0505a88}}#dark-tether .dark-bearing{color:#c9b6ab;font-size:11.5px}
+      #dark-tether button,#dark-atlas button{background:#3a1e25;border:1px solid #b07a6a77;border-radius:3px;color:#f2e1d0;font:11.5px Alegreya,sans-serif;padding:4px 9px;cursor:pointer;margin:6px 4px 0 0}#dark-tether button:hover,#dark-atlas button:hover{background:#5a2e36}#dark-tether button:disabled,#dark-atlas button:disabled{opacity:.4;cursor:default}
+      #dark-atlas{position:absolute;inset:4vh 5vw;background:#170c10f7;color:#eae0cf;border:1px solid #b9a27d88;z-index:170;pointer-events:auto;padding:22px;overflow:auto;font:13px Alegreya,sans-serif}#dark-atlas h2{font:24px IM Fell English SC,serif;letter-spacing:.16em;margin:0 0 8px}#dark-atlas p{margin:7px 0;color:#c0b8c6;max-width:850px}#dark-atlas canvas{display:block;width:100%;height:min(53vh,490px);background:#222330;border:1px solid #635b6c;margin:15px 0}#dark-atlas .dark-map-actions{display:flex;flex-wrap:wrap;gap:5px;align-items:center}#dark-atlas .dark-legend{color:#ddc594}
     `;
     document.head.appendChild(css);
     const ui = document.getElementById('ui')!;
     this.hud = el('div', ui);
     this.hud.id = 'dark-tether';
     this.hud.hidden = true;
-    el('strong', this.hud, 'THE DARK · DAWN TETHER');
+    el('strong', this.hud, 'The Dark · tether');
     this.readout = el('div', this.hud);
     this.readout.className = 'dark-readout';
     const track = el('div', this.hud);
@@ -52,24 +54,25 @@ export class DarkView {
     this.fill = el('div', track);
     this.fill.className = 'dark-fill';
     this.bearing = el('div', this.hud);
-    this.recall = el('button', this.hud, 'Recall to entry');
+    this.bearing.className = 'dark-bearing';
+    this.recall = el('button', this.hud, 'Recall');
     this.recall.onclick = recall;
-    const mapButton = el('button', this.hud, 'M · Dark chart');
+    const mapButton = el('button', this.hud, 'M · Chart');
     mapButton.onclick = () => this.toggleMap();
     this.map = el('div', ui);
     this.map.id = 'dark-atlas';
     this.map.hidden = true;
-    el('h2', this.map, 'THE WORLD BEFORE');
-    el('p', this.map, 'The same continent, thousands of years before its living kingdoms. Ancient wounds open routes that modern roads and walls cannot follow.');
+    el('h2', this.map, 'THE DARK');
+    el('p', this.map, 'The world\'s shadow: the same land, under a red sky, with nothing anyone built standing on it. No walls, no gates, no guards. Only what the Dark keeps.');
     el(
       'p',
       this.map,
-      'Tether is separate from health. It drains as you explore and frays when you take damage. Sunwheels shelter it unless an enemy is close. On exhaustion, you return to the entry wheel.'
+      'Tether is separate from health. It drains as you explore and frays when you take damage. Sunwheels and relit Lost Lanterns hold it unless an enemy is close. On exhaustion, you return to the entry wheel.'
     );
     this.canvas = el('canvas', this.map);
     this.canvas.width = 1000;
     this.canvas.height = 520;
-    const legend = el('p', this.map, '✦ You   ·   Gold: attuned ancient wheel   ·   Grey: known living wheel   ·   Blue: remembered battle scar');
+    const legend = el('p', this.map, '✦ You   ·   Gold: attuned ancient wheel   ·   Grey: known living wheel   ·   Blue: remembered battle scar   ·   Dark red: the still black sea');
     legend.className = 'dark-legend';
     el(
       'p',
@@ -114,7 +117,7 @@ export class DarkView {
     this.redraw = true;
     if (open) this.draw();
   }
-  update(run: DarkRun | null, capacity: number, nodes: WheelNode[], flags: DarkFlags, pos: THREE.Vector3, dead: boolean, paused = false) {
+  update(run: DarkRun | null, capacity: number, nodes: WheelNode[], flags: DarkFlags, pos: THREE.Vector3, dead: boolean, paused = false, ward = false) {
     document.getElementById('ui')!.classList.toggle('dark-exploring', !!run);
     this.hud.hidden = !run;
     if (!run) {
@@ -122,8 +125,8 @@ export class DarkView {
       this.toggleMap(false);
       return;
     }
-    const x = pos.x - DARK_X,
-      z = pos.z - DARK_Z;
+    const x = pos.x,
+      z = pos.z;
     this.last = { run, capacity, nodes, flags, x, z };
     this.fill.style.width = `${Math.max(0, Math.min(100, (run.left / capacity) * 100))}%`;
     this.hud.classList.toggle('fraying', run.left <= 30);
@@ -136,8 +139,8 @@ export class DarkView {
         nearest = n;
       }
     }
-    const sheltered = distance < 5.3 && Math.abs(pos.y - ancientHeight(nearest?.pos.x ?? 0, nearest?.pos.z ?? 0)) < 5;
-    this.readout.textContent = `${time(run.left)} / ${time(capacity)} · ${dead ? 'Connection lost' : paused ? 'Connection held · menu open' : sheltered ? 'At a Sunwheel · beware nearby enemies' : 'Exploring · tether draining'}`;
+    const sheltered = distance < 5.3 && Math.abs(pos.y - heightAt(nearest?.pos.x ?? 0, nearest?.pos.z ?? 0)) < 5;
+    this.readout.textContent = `${time(run.left)} / ${time(capacity)} · ${dead ? 'Connection lost' : paused ? 'Connection held · menu open' : sheltered ? 'At a Sunwheel · beware nearby enemies' : ward ? 'Under a Wardlight · tether held' : 'Exploring · tether draining'}`;
     if (nearest) {
       const angle = Math.atan2(nearest.pos.x - x, -(nearest.pos.z - z));
       const dir = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][(Math.round(angle / (Math.PI / 4)) + 8) % 8];
@@ -161,9 +164,9 @@ export class DarkView {
     c.fillRect(0, 0, w, h);
     for (let j = 0; j < h; j += 8)
       for (let i = 0; i < w; i += 8) {
-        const elevation = ancientHeight(x + (i - w / 2) / scale, z + (j - h / 2) / scale);
-        const light = Math.max(13, Math.min(48, 22 + elevation / 25));
-        c.fillStyle = `hsl(250 9% ${light}%)`;
+        const elevation = macroHeight(x + (i - w / 2) / scale, z + (j - h / 2) / scale);
+        const light = Math.max(10, Math.min(46, 20 + elevation / 25));
+        c.fillStyle = elevation < 0 ? `hsl(352 30% ${Math.max(6, light - 8)}%)` : `hsl(330 12% ${light}%)`;
         c.fillRect(i, j, 8, 8);
       }
     c.strokeStyle = '#9b8b7733';

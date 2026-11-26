@@ -75,66 +75,45 @@ test('tether progression is permanent, bounded, pauseable and resumable without 
   expect(r.periodic).toBeCloseTo(r.hit, 8);
 });
 
-test('a real capsule passes beneath the severed ridge with independent collision and complete traversal cleanup', async ({ page }) => {
-  await page.route('**/dark-geometry.html', (r) => r.fulfill({ body: '<!doctype html><html></html>', contentType: 'text/html' }));
-  await page.goto('/dark-geometry.html');
-  const result = await page.evaluate(async () => {
+test('the veil: in the Dark nothing anyone built is solid, the ground still is, and the Dark keeps its own walls', async ({ page }) => {
+  await page.route('**/dark-veil.html', (r) => r.fulfill({ body: '<!doctype html><html></html>', contentType: 'text/html' }));
+  await page.goto('/dark-veil.html');
+  const r = await page.evaluate(async () => {
     const T = await import('/node_modules/three/build/three.module.js' as string),
-      P = await import('/src/physics/physics.ts' as string),
-      W = await import('/src/world/dark/world.ts' as string),
-      F = await import('/src/world/dark/tether.ts' as string),
-      C = await import('/src/player/traversalSurfaces.ts' as string);
+      P = await import('/src/physics/physics.ts' as string);
     const p = P.physics;
     await p.init();
-    const R = p.R,
-      scene = new T.Scene(),
-      world = new W.DarkWorld(
-        scene,
-        {} as any,
-        new F.Tether({}),
-        () => {},
-        () => {}
-      );
-    world.start([]);
-    const start = world.at(-1250, -695, 0.1);
-    world.warm(start);
-    const livingWall = p.addBox(new T.Vector3(-1250, 0, -672), new T.Vector3(5, 30, 8));
-    const rb = p.world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(start.x, start.y + 0.9, start.z));
-    const col = p.world.createCollider(R.ColliderDesc.capsule(0.55, 0.32).setCollisionGroups(P.groups(P.G_PLAYER, 0xffff)), rb),
-      kcc = p.createCharacterController();
+    const down = new T.Vector3(0, -1, 0);
+    const ground = p.addHeightfield(new T.Vector3(0, 0, 0), 2, 2, new Float32Array(9), 40, 40);
+    const wall = p.addBox(new T.Vector3(0, 5, 0), new T.Vector3(2, 2, 2));
     p.step(1 / 60);
-    const under = world.at(-1250, -672, 2),
-      ceiling = p.castRay(under, new T.Vector3(0, 1, 0), 50);
-    const tagsBefore = C.traversalSurfaceCount();
-    let grounded = false;
-    for (let i = 0; i < 480; i++) {
-      const cur = rb.translation();
-      kcc.computeColliderMovement(col, { x: 0, y: grounded ? -0.05 : -0.1, z: 0.1 }, R.QueryFilterFlags.EXCLUDE_SENSORS, P.STATIC_ONLY);
-      const move = kcc.computedMovement();
-      rb.setNextKinematicTranslation({ x: cur.x + move.x, y: cur.y + move.y, z: cur.z + move.z });
-      p.step(1 / 60);
-      grounded = kcc.computedGrounded();
-    }
-    const end = rb.translation(),
-      travelled = end.z - start.z;
-    const floorError = Math.abs(end.y - 0.9 - world.ground(end.x, end.z));
-    p.world.removeRigidBody(rb);
-    p.world.removeCharacterController(kcc);
-    p.removeStatic(livingWall);
-    world.dispose();
-    return { ceiling, travelled, floorError, tagsBefore, tagsAfter: C.traversalSurfaceCount(), sceneChildren: scene.children.length, chunks: world.chunks.size };
+    const before = p.castRay(new T.Vector3(0, 20, 0), down, 40);
+    p.veil(true);
+    const late = p.addBox(new T.Vector3(10, 5, 0), new T.Vector3(2, 2, 2));
+    const own = p.dark(() => p.addBox(new T.Vector3(-10, 5, 0), new T.Vector3(2, 2, 2)));
+    const gone = p.addBox(new T.Vector3(10, 5, 10), new T.Vector3(2, 2, 2));
+    p.removeStatic(gone);
+    p.step(1 / 60);
+    const veiled = { wall: p.castRay(new T.Vector3(0, 20, 0), down, 40), late: p.castRay(new T.Vector3(10, 20, 0), down, 40), own: p.castRay(new T.Vector3(-10, 20, 0), down, 40), up: p.veilUp };
+    p.veil(false);
+    p.step(1 / 60);
+    const lifted = { wall: p.castRay(new T.Vector3(0, 20, 0), down, 40), late: p.castRay(new T.Vector3(10, 20, 0), down, 40), up: p.veilUp };
+    for (const c of [ground, wall, late, own]) p.removeStatic(c);
+    return { before, veiled, lifted };
   });
-  expect(result.ceiling).toBeGreaterThan(15);
-  expect(result.ceiling).toBeLessThan(40);
-  expect(result.travelled).toBeGreaterThan(42);
-  expect(result.floorError).toBeLessThan(0.5);
-  expect(result.tagsBefore).toBeGreaterThan(50);
-  expect(result.tagsAfter).toBe(0);
-  expect(result.chunks).toBe(0);
-  expect(result.sceneChildren).toBe(0);
+  // The wall's top is at 7 m: 13 m down from 20.
+  expect(r.before).toBeCloseTo(13, 1);
+  expect(r.veiled.up).toBe(true);
+  // Veiled: the ray falls through the wall to the ground at 0.
+  expect(r.veiled.wall).toBeCloseTo(20, 1);
+  expect(r.veiled.late).toBeCloseTo(20, 1);
+  expect(r.veiled.own).toBeCloseTo(13, 1);
+  expect(r.lifted.up).toBe(false);
+  expect(r.lifted.wall).toBeCloseTo(13, 1);
+  expect(r.lifted.late).toBeCloseTo(13, 1);
 });
 
-test('Sunwheel crossings use independent terrain, health and tether, save a run, and safely recover on exhaustion and death', async ({ page }, info) => {
+test('Sunwheel crossings lay the red-sky Dark over the living land, keep health and tether, save a run, and recover on exhaustion and death', async ({ page }, info) => {
   test.setTimeout(800_000 * SLOW);
   const errors = await boot(page, '?test&save');
   const first = await page.evaluate(async () => {
@@ -163,7 +142,7 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
     const option = g.dialogue.options.find((o: any) => o.label.includes('enter the Dark'));
     option?.run();
     const entered = j.active,
-      hidden = !g.terrain.group.visible && !g.stylizedNature.group?.visible;
+      look = { land: g.terrain.group.visible, veil: g.physics.veilUp, dark: (await import('/src/render/post.ts' as string)).DARK.value, trees: j.world?.trees.reduce((n: number, t: any) => n + t.count, 0) ?? 0 };
     const world = j.world;
     if (!world) return { entered, options };
     const initial = j.tether.run.left,
@@ -177,6 +156,7 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
       p.act = null;
       p.clearCombatInput();
       const at = world.at(x, z, 0.5);
+      g.terrain.warm(at);
       world.warm(at);
       p.teleport(at);
     };
@@ -190,10 +170,9 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
     g.input.releaseAll();
     const walked = p.pos.distanceTo(start),
       spent = atWheel - j.tether.run.left;
-    const ground = world.ground(p.pos.x, p.pos.z),
+    const ground = world.height(p.pos.x, p.pos.z),
       support = Math.abs(p.pos.y - ground),
-      swimming = p.swimming,
-      water = W.waterSurfaceAt(p.pos.x, p.pos.z);
+      swimming = p.swimming;
     const rayOrigin = p.pos.clone().add(new g.THREE.Vector3(0, 20, 0)),
       ray = g.physics.castRay(rayOrigin, new g.THREE.Vector3(0, -1, 0), 45);
     const left = j.tether.run.left;
@@ -210,25 +189,25 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
     j.frame();
     const chart = j.view.open;
     j.view.toggleMap(false);
-    // A physical crossing, with real destination overlap checks. It crosses
-    // the palisade's logical line without removing any living colliders.
+    // A physical crossing, with real destination overlap checks against the living
+    // world (the veil lifts for the look, then comes back down).
     const farWheel = g.story.wheel.nodes().find((n: any) => n.id === 'dawn-glen');
     go(farWheel.pos.x + 3.2, farWheel.pos.z);
     g.stepSim(1);
     const obstruction = g.physics.addBox(farWheel.pos.clone().add(new g.THREE.Vector3(0, 5, 0)), new g.THREE.Vector3(16, 5, 16));
-    const refusedObstructed = !j.emerge(farWheel.id) && j.active;
+    const refusedObstructed = !j.emerge(farWheel.id) && j.active && g.physics.veilUp;
     g.physics.removeStatic(obstruction);
     const crossed = j.emerge(farWheel.id),
       emerged = [p.pos.x, p.pos.y, p.pos.z],
       aliveWorld = g.terrain.group.visible;
-    const leftDark = !j.active,
-      cleaned = world.chunks.size === 0 && world.foes.size === 0;
+    const leftDark = !j.active && !g.physics.veilUp,
+      cleaned = world.foes.size === 0 && !world.group.parent;
     // Re-enter, move past the old 230m mirror boundary and collect a memory.
     p.teleport(farWheel.pos.clone().add(new g.THREE.Vector3(3.2, 0.4, 0)));
     const reentry = j.enter(farWheel.id);
-    const current = j.world,
-      s = L.SCARS.find((s: any) => s.id === 'first-impact');
-    const at = current.at(s.x + s.r * 0.84, s.z, 0.4);
+    const current = j.world;
+    const at = current.memoryAt('first-impact').clone().add(new g.THREE.Vector3(0, 0.4, 0));
+    g.terrain.warm(at);
     current.warm(at);
     p.teleport(at);
     g.input.uiMode = false;
@@ -237,7 +216,7 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
     await Promise.all(sentinels.map((f) => f.ready));
     g.stepSim(150);
     const sentinelReady = sentinels.some((f) => f.risen && f.alive);
-    const firstSentinel = [...current.foes.entries()][0] as any;
+    const firstSentinel = [...current.foes.entries()].find(([id]: any) => !id.startsWith('pack:')) as any;
     if (firstSentinel)
       firstSentinel[1].takeHit({ damage: 99999, poise: 100, dir: new g.THREE.Vector3(1, 0, 0), at: firstSentinel[1].center.clone(), crit: false, source: 'melee' });
     g.stepSim(1);
@@ -250,11 +229,12 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
     memory.action();
     g.dialogue.close();
     const duplicateGain = j.tether.capacity - capBefore;
+    g.terrain.warm(current.at(700, 20, 0.4));
     current.warm(current.at(700, 20, 0.4));
     p.teleport(current.at(700, 20, 0.4));
     g.input.uiMode = false;
     g.stepSim(1);
-    const unbounded = Math.abs(p.pos.x - L.DARK_X - 700) < 2;
+    const unbounded = Math.abs(p.pos.x - 700) < 2;
     // Preserve height when saving on a boulder above the heightfield.
     const top = p.pos.clone().add(new g.THREE.Vector3(0, 80, 0));
     const drop = g.physics.castRay(top, new g.THREE.Vector3(0, -1, 0), 160);
@@ -275,7 +255,7 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
     return {
       entered,
       options,
-      hidden,
+      look,
       initial,
       capacity,
       atWheel,
@@ -283,7 +263,6 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
       spent,
       support,
       swimming,
-      water,
       ray,
       damaged,
       pauseLoss,
@@ -314,7 +293,10 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
   expect(first.spent).toBeGreaterThan(1);
   expect(first.support).toBeLessThan(1.4);
   expect(first.swimming).toBe(false);
-  expect(first.water).toBeNull();
+  expect(first.look!.land).toBe(true);
+  expect(first.look!.veil).toBe(true);
+  expect(first.look!.dark).toBe(1);
+  expect(first.look!.trees).toBeGreaterThan(50);
   expect(first.ray).not.toBeNull();
   expect(first.damaged!.hp).toBeGreaterThan(0);
   expect(first.damaged!.tether).toBeGreaterThan(2);
@@ -340,12 +322,15 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
       L = await import('/src/world/dark/land.ts' as string);
     (window as any).darkShot = { pos: g.player.pos.clone(), camera: g.r.camera.position.clone(), rotation: g.r.camera.quaternion.clone() };
     const s = L.SCARS[0],
-      at = j.world.at(s.x + s.r * 1.15, s.z, 0.5);
+      m = j.world.memoryAt(s.id),
+      at = m.clone().add(new g.THREE.Vector3(40, 0, 25));
+    at.y = j.world.height(at.x, at.z) + 0.5;
+    g.terrain.warm(at);
     j.world.warm(at);
     g.player.teleport(at);
     g.player.present(1, 0);
     g.r.camera.position.copy(at).add(new g.THREE.Vector3(35, 42, 48));
-    g.r.camera.lookAt(j.world.at(s.x, s.z, 4));
+    g.r.camera.lookAt(m.clone().add(new g.THREE.Vector3(0, 4, 0)));
     g.r.followShadow(at);
     j.frame();
     g.r.render(0.016);
@@ -361,6 +346,7 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
     const g = (window as any).__game,
       s = (window as any).darkShot;
     g.darkJourney.view.toggleMap(false);
+    g.terrain.warm(s.pos);
     g.darkJourney.world.warm(s.pos);
     g.player.teleport(s.pos);
     g.player.present(1, 0);
@@ -396,7 +382,7 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
     g.input.uiMode = false;
     const resumed = j.active,
       left = j.tether.run?.left,
-      resumeX = g.player.pos.x - L.DARK_X,
+      resumeX = g.player.pos.x,
       resumeY = g.player.pos.y,
       memory = !!g.worldFlags['dark:memory:first-impact'];
     if (!j.active) return { resumed, left, resumeX, resumeY, memory };
@@ -408,7 +394,7 @@ test('Sunwheel crossings use independent terrain, health and tether, save a run,
     const exhausted = !j.active && g.realm.mode === 'overworld',
       exhaustedHp = g.player.hp,
       x = g.player.pos.x;
-    const cleanup = w.chunks.size === 0 && w.foes.size === 0;
+    const cleanup = w.foes.size === 0 && !w.group.parent && !g.physics.veilUp;
     const n = g.story.wheel.nodes().find((n: any) => n.id === 'dawn-glen');
     const enteredAgain = j.enter(n.id);
     g.player.invulnerable = false;

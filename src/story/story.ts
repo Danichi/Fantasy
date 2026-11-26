@@ -176,7 +176,7 @@ export class Story {
   // ---- the Dark mirror -------------------------------------------------------------
   private setDarkNow(v: number) {
     this.dark = this.darkTarget = v;
-    DARK.value = v;
+    DARK.value = Math.max(v, DARK.floor);
   }
   /** Ease into (or out of) the Dark mirror. */
   darkTo(v: number) {
@@ -341,7 +341,7 @@ export class Story {
       const want = Math.max(this.darkTarget, dread > 0.5 ? dread * 0.3 : 0);
       this.dark += (want - this.dark) * Math.min(1, dt * 1.5);
       if (Math.abs(this.dark - want) < 0.002) this.dark = want;
-      DARK.value = this.dark;
+      DARK.value = Math.max(this.dark, DARK.floor);
     }
   }
 
