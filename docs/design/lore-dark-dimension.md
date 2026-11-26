@@ -1,6 +1,6 @@
 # Lore: the Dark Dimension and the Champions' Game
 
-Status: **built into the main story (2026-10-29): see main-story.md.** The rest is still ideas. Written down from the
+Status: **built into the main story (2026-10-29): see main-story.md. The Dawn's identity and the full arc are settled in story-guide.md (2026-11-26).** The rest is still ideas. Written down from the
 user's brief (2026-10-19) so future updates (main quest, monsters, raids,
 bosses, NPCs) can build toward it. Names marked TBD are still open.
 

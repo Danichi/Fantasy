@@ -115,7 +115,7 @@ export const MOUNTAIN_QUESTS: QuestDef[] = [
           type: 'choose', npc: 'durin', key: 'hood', text: 'Answer the King about the hooded Sunwheel', reply: 'The stone in your courtyard. Why is it hooded?',
           prompt: 'Because it looks. That is all I know and all my grandfather knew: keep it covered, and it does not look. Your people use the stones to travel, I hear, from one to the next in a heartbeat. I will not forbid a guest. But I ask you, as a King asks: leave mine hooded.',
           options: [
-            { id: 'leave', label: 'Then it stays hooded. I can walk.', say: 'Hm. A sky-born who keeps a promise she was not asked to make. Wear this: the holds will know you.' },
+            { id: 'leave', label: 'Then it stays hooded. I can walk.', say: 'Hm. A sky-born who keeps a promise nobody asked of them. Wear this: the holds will know you.' },
             { id: 'wake', label: 'I need that waystone, King. I\'ll wake it.', say: 'Then wake it, and be quick, and do not stand near it longer than you must. I will not pretend I like it.' },
           ],
         }],

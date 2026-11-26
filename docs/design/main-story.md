@@ -1,5 +1,8 @@
 # The main story: The Fifth Summon
 
+This file describes what is built. Where the story goes next, and the rules it
+follows, are in [story-guide.md](story-guide.md).
+
 Built 2026-10-29 from the lore brief in `lore-dark-dimension.md`. Code in
 `src/story/`; the chain in `src/quests/mainQuest.ts`; tests in
 `tests/story.spec.ts`.
@@ -112,8 +115,9 @@ Attuned wheels show on the world map.
 - *The Four Who Came Before* (`mq-four`): Elin's grave, Oswald's tomb (Ingrid, Hollow Ridge), Harrow Ford (Corvin, the cairn's rite), the Rust Knight (Tobin). A spoke from each.
 - *The Turning of the Wheel* (`mq-turning`): five spokes in the standing stones; the Wheel-Shield comes through the Dark. You can't win; you last until Ysra the Undying steps in.
 
-**Next (with the regions):** the elven woods, the mountains and the sea hold
-the remaining spokes; Act IV is the chair.
+**Next:** see [the story guide](story-guide.md): the canon (who the Dawn
+really is), the rules for writing the story, the threads that join the
+regions, and Acts III to VI.
 
 ## How chapters hand on
 
