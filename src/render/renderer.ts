@@ -43,7 +43,7 @@ export class Renderer {
 
     this.camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.08, 1700);
     // The post pass draws atmospheric haze from depth; Low falls back to fog.
-    if (!Q.post) this.scene.fog = new THREE.Fog(FOG_COLOR, 90, 720);
+    if (!Q.post) this.scene.fog = new THREE.Fog(FOG_COLOR, 140, 850);
 
     // Sun: warm key light with a tight shadow box that follows the player.
     this.sun = new THREE.DirectionalLight(0xfff1d6, 2.3);
@@ -115,12 +115,13 @@ export class Renderer {
       const stormy = THREE.MathUtils.smoothstep(w.cloud, 0.72, 1);
       haze.lerp(new THREE.Color(0.6, 0.64, 0.7).lerp(new THREE.Color(0.3, 0.34, 0.42), stormy).multiplyScalar(1 - s.night * 0.8), Math.min(1, w.cloud * 0.55 + w.fog * 0.6));
       (u.uSunColor.value as THREE.Color).copy(s.sunColor);
-      u.uHaze.value = 0.0032 + w.fog * 0.0045 + w.rain * 0.0015 + w.snow * 0.003;
+      u.uHaze.value = 0.0022 + w.fog * 0.0045 + w.rain * 0.0015 + w.snow * 0.003;
       u.uExposure.value = s.exposure * (1 - stormy * 0.26) * (1 + flash * 0.8);
       u.uClouds.value = 0.85 * (1 - w.cloud * 0.8) * (1 - s.night);
     } else if (this.scene.fog instanceof THREE.Fog) {
       this.scene.fog.color.copy(s.haze);
-      this.scene.fog.far = 720 * (1 - w.fog * 0.7);
+      this.scene.fog.near = 140 * (1 - w.fog * 0.85);
+      this.scene.fog.far = 850 * (1 - w.fog * 0.7);
     }
     this.renderer.toneMappingExposure = 1.06 * s.exposure;
     // Refresh the image-based ambient light now and then as the sky changes.
@@ -167,7 +168,7 @@ export class Renderer {
     let next = this.dynScale;
     // (Balanced holds a steadier rate: it gives way sooner and may go a little lower.)
     const target = Q.targetMs ?? 30, floor = Q.minScale ?? 0.75;
-    if (avg > target) next = Math.max(floor, this.dynScale - 0.08);
+    if (avg > target * 1.08) next = Math.max(floor, this.dynScale - 0.04);
     else if (avg < target * 0.78) next = Math.min(1, this.dynScale + 0.05);
     if (next !== this.dynScale) {
       this.dynScale = next;

@@ -10,6 +10,7 @@ import { shapeIslands } from './islands/layout';
 import { shapeLandscape } from './landscape/layout';
 import { shapeElvenForest } from './elves/layout';
 import { mountainShape } from './mountains/mountainLayout';
+import { GLEN_WEAR } from './glenCircuitData';
 
 // ---------------------------------------------------------------------------
 // Terrain heights for the whole world (pure: no rendering, no physics, so the
@@ -423,6 +424,10 @@ export function splatAt(x: number, z: number): [number, number, number] {
   dirt = Math.max(dirt, smoothstep(GRAVEWOOD_R, GRAVEWOOD_R - 35, gw) * smoothstep(0.42, 0.58, fbm(x * 0.07 + 11, z * 0.07 - 4, 3)) * 0.9);
   // Worn patches scattered in the grass.
   dirt = Math.max(dirt, smoothstep(0.68, 0.76, fbm(x * 0.045 - 3, z * 0.045 + 5, 3)) * 0.8);
+  for (const [px, pz, r] of GLEN_WEAR) {
+    const dx = x - px, dz = z - pz;
+    if (Math.abs(dx) < r && Math.abs(dz) < r) dirt = Math.max(dirt, smoothstep(r, r * 0.3, Math.hypot(dx, dz)) * 0.94);
+  }
   dirt = clamp(dirt * (1 - stone), 0, 1);
   const grass = clamp(1 - stone - dirt, 0, 1);
   return [stone, dirt, grass];

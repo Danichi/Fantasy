@@ -6,6 +6,10 @@ The interface follows [the Dawn Codex identity](design/ui-identity.md): locally
 bundled book typography, engraved names, parchment notes and substantial leather
 frames. Use its shared type and surface roles for new menus and hints.
 
+The [Elder Glen living circuit](design/elder-glen-immersion.md) is the first
+playable benchmark for composition, recognizable routes, visible work and
+local sound. Judge its normal Medium captures alongside the low-cost test views.
+
 ## 1. The five rules
 
 1. **Detailed textures, clean models.** Textures keep their full detail (only a whisper of softening, so nothing reads as a photograph). Models are clean: crisp silhouettes, no noise, no outlines, no brush filters. Light does the stylising, not the textures.

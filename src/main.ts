@@ -145,11 +145,14 @@ import { MenuBook } from './ui/menuBook';
 import { Bestiary } from './progression/bestiary';
 import { BestiaryUI } from './ui/bestiaryUI';
 import { glenNamedFolk } from './npc/glenNamed';
+import { glenWork } from './npc/glenWork';
+import { GlenCircuit } from './world/glenCircuit';
 import { ITEMS } from './items/itemDefs';
 import { buildGlenDressing, MARKET_SPOTS, WELL } from './world/glenDressing';
 import { Weather } from './world/weather';
 import { Precipitation } from './world/precipitation';
 import { Ambience } from './audio/ambience';
+import { sfx } from './audio/sfx';
 import { NpcManager } from './npc/npcManager';
 import { elderGlenFolk } from './npc/elderGlenFolk';
 import { REGIONS } from './world/regionDefinitions';
@@ -358,6 +361,9 @@ async function boot() {
   const crops = buildCrops(r.scene);
   mark('crops');
   buildGlenDressing(r.scene, world.mats);
+  const glenCircuit = new GlenCircuit(r.scene, world.mats, fx, farm.spots.mill[0]);
+  await glenCircuit.plant();
+  ground.prime(spawn);
   mark('dressing');
   const kingsRoad = buildKingsRoad(r.scene, world.mats, fx);
   mark('kingsRoad');
@@ -422,7 +428,7 @@ async function boot() {
     moonIn: () => time.nightsToFull,
   });
   {
-    const avoid: [number, number, number][] = [...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.map((d) => [d.home.x, d.home.z, d.home.r + 30] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 12] as [number, number, number])];
+    const avoid: [number, number, number][] = [...glenCircuit.clearings, ...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.map((d) => [d.home.x, d.home.z, d.home.r + 30] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 12] as [number, number, number])];
     const ms = sites.place([...BATCH5, ...BATCH1, ...BATCH2, ...BATCH3, ...BATCH4], avoid.filter(([x, z]) => !DISCOVERY_BOSSES.some((d) => d.home.x === x && d.home.z === z)));
     console.info(`[sites] placed ${sites.sites.length} in ${ms.toFixed(0)} ms`);
     // The Lost Lanterns (world/lostLanterns.ts): placed clear of the same things, and of the sites themselves.
@@ -445,7 +451,7 @@ async function boot() {
     }
     console.info(`[lanterns] placed ${lanternSpots.length} in ${(performance.now() - t0).toFixed(0)} ms`);
   }
-  stylizedNature.clearings = [...lanternSpots.map((l) => [l.x, l.z, l.style === 'tall' || l.style === 'nook' ? 3.2 : 2.2] as [number, number, number]), ...sites.clearings, [DROWNED_MERE.x, DROWNED_MERE.z, DROWNED_MERE.r + 14], [SINKHOLE.x, SINKHOLE.z, SINKHOLE.r + 8], ...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
+  stylizedNature.clearings = [...glenCircuit.clearings, ...lanternSpots.map((l) => [l.x, l.z, l.style === 'tall' || l.style === 'nook' ? 3.2 : 2.2] as [number, number, number]), ...sites.clearings, [DROWNED_MERE.x, DROWNED_MERE.z, DROWNED_MERE.r + 14], [SINKHOLE.x, SINKHOLE.z, SINKHOLE.r + 8], ...WILDS_CLEARINGS, ...roadLife.clearings, MEADOW_CLEARING, ...farm.clearings, ...crops.clearings, ...LANDMARK_CLEARINGS, ...kingsRoad.clearings, ...port.clearings, ...islands.clearings, ...capital.clearings, ...crownRoad.clearings, Gravewood.clearing, MINE_CLEARING, ...BOSS_DEFS.filter((d) => d.clearing).map((d) => [d.home.x, d.home.z, d.clearing!] as [number, number, number]), ...population.dens.map((d) => [d.x, d.z, 8] as [number, number, number])];
   await stylizedNature.ready;
   mark('natureLoad');
   stylizedNature.warm(spawn, spawn);
@@ -462,10 +468,11 @@ async function boot() {
   weather.fromJSON(saveData?.world?.weather);
   const precip = new Precipitation(r.scene);
   const ambience = new Ambience();
-  events.on('footstep', ({ at, surface }) => {
-    if (realm?.mode === 'dungeon') return ambience.footstep('stone', false);
+  events.on('footstep', ({ at, surface, weight }) => {
+    if (realm?.mode === 'dungeon') return ambience.footstep('stone', false, false, weight);
+    if (realm?.mode === 'interior') return ambience.footstep(['home', 'tavern', 'shop', 'library', 'cabin'].includes(realm.interior?.kind ?? '') ? 'wood' : 'stone', false, false, weight);
     const rel = reliefAt(at.x, at.z);
-    ambience.footstep(surface, rel === RELIEF.snow || weather.p.snow > 0.5);
+    ambience.footstep(surface, rel === RELIEF.snow || weather.p.snow > 0.5, weather.p.wet > 0.3, weight);
   });
   weather.onLightning = (s) => {
     r.lightning(s);
@@ -481,12 +488,19 @@ async function boot() {
     const folk = elderGlenFolk(world.village.houses);
     // Work spots from the farmstead and market square.
     const pl = folk.settlement.places;
+    for (const [i, rec] of folk.records.filter(r => r.job === 'elder').slice(0, 2).entries()) {
+      const id = 'glen:bell-seat:' + i;
+      pl.set(id, { id, spots: [glenCircuit.seats[i]], seated: true, yaw: -(i * Math.PI + 0.3) - Math.PI / 2 });
+      for (const e of rec.schedule) if (['plaza', 'market'].includes(e.place) && e.activity === 'idle') { e.place = id; e.activity = 'sit'; }
+    }
     pl.set('market', { id: 'market', spots: MARKET_SPOTS, yaw: 0 });
     pl.set('mill', { id: 'mill', spots: farm.spots.mill });
     pl.set('pasture', { id: 'pasture', spots: farm.spots.pasture });
     // Quest givers and the guild's adventurers keep posts by day.
     const named = glenNamedFolk(farm.spots.mill[0]);
     for (const place of named.places) pl.set(place.id, place);
+    glenWork(named.records, pl);
+    glenWork(folk.records, pl);
     npcs.ray = (from, dir, max) => physics.castRay(from, dir, max);
     npcs.addSettlement(folk.settlement);
     for (const rec of folk.records) npcs.add(rec);
@@ -633,6 +647,7 @@ async function boot() {
   const realm = new Realm(r, player, cam, fx, hud, mapUI, {
     hide: (h) => {
       darkJourney?.setLivingVisible(!h);
+      glenCircuit.group.visible = !h;
       terrain.group.visible = !h;
       grass.mesh.visible = !h;
       ambient.setVisible(!h);
@@ -1367,6 +1382,10 @@ async function boot() {
       },
     }]);
   }
+  glenCircuit.player = () => realm.mode === 'overworld' ? player.pos : null;
+  glenCircuit.onRead = p => dialogue.show(p.name, 'Local directions', p.directions, [{ label: 'Thank you.', run: () => dialogue.close() }]);
+  glenCircuit.onBell = () => { sfx.harbourBell(0.12); hud.toast('The Market Bell carries across the Glen.'); };
+  realm.overworldInteractables.push(...glenCircuit.interactables);
   realm.overworldInteractables.push(...arms.interactables); // Arms and Crafting: the port's forge, gathering
   realm.overworldInteractables.push(encounters.interactable, ...roadQuests.interactables, horses.interactable, ...roads.interactables, foraging.interactable, ...farmLife.interactables, livestock, ...landmarks.interactables, ...glenQuests.interactables, ...glenMore.interactables);
 
@@ -2214,6 +2233,7 @@ async function boot() {
     treesNear: (x, z, rr) => stylizedNature.treesNear(x, z, rr),
     say: (line) => hud.toast(line),
     hide: (h) => {
+      glenCircuit.group.visible = !h;
       npcs.setVisible(!h);
       fauna.setVisible(!h);
       horses?.setVisible(!h);
@@ -3328,6 +3348,7 @@ async function boot() {
       world.village.lanternMat.emissiveIntensity = 0.6 + ts.night * 2.6;
       npcs.raining = wp.rain > 0.45;
       if (worldRunning) npcs.update(dt, player.pos, r.camera.position, ts.night);
+      glenCircuit.update(worldRunning ? dt : 0, player.pos, ts.night, wp.wind);
       if (worldRunning) fauna.update(dt, player.pos, ts.night);
       farm.update(dt, wp.wind);
       crops.setWind(wp.wind);
@@ -3388,7 +3409,10 @@ async function boot() {
     }
     const riverNear = Math.max(0, 1 - Math.abs(player.pos.x - riverX(player.pos.z)) / 40) * (Math.abs(player.pos.z) < 420 ? 1 : 0);
     const def = REGIONS[here];
-    ambience.update(dt, def?.ambience ?? 'meadow', ts.night, wp, { river: riverNear * 0.7 }, realm.mode !== 'overworld');
+    const indoors = realm.mode === 'interior';
+    ambience.update(dt, def?.ambience ?? 'meadow', ts.night, wp, { river: indoors || Math.abs(player.pos.z - 6) < 45 ? 0 : riverNear * 0.7 }, realm.mode === 'dungeon' || realm.mode === 'dark', indoors);
+    const camRight = new THREE.Vector3().setFromMatrixColumn(r.camera.matrixWorld, 0);
+    ambience.local.update(dt, player.pos.x, player.pos.z, camRight.x, camRight.z, ts.night, ambience.master, realm.mode === 'overworld' && !ambience.muted);
     if (realm.interior) {
       realm.interior.setDaylight(1 - ts.night);
       inside.borrowed?.n.update(dt, player.pos);
@@ -3544,7 +3568,7 @@ async function boot() {
     (window as any).__game = {
       resetForTest, techniques, techniqueLibrary, traversalView, darkJourney,
       sleep: (on: boolean) => (asleep = on),
-      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, mainQuest, desert, mountains: mtn, archipelagos, elves, landscape, terrainDressing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
+      THREE, r, input, player, cam, physics, fx, social, folkTalk, trouble, requests, repPanel, story, mainStory: main, slimes, population, raids, bosses, sites, spells, skillRt, hud, inv, skills, realm, rewards, mapUI, save, town, dialogue, stylizedNature, grass, ground, world, discovery, worldMap, terrain, ocean, events, npcs, time, weather, fauna, farm, quests, farmLife, landmarks, questUI, foraging, roads, kingsRoad, horses, encounters, caravans, port: { ...port, berth: PORT_SPOTS.berth }, portLife, capital, crownRoad, sailing, seaState, seaPanel, fishing, glenLife, glenCircuit, ambience, mainQuest, desert, mountains: mtn, archipelagos, elves, landscape, terrainDressing, duel, academy, lowerCity, riverLife, book, doors: DOORS, inside, stepSim: (n = 1) => { for (let i = 0; i < n; i++) simStep(); }, sellFish, worldFlags, gravewood, boats, exportIcons: exportAllIcons, gearRt, catalogSources, locks, specials,
       microDiscoveries, fieldLife,
       arms, // Arms and Crafting (feat/arms)
       sandbox, overlays, yard, combatDebug, telegraphs, // combat rework: the drill yard and the F9 overlay

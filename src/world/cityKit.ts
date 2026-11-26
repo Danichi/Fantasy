@@ -26,7 +26,18 @@ export class StaticBatch {
   add(geo: THREE.BufferGeometry, mat: THREE.Material, matrix: THREE.Matrix4) {
     let g = geo.index ? geo.toNonIndexed() : geo.clone();
     g.applyMatrix4(this.tmp.copy(matrix));
-    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv' && k !== 'color') g.deleteAttribute(k);
+    // Stylized foliage stores its palette in vertex colours. Normalize the
+    // attribute before merging: GLTF may use normalized bytes or float RGB.
+    if ((mat as THREE.MeshStandardMaterial).vertexColors) {
+      const src = g.attributes.color, colors = new Float32Array(g.attributes.position.count * 3);
+      for (let i = 0; i < g.attributes.position.count; i++) {
+        colors[i * 3] = src ? src.getX(i) : 1;
+        colors[i * 3 + 1] = src ? src.getY(i) : 1;
+        colors[i * 3 + 2] = src ? src.getZ(i) : 1;
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    } else g.deleteAttribute('color');
     if (!g.attributes.normal) g.computeVertexNormals();
     if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
     g = g.index ? g.toNonIndexed() : g;

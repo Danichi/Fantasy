@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { glenDirections } from '../world/glenCircuitData';
 import type { NpcManager } from '../npc/npcManager';
 import type { QuestLog } from '../quests/questLog';
 import type { NpcSpec } from '../npc/npc';
@@ -88,6 +89,12 @@ export function setupSocial(h: SocialHooks) {
   const convo = new Conversation({
     people, dialogue: h.dialogue, ctx, day: h.day, gold: h.gold, addGold: h.addGold, level: h.level,
     giftables: h.items, take: h.take, give: h.give, toast: h.toast,
+    currentTask: id => h.npcs.taskOf(id)?.line,
+    localDirections: id => {
+      const n = h.npcs.find(id), p = n?.pos ?? h.playerPos();
+      if (n ? n.rec.settlement !== 'elderGlen' : ctx(id).region !== 'glen') return undefined;
+      return glenDirections(p.x, p.z);
+    },
     witnessed: (id) => {
       // Someone else close enough to see (the street, not behind closed doors).
       const me = h.npcs.find(id)?.pos ?? h.playerPos();

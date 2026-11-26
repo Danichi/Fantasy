@@ -25,6 +25,8 @@ export interface GiftItem {
 
 /** What the game lends a conversation. */
 export interface ConvoHost {
+  localDirections?(id: string): string | undefined;
+  currentTask?(id: string): string | undefined;
   people: People;
   dialogue: DialogueUI;
   ctx(id: string): LineCtx;
@@ -273,6 +275,8 @@ export class Conversation {
     const m = this.rep.memOf(p.id);
     const mood = this.rep.moodOf(p.id);
     const opts: DialogueOption[] = [...spec.services];
+    if (this.h.localDirections?.(p.id)) opts.push({ label: 'Can you help me find my way?', run: () => this.show(spec, this.h.localDirections?.(p.id) ?? 'Ask at the Market Bell.', this.menu(spec, p)) });
+    if (this.h.currentTask?.(p.id)) opts.push({ label: 'What are you doing?', run: () => this.show(spec, this.h.currentTask?.(p.id) ?? 'Taking a moment before the next job.', this.menu(spec, p)) });
     if ((m.insults > 0 || m.threats > 0 || MOODS.indexOf(mood) <= MOODS.indexOf('wary')) && m.apologyDay !== this.h.day()) {
       opts.push({ label: 'About before... I\'m sorry.', tone: 'kind', run: () => this.apologise(spec, p) });
     }
