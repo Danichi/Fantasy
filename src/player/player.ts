@@ -1594,7 +1594,10 @@ export class Player {
     this.airHang = 0;
     const a = this.act;
     if (this.fallSpeed > 8) this.onShake?.(Math.min(0.35, this.fallSpeed * 0.02));
-    if (this.airTime > 0.15) this.landT = 0;
+    if (this.airTime > 0.15) {
+      this.landT = 0;
+      if (this.fallSpeed > 2) events.emit('footstep', { at: this.pos.clone(), surface: surfaceAt(this.pos.x, this.pos.z), weight: clamp(this.fallSpeed / 7, 0.9, 1.8) });
+    }
     if (a?.def.air && !a.landed) {
       a.landed = true;
       if (a.def.hit) a.t = Math.max(a.t, a.def.hit.from + 0.1);

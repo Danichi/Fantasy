@@ -19,7 +19,7 @@ export const STYLE = {
   /** 0 = full texture detail, 1 = painterly flattening. */
   textureSoftness: { value: 0.08 },
   rimColor: { value: new THREE.Color(0.78, 0.9, 1.0) },
-  rimStrength: { value: 0.3 },
+  rimStrength: { value: 0.18 },
 };
 
 const S = THREE.ShaderChunk;

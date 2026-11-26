@@ -34,8 +34,14 @@ const PLACE_WORDS: Record<string, string> = {
   tavern: 'the inn', plaza: 'the plaza', market: 'the market', forge: 'the forge', mill: 'the mill', guild: 'the guild hall',
   training: 'the training yard', fields: 'the fields', pasture: 'the pasture', looms: 'the looms', lanes: 'the lanes', homes: 'home',
   southGate: 'the south gate', northGate: 'the north gate', eastGate: 'the east gate', westGate: 'the west gate', home: 'home',
+  'glen:mill-sacks': 'the mill’s loading rack', 'glen:mill-check': 'the millrace', 'glen:grain-rack': 'the Sheaf Yard loading rack',
+  'glen:grain-queue': 'the Sheaf Yard ration counter', 'glen:feed': 'the cattle trough', 'glen:pasture-gate': 'the pasture gate',
+  'glen:wheat-basket': 'the south wheat rows', 'glen:wheat-water': 'the south wheat rows', 'glen:relief-counter': 'the Sheaf Yard ration counter',
+  'glen:relief-load': 'the granary loading cart', 'glen:bell-seats': 'the benches beneath the market oak',
 };
 function placeLabel(id: string) {
+  if (id.startsWith('glen:bell-seat:')) return 'the benches beneath the market oak';
+  if (id.startsWith('glen:market-stock:')) return 'the bread stall’s stock shelf';
   if (/^home\d*$/.test(id) || /^yard\d*$/.test(id)) return 'home';
   return PLACE_WORDS[id] ?? id.replace(/^post:/, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
 }
@@ -50,7 +56,18 @@ export interface ScheduleEntry {
   place: string;
 }
 
+export interface WorkTask {
+  place: string;
+  activity: Activity;
+  seconds: number;
+  line: string;
+  carry?: 'sack' | 'basket' | 'ledger';
+}
+
 export interface NpcRecord {
+  /** Small visible tasks during the working entry, resolved from the saved world clock. */
+  routine?: { post: string; tasks: WorkTask[] };
+  workClip?: string;
   /** An authored elevated settlement floor; the World Tree’s fixed canopy posts use this. */
   elevation?: number;
   id: string;
@@ -126,6 +143,9 @@ interface NpcState {
 }
 
 interface Actor {
+  carried?: THREE.Group;
+  carryPose?: THREE.AnimationAction;
+  carrying?: boolean;
   key: string;
   built: BuiltCharacter;
   actions: Record<string, THREE.AnimationAction | undefined>;
@@ -423,6 +443,23 @@ export class NpcManager {
     return st.moving ? 'walk' : this.effective(st).activity;
   }
 
+  taskOf(id: string) {
+    const st = this.find(id);
+    if (!st || st.hidden || this.raidOn === st.rec.settlement) return null;
+    const e = this.effective(st);
+    return 'line' in e ? e as WorkTask : null;
+  }
+
+  private workTask(st: NpcState) {
+    const r = st.rec.routine;
+    if (!r?.tasks.length) return null;
+    const total = r.tasks.reduce((n, t) => n + t.seconds, 0);
+    if (total <= 0) return null;
+    let t = (this.time.hour * 120 + (st.seed % 31)) % total;
+    for (const task of r.tasks) { if (t < task.seconds) return task; t -= task.seconds; }
+    return r.tasks[0];
+  }
+
   /** A resident by id (quest markers, scripted scenes). */
   find(id: string) {
     return this.npcs.find((n) => n.rec.id === id) ?? null;
@@ -448,6 +485,7 @@ export class NpcManager {
       }
       return { activity: 'drink' as Activity, place: 'tavern' };
     }
+    if (!this.raining && st.rec.routine?.post === e.place) return this.workTask(st) ?? e;
     return e;
   }
 
@@ -610,6 +648,9 @@ export class NpcManager {
 
   private release(st: NpcState) {
     if (!st.actor) return;
+    st.actor.carryPose?.stop();
+    st.actor.carrying = false;
+    if (st.actor.carried) st.actor.carried.visible = false;
     st.actor.built.root.visible = false;
     st.actor.built.root.removeFromParent();
     st.actor.current = '';
@@ -668,13 +709,14 @@ export class NpcManager {
         continue;
       }
       if (this.trouble(st, dt, player)) {
+        if (st.actor) this.carry(st.actor, undefined, st.rec.look.height ?? 1.75);
         if (st.hidden && st.actor) this.release(st);
         continue;
       }
       // Schedule changes: head to the new place along the waypoint graph.
       const idx = this.entryIndex(st.rec);
       // A quest giver doesn't walk off while the player is still with them.
-      const stay = st.rec.named && !st.moving && st.pos.distanceTo(player) < 12;
+      const stay = st === this.engaged || st.talkT > 0 || (st.rec.named && idx !== st.entry && !st.moving && st.pos.distanceTo(player) < 12);
       if (!stay && (idx !== st.entry || this.effective(st).place !== st.placeKey)) {
         this.placeBySchedule(st, false);
         st.path = this.route(s, st.pos, st.spot, st);
@@ -767,7 +809,7 @@ export class NpcManager {
       const e = this.effective(st);
       // Some variety: farmers alternate harvesting and watering; kids play or cheer.
       const alt = Math.floor(this.time.hour * 4 + (st.seed % 7)) % 2 === 0;
-      let clip = e.activity === 'work' ? WORK_CLIP[st.rec.job] ?? 'fix' : ACTIVITY_CLIP[e.activity];
+      let clip = e.activity === 'work' ? st.rec.workClip ?? WORK_CLIP[st.rec.job] ?? 'fix' : ACTIVITY_CLIP[e.activity];
       if (e.activity === 'farm' && alt) clip = 'water';
       if (e.activity === 'play' && alt) clip = 'cheer';
       // 'sit' is a chair sit: without a seat it sank people into the ground.
@@ -779,12 +821,24 @@ export class NpcManager {
       if (clip === 'idle' && (this.time.hour >= 21 || this.time.hour < 5 || st.rec.job === 'elder') && st.seed % 2 === 0) clip = 'idle_tired';
       if (st === this.engaged || st.talkT > 0) clip = 'talk';
       else if (st.moving && st.waitT <= 0) clip = 'walk';
+      const carrying = 'carry' in e && st !== this.engaged && st.talkT <= 0 ? (e as WorkTask).carry : undefined;
+      this.carry(a, carrying, st.rec.look.height ?? 1.75);
+      if (carrying && clip === 'walk' && a.actions.carry_walk) clip = 'carry_walk';
+      else if (carrying && a.actions.carry_idle) clip = 'carry_idle';
       this.play(a, clip);
       // Legs keep pace with the ground: the walk plays fast enough that planted feet don't slide.
-      const walkAct = a.actions.walk;
+      const walkAct = a.actions[clip === 'carry_walk' ? 'carry_walk' : 'walk'];
       if (walkAct) walkAct.timeScale = (this.speedOf(st) / ((st.rec.look.height ?? 1.75) / 1.8)) / WALK_CLIP_SPEED;
       // Far actors animate at a lower rate.
       a.built.mixer.update(dist > 45 ? (slow ? 0.25 : 0) : dt);
+      if (a.carried?.visible) {
+        const left = a.built.bones.get('hand_l'), right = a.built.bones.get('hand_r');
+        if (left && right) {
+          a.built.root.updateMatrixWorld(true);
+          const grip = left.getWorldPosition(new THREE.Vector3()).add(right.getWorldPosition(new THREE.Vector3())).multiplyScalar(0.5);
+          a.carried.position.copy(a.built.root.worldToLocal(grip)).add(new THREE.Vector3(0, -0.08, 0.22));
+        }
+      }
       // Turn the head toward the player when close and idle.
       const toP = Math.atan2(player.x - st.pos.x, player.z - st.pos.z) - st.yaw;
       const want = !st.moving && dist < 6 ? Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(toP), Math.cos(toP)))) : 0;
@@ -822,6 +876,34 @@ export class NpcManager {
       this.lastBuild = performance.now();
       void this.buildActor(lookKey(farLook), farLook);
     }
+  }
+
+  private carry(a: Actor, kind: WorkTask['carry'], height: number) {
+    if (!kind) {
+      if (a.carried) a.carried.visible = false;
+      if (a.carrying) { a.carryPose?.fadeOut(0.18); a.carrying = false; }
+      return;
+    }
+    if (!a.carried) {
+      const group = new THREE.Group();
+      const sack = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 6).scale(1, 1.3, 0.8), new THREE.MeshStandardMaterial({ color: 0xbba176, roughness: 1 }));
+      const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.21, 0.28, 8), new THREE.MeshStandardMaterial({ color: 0x865e37, roughness: 1 }));
+      const ledger = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.045, 0.25), new THREE.MeshStandardMaterial({ color: 0x623b2c, roughness: 0.95 }));
+      group.add(sack, basket, ledger);
+      a.built.root.add(group); a.carried = group;
+      const arms = (t: THREE.KeyframeTrack) => /upperarm|lowerarm|clavicle|hand|forearm|leftarm|rightarm|shoulder/i.test(t.name);
+      const pose = a.actions.arms?.getClip(), walk = a.actions.walk?.getClip();
+      if (pose && walk) {
+        a.carryPose = a.built.mixer.clipAction(new THREE.AnimationClip('carrying upper body', pose.duration, pose.tracks.filter(arms)));
+        a.actions.carry_walk = a.built.mixer.clipAction(new THREE.AnimationClip('carrying walk', walk.duration, walk.tracks.filter(t => !arms(t))));
+        const idle = a.actions.idle?.getClip();
+        if (idle) a.actions.carry_idle = a.built.mixer.clipAction(new THREE.AnimationClip('carrying rest', idle.duration, idle.tracks.filter(t => !arms(t))));
+      }
+    }
+    if (!a.carrying) { a.carryPose?.reset().setEffectiveWeight(1).fadeIn(0.18).play(); a.carrying = true; }
+    a.carried.visible = true;
+    a.carried.position.set(0, height * 0.57, 0.36);
+    a.carried.children.forEach((o, i) => { o.visible = i === ['sack', 'basket', 'ledger'].indexOf(kind); (o as THREE.Mesh).castShadow = !!a.shadow; });
   }
 
   private clock = 0;
@@ -1143,6 +1225,7 @@ export class NpcManager {
     const e = this.effective(st);
     const atPost = postIdx >= 0 ? e.place === sched[postIdx].place : true;
     if (!st.hidden && atPost) return null;
+    if (!st.hidden && st.rec.routine?.post === sched[postIdx]?.place && this.taskOf(id)) return { name: st.rec.name, why: 'away', back: '', where: placeLabel(e.place), post };
     const usable = (k: number) => (postIdx >= 0 ? sched[k].place === sched[postIdx].place : sched[k].activity !== 'sleep' && !s.places.get(sched[k].place)?.indoors);
     const n = sched.length, idx = this.entryIndex(st.rec);
     let next = -1;

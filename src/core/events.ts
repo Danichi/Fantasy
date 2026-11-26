@@ -68,7 +68,7 @@ export interface GameEvents {
   unblockable: { kind: import('../combat/core').AttackKind; from: Vector3 };
   spellCast: { spell: string };
   spellImpact: { at: Vector3; spell: string };
-  footstep: { at: Vector3; surface: string };
+  footstep: { at: Vector3; surface: string; weight?: number };
   notEnough: { stat: 'stamina' | 'mana' };
   needTarget: {};
   levelUp: { level: number };

@@ -25,7 +25,7 @@ export class Kit {
   private cols = new Map<number, THREE.MeshStandardMaterial>();
   private t = 0;
 
-  constructor(readonly scene: THREE.Scene, readonly m: WorldMats, private fx: FX) {}
+  constructor(readonly scene: THREE.Object3D, readonly m: WorldMats, private fx: FX) {}
 
   col(c: number, rough = 0.9, side: THREE.Side = THREE.FrontSide) {
     const k = c + (side === THREE.DoubleSide ? 0x1000000 : 0) + Math.round(rough * 10) * 0x2000000;

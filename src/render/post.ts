@@ -165,12 +165,15 @@ const FINAL_FRAG = /* glsl */ `
       float amount = abs(dy) > 0.05
         ? uHaze * exp(-k * camH) * (1.0 - exp(-k * dy)) / (k * ray.y)
         : uHaze * exp(-k * camH) * dist;
-      float f = 1.0 - exp(-max(amount, 0.0));
+      // Keep nearby architecture clear in fair weather; storms and the Dark
+      // retain close fog. The distant silhouettes still form blue layers.
+      float nearClear = mix(smoothstep(12.0, 80.0, dist), 1.0, clamp((uHaze - 0.003) / 0.006 + uMist, 0.0, 1.0));
+      float f = 1.0 - exp(-max(amount, 0.0) * nearClear);
       // Distant land loses saturation and turns blue long before the haze
       // swallows it: hills stack in pale layers (aerial perspective).
       float farL = dot(col, vec3(0.3, 0.55, 0.15));
-      float far = smoothstep(35.0, 600.0, dist);
-      col = mix(col, vec3(farL) * mix(vec3(1.0), uHazeColor * 1.2, 0.6), far * 0.62);
+      float far = smoothstep(80.0, 850.0, dist);
+      col = mix(col, vec3(farL) * mix(vec3(1.0), uHazeColor * 1.2, 0.6), far * 0.52);
       // uMist (the Gravewood's cursed fog) lets the haze swallow everything.
       col = mix(col, haze, clamp(f, 0.0, mix(0.92, 0.995, uMist)));
     } else {

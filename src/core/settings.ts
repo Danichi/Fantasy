@@ -1,4 +1,4 @@
-// Quality presets. Medium targets ~60fps on Intel Iris Xe at 1080p.
+// Quality presets. The authored look targets 30–45 fps on integrated GPUs.
 export type Quality = 'low' | 'balanced' | 'medium' | 'high';
 
 export interface QualitySettings {
@@ -22,14 +22,13 @@ export interface QualitySettings {
 }
 
 export const PRESETS: Record<Quality, QualitySettings> = {
-  // Medium skips the composer entirely: MSAA on the canvas and tone mapping in
-  // the material shaders. Bloom + SMAA cost ~40ms/frame at 1080p on Iris Xe.
+  // Low skips the composer: canvas rendering and material tone mapping.
   low: { pixelRatio: 0.8, shadowMapSize: 1536, bloom: false, smaa: false, post: false, msaa: false, grassCount: 8000, grassBlades: 26000, maxDynamicLights: 1, particleScale: 0.65 },
   // Balanced: medium's look (haze, grading, bloom, shadows) for less: half the
-  // grass, a smaller shadow map, and a resolution that gives way to hold ~45 fps.
-  balanced: { pixelRatio: 0.92, shadowMapSize: 2048, bloom: true, smaa: false, post: true, msaa: true, grassCount: 12000, grassBlades: 38000, maxDynamicLights: 2, particleScale: 0.85, targetMs: 22, minScale: 0.7 },
-  medium: { pixelRatio: 1, shadowMapSize: 3072, bloom: true, smaa: false, post: true, msaa: true, grassCount: 28000, grassBlades: 110000, maxDynamicLights: 2, particleScale: 1 },
-  high: { pixelRatio: Math.min(window.devicePixelRatio, 2), shadowMapSize: 4096, bloom: true, smaa: false, post: true, msaa: true, grassCount: 60000, grassBlades: 200000, maxDynamicLights: 4, particleScale: 1.5 },
+  // grass, a smaller shadow map, and a resolution that gives way under load.
+  balanced: { pixelRatio: 1, shadowMapSize: 2048, bloom: true, smaa: false, post: true, msaa: true, grassCount: 12000, grassBlades: 38000, maxDynamicLights: 2, particleScale: 0.85, targetMs: 28, minScale: 0.8 },
+  medium: { pixelRatio: 1, shadowMapSize: 3072, bloom: true, smaa: false, post: true, msaa: true, grassCount: 28000, grassBlades: 110000, maxDynamicLights: 2, particleScale: 1, targetMs: 33, minScale: 0.85 },
+  high: { pixelRatio: Math.min(window.devicePixelRatio, 2), shadowMapSize: 4096, bloom: true, smaa: false, post: true, msaa: true, grassCount: 60000, grassBlades: 200000, maxDynamicLights: 4, particleScale: 1.5, targetMs: 33, minScale: 0.9 },
 };
 
 const params = new URLSearchParams(location.search);

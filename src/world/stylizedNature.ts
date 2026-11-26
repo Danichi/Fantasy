@@ -119,7 +119,7 @@ function bushGeometry(seed: number, hue = 0) {
   return geo;
 }
 
-function rockGeometry(seed: number) {
+export function rockGeometry(seed: number) {
   const rnd = mulberry32(seed);
   // A smooth, lumpy boulder (the wild look: clean forms, no hard facets): a
   // fine sphere pushed in and out by a few broad waves, squashed and set flat
@@ -245,8 +245,9 @@ interface VegTile {
  * shade of green, the undersides of the crown fall into shadow, and leaves
  * glow where the sun shines through them toward the camera.
  */
-function leafShader(mat: THREE.Material) {
+export function leafShader(mat: THREE.Material, batched = false) {
   const m = mat as THREE.MeshStandardMaterial;
+  m.customProgramCacheKey = () => 'nature-leaves-' + (batched ? 'batched' : 'instanced');
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = WIND.uTime;
     sh.uniforms.uWindDir = WIND.uWindDir;
@@ -266,7 +267,7 @@ function leafShader(mat: THREE.Material) {
         vLeafUp = objectNormal.y;
         float leafSway = sin(uTime * 1.3 + leafBase.x * 0.21 + leafBase.z * 0.17 + position.y * 0.4) * 0.6
                        + sin(uTime * 3.1 + position.x * 1.7 + position.z * 1.3) * 0.25;
-        transformed.xz += uWindDir * leafSway * uWindStrength * 0.02 * max(position.y, 0.0);`);
+        transformed.xz += uWindDir * leafSway * uWindStrength * 0.02 * ${batched ? 'min(max(position.y, 0.0), 16.0)' : 'max(position.y, 0.0)'};`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
         uniform vec3 uLeafSun;

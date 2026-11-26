@@ -1,4 +1,7 @@
 import type { WeatherParams } from '../world/weather';
+import { SurfaceFoley, footMaterial } from './surfaceFoley';
+import { LocalSoundscape } from './localSoundscape';
+import { GLEN_SOUNDS } from '../world/glenCircuitData';
 
 // Region ambience (prompt §54): a few looping beds per biome, crossfaded by
 // region, time of day and weather. At most one bed per layer plays: base
@@ -42,6 +45,8 @@ const BIOME_BEDS: Record<string, [AmbKey, AmbKey]> = {
 };
 
 export class Ambience {
+  readonly foley = new SurfaceFoley();
+  readonly local = new LocalSoundscape(GLEN_SOUNDS);
   private tracks = new Map<AmbKey, HTMLAudioElement>();
   private target = new Map<AmbKey, number>();
   private started = false;
@@ -64,9 +69,14 @@ export class Ambience {
   // Footsteps: a small round-robin pool so quick steps overlap cleanly.
   private steps: Record<'grass' | 'snow', HTMLAudioElement[]> = { grass: [], snow: [] };
   private stepIdx = 0;
-  /** A footstep on a surface (grass/dirt/stone use the grass step, pitched). */
-  footstep(surface: string, snowy: boolean) {
+  /** Recorded soft ground and synthesized hard or wet surface contacts. */
+  footstep(surface: string, snowy: boolean, wet = false, weight = 1) {
     if (!this.started || this.muted) return;
+    const material = footMaterial(surface, snowy);
+    if (material !== 'grass' && material !== 'snow') {
+      this.foley.step(material, 0.2 * this.master * weight, wet);
+      return;
+    }
     const kind = snowy ? 'snow' : 'grass';
     if (!this.steps[kind].length) for (let i = 0; i < 4; i++) {
       const a = new Audio(DIR + (kind === 'snow' ? 'step-snow.mp3' : 'step-grass.mp3'));
@@ -75,7 +85,7 @@ export class Ambience {
     }
     const a = this.steps[kind][this.stepIdx++ % 4];
     a.currentTime = 0;
-    a.volume = (surface === 'stone' ? 0.14 : 0.2) * this.master;
+    a.volume = Math.min(1, 0.2 * this.master * weight);
     a.playbackRate = (surface === 'stone' ? 1.35 : surface === 'dirt' ? 1.1 : 0.95) + Math.random() * 0.1;
     void a.play().catch(() => {});
   }
@@ -83,6 +93,8 @@ export class Ambience {
   /** Browsers only allow audio after a gesture (the title screen click). */
   start() {
     this.started = true;
+    this.foley.start();
+    this.local.start(this.foley.context);
   }
 
   /** Lightning: a crack whose delay and volume follow the (random) distance. */
@@ -100,20 +112,21 @@ export class Ambience {
    * ambience: region ambience id; night 0..1; accents: nearby local sounds
    * (0..1 each, e.g. river proximity); indoors/underground set by the caller.
    */
-  update(dt: number, ambience: string, night: number, w: WeatherParams, accents: Partial<Record<AmbKey, number>>, dungeon: boolean) {
+  update(dt: number, ambience: string, night: number, w: WeatherParams, accents: Partial<Record<AmbKey, number>>, dungeon: boolean, sheltered = false) {
     this.target.clear();
     if (dungeon) this.target.set('cave', 0.75);
     else {
       const [day, nightBed] = BIOME_BEDS[ambience] ?? BIOME_BEDS.meadow;
-      const shelter = 1 - Math.max(w.rain, w.snow) * 0.5;
+      const shelter = (1 - Math.max(w.rain, w.snow) * 0.5) * (sheltered ? 0.22 : 1);
       this.target.set(day, ((this.target.get(day) ?? 0) + (1 - night) * 0.7) * shelter);
       this.target.set(nightBed, ((this.target.get(nightBed) ?? 0) + night * 0.6) * shelter);
-      if (w.rain > 0.02) this.target.set('rain', w.rain * 0.85);
+      if (w.rain > 0.02) this.target.set('rain', w.rain * (sheltered ? 0.16 : 0.85));
       if (w.storm > 0.05 || w.wind > 0.85) this.target.set('storm', Math.max(w.storm, (w.wind - 0.7) * 2) * 0.7);
       if (w.storm > 0.3) this.target.set('thunderLoop', w.storm * 0.4);
       if (w.snow > 0.3 || w.wind > 0.7) this.target.set('mountain', Math.max(this.target.get('mountain') ?? 0, w.wind * 0.5));
       for (const [k, v] of Object.entries(accents) as [AmbKey, number][]) this.target.set(k, Math.max(this.target.get(k) ?? 0, v));
     }
+    if (sheltered) for (const k of ['storm', 'mountain', 'thunderLoop'] as AmbKey[]) if (this.target.has(k)) this.target.set(k, this.target.get(k)! * 0.22);
     const fade = Math.min(1, dt / 2.5);
     for (const [k, a] of this.tracks) {
       const want = this.started && !this.muted ? (this.target.get(k) ?? 0) * this.master : 0;
@@ -126,5 +139,7 @@ export class Ambience {
 
   setMuted(m: boolean) {
     this.muted = m;
+    this.foley.muted = m;
+    if (m) this.local.silence();
   }
 }
